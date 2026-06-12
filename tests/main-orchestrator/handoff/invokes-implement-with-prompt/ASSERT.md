@@ -6,7 +6,6 @@
 ```go
 import (
     "os"
-    "path/filepath"
     "strings"
     "testing"
 )
@@ -19,11 +18,13 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("stdout missing mock text:\n%s", resp.Stdout)
     }
 
-    home, _ := os.UserHomeDir()
-    agentDir := filepath.Join(home, ".agent-pro", "dedicated-agents", "doctest-agent", "sessions")
-    entries, readErr := os.ReadDir(agentDir)
+    sessionHome := os.Getenv("DOCTEST_DEBUG_SESSION_HOME")
+    if sessionHome == "" {
+        t.Fatal("DOCTEST_DEBUG_SESSION_HOME not set")
+    }
+    entries, readErr := os.ReadDir(sessionHome)
     if readErr != nil {
-        t.Fatalf("cannot read session dir %s: %v", agentDir, readErr)
+        t.Fatalf("cannot read session dir %s: %v", sessionHome, readErr)
     }
     found := false
     for _, entry := range entries {

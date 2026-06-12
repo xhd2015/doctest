@@ -287,7 +287,7 @@ func sessionsBase() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("get home dir: %w", err)
 	}
-	return filepath.Join(home, ".agent-pro", "dedicated-agents", "doctest-agent-implementer", "sessions"), nil
+	return filepath.Join(home, ".doctest", "implementer", "sessions"), nil
 }
 
 type meta struct {

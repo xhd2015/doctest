@@ -12,7 +12,7 @@
 5. Provide helper functions for writing mock configs and inspecting session metadata.
 
 ## Context
-- Session directories are created under `~/.agent-pro/dedicated-agents/doctest-agent-implementer/sessions/`.
+- Session directories are created under `~/.doctest/implementer/sessions/`.
 - Mock config format follows the `fake-codex` conventions.
 
 ```go
@@ -33,7 +33,7 @@ func Setup(t *testing.T, req *Request) error {
     tmp := t.TempDir()
 
     doctestBin := filepath.Join(tmp, "doctest")
-    build := exec.Command("go", "build", "-o", doctestBin, ".")
+    build := exec.Command("go", "build", "-o", doctestBin, "./cmd/doctest")
     build.Dir = filepath.Join(DOCTEST_ROOT, "..")
     if out, err := build.CombinedOutput(); err != nil {
         t.Fatalf("build doctest: %v\n%s", err, string(out))
@@ -78,7 +78,7 @@ func sessionsDir() string {
         return v
     }
     home, _ := os.UserHomeDir()
-    return filepath.Join(home, ".agent-pro", "dedicated-agents", "doctest-agent-implementer", "sessions")
+    return filepath.Join(home, ".doctest", "implementer", "sessions")
 }
 
 func findSessionMeta(t *testing.T, field string, value string) string {

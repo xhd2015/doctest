@@ -1,6 +1,6 @@
 ## Expected
 - Exit code 0.
-- Session directory is created under `~/.agent-pro/dedicated-agents/doctest-agent-implementer/sessions/YYYY/MM/DD/sess_*/`.
+- Session directory is created under `~/.doctest/implementer/sessions/YYYY/MM/DD/sess_*/`.
 - Session dir name matches `sess_HHMMSS_<nano>` format.
 - The session dir contains `meta.json` with `main_agent_codex_thread_id`.
 - `doctest_agent_implementer_session_id` is absent (CODEX_THREAD_ID does not populate it).

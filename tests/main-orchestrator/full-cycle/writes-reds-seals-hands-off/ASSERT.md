@@ -6,7 +6,6 @@
 ```go
 import (
     "os"
-    "path/filepath"
     "strings"
     "testing"
 )
@@ -20,9 +19,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     }
 
     // Verify session was created
-    home, _ := os.UserHomeDir()
-    agentDir := filepath.Join(home, ".agent-pro", "dedicated-agents", "doctest-agent", "sessions")
-    entries, _ := os.ReadDir(agentDir)
+    sessionHome := os.Getenv("DOCTEST_DEBUG_SESSION_HOME")
+    if sessionHome == "" {
+        t.Fatal("DOCTEST_DEBUG_SESSION_HOME not set")
+    }
+    entries, _ := os.ReadDir(sessionHome)
     found := false
     for _, entry := range entries {
         if entry.IsDir() {

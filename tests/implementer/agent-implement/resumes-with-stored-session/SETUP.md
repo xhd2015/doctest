@@ -21,9 +21,8 @@ func Setup(t *testing.T, req *Request) error {
     threadID := "impl_test_resume_sid"
     req.Env = append(req.Env, "CODEX_THREAD_ID="+threadID)
 
-    home, _ := os.UserHomeDir()
     dateDir := time.Now().Format("2006/01/02")
-    sessDir := filepath.Join(home, ".agent-pro", "dedicated-agents", "doctest-agent-implementer", "sessions", dateDir, "sess_test_resume_sid")
+    sessDir := filepath.Join(sessionsDir(), dateDir, "sess_test_resume_sid")
     if mkErr := os.MkdirAll(sessDir, 0755); mkErr != nil {
         t.Fatalf("create session dir: %v", mkErr)
     }

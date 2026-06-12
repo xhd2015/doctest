@@ -45,7 +45,7 @@ func Setup(t *testing.T, req *Request) error {
 
     tmp := t.TempDir()
     doctestBin := filepath.Join(tmp, "doctest")
-    build := exec.Command("go", "build", "-o", doctestBin, ".")
+    build := exec.Command("go", "build", "-o", doctestBin, "./cmd/doctest")
     build.Dir = filepath.Join(DOCTEST_ROOT, "..")
     if out, err := build.CombinedOutput(); err != nil {
         t.Fatalf("build doctest: %v\n%s", err, string(out))

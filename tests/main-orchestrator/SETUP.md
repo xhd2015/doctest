@@ -30,7 +30,7 @@ func Setup(t *testing.T, req *Request) error {
     }
 
     doctestBin := filepath.Join(tmp, "doctest")
-    buildDT := exec.Command("go", "build", "-o", doctestBin, ".")
+    buildDT := exec.Command("go", "build", "-o", doctestBin, "./cmd/doctest")
     buildDT.Dir = filepath.Join(DOCTEST_ROOT, "..")
     if out, err := buildDT.CombinedOutput(); err != nil {
         t.Fatalf("build doctest: %v\n%s", err, string(out))
@@ -41,13 +41,16 @@ func Setup(t *testing.T, req *Request) error {
         t.Fatalf("copy yield-pending-questions: %v\n%s", err, string(out))
     }
 
+    sessionHome := filepath.Join(tmp, "sessions")
     req.Env = append(req.Env,
         "DOCTEST_BIN="+doctestBin,
         "AGENT_RUNNER_FAKE_CODEX_PATH="+fakeCodex,
         "YIELD_PQ_BIN="+yieldPQ,
+        "DOCTEST_DEBUG_SESSION_HOME="+sessionHome,
     )
     req.Bin = doctestBin
     os.Setenv("YIELD_PQ_BIN", yieldPQ)
+    os.Setenv("DOCTEST_DEBUG_SESSION_HOME", sessionHome)
     req.Timeout = 60 * time.Second
     return nil
 }

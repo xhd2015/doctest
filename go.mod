@@ -2,11 +2,9 @@ module github.com/xhd2015/doctest
 
 go 1.25.0
 
-replace github.com/xhd2015/agent-pro => ../../
-
 require (
 	github.com/google/uuid v1.6.0
-	github.com/xhd2015/agent-pro v0.0.0-00010101000000-000000000000
+	github.com/xhd2015/agent-pro v0.0.16
 	github.com/xhd2015/gitops v0.0.15
 	github.com/xhd2015/less-flags v1.0.0
 	github.com/xhd2015/skills v0.0.7
