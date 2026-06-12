@@ -1,0 +1,14 @@
+.DS_Store
+.agents
+.codex
+.claude
+
+.vscode
+
+# binary
+.decisions.json
+*.jsonl
+
+/doctest
+
+handoff_*
