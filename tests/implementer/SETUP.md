@@ -196,4 +196,26 @@ func getSessionDir(t *testing.T, field string, value string) (string, string) {
     }
     return "", ""
 }
+
+func readEventsJSONL(t *testing.T, sessDir string) []map[string]any {
+    t.Helper()
+    eventsPath := filepath.Join(sessDir, "events.jsonl")
+    data, err := os.ReadFile(eventsPath)
+    if err != nil {
+        t.Fatalf("cannot read events.jsonl: %v", err)
+    }
+    lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+    var events []map[string]any
+    for _, line := range lines {
+        if strings.TrimSpace(line) == "" {
+            continue
+        }
+        var ev map[string]any
+        if err := json.Unmarshal([]byte(line), &ev); err != nil {
+            t.Fatalf("invalid JSON line in events.jsonl: %v\nline: %s", err, line)
+        }
+        events = append(events, ev)
+    }
+    return events
+}
 ```

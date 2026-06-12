@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,6 +22,7 @@ import (
 	agentprovider "github.com/xhd2015/agent-pro/agent/cli/provider"
 	"github.com/xhd2015/agent-pro/agent/cli/registry"
 	agentexec "github.com/xhd2015/agent-pro/agent/exec"
+	"github.com/xhd2015/agent-pro/agent_trace/events"
 )
 
 //go:embed PROMPT.md
@@ -165,7 +167,16 @@ func Run(opts Options) error {
 		opencodeSessionID = readOpencodeSessionID(sessionDir)
 	}
 
-	capture := &sessionIDCapture{}
+	eventsPath := filepath.Join(sessionDir, "events.jsonl")
+	eventsLogger, err := events.Open(eventsPath)
+	if err != nil {
+		return fmt.Errorf("open events.jsonl: %w", err)
+	}
+	defer eventsLogger.Close()
+
+	capture := &sessionLogWriter{
+		eventsFile: eventsLogger,
+	}
 
 	var fullPrompt string
 	if isNew {
@@ -236,14 +247,14 @@ func resolveSessionID(flagSessionID string) (*sessionIDSources, error) {
 		}, nil
 	}
 	genID := generateSessionID()
-	return nil, fmt.Errorf("cannot detect session id, if you're running inside opencode, run with: doctest agent implement --session-id %s <prompt>, and use the same session id in subsequent followups, don't generate your session id randomly, use the provided session id %s explicity.", genID, genID)
+	return nil, fmt.Errorf("cannot detect session id, if you're running inside opencode, try again with: `doctest agent implement --session-id %s <prompt>`, and use the same session id in subsequent followups, don't generate your session id, use the provided session id %s explicity.", genID, genID)
 }
 
 func generateSessionID() string {
 	return "gen_" + fmt.Sprintf("%x", md5.Sum([]byte(uuid.New().String())))
 }
 
-func runAgent(agentRunner, prompt, sessionID string, rawLog *sessionIDCapture) (string, error) {
+func runAgent(agentRunner, prompt, sessionID string, rawLog *sessionLogWriter) (string, error) {
 	env := agentexec.NewEnv(&agentexec.PathsConfig{
 		RootDirName: ".agent-pro",
 		DataDirName: "data",
@@ -470,25 +481,40 @@ func newQuestionsFile(dir string) string {
 	}
 }
 
-type sessionIDCapture struct {
-	sessionID string
+type sessionLogWriter struct {
+	mu         sync.Mutex
+	sessionID  string
+	eventsFile events.Logger
 }
 
-func (c *sessionIDCapture) Write(p []byte) (int, error) {
-	if c.sessionID != "" {
-		return len(p), nil
+func (w *sessionLogWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.eventsFile != nil {
+		_ = w.eventsFile.Append(p)
 	}
-	line := strings.TrimSpace(string(p))
-	if line == "" || line[0] != '{' {
-		return len(p), nil
+
+	if w.sessionID == "" {
+		line := strings.TrimSpace(string(p))
+		if line != "" && line[0] == '{' {
+			var event struct {
+				SessionID string `json:"sessionID,omitempty"`
+			}
+			if json.Unmarshal([]byte(line), &event) == nil && event.SessionID != "" {
+				w.sessionID = event.SessionID
+			}
+		}
 	}
-	var event struct {
-		SessionID string `json:"sessionID,omitempty"`
-	}
-	if json.Unmarshal([]byte(line), &event) == nil && event.SessionID != "" {
-		c.sessionID = event.SessionID
-	}
+
 	return len(p), nil
+}
+
+func (w *sessionLogWriter) Close() error {
+	if w.eventsFile != nil {
+		return w.eventsFile.Close()
+	}
+	return nil
 }
 
 func readOpencodeSessionID(sessionDir string) string {
