@@ -23,10 +23,16 @@ func BuildArgs(args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(remainArgs) != 1 {
+	if len(remainArgs) < 1 {
 		return fmt.Errorf("build requires <dir>")
 	}
-	arg := remainArgs[0]
+	if len(remainArgs) == 1 {
+		return buildSingleDir(remainArgs[0], opts)
+	}
+	return processBuildArgs(remainArgs, opts)
+}
+
+func buildSingleDir(arg string, opts core.Options) error {
 	if arg == "..." {
 		return fmt.Errorf("bare '...' pattern is not supported; use './...' or 'path/...' instead")
 	}
@@ -45,17 +51,78 @@ func BuildArgs(args []string) error {
 			return err
 		})
 	}
-	targetDir, _ := filepath.Abs(remainArgs[0])
+	targetDir, _ := filepath.Abs(arg)
 	root, ok := ResolveRoot(targetDir)
 	if !ok {
 		return ErrNoTestsFound
 	}
 	opts.SubDir = targetDir
-	err = runnerbuild.Build(root, opts)
+	err := runnerbuild.Build(root, opts)
 	if err != nil && strings.Contains(err.Error(), "no runnable test cases found") {
 		return ErrNoTestsFound
 	}
 	return err
+}
+
+func processBuildArgs(remainArgs []string, opts core.Options) error {
+	var errs []string
+	allNoTestsFound := true
+
+	for _, arg := range remainArgs {
+		if arg == "..." {
+			return fmt.Errorf("bare '...' pattern is not supported; use './...' or 'path/...' instead")
+		}
+		if isDotDotDotPattern(arg) {
+			err := runForDirs(extractBasePath(arg), func(dir string) error {
+				root, _ := ResolveRoot(dir)
+				if root == "" {
+					root = dir
+				}
+				o := opts
+				o.SubDir = dir
+				err := runnerbuild.Build(root, o)
+				if err != nil && strings.Contains(err.Error(), "no runnable test cases found") {
+					return ErrNoTestsFound
+				}
+				return err
+			})
+			if err != nil {
+				if errors.Is(err, ErrNoTestsFound) {
+					continue
+				}
+				errs = append(errs, err.Error())
+				allNoTestsFound = false
+			} else {
+				allNoTestsFound = false
+			}
+			continue
+		}
+		targetDir, _ := filepath.Abs(arg)
+		root, ok := ResolveRoot(targetDir)
+		if !ok {
+			continue
+		}
+		o := opts
+		o.SubDir = targetDir
+		err := runnerbuild.Build(root, o)
+		if err != nil && strings.Contains(err.Error(), "no runnable test cases found") {
+			continue
+		}
+		if err != nil {
+			errs = append(errs, err.Error())
+			allNoTestsFound = false
+		} else {
+			allNoTestsFound = false
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("test failures:\n%s", strings.Join(errs, "\n"))
+	}
+	if allNoTestsFound {
+		return ErrNoTestsFound
+	}
+	return nil
 }
 
 func Test(args []string) error {
@@ -63,10 +130,16 @@ func Test(args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(remainArgs) != 1 {
+	if len(remainArgs) < 1 {
 		return fmt.Errorf("test requires <dir>")
 	}
-	arg := remainArgs[0]
+	if len(remainArgs) == 1 {
+		return testSingleDir(remainArgs[0], opts)
+	}
+	return processTestArgs(remainArgs, opts)
+}
+
+func testSingleDir(arg string, opts core.Options) error {
 	if arg == "..." {
 		return fmt.Errorf("bare '...' pattern is not supported; use './...' or 'path/...' instead")
 	}
@@ -85,17 +158,78 @@ func Test(args []string) error {
 			return err
 		})
 	}
-	targetDir, _ := filepath.Abs(remainArgs[0])
+	targetDir, _ := filepath.Abs(arg)
 	root, ok := ResolveRoot(targetDir)
 	if !ok {
 		return ErrNoTestsFound
 	}
 	opts.SubDir = targetDir
-	err = runnerbuild.Test(root, opts)
+	err := runnerbuild.Test(root, opts)
 	if err != nil && strings.Contains(err.Error(), "no runnable test cases found") {
 		return ErrNoTestsFound
 	}
 	return err
+}
+
+func processTestArgs(remainArgs []string, opts core.Options) error {
+	var errs []string
+	allNoTestsFound := true
+
+	for _, arg := range remainArgs {
+		if arg == "..." {
+			return fmt.Errorf("bare '...' pattern is not supported; use './...' or 'path/...' instead")
+		}
+		if isDotDotDotPattern(arg) {
+			err := runForDirs(extractBasePath(arg), func(dir string) error {
+				root, _ := ResolveRoot(dir)
+				if root == "" {
+					root = dir
+				}
+				o := opts
+				o.SubDir = dir
+				err := runnerbuild.Test(root, o)
+				if err != nil && strings.Contains(err.Error(), "no runnable test cases found") {
+					return ErrNoTestsFound
+				}
+				return err
+			})
+			if err != nil {
+				if errors.Is(err, ErrNoTestsFound) {
+					continue
+				}
+				errs = append(errs, err.Error())
+				allNoTestsFound = false
+			} else {
+				allNoTestsFound = false
+			}
+			continue
+		}
+		targetDir, _ := filepath.Abs(arg)
+		root, ok := ResolveRoot(targetDir)
+		if !ok {
+			continue
+		}
+		o := opts
+		o.SubDir = targetDir
+		err := runnerbuild.Test(root, o)
+		if err != nil && strings.Contains(err.Error(), "no runnable test cases found") {
+			continue
+		}
+		if err != nil {
+			errs = append(errs, err.Error())
+			allNoTestsFound = false
+		} else {
+			allNoTestsFound = false
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("test failures:\n%s", strings.Join(errs, "\n"))
+	}
+	if allNoTestsFound {
+		return ErrNoTestsFound
+	}
+	return nil
 }
 
 func runForDirs(basePath string, fn func(dir string) error) error {
