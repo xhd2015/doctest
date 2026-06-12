@@ -1,3 +1,5 @@
+> I once thought every domain of test needs a dedicated DSL, now they just become markdowns with code annotation
+
 # doctest
 
 Doc-style test tool: write test cases as markdown decision trees with embedded Go code, then build and run them.
@@ -5,13 +7,30 @@ Doc-style test tool: write test cases as markdown decision trees with embedded G
 # Installation
 
 ```sh
-go install github.com/xhd2015/doctest@latest
+go install github.com/xhd2015/doctest/cmd/doctest@latest
 ```
 
 # Usage
 
+Paste the follow prompt into your agent(claude code, codex, opencode etc.):
+
+```md
+Follow the guideline of `doctest skill doc-spec show` and `doctest skill code-spec show`, write tests first, run doctest test to ensure them RED(TDD), then seal them(`git add <tests>`); then implement the feature and run doctest until all GREEN.
+
+<your feature here>
+```
+
+
 ```sh
 doctest test -v ./...
+```
+
+# Install skills
+```sh
+doctest skill --list
+
+# the primary tdd-flow skill you need
+doctest skill tdd install --codex --opencode
 ```
 
 ## Commands
