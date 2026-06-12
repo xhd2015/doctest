@@ -16,6 +16,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/xhd2015/dot-pkgs/go-pkgs/logs"
+
 	agentprovider "github.com/xhd2015/agent-pro/agent/cli/provider"
 	"github.com/xhd2015/agent-pro/agent/cli/registry"
 	agentexec "github.com/xhd2015/agent-pro/agent/exec"
@@ -122,6 +124,38 @@ func Run(opts Options) error {
 	questionFile := newQuestionsFile(questionsDir)
 	os.Setenv("QUESTION_FIFO", questionFile)
 
+	progressDir := filepath.Join(sessionDir, "progress")
+	if err := os.MkdirAll(progressDir, 0755); err != nil {
+		return fmt.Errorf("create progress dir: %w", err)
+	}
+
+	rpPath := filepath.Join(tempDir, "report-progress")
+	if out, err := exec.Command("cp", exe, rpPath).CombinedOutput(); err != nil {
+		return fmt.Errorf("copy report-progress: %w\n%s", err, string(out))
+	}
+
+	progressFile := filepath.Join(progressDir, time.Now().Format("20060102_150405")+"_progress_update.jsonl")
+	os.Setenv("PROGRESS_FILE", progressFile)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		logs.WatchLine(ctx, progressFile, logs.WatchLineOptions{}, func(line string) error {
+			var entry map[string]any
+			if err := json.Unmarshal([]byte(line), &entry); err != nil {
+				return nil
+			}
+			desc, _ := entry["description"].(string)
+			ts, _ := entry["timestamp"].(string)
+			if ts == "" {
+				ts = time.Now().Format("2006-01-02T15:04:05")
+			}
+			fmt.Printf("[%s] %s\n", ts, desc)
+			return nil
+		})
+	}()
+
 	if opts.MockConfig != "" {
 		os.Setenv("FAKE_CODEX_MOCK_CONFIG", opts.MockConfig)
 	}
@@ -140,6 +174,7 @@ func Run(opts Options) error {
 		fullPrompt = prompt
 	}
 	output, err := runAgent(agentRunner, fullPrompt, opencodeSessionID, capture)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("sub-agent failed: %w", err)
 	}
@@ -201,7 +236,7 @@ func resolveSessionID(flagSessionID string) (*sessionIDSources, error) {
 		}, nil
 	}
 	genID := generateSessionID()
-	return nil, fmt.Errorf("cannot detect session id, if you're running inside opencode, run with: doctest agent implement --session-id %s <prompt>, and use the same session id in subsequent followups; or set DOCTEST_AGENT_IMPLEMENTER_SESSION_ID or CODEX_THREAD_ID", genID)
+	return nil, fmt.Errorf("cannot detect session id, if you're running inside opencode, run with: doctest agent implement --session-id %s <prompt>, and use the same session id in subsequent followups, don't generate your session id randomly, use the provided session id %s explicity.", genID, genID)
 }
 
 func generateSessionID() string {
@@ -279,6 +314,35 @@ func HandleYieldPendingQuestions(args []string) error {
 	return nil
 }
 
+func HandleReportProgress(args []string) error {
+	progressFile := os.Getenv("PROGRESS_FILE")
+	if progressFile == "" {
+		return fmt.Errorf("PROGRESS_FILE must be set")
+	}
+
+	if len(args) == 0 {
+		return fmt.Errorf("usage: report-progress <description>")
+	}
+
+	description := strings.Join(args, " ")
+
+	entry := map[string]string{
+		"type":        "progress",
+		"description": description,
+		"timestamp":   time.Now().Format(time.RFC3339),
+	}
+	data, _ := json.Marshal(entry)
+
+	f, err := os.OpenFile(progressFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open progress file: %w", err)
+	}
+	defer f.Close()
+
+	fmt.Fprintf(f, "%s\n", string(data))
+	return nil
+}
+
 func sessionsBase() (string, error) {
 	if v := os.Getenv("DOCTEST_DEBUG_SESSION_HOME"); v != "" {
 		return v, nil
@@ -291,11 +355,11 @@ func sessionsBase() (string, error) {
 }
 
 type meta struct {
-	ExplicitSessionID                  string    `json:"explicit_session_id,omitempty"`
-	DoctestAgentImplementerSessionID   string    `json:"doctest_agent_implementer_session_id,omitempty"`
-	MainAgentCodexThreadID             string    `json:"main_agent_codex_thread_id,omitempty"`
-	OpencodeSessionID                  string    `json:"opencode_session_id,omitempty"`
-	CreatedAt                          time.Time `json:"created_at"`
+	ExplicitSessionID                string    `json:"explicit_session_id,omitempty"`
+	DoctestAgentImplementerSessionID string    `json:"doctest_agent_implementer_session_id,omitempty"`
+	MainAgentCodexThreadID           string    `json:"main_agent_codex_thread_id,omitempty"`
+	OpencodeSessionID                string    `json:"opencode_session_id,omitempty"`
+	CreatedAt                        time.Time `json:"created_at"`
 }
 
 func findOrCreateSession(threadID string, srcs *sessionIDSources) (dir string, isNew bool, err error) {

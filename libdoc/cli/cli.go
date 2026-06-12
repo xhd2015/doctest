@@ -100,6 +100,9 @@ func Run(args []string) error {
 	if filepath.Base(os.Args[0]) == "yield-pending-questions" {
 		return implementer.HandleYieldPendingQuestions(args)
 	}
+	if filepath.Base(os.Args[0]) == "report-progress" {
+		return implementer.HandleReportProgress(args)
+	}
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
 		fmt.Print(usage)
 		return nil

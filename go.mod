@@ -11,8 +11,16 @@ require (
 )
 
 require (
+	github.com/fsnotify/fsnotify v1.8.0 // indirect
+	golang.org/x/sys v0.44.0 // indirect
+)
+
+require (
+	github.com/xhd2015/dot-pkgs/go-pkgs v0.0.13
 	github.com/xhd2015/go-coverage v1.0.41 // indirect
 	github.com/xhd2015/go-inspect v0.0.49 // indirect
 	github.com/xhd2015/less-gen v0.0.19 // indirect
 	github.com/xhd2015/xgo v1.1.14 // indirect
 )
+
+replace github.com/xhd2015/dot-pkgs/go-pkgs => ./external/dot-pkgs/go-pkgs

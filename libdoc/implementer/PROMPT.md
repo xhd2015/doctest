@@ -45,6 +45,22 @@ git diff ./<test-dir>   # must show no changes to test files
 doctest test -v ./<test-dir>  # must show all GREEN
 ```
 
+## Reporting Progress
+
+During implementation, periodically call `report-progress` to inform the
+main agent of your current status. This does **not** suspend the conversation
+— it only writes a progress update to a file that the parent process watches.
+
+```sh
+report-progress "Implementing JSON parser for input validation"
+report-progress "Fixing edge case: empty input handling"
+report-progress "15/18 tests passing, debugging file-not-found error"
+```
+
+Call this at meaningful milestones (e.g., after reading the test tree, after
+writing each major piece of code, after each test run). Use clear, concise
+descriptions so the main agent can follow your progress.
+
 ## When You Need Clarification
 
 If you encounter ambiguity that prevents you from continuing, use
@@ -63,7 +79,10 @@ Each question object has:
   - `option` — a short label for this answer
   - `explanation` — a longer explanation of this answer option
 
-After you run `yield-pending-questions`, must suspend the conversation and wait for followup.
+After you run `yield-pending-questions`, you must suspend the conversation and
+wait for followup. **Do not** mix `report-progress` (non-suspending) with
+`yield-pending-questions` (suspending) — use `yield-pending-questions` only
+when you truly need input before continuing.
 
 ## Example Walkthrough
 

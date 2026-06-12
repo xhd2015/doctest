@@ -56,13 +56,13 @@ When the feature description is long or contains shell-special characters
 `--requirement` flag:
 
 ```sh
-doctest agent implement --requirement REQUIREMENT.md
+doctest agent implement --requirement REQUIREMENT-<feature-brief-slug>.md
 ```
 
 For follow-up answers combined with a requirement file:
 
 ```sh
-doctest agent implement --requirement REQUIREMENT.md "<answers to questions>"
+doctest agent implement --requirement REQUIREMENT-<feature-brief-slug>.md "<answers to questions>"
 ```
 
 Disallowed substitutions:
@@ -161,11 +161,18 @@ and test overview:
 doctest agent implement "<design doc + test summary>"
 ```
 
+**NOTE:** The sub-agent may take a long time to finish — hours or even days for
+complex features. The main agent should wait patiently and **not set a timeout** or **set a long enough timeout(e.g. 1h)**
+The sub-agent will report progress
+periodically back.
+
+**NOTE:** If the sub-agent return an error requiring session id, MUST use the session id provided in the error message.
+
 If the prompt is long or contains shell-special characters, write it to a file
 and use `--requirement`:
 
 ```sh
-doctest agent implement --requirement REQUIREMENT.md
+doctest agent implement --requirement REQUIREMENT-<feature-brief-slug>.md
 ```
 
 This command is mandatory for implementation handoff in this workflow. Do not
