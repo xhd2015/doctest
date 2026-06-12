@@ -39,7 +39,7 @@ You can run `doctest skill doc-spec show` and `doctest skill code-spec show` to 
 
 When this workflow is requested, the implementation sub-agent is the
 `doctest agent implement` sub-agent. Do **not** replace it with another
-delegation mechanism, generic coding agent, multi-agent tool, handoff skill,
+delegation mechanism, generic coding agent, multi-agent tool, handoff/delegation skill,
 or manually-created implementation worker.
 
 Your allowed actions as main-agent:
@@ -68,7 +68,7 @@ doctest agent implement --requirement REQUIREMENT-<feature-brief-slug>.md "<answ
 Disallowed substitutions:
 
 - spawning a generic worker or explorer agent for implementation
-- using a separate handoff directory as the primary implementation mechanism
+- using a separate delegation directory as the primary implementation mechanism
 - implementing the production change directly after tests are sealed
 - treating an existing non-doctest delegation tool as equivalent to `doctest agent implement`
 
@@ -112,7 +112,7 @@ Instead:
 2. Add or update tests that express the new requirement.
 3. Run the relevant doctest tree and confirm the new requirement fails before
    implementation, unless the feature is already correctly implemented.
-4. Seal the affected test files before handoff.
+4. Seal the affected test files before delegation.
 
 If the feature is already correctly implemented and the tests pass before any
 code change, report that result to the user instead of delegating unnecessary
@@ -148,11 +148,11 @@ Run `git status --short` before and after sealing. If the current working
 directory is not a Git repository, locate the repository that owns the doctest
 tree and run `git add` there. If the doctest tree is genuinely outside any Git
 repository, explicitly tell the user that tests cannot be sealed with Git and
-ask whether to continue with an unsealed doctest handoff.
+ask whether to continue with an unsealed doctest delegation.
 
 **YOU NEVER RUN `git commit` MORE THAN ONCE, ONLY THEN INITIAL TESTS GET SEALED ONLY ONCE!**
 
-### Phase 5: Handoff to Sub-Agent
+### Phase 5: Delegation to Sub-Agent
 
 Invoke the doctest-managed implementation sub-agent with the design document
 and test overview:
@@ -175,7 +175,7 @@ and use `--requirement`:
 doctest agent implement --requirement REQUIREMENT-<feature-brief-slug>.md
 ```
 
-This command is mandatory for implementation handoff in this workflow. Do not
+This command is mandatory for implementation delegation in this workflow. Do not
 use any other agent or worker command in its place.
 
 The prompt should include:
