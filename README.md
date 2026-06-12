@@ -12,7 +12,7 @@ go install github.com/xhd2015/doctest/cmd/doctest@latest
 
 # Usage
 
-Paste the follow prompt into your agent(claude code, codex, opencode etc.):
+Paste the following prompt into your agent(claude code, codex, opencode etc.):
 
 ```md
 Follow the guideline of `doctest skill doc-spec show` and `doctest skill code-spec show`, write tests first, run doctest test to ensure them RED(TDD), then seal them(`git add <tests>`); then implement the feature and run doctest until all GREEN.
