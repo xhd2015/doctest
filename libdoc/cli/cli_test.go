@@ -33,6 +33,7 @@ func TestRunHelpOutput(t *testing.T) {
 		{name: "skill long help", args: []string{"skill", "--help"}, wants: []string{"Usage: doctest skill --list", "install"}},
 		{name: "skill short help", args: []string{"skill", "-h"}, wants: []string{"Usage: doctest skill --list", "show"}},
 		{name: "skill list", args: []string{"skill", "--list"}, wants: []string{"doc-spec", "code-spec"}},
+		{name: "agent implement help", args: []string{"agent", "implement", "--help"}, wants: []string{"Usage: doctest agent implement", "--session-id", "--requirement", "--trace"}},
 	}
 
 	for _, tt := range tests {
@@ -71,6 +72,9 @@ func TestRunErrorCases(t *testing.T) {
 		{name: "skill missing action", args: []string{"skill", "doc-spec"}, wantErr: "skill requires doc-spec, code-spec, tdd, or implementer plus show or install"},
 		{name: "skill unknown action", args: []string{"skill", "doc-spec", "nope"}, wantErr: "unknown skill action: nope"},
 		{name: "skill unknown name", args: []string{"skill", "unknown", "show"}, wantErr: "unknown skill: unknown"},
+		{name: "implement trace without session-id", args: []string{"agent", "implement", "--trace"}, wantErr: "requires --session-id"},
+		{name: "implement session-id missing value", args: []string{"agent", "implement", "--session-id"}, wantErr: "--session-id requires value"},
+		{name: "implement agent-runner missing value", args: []string{"agent", "implement", "--agent-runner"}, wantErr: "--agent-runner requires value"},
 	}
 
 	for _, tt := range tests {

@@ -19,7 +19,7 @@ const usage = `Usage: doctest <command> [options]
 Commands:
   agent generate <idea> [-d|--dir <target-dir>] [--agent-runner RUNNER]
   agent fill-code <target-dir>
-   agent implement <prompt> [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH]
+   agent implement <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace]
   validate <dir>
   build <dir>
   test <dir>
@@ -82,17 +82,22 @@ Examples:
   doctest test -v ./sub-module/...
 `
 
-const agentImplementUsage = `Usage: doctest agent implement [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] <prompt>
+const agentImplementUsage = `Usage: doctest agent implement [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] <prompt>
 
 Spawn a sub-agent to implement code that makes doctests pass.
 Blocks until the sub-agent completes or yields questions via
 yield-pending-questions.
 
+With --trace, follow and print the events of an existing session
+instead of spawning a sub-agent.
+
 Options:
+  --session-id ID         session to use or resume; for --trace, the session to follow
   --agent-runner RUNNER   opencode, codex, or fake-codex (default: opencode)
   --mock-config PATH      mock config JSON for fake-codex
   --requirement PATH      read requirement from file (useful for long prompts
                           or prompts with shell special characters)
+  --trace                 follow and print events from an existing session
   -h, --help              Show help
 `
 
@@ -130,7 +135,7 @@ func runAgent(args []string) error {
 Commands:
   generate <idea> [-d|--dir <target-dir>]
   fill-code <target-dir>
-  implement <prompt> [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH]
+   implement <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace]
 `)
 		return nil
 	}
@@ -226,6 +231,8 @@ func runAgentImplement(args []string) error {
 			}
 			opts.Requirement = args[i+1]
 			i++
+		case "--trace":
+			opts.CatchUp = true
 		default:
 			promptParts = append(promptParts, arg)
 		}

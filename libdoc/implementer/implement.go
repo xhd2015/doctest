@@ -52,9 +52,17 @@ type Options struct {
 	MockConfig  string
 	SessionID   string
 	Requirement string
+	CatchUp     bool
 }
 
 func Run(opts Options) error {
+	if opts.CatchUp {
+		if opts.SessionID == "" && os.Getenv("DOCTEST_AGENT_IMPLEMENTER_SESSION_ID") == "" && os.Getenv("CODEX_THREAD_ID") == "" {
+			return fmt.Errorf("--trace requires --session-id")
+		}
+		return TraceSession(opts.SessionID)
+	}
+
 	prompt := strings.TrimSpace(opts.Prompt)
 	if opts.Requirement != "" {
 		data, err := os.ReadFile(opts.Requirement)
@@ -81,6 +89,8 @@ func Run(opts Options) error {
 	if err != nil {
 		return err
 	}
+
+	fmt.Printf("Session ID: %s (source: %s)\n", srcs.sessionID, sourceLabel(srcs))
 
 	sessionDir, isNew, err := findOrCreateSession(srcs.sessionID, srcs)
 	if err != nil {
@@ -223,6 +233,104 @@ type sessionIDSources struct {
 	explicitSessionID string
 }
 
+func TraceSession(flagSessionID string) error {
+	srcs, err := resolveSessionID(flagSessionID)
+	if err != nil {
+		return err
+	}
+
+	sessionDir, _, err := findOrCreateSession(srcs.sessionID, srcs)
+	if err != nil {
+		return fmt.Errorf("session: %w", err)
+	}
+
+	eventsPath := filepath.Join(sessionDir, "events.jsonl")
+	data, err := os.ReadFile(eventsPath)
+	if err != nil {
+		return fmt.Errorf("read events.jsonl: %w", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	eventCount := 0
+	for _, line := range lines {
+		if line != "" {
+			eventCount++
+		}
+	}
+
+	fmt.Fprintf(os.Stdout, "\n═══════════════════════════════════════════════════════════════\n")
+	fmt.Fprintf(os.Stdout, "  Session: %s\n", srcs.sessionID)
+	fmt.Fprintf(os.Stdout, "  Events:  %d lines\n", eventCount)
+	fmt.Fprintf(os.Stdout, "═══════════════════════════════════════════════════════════════\n\n")
+
+	n := 0
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		n++
+		formatted := formatTraceEventLine(line)
+		if formatted != "" {
+			fmt.Fprintf(os.Stdout, "[%d]  %s\n", n, formatted)
+		}
+	}
+
+	fmt.Fprintf(os.Stdout, "───────────────────────────────────────────────────────────────\n")
+	if eventCount > 0 {
+		fmt.Fprintf(os.Stdout, "  ✓ Done\n")
+	}
+	fmt.Fprintf(os.Stdout, "───────────────────────────────────────────────────────────────\n")
+
+	return nil
+}
+
+func formatTraceEventLine(line string) string {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" || !strings.HasPrefix(trimmed, "{") {
+		return ""
+	}
+	var event struct {
+		Type string         `json:"type"`
+		Item *traceEventItem `json:"item,omitempty"`
+	}
+	if err := json.Unmarshal([]byte(trimmed), &event); err != nil {
+		return ""
+	}
+
+	if event.Item == nil {
+		return ""
+	}
+
+	switch event.Item.Type {
+	case "message", "agent_message", "assistant_message", "output_text":
+		text := strings.TrimSpace(event.Item.Text)
+		if text != "" {
+			return "💬   ASSISTANT\n     " + strings.ReplaceAll(text, "\n", "\n     ")
+		}
+	case "command_execution":
+		cmd := event.Item.Command
+		if cmd == "" {
+			cmd = event.Item.Type
+		}
+		return "⚡  RUN\n     " + cmd
+	default:
+		text := strings.TrimSpace(event.Item.Text)
+		if text == "" {
+			text = event.Item.Type
+		}
+		return "🔧  " + strings.ToUpper(event.Item.Type) + "\n     " + text
+	}
+	return ""
+}
+
+type traceEventItem struct {
+	ID      string `json:"id"`
+	Type    string `json:"type"`
+	Text    string `json:"text"`
+	Command string `json:"command"`
+	Status  string `json:"status"`
+}
+
 func resolveSessionID(flagSessionID string) (*sessionIDSources, error) {
 	if flagSessionID != "" {
 		codexID := os.Getenv("CODEX_THREAD_ID")
@@ -252,6 +360,19 @@ func resolveSessionID(flagSessionID string) (*sessionIDSources, error) {
 
 func generateSessionID() string {
 	return "gen_" + fmt.Sprintf("%x", md5.Sum([]byte(uuid.New().String())))
+}
+
+func sourceLabel(srcs *sessionIDSources) string {
+	if srcs.explicitSessionID != "" {
+		return "--session-id"
+	}
+	if srcs.implSessionID != "" {
+		return "DOCTEST_AGENT_IMPLEMENTER_SESSION_ID"
+	}
+	if srcs.codexThreadID != "" {
+		return "CODEX_THREAD_ID"
+	}
+	return "generated"
 }
 
 func runAgent(agentRunner, prompt, sessionID string, rawLog *sessionLogWriter) (string, error) {
