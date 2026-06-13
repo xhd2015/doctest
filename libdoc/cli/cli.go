@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	lessflags "github.com/xhd2015/less-flags"
+
 	"github.com/xhd2015/doctest/libdoc/agent"
 	"github.com/xhd2015/doctest/libdoc/implementer"
 	"github.com/xhd2015/doctest/libdoc/runner"
@@ -164,30 +166,18 @@ func runAgentGenerate(args []string) error {
 		return nil
 	}
 	opts := agent.GenerateOptions{AgentRunner: "opencode"}
-	var idea []string
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		switch arg {
-		case "-h", "--help":
-			fmt.Print(agentGenerateUsage)
+	remainArgs, err := lessflags.String("-d,--dir", &opts.Dir).
+		String("--agent-runner", &opts.AgentRunner).
+		Help("-h,--help", agentGenerateUsage).
+		HelpNoExit().
+		Parse(args)
+	if err != nil {
+		if errors.Is(err, lessflags.ErrHelp) {
 			return nil
-		case "-d", "--dir":
-			if i+1 >= len(args) {
-				return fmt.Errorf("%s requires value", arg)
-			}
-			opts.Dir = args[i+1]
-			i++
-		case "--agent-runner":
-			if i+1 >= len(args) {
-				return fmt.Errorf("--agent-runner requires value")
-			}
-			opts.AgentRunner = args[i+1]
-			i++
-		default:
-			idea = append(idea, arg)
 		}
+		return err
 	}
-	opts.Idea = strings.Join(idea, " ")
+	opts.Idea = strings.Join(remainArgs, " ")
 	if strings.TrimSpace(opts.Idea) == "" {
 		return fmt.Errorf("agent generate requires <idea>")
 	}
@@ -200,44 +190,21 @@ func runAgentImplement(args []string) error {
 		return nil
 	}
 	opts := implementer.Options{AgentRunner: "opencode"}
-	var promptParts []string
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		switch arg {
-		case "-h", "--help":
-			fmt.Print(agentImplementUsage)
+	remainArgs, err := lessflags.String("--session-id", &opts.SessionID).
+		String("--agent-runner", &opts.AgentRunner).
+		String("--mock-config", &opts.MockConfig).
+		String("--requirement", &opts.Requirement).
+		Bool("--trace", &opts.CatchUp).
+		Help("-h,--help", agentImplementUsage).
+		HelpNoExit().
+		Parse(args)
+	if err != nil {
+		if errors.Is(err, lessflags.ErrHelp) {
 			return nil
-		case "--agent-runner":
-			if i+1 >= len(args) {
-				return fmt.Errorf("--agent-runner requires value")
-			}
-			opts.AgentRunner = args[i+1]
-			i++
-		case "--session-id":
-			if i+1 >= len(args) {
-				return fmt.Errorf("--session-id requires value")
-			}
-			opts.SessionID = args[i+1]
-			i++
-		case "--mock-config":
-			if i+1 >= len(args) {
-				return fmt.Errorf("--mock-config requires value")
-			}
-			opts.MockConfig = args[i+1]
-			i++
-		case "--requirement":
-			if i+1 >= len(args) {
-				return fmt.Errorf("--requirement requires value")
-			}
-			opts.Requirement = args[i+1]
-			i++
-		case "--trace":
-			opts.CatchUp = true
-		default:
-			promptParts = append(promptParts, arg)
 		}
+		return err
 	}
-	opts.Prompt = strings.Join(promptParts, " ")
+	opts.Prompt = strings.Join(remainArgs, " ")
 	return implementer.Run(opts)
 }
 
@@ -270,28 +237,39 @@ func runSkill(args []string) error {
 		fmt.Print(skillUsage)
 		return nil
 	}
-	if args[0] == "--list" {
+	var listFlag bool
+	remainArgs, err := lessflags.Bool("--list", &listFlag).
+		Help("-h,--help", skillUsage).
+		HelpNoExit().
+		Parse(args)
+	if err != nil {
+		if errors.Is(err, lessflags.ErrHelp) {
+			return nil
+		}
+		return err
+	}
+	if listFlag {
 		fmt.Println("doc-spec")
 		fmt.Println("code-spec")
 		fmt.Println("tdd")
 		fmt.Println("implementer")
 		return nil
 	}
-	if len(args) < 2 {
+	if len(remainArgs) < 2 {
 		return fmt.Errorf("skill requires doc-spec, code-spec, tdd, or implementer plus show or install")
 	}
-	switch args[1] {
+	switch remainArgs[1] {
 	case "show":
-		content, err := spec.Content(args[0])
+		content, err := spec.Content(remainArgs[0])
 		if err != nil {
 			return err
 		}
 		fmt.Print(content)
 		return nil
 	case "install":
-		return spec.Install(args[0], args[2:])
+		return spec.Install(remainArgs[0], remainArgs[2:])
 	default:
-		return fmt.Errorf("unknown skill action: %s", args[1])
+		return fmt.Errorf("unknown skill action: %s", remainArgs[1])
 	}
 }
 
