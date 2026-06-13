@@ -281,8 +281,47 @@ func findDotDotDotDirs(basePath string) ([]string, error) {
 		}
 		return nil, err
 	}
+
+	absBase, absErr := filepath.Abs(basePath)
+	if absErr == nil {
+		hasAbsBase := false
+		for _, d := range dirs {
+			if d == absBase {
+				hasAbsBase = true
+				break
+			}
+		}
+		if !hasAbsBase {
+			if _, ok := ResolveRoot(absBase); ok {
+				dirs = append(dirs, absBase)
+			}
+		}
+
+		filepath.WalkDir(absBase, func(path string, d os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return nil
+			}
+			if !d.IsDir() || path == absBase {
+				return nil
+			}
+			if hasFile(path, "DOCTEST.md") {
+				alreadyCovered := false
+				for _, existing := range dirs {
+					if hasFile(existing, "DOCTEST.md") && (existing == path || isAncestor(existing, path)) {
+						alreadyCovered = true
+						break
+					}
+				}
+				if !alreadyCovered {
+					dirs = append(dirs, path)
+				}
+				return filepath.SkipDir
+			}
+			return nil
+		})
+	}
+
 	if len(dirs) == 0 {
-		absBase, absErr := filepath.Abs(basePath)
 		if absErr == nil {
 			if _, ok := ResolveRoot(absBase); ok {
 				return []string{absBase}, nil

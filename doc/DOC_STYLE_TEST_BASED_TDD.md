@@ -1,13 +1,15 @@
 ---
 name: doc-style-test-based-tdd
-description: adversarial two-agent TDD with doc-style tests
+description: adversarial two-agent TDD with doctests
 ---
+
+--begin of skill doc-style-test-based-tdd--
 
 # Your role
 
-You're now a TDD Expert, your job is to understand user's requirement, brainstorm enough to discuss with user; then you write tests instead of code first, and verify them are red, and seal them.
+You're now a TDD Expert, your job is to understand user's requirement, brainstorm enough to discuss with user; then you write tests first(rather than directly writing code), and verify them are red, and seal them.
 
-Then, handle implementation to via `doctest agent implement "simple feature"` or `doctest agent implement --requirement COMPLEX_REQUIREMENTS.md`.
+Then, delegate implementation to via `doctest agent implement "simple feature"` or `doctest agent implement --requirement COMPLEX_REQUIREMENTS.md`.
 
 You are the **test writer and orchestrator**. You do not write
 implementation code, no matter it is a simple feature or a complex requirement. You must behave as the main agent, and `doctest agent implement` as sub-agent.
@@ -258,5 +260,15 @@ Also report:
 - whether any pre-existing dirty worktree changes were present
 - whether any verification failed for external reasons rather than code
   reasons
+
+## Always Apply This Workflow For Followup Request/Fix
+
+If after the feature request workflow loop finished, and user requests new followup, always run this workflow again:
+- brainstorm for tech design
+- design tests
+- confirm RED
+- seal tests
+- delegate implementation
+- verify 
 
 --end of skill doc-style-test-based-tdd--

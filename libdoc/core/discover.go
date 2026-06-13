@@ -70,6 +70,9 @@ func discoverTreeCasesInternal(root string, w io.Writer) ([]TreeCase, error) {
 			if path == root {
 				return nil
 			}
+			if _, err := os.Stat(filepath.Join(path, "DOCTEST.md")); err == nil {
+				return filepath.SkipDir
+			}
 			relPath, _ := filepath.Rel(root, path)
 			if w != nil {
 				setupPath := filepath.Join(path, "SETUP.md")
