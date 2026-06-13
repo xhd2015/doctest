@@ -10,188 +10,97 @@ import (
 	"github.com/xhd2015/less-flags"
 	runnerbuild "github.com/xhd2015/doctest/libdoc/build"
 	"github.com/xhd2015/doctest/libdoc/core"
+	"github.com/xhd2015/doctest/libdoc/path_resolve"
+	"github.com/xhd2015/doctest/libdoc/validate"
 )
 
-var ErrNoTestsFound = errors.New("no tests found")
+var ErrNoTestsFound = path_resolve.ErrNoTestsFound
 
 func Build(dir string) error {
 	return runnerbuild.Build(dir, core.Options{RemoveTemp: false})
 }
 
 func BuildArgs(args []string) error {
-	opts, remainArgs, err := parseBuildOptions(args)
-	if err != nil {
-		return err
-	}
-	if len(remainArgs) < 1 {
-		return fmt.Errorf("build requires <dir>")
-	}
-	if len(remainArgs) == 1 {
-		return buildSingleDir(remainArgs[0], opts)
-	}
-	return processBuildArgs(remainArgs, opts)
-}
-
-func buildSingleDir(arg string, opts core.Options) error {
-	if arg == "..." {
-		return fmt.Errorf("bare '...' pattern is not supported; use './...' or 'path/...' instead")
-	}
-	if isDotDotDotPattern(arg) {
-		return runForDirs(extractBasePath(arg), func(dir string) error {
-			root, _ := ResolveRoot(dir)
-			if root == "" {
-				root = dir
-			}
-			o := opts
-			o.SubDir = dir
-			err := runnerbuild.Build(root, o)
-			if err != nil && strings.Contains(err.Error(), "no runnable test cases found") {
-				return ErrNoTestsFound
-			}
-			return err
-		})
-	}
-	targetDir, _ := filepath.Abs(arg)
-	root, ok := ResolveRoot(targetDir)
-	if !ok {
-		return ErrNoTestsFound
-	}
-	opts.SubDir = targetDir
-	err := runnerbuild.Build(root, opts)
-	if err != nil && strings.Contains(err.Error(), "no runnable test cases found") {
-		return ErrNoTestsFound
-	}
-	return err
-}
-
-func processBuildArgs(remainArgs []string, opts core.Options) error {
-	var errs []string
-	allNoTestsFound := true
-
-	for _, arg := range remainArgs {
-		if arg == "..." {
-			return fmt.Errorf("bare '...' pattern is not supported; use './...' or 'path/...' instead")
-		}
-		if isDotDotDotPattern(arg) {
-			err := runForDirs(extractBasePath(arg), func(dir string) error {
-				root, _ := ResolveRoot(dir)
-				if root == "" {
-					root = dir
-				}
-				o := opts
-				o.SubDir = dir
-				err := runnerbuild.Build(root, o)
-				if err != nil && strings.Contains(err.Error(), "no runnable test cases found") {
-					return ErrNoTestsFound
-				}
-				return err
-			})
-			if err != nil {
-				if errors.Is(err, ErrNoTestsFound) {
-					continue
-				}
-				errs = append(errs, err.Error())
-				allNoTestsFound = false
-			} else {
-				allNoTestsFound = false
-			}
-			continue
-		}
-		targetDir, _ := filepath.Abs(arg)
-		root, ok := ResolveRoot(targetDir)
-		if !ok {
-			continue
-		}
-		o := opts
-		o.SubDir = targetDir
-		err := runnerbuild.Build(root, o)
+	return processArgs(args, "build", parseBuildOptions, func(dir string, opts core.Options) error {
+		err := runnerbuild.Build(dir, opts)
 		if err != nil && strings.Contains(err.Error(), "no runnable test cases found") {
-			continue
+			return ErrNoTestsFound
 		}
-		if err != nil {
-			errs = append(errs, err.Error())
-			allNoTestsFound = false
-		} else {
-			allNoTestsFound = false
-		}
-	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("test failures:\n%s", strings.Join(errs, "\n"))
-	}
-	if allNoTestsFound {
-		return ErrNoTestsFound
-	}
-	return nil
+		return err
+	})
 }
 
 func Test(args []string) error {
-	opts, remainArgs, err := parseTestOptions(args)
+	return processArgs(args, "test", parseTestOptions, func(dir string, opts core.Options) error {
+		err := runnerbuild.Test(dir, opts)
+		if err != nil && strings.Contains(err.Error(), "no runnable test cases found") {
+			return ErrNoTestsFound
+		}
+		return err
+	})
+}
+
+func VetArgs(args []string) error {
+	return processArgs(args, "vet", parseVetOptions, func(dir string, opts core.Options) error {
+		return validate.RunWithOptions(dir, opts)
+	})
+}
+
+func processArgs(args []string, cmdName string, parseFn func([]string) (core.Options, []string, error), processDirFn func(string, core.Options) error) error {
+	opts, remainArgs, err := parseFn(args)
 	if err != nil {
 		return err
 	}
 	if len(remainArgs) < 1 {
-		return fmt.Errorf("test requires <dir>")
+		return fmt.Errorf("%s requires <dir>", cmdName)
 	}
 	if len(remainArgs) == 1 {
-		return testSingleDir(remainArgs[0], opts)
+		return processSingleArg(remainArgs[0], opts, processDirFn)
 	}
-	return processTestArgs(remainArgs, opts)
+	return processMultiArg(remainArgs, opts, processDirFn)
 }
 
-func testSingleDir(arg string, opts core.Options) error {
+func processSingleArg(arg string, opts core.Options, fn func(string, core.Options) error) error {
 	if arg == "..." {
 		return fmt.Errorf("bare '...' pattern is not supported; use './...' or 'path/...' instead")
 	}
-	if isDotDotDotPattern(arg) {
-		return runForDirs(extractBasePath(arg), func(dir string) error {
-			root, _ := ResolveRoot(dir)
+	if path_resolve.IsDotDotDotPattern(arg) {
+		return path_resolve.RunForDirs(path_resolve.ExtractBasePath(arg), func(dir string) error {
+			root, _ := path_resolve.ResolveRoot(dir)
 			if root == "" {
 				root = dir
 			}
 			o := opts
 			o.SubDir = dir
-			err := runnerbuild.Test(root, o)
-			if err != nil && strings.Contains(err.Error(), "no runnable test cases found") {
-				return ErrNoTestsFound
-			}
-			return err
+			return fn(root, o)
 		})
 	}
 	targetDir, _ := filepath.Abs(arg)
-	root, ok := ResolveRoot(targetDir)
+	root, ok := path_resolve.ResolveRoot(targetDir)
 	if !ok {
-		return ErrNoTestsFound
+		root = targetDir
 	}
 	opts.SubDir = targetDir
-	err := runnerbuild.Test(root, opts)
-	if err != nil && strings.Contains(err.Error(), "no runnable test cases found") {
-		return ErrNoTestsFound
-	}
-	return err
+	return fn(root, opts)
 }
 
-func processTestArgs(remainArgs []string, opts core.Options) error {
+func processMultiArg(args []string, opts core.Options, fn func(string, core.Options) error) error {
 	var errs []string
 	allNoTestsFound := true
 
-	for _, arg := range remainArgs {
+	for _, arg := range args {
 		if arg == "..." {
 			return fmt.Errorf("bare '...' pattern is not supported; use './...' or 'path/...' instead")
 		}
-		if isDotDotDotPattern(arg) {
-			err := runForDirs(extractBasePath(arg), func(dir string) error {
-				root, _ := ResolveRoot(dir)
+		if path_resolve.IsDotDotDotPattern(arg) {
+			err := path_resolve.RunForDirs(path_resolve.ExtractBasePath(arg), func(dir string) error {
+				root, _ := path_resolve.ResolveRoot(dir)
 				if root == "" {
 					root = dir
 				}
 				o := opts
 				o.SubDir = dir
-				err := runnerbuild.Test(root, o)
-				if err != nil && strings.Contains(err.Error(), "no runnable test cases found") {
-					return ErrNoTestsFound
-				}
-				return err
+				return fn(root, o)
 			})
 			if err != nil {
 				if errors.Is(err, ErrNoTestsFound) {
@@ -205,14 +114,14 @@ func processTestArgs(remainArgs []string, opts core.Options) error {
 			continue
 		}
 		targetDir, _ := filepath.Abs(arg)
-		root, ok := ResolveRoot(targetDir)
+		root, ok := path_resolve.ResolveRoot(targetDir)
 		if !ok {
-			continue
+			root = targetDir
 		}
 		o := opts
 		o.SubDir = targetDir
-		err := runnerbuild.Test(root, o)
-		if err != nil && strings.Contains(err.Error(), "no runnable test cases found") {
+		err := fn(root, o)
+		if errors.Is(err, ErrNoTestsFound) {
 			continue
 		}
 		if err != nil {
@@ -230,121 +139,6 @@ func processTestArgs(remainArgs []string, opts core.Options) error {
 		return ErrNoTestsFound
 	}
 	return nil
-}
-
-func runForDirs(basePath string, fn func(dir string) error) error {
-	dirs, err := findDotDotDotDirs(basePath)
-	if err != nil {
-		return err
-	}
-	if len(dirs) == 0 {
-		return ErrNoTestsFound
-	}
-	var errs []string
-	for _, dir := range dirs {
-		if err := fn(dir); err != nil {
-			if errors.Is(err, ErrNoTestsFound) {
-				continue
-			}
-			errs = append(errs, fmt.Sprintf("%s: %v", dir, err))
-		}
-	}
-	if len(errs) > 0 {
-		return fmt.Errorf("test failures:\n%s", strings.Join(errs, "\n"))
-	}
-	return nil
-}
-
-func findDotDotDotDirs(basePath string) ([]string, error) {
-	if basePath == "" || basePath == "." {
-		dirs, err := FindDOCTestDirsWithBase(".", ".")
-		if err == nil {
-			if len(dirs) == 0 {
-				return nil, fmt.Errorf("no tests found")
-			}
-			return dirs, nil
-		}
-		if !errors.Is(err, os.ErrNotExist) {
-			return nil, err
-		}
-		return FindDOCTestDirsFromSubdirs(".")
-	}
-	dirs, err := FindDOCTestDirsWithBase(basePath, basePath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			absBase, absErr := filepath.Abs(basePath)
-			if absErr == nil {
-				if _, ok := ResolveRoot(absBase); ok {
-					return []string{absBase}, nil
-				}
-			}
-		}
-		return nil, err
-	}
-
-	absBase, absErr := filepath.Abs(basePath)
-	if absErr == nil {
-		hasAbsBase := false
-		for _, d := range dirs {
-			if d == absBase {
-				hasAbsBase = true
-				break
-			}
-		}
-		if !hasAbsBase {
-			if _, ok := ResolveRoot(absBase); ok {
-				dirs = append(dirs, absBase)
-			}
-		}
-
-		filepath.WalkDir(absBase, func(path string, d os.DirEntry, walkErr error) error {
-			if walkErr != nil {
-				return nil
-			}
-			if !d.IsDir() || path == absBase {
-				return nil
-			}
-			if hasFile(path, "DOCTEST.md") {
-				alreadyCovered := false
-				for _, existing := range dirs {
-					if hasFile(existing, "DOCTEST.md") && (existing == path || isAncestor(existing, path)) {
-						alreadyCovered = true
-						break
-					}
-				}
-				if !alreadyCovered {
-					dirs = append(dirs, path)
-				}
-				return filepath.SkipDir
-			}
-			return nil
-		})
-	}
-
-	if len(dirs) == 0 {
-		if absErr == nil {
-			if _, ok := ResolveRoot(absBase); ok {
-				return []string{absBase}, nil
-			}
-		}
-	}
-	return dirs, nil
-}
-
-func isDotDotDotPattern(arg string) bool {
-	if len(arg) > 0 && arg[0] == '/' {
-		return false
-	}
-	return strings.HasSuffix(arg, "/...")
-}
-
-func extractBasePath(arg string) string {
-	base := strings.TrimSuffix(arg, "/...")
-	base = strings.TrimPrefix(base, "./")
-	if base == "" {
-		return "."
-	}
-	return base
 }
 
 func parseBuildOptions(args []string) (core.Options, []string, error) {
@@ -365,6 +159,16 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 	remainArgs, err := lessflags.Bool("-v,--verbose", &opts.Verbose).
 		Bool("--rm", &opts.RemoveTemp).
 		Int("-count", &opts.Count).
+		Parse(args)
+	if err != nil {
+		return core.Options{}, nil, err
+	}
+	return opts, remainArgs, nil
+}
+
+func parseVetOptions(args []string) (core.Options, []string, error) {
+	opts := core.Options{Stderr: os.Stderr}
+	remainArgs, err := lessflags.Bool("-v,--verbose", &opts.Verbose).
 		Parse(args)
 	if err != nil {
 		return core.Options{}, nil, err

@@ -1,4 +1,4 @@
-package runner
+package path_resolve
 
 import (
 	"errors"
@@ -10,6 +10,126 @@ import (
 
 	"github.com/xhd2015/gitops/git"
 )
+
+var ErrNoTestsFound = errors.New("no tests found")
+
+var errNoModuleFound = errors.New("no module found")
+
+func IsDotDotDotPattern(arg string) bool {
+	if len(arg) > 0 && arg[0] == '/' {
+		return false
+	}
+	return strings.HasSuffix(arg, "/...")
+}
+
+func ExtractBasePath(arg string) string {
+	base := strings.TrimSuffix(arg, "/...")
+	base = strings.TrimPrefix(base, "./")
+	if base == "" {
+		return "."
+	}
+	return base
+}
+
+func RunForDirs(basePath string, fn func(dir string) error) error {
+	dirs, err := FindDotDotDotDirs(basePath)
+	if err != nil {
+		return err
+	}
+	if len(dirs) == 0 {
+		return ErrNoTestsFound
+	}
+	var errs []string
+	for _, dir := range dirs {
+		if err := fn(dir); err != nil {
+			if errors.Is(err, ErrNoTestsFound) {
+				continue
+			}
+			errs = append(errs, dir+": "+err.Error())
+		}
+	}
+	if len(errs) > 0 {
+		return errors.New("test failures:\n" + strings.Join(errs, "\n"))
+	}
+	return nil
+}
+
+func FindDotDotDotDirs(basePath string) ([]string, error) {
+	if basePath == "" || basePath == "." {
+		dirs, err := FindDOCTestDirsWithBase(".", ".")
+		if err == nil {
+			if len(dirs) == 0 {
+				return nil, errors.New("no tests found")
+			}
+			return dirs, nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		return FindDOCTestDirsFromSubdirs(".")
+	}
+	dirs, err := FindDOCTestDirsWithBase(basePath, basePath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			absBase, absErr := filepath.Abs(basePath)
+			if absErr == nil {
+				if _, ok := ResolveRoot(absBase); ok {
+					return []string{absBase}, nil
+				}
+			}
+		}
+		return nil, err
+	}
+
+	absBase, absErr := filepath.Abs(basePath)
+	if absErr == nil {
+		hasAbsBase := false
+		for _, d := range dirs {
+			if d == absBase {
+				hasAbsBase = true
+				break
+			}
+		}
+		if !hasAbsBase {
+			if _, ok := ResolveRoot(absBase); ok {
+				dirs = append(dirs, absBase)
+			}
+		}
+
+		filepath.WalkDir(absBase, func(path string, d os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return nil
+			}
+			if !d.IsDir() || path == absBase {
+				return nil
+			}
+			if hasFile(path, "DOCTEST.md") {
+				alreadyCovered := false
+				for _, existing := range dirs {
+					if hasFile(existing, "DOCTEST.md") && (existing == path || isAncestor(existing, path)) {
+						alreadyCovered = true
+						break
+					}
+				}
+				if !alreadyCovered {
+					dirs = append(dirs, path)
+				}
+				return filepath.SkipDir
+			}
+			return nil
+		})
+	}
+
+	if len(dirs) == 0 {
+		if absErr == nil {
+			if _, ok := ResolveRoot(absBase); ok {
+				return []string{absBase}, nil
+			}
+		}
+		return nil, errors.New("no tests found")
+	}
+	return dirs, nil
+}
 
 func ResolveRoot(dir string) (root string, ok bool) {
 	absDir, err := filepath.Abs(dir)
@@ -192,8 +312,6 @@ func FindDOCTestDirsFromSubdirs(cwd string) ([]string, error) {
 	sort.Strings(allDirs)
 	return allDirs, nil
 }
-
-var errNoModuleFound = errors.New("no module found")
 
 func findDOCTestDirsInTree(subdir string) ([]string, error) {
 	var dirs []string

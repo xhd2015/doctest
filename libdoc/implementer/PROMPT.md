@@ -47,7 +47,7 @@ doctest test -v ./<test-dir>  # must show all GREEN
 
 ## Reporting Progress
 
-During implementation, periodically call `report-progress` to inform the
+**MUST**: During implementation, periodically call `report-progress` to inform the
 main agent of your current status. This does **not** suspend the conversation
 — it only writes a progress update to a file that the parent process watches.
 
@@ -98,8 +98,10 @@ Here is an example of the full cycle from the implementer's perspective:
 
 # Step 1: Read the test tree to understand expectations
 # (examine SETUP.md and ASSERT.md files)
+report-progress "now I have a full picture of all the tests and requirement"
 
 # Step 2: Implement the code
+report-progress "code implemented, now run doctest..."
 
 # Step 3: Verify
 doctest test -v ./tests/my-feature
@@ -111,3 +113,5 @@ yield-pending-questions '{"id":"1","question":"Should the tool output JSON or pl
 # The main agent sends followup answers on the same thread.
 # Continue implementation, verify, and report completion.
 ```
+
+Run `report-progress` periodically and promptly.

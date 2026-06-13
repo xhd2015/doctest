@@ -1,0 +1,30 @@
+## Preconditions
+- One valid doctest tree and one invalid directory (missing DOCTEST.md).
+
+## Steps
+1. Create one valid temp directory with a doctest tree.
+2. Create a second temp directory without DOCTEST.md (invalid).
+3. Run `doctest vet <valid-dir> <invalid-dir>`.
+
+```go
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func Setup(t *testing.T, req *Request) error {
+	validDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(validDir, "DOCTEST.md"), []byte("# tests\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(validDir, "SETUP.md"), []byte("## Setup\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	invalidDir := t.TempDir()
+
+	req.Args = []string{"vet", validDir, invalidDir}
+	return nil
+}
+```

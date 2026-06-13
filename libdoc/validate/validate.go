@@ -5,9 +5,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/xhd2015/doctest/libdoc/core"
 )
 
 func Run(dir string) error {
+	return RunWithOptions(dir, core.Options{})
+}
+
+func RunWithOptions(dir string, opts core.Options) error {
 	info, err := os.Stat(dir)
 	if err != nil {
 		return err
@@ -17,6 +23,10 @@ func Run(dir string) error {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "DOCTEST.md")); err != nil {
 		return fmt.Errorf("%s: root must contain DOCTEST.md", dir)
+	}
+
+	if opts.Verbose {
+		fmt.Printf("[vet] validating %s\n", dir)
 	}
 
 	var antiViolations []error
@@ -54,6 +64,10 @@ func Run(dir string) error {
 		name := d.Name()
 		if name != "SETUP.md" && name != "ASSERT.md" {
 			return nil
+		}
+
+		if opts.Verbose {
+			fmt.Printf("[vet]   %s\n", name)
 		}
 
 		content, err := os.ReadFile(path)

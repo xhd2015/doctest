@@ -13,13 +13,12 @@ import (
 	"github.com/xhd2015/doctest/libdoc/implementer"
 	"github.com/xhd2015/doctest/libdoc/runner"
 	"github.com/xhd2015/doctest/libdoc/spec"
-	"github.com/xhd2015/doctest/libdoc/validate"
 )
 
 const usage = `Usage: doctest <command> [options]
 
 Commands:
-  vet <dir>
+  vet [-v|--verbose] <dir...>
   build <dir>
   test <dir>
 
@@ -56,6 +55,20 @@ const skillUsage = `Usage: doctest skill --list
        doctest skill code-spec show|install
        doctest skill tdd show|install
        doctest skill implementer show|install
+`
+
+const vetUsage = `Usage: doctest vet [-v|--verbose] <dir...>
+
+Validate doc-test tree structure and anti-patterns, allow ./... patterns like go build.
+
+Options:
+  -v, --verbose     Show directories and files being validated
+  -h, --help        Show help
+
+Examples:
+  doctest vet -v ./
+  doctest vet -v ./...
+  doctest vet -v ./sub-module/...
 `
 
 const buildUsage = `Usage: doctest build [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] <dir>
@@ -132,7 +145,7 @@ func Run(args []string) error {
 	case "agent":
 		return runAgent(args[1:])
 	case "vet":
-		return runOneDir("vet", args[1:], validate.Run)
+		return runRunner(args[1:], vetUsage, runner.VetArgs)
 	case "build":
 		return runRunner(args[1:], buildUsage, runner.BuildArgs)
 	case "test":
@@ -222,17 +235,6 @@ func runAgentImplement(args []string) error {
 	}
 	opts.Prompt = strings.Join(remainArgs, " ")
 	return implementer.Run(opts)
-}
-
-func runOneDir(name string, args []string, fn func(string) error) error {
-	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
-		fmt.Printf("Usage: doctest %s <dir>\n", name)
-		return nil
-	}
-	if len(args) != 1 {
-		return fmt.Errorf("%s requires <dir>", name)
-	}
-	return fn(args[0])
 }
 
 func runRunner(args []string, usage string, fn func([]string) error) error {
