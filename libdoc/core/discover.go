@@ -440,10 +440,10 @@ func WriteGeneratedCases(dir string, cases []TreeCase, compileOnly bool, w io.Wr
 		testFiles = append(testFiles, testFile)
 	}
 	args := append([]string{"-w"}, testPaths...)
-	goimportsCmd := exec.Command("goimports", args...)
-	goimportsCmd.Dir = dir
-	if out, err := goimportsCmd.CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("goimports failed: %v\n%s", err, string(out))
+	gofmtCmd := exec.Command("gofmt", args...)
+	gofmtCmd.Dir = dir
+	if out, err := gofmtCmd.CombinedOutput(); err != nil {
+		return nil, fmt.Errorf("gofmt failed: %v\n%s", err, string(out))
 	}
 	return testFiles, nil
 }

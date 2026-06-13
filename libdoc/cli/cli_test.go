@@ -14,7 +14,7 @@ func TestRunHelpOutput(t *testing.T) {
 		args  []string
 		wants []string
 	}{
-		{name: "no args", args: nil, wants: []string{"Usage: doctest <command>", "agent", "validate", "build", "test", "skill"}},
+		{name: "no args", args: nil, wants: []string{"Usage: doctest <command>", "agent", "vet", "build", "test", "skill"}},
 		{name: "top long", args: []string{"--help"}, wants: []string{"Usage: doctest <command>", "Run doctest <command> --help"}},
 		{name: "top short", args: []string{"-h"}, wants: []string{"Usage: doctest <command>", "agent fill-code"}},
 		{name: "agent no args", args: []string{"agent"}, wants: []string{"Usage: doctest agent <command>", "generate", "fill-code"}},
@@ -23,8 +23,8 @@ func TestRunHelpOutput(t *testing.T) {
 		{name: "agent generate help", args: []string{"agent", "generate", "--help"}, wants: []string{"Usage: doctest agent generate", "<idea>", "-d", "--dir", "--agent-runner"}},
 		{name: "agent generate short help", args: []string{"agent", "generate", "-h"}, wants: []string{"Usage: doctest agent generate", "fake-codex"}},
 		{name: "agent fill-code help", args: []string{"agent", "fill-code", "--help"}, wants: []string{"Usage: doctest agent fill-code <target-dir>"}},
-		{name: "validate help", args: []string{"validate", "--help"}, wants: []string{"Usage: doctest validate <dir>"}},
-		{name: "validate short help", args: []string{"validate", "-h"}, wants: []string{"Usage: doctest validate <dir>"}},
+		{name: "vet help", args: []string{"vet", "--help"}, wants: []string{"Usage: doctest vet <dir>"}},
+		{name: "vet short help", args: []string{"vet", "-h"}, wants: []string{"Usage: doctest vet <dir>"}},
 		{name: "build help", args: []string{"build", "--help"}, wants: []string{"Usage: doctest build", "-v", "--verbose", "--rm", "--gen-dir", "-count"}},
 		{name: "build short help", args: []string{"build", "-h"}, wants: []string{"Usage: doctest build", "--gen-dir"}},
 		{name: "test help", args: []string{"test", "--help"}, wants: []string{"Usage: doctest test", "-v", "--verbose", "--rm", "-count"}},
@@ -64,8 +64,8 @@ func TestRunErrorCases(t *testing.T) {
 		{name: "fill code no dir", args: []string{"agent", "fill-code"}, wantErr: "agent fill-code requires <target-dir>"},
 		{name: "fill code extra arg", args: []string{"agent", "fill-code", "a", "b"}, wantErr: "agent fill-code requires <target-dir>"},
 		{name: "generate no idea", args: []string{"agent", "generate"}, wantErr: "agent generate requires <idea>"},
-		{name: "validate no dir", args: []string{"validate"}, wantErr: "validate requires <dir>"},
-		{name: "validate too many dirs", args: []string{"validate", "a", "b"}, wantErr: "validate requires <dir>"},
+		{name: "vet no dir", args: []string{"vet"}, wantErr: "vet requires <dir>"},
+		{name: "vet too many dirs", args: []string{"vet", "a", "b"}, wantErr: "vet requires <dir>"},
 		{name: "skill missing action", args: []string{"skill", "doc-spec"}, wantErr: "skill requires doc-spec, code-spec, tdd, or implementer plus show or install"},
 		{name: "skill unknown action", args: []string{"skill", "doc-spec", "nope"}, wantErr: "unknown skill action: nope"},
 		{name: "skill unknown name", args: []string{"skill", "unknown", "show"}, wantErr: "unknown skill: unknown"},
