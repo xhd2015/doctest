@@ -54,9 +54,18 @@ type Options struct {
 	SessionID   string
 	Requirement string
 	CatchUp     bool
+	Status      bool
 }
 
 func Run(opts Options) error {
+	if opts.Status {
+		if opts.SessionID == "" {
+			fmt.Fprintf(os.Stderr, "error: --status requires --session-id\n")
+			return nil
+		}
+		return ShowStatus(opts.SessionID)
+	}
+
 	if opts.CatchUp {
 		if opts.SessionID == "" && os.Getenv("DOCTEST_AGENT_IMPLEMENTER_SESSION_ID") == "" && os.Getenv("CODEX_THREAD_ID") == "" {
 			return fmt.Errorf("--trace requires --session-id")
@@ -90,6 +99,7 @@ func Run(opts Options) error {
 	if err != nil {
 		return err
 	}
+	srcs.agentRunner = agentRunner
 
 	Logf("Session ID: %s (source: %s)\n", srcs.sessionID, sourceLabel(srcs))
 
@@ -240,6 +250,7 @@ type sessionIDSources struct {
 	codexThreadID     string
 	implSessionID     string
 	explicitSessionID string
+	agentRunner       string
 }
 
 func TraceSession(flagSessionID string) error {
@@ -349,6 +360,128 @@ func TraceSession(flagSessionID string) error {
 	fmt.Fprintf(os.Stdout, "\n───────────────────────────────────────────────────────────────\n")
 	fmt.Fprintf(os.Stdout, "  ✓ Session finished\n")
 	fmt.Fprintf(os.Stdout, "───────────────────────────────────────────────────────────────\n")
+
+	return nil
+}
+
+func ShowStatus(flagSessionID string) error {
+	srcs, err := resolveSessionID(flagSessionID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return nil
+	}
+
+	base, err := sessionsBase()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return nil
+	}
+
+	sessionDir := findSession(base, srcs.sessionID, srcs)
+	if sessionDir == "" {
+		fmt.Fprintf(os.Stderr, "error: session not found: %s\n", srcs.sessionID)
+		return nil
+	}
+
+	metaPath := filepath.Join(sessionDir, "meta.json")
+	metaData, err := os.ReadFile(metaPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: read meta.json: %v\n", err)
+		return nil
+	}
+
+	var metaMap map[string]any
+	if err := json.Unmarshal(metaData, &metaMap); err != nil {
+		fmt.Fprintf(os.Stderr, "error: invalid meta.json: %v\n", err)
+		return nil
+	}
+
+	sesID, _ := metaMap["explicit_session_id"].(string)
+	if sesID == "" {
+		sesID = srcs.sessionID
+	}
+
+	runner, _ := metaMap["agent_runner"].(string)
+	if runner == "" {
+		runner = "opencode"
+	}
+
+	codex, _ := metaMap["main_agent_codex_thread_id"].(string)
+	opencodeSID, _ := metaMap["opencode_session_id"].(string)
+
+	createdAtStr, _ := metaMap["created_at"].(string)
+	if t, err := time.Parse(time.RFC3339, createdAtStr); err == nil {
+		createdAtStr = t.Format("2006-01-02 15:04:05")
+	}
+
+	eventsPath := filepath.Join(sessionDir, "events.jsonl")
+	var eventLines []string
+	var lastTimestampMs int64
+	eventsData, evErr := os.ReadFile(eventsPath)
+	if evErr == nil {
+		for _, line := range strings.Split(string(eventsData), "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" && strings.HasPrefix(line, "{") {
+				eventLines = append(eventLines, line)
+			}
+		}
+		if len(eventLines) > 0 {
+			lastTimestampMs = parseEventTimestamp(eventLines[len(eventLines)-1])
+		}
+	}
+
+	eventCount := len(eventLines)
+	lastRelative := "—"
+	if lastTimestampMs > 0 {
+		lastRelative = relativeTime(lastTimestampMs)
+	}
+
+	status := "finished"
+	if isSessionLive(sessionDir) {
+		pidData, _ := os.ReadFile(filepath.Join(sessionDir, "pid"))
+		pid := strings.TrimSpace(string(pidData))
+		status = fmt.Sprintf("running (PID %s)", pid)
+	}
+
+	fmt.Fprintf(os.Stdout, "\n═══════════════════════════════════════════════════════════════\n")
+	fmt.Fprintf(os.Stdout, "  Session:  %s\n", sesID)
+	fmt.Fprintf(os.Stdout, "  Status:   %s\n", status)
+	fmt.Fprintf(os.Stdout, "  Runner:   %s\n", runner)
+	fmt.Fprintf(os.Stdout, "  Created:  %s\n", createdAtStr)
+
+	codexDisplay := codex
+	if codexDisplay == "" {
+		codexDisplay = "—"
+	}
+	fmt.Fprintf(os.Stdout, "  Codex:    %s\n", codexDisplay)
+	opencodeDisplay := opencodeSID
+	if opencodeDisplay == "" {
+		opencodeDisplay = "—"
+	}
+	fmt.Fprintf(os.Stdout, "  Opencode: %s\n", opencodeDisplay)
+	fmt.Fprintf(os.Stdout, "  Events:   %d lines (last: %s)\n", eventCount, lastRelative)
+	fmt.Fprintf(os.Stdout, "═══════════════════════════════════════════════════════════════\n\n")
+
+	if eventCount == 0 {
+		fmt.Fprintf(os.Stdout, "No events yet\n")
+	} else {
+		for i, line := range eventLines {
+			formatted := formatTraceEventLine(line)
+			if formatted == "" {
+				formatted = line
+			}
+			ts := parseEventTimestamp(line)
+			rel := "—"
+			if ts > 0 {
+				rel = relativeTime(ts)
+			}
+			lines := strings.Split(formatted, "\n")
+			fmt.Fprintf(os.Stdout, "  [%d] %s — %s\n", i+1, lines[0], rel)
+			for _, l := range lines[1:] {
+				fmt.Fprintf(os.Stdout, "       %s\n", l)
+			}
+		}
+	}
 
 	return nil
 }
@@ -723,6 +856,7 @@ type meta struct {
 	DoctestAgentImplementerSessionID string    `json:"doctest_agent_implementer_session_id,omitempty"`
 	MainAgentCodexThreadID           string    `json:"main_agent_codex_thread_id,omitempty"`
 	OpencodeSessionID                string    `json:"opencode_session_id,omitempty"`
+	AgentRunner                      string    `json:"agent_runner,omitempty"`
 	CreatedAt                        time.Time `json:"created_at"`
 }
 
@@ -802,6 +936,7 @@ func createSession(base, threadID string, srcs *sessionIDSources) (string, error
 		ExplicitSessionID:                srcs.explicitSessionID,
 		DoctestAgentImplementerSessionID: srcs.implSessionID,
 		MainAgentCodexThreadID:           srcs.codexThreadID,
+		AgentRunner:                      srcs.agentRunner,
 		CreatedAt:                        now,
 	}
 	data, err := json.MarshalIndent(m, "", "  ")
@@ -911,4 +1046,39 @@ func processExists(pid int) bool {
 	}
 	err = process.Signal(syscall.Signal(0))
 	return err == nil
+}
+
+func parseEventTimestamp(line string) int64 {
+	var event struct {
+		Timestamp int64 `json:"timestamp"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(line)), &event); err != nil {
+		return 0
+	}
+	return event.Timestamp
+}
+
+func relativeTime(timestampMs int64) string {
+	if timestampMs <= 0 {
+		return "—"
+	}
+	now := time.Now().UnixMilli()
+	diff := now - timestampMs
+	if diff < 0 {
+		diff = 0
+	}
+	seconds := diff / 1000
+	if seconds < 60 {
+		return fmt.Sprintf("%ds ago", seconds)
+	}
+	minutes := seconds / 60
+	if minutes < 60 {
+		return fmt.Sprintf("%dm ago", minutes)
+	}
+	hours := minutes / 60
+	if hours < 24 {
+		return fmt.Sprintf("%dh ago", hours)
+	}
+	days := hours / 24
+	return fmt.Sprintf("%dd ago", days)
 }

@@ -21,7 +21,7 @@ const usage = `Usage: doctest <command> [options]
 Commands:
   agent generate <idea> [-d|--dir <target-dir>] [--agent-runner RUNNER]
   agent fill-code <target-dir>
-   agent implement <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace]
+   agent implement <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status]
   validate <dir>
   build <dir>
   test <dir>
@@ -84,7 +84,7 @@ Examples:
   doctest test -v ./sub-module/...
 `
 
-const agentImplementUsage = `Usage: doctest agent implement [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] <prompt>
+const agentImplementUsage = `Usage: doctest agent implement [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status] <prompt>
 
 Spawn a sub-agent to implement code that makes doctests pass.
 Blocks until the sub-agent completes or yields questions via
@@ -93,6 +93,9 @@ yield-pending-questions.
 With --trace, follow and print the events of an existing session
 instead of spawning a sub-agent.
 
+With --status, display the current status of an existing session
+(requires --session-id).
+
 Options:
   --session-id ID         session to use or resume; for --trace, the session to follow
   --agent-runner RUNNER   opencode, codex, or fake-codex (default: opencode)
@@ -100,6 +103,7 @@ Options:
   --requirement PATH      read requirement from file (useful for long prompts
                           or prompts with shell special characters)
   --trace                 follow and print events from an existing session
+  --status                display session status (requires --session-id)
   -h, --help              Show help
 `
 
@@ -137,7 +141,7 @@ func runAgent(args []string) error {
 Commands:
   generate <idea> [-d|--dir <target-dir>]
   fill-code <target-dir>
-   implement <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace]
+   implement <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status]
 `)
 		return nil
 	}
@@ -195,6 +199,7 @@ func runAgentImplement(args []string) error {
 		String("--mock-config", &opts.MockConfig).
 		String("--requirement", &opts.Requirement).
 		Bool("--trace", &opts.CatchUp).
+		Bool("--status", &opts.Status).
 		Help("-h,--help", agentImplementUsage).
 		HelpNoExit().
 		Parse(args)
