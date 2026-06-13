@@ -19,19 +19,26 @@ import (
 const usage = `Usage: doctest <command> [options]
 
 Commands:
-  agent generate <idea> [-d|--dir <target-dir>] [--agent-runner RUNNER]
-  agent fill-code <target-dir>
-   agent implement <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status]
   validate <dir>
   build <dir>
   test <dir>
-   skill --list
-   skill doc-spec show|install
-   skill code-spec show|install
-   skill tdd show|install
-   skill implementer show|install
+
+Agents:
+  agent generate <idea> [-d|--dir <target-dir>] [--agent-runner RUNNER]
+  agent fill-code <target-dir>
+  agent implement <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status]
+
+Skills:
+  skill --list
+  skill doc-spec show|install
+  skill code-spec show|install
+  skill tdd show|install
+  skill implementer show|install
 
 Run doctest <command> --help for command-specific options.
+
+Examples:
+  doc test -v ./...
 `
 
 const agentGenerateUsage = `Usage: doctest agent generate <idea> [-d|--dir <target-dir>] [--agent-runner RUNNER]
