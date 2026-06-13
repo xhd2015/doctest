@@ -90,7 +90,7 @@ func Run(opts Options) error {
 		return err
 	}
 
-	fmt.Printf("Session ID: %s (source: %s)\n", srcs.sessionID, sourceLabel(srcs))
+	Logf("Session ID: %s (source: %s)\n", srcs.sessionID, sourceLabel(srcs))
 
 	sessionDir, isNew, err := findOrCreateSession(srcs.sessionID, srcs)
 	if err != nil {
@@ -159,11 +159,7 @@ func Run(opts Options) error {
 				return nil
 			}
 			desc, _ := entry["description"].(string)
-			ts, _ := entry["timestamp"].(string)
-			if ts == "" {
-				ts = time.Now().Format("2006-01-02T15:04:05")
-			}
-			fmt.Printf("[%s] %s\n", ts, desc)
+			Logf("%s", desc)
 			return nil
 		})
 	}()
@@ -224,6 +220,11 @@ func Run(opts Options) error {
 	}
 
 	return nil
+}
+
+func Logf(fmtStr string, args ...interface{}) {
+	ts := time.Now().Format("2006-01-02T15:04:05")
+	fmt.Println("[" + ts + "] " + fmt.Sprintf(fmtStr, args...))
 }
 
 type sessionIDSources struct {
@@ -290,7 +291,7 @@ func formatTraceEventLine(line string) string {
 		return ""
 	}
 	var event struct {
-		Type string         `json:"type"`
+		Type string          `json:"type"`
 		Item *traceEventItem `json:"item,omitempty"`
 	}
 	if err := json.Unmarshal([]byte(trimmed), &event); err != nil {
