@@ -474,13 +474,17 @@ func ShowStatus(flagSessionID string) error {
 		opencodeDisplay = "—"
 	}
 	fmt.Fprintf(os.Stdout, "  Opencode: %s\n", opencodeDisplay)
-	fmt.Fprintf(os.Stdout, "  Events:   %d lines (last: %s)\n", eventCount, lastRelative)
+	fmt.Fprintf(os.Stdout, "  Events:  %d lines (last: %s)\n", eventCount, lastRelative)
 	fmt.Fprintf(os.Stdout, "═══════════════════════════════════════════════════════════════\n\n")
 
 	if eventCount == 0 {
 		fmt.Fprintf(os.Stdout, "No events yet\n")
 	} else {
-		for i, line := range eventLines {
+		lastEvents := eventLines
+		if len(eventLines) > 3 {
+			lastEvents = eventLines[len(eventLines)-3:]
+		}
+		for i, line := range lastEvents {
 			formatted := print.FormatTraceLine(line)
 			if formatted == "" {
 				formatted = line

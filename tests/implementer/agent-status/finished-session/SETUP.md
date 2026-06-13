@@ -1,10 +1,11 @@
 ## Preconditions
 - A finished session directory exists with full `meta.json` and 5 events in `events.jsonl`.
 - Events use the actual opencode JSON format with `part` field and `timestamp` in milliseconds.
+- Only the last 3 events should appear in the output listing.
 
 ## Steps
 1. Create a session directory with all metadata fields.
-2. Write 5 events with known content and relative timestamps.
+2. Write 5 events. Event 2 content should be truncated (only last 3 shown). Events 3-5 should appear.
 3. Run `doctest agent implement --status --session-id status-finished-test`.
 
 ```go
@@ -40,9 +41,9 @@ func Setup(t *testing.T, req *Request) error {
     nowMs := now.UnixMilli()
     events := []string{
         fmt.Sprintf(`{"type":"step_start","timestamp":%d,"sessionID":"ses_open_xyz789","part":{"id":"prt_1","type":"step-start"}}`, nowMs-120000),
-        fmt.Sprintf(`{"type":"tool_use","timestamp":%d,"sessionID":"ses_open_xyz789","part":{"type":"tool","tool":"bash","callID":"call_1","state":{"status":"completed","input":{"command":"go build ./...","description":"Build project"},"output":"ok","title":"Build project"}}}`, nowMs-90000),
-        fmt.Sprintf(`{"type":"text","timestamp":%d,"sessionID":"ses_open_xyz789","part":{"id":"txt_1","type":"text","text":"Building the project..."}}`, nowMs-85000),
-        fmt.Sprintf(`{"type":"tool_use","timestamp":%d,"sessionID":"ses_open_xyz789","part":{"type":"tool","tool":"task","callID":"call_2","state":{"status":"completed","input":{"description":"Run tests","prompt":"Run go test ./... and report results"},"output":"All 16 tests pass","title":"Run tests"}}}`, nowMs-30000),
+        fmt.Sprintf(`{"type":"text","timestamp":%d,"sessionID":"ses_open_xyz789","part":{"id":"txt_trunc","type":"text","text":"THIS-SHOULD-BE-TRUNCATED"}}`, nowMs-100000),
+        fmt.Sprintf(`{"type":"tool_use","timestamp":%d,"sessionID":"ses_open_xyz789","part":{"type":"tool","tool":"bash","callID":"call_2","state":{"status":"completed","input":{"command":"go build ./...","description":"Build project"},"output":"ok","title":"Build project"}}}`, nowMs-90000),
+        fmt.Sprintf(`{"type":"tool_use","timestamp":%d,"sessionID":"ses_open_xyz789","part":{"type":"tool","tool":"task","callID":"call_3","state":{"status":"completed","input":{"description":"Run tests","prompt":"Run go test ./... and report results"},"output":"All 16 tests pass","title":"Run tests"}}}`, nowMs-30000),
         fmt.Sprintf(`{"type":"text","timestamp":%d,"sessionID":"ses_open_xyz789","part":{"id":"txt_2","type":"text","text":"All 16 tests pass — implementation complete."}}`, nowMs-10000),
     }
     eventsData := strings.Join(events, "\n") + "\n"
