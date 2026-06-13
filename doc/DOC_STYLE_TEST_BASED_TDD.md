@@ -26,16 +26,46 @@ Your responsibilities:
 
 # Doctest specification
 
-To write best doctests,  you must understand:
+A doc-style test is a test expressed as markdown in a decision tree.
+Prose is primary, code supplementary.
 
-- **`doctest skill doc-spec show`** —
-  how to structure test cases as markdown decision trees with `SETUP.md` and
-  `ASSERT.md`
-- **`doctest skill code-spec show`** —
-  how to embed executable Go code in `SETUP.md` and `ASSERT.md`, including
-  function signatures for `Setup`, `Run`, and `Assert`
+## Layout
 
-You can run `doctest skill doc-spec show` and `doctest skill code-spec show` to learn the doctest specifications, or inspect existing doctests structure to learn conventions.
+```
+<pkg>/tests/<feature>/
+├── DOCTEST.md          # Overview, diagram, test index + "## How to Run"
+├── SETUP.md            # Root: shared preconditions, Request/Response types, the Run(t, req) (resp,error) function that actually runs the logic
+├── testdata/           # Fixtures (skipped)
+├── decision/           # Grouping — no ASSERT.md, must have SETUP.md
+│   └── leaf/           # Runnable — has ASSERT.md, must have SETUP.md
+```
+
+- Dir with `ASSERT.md` = runnable leaf; without = grouping node (must have SETUP.md)
+- `SETUP.md` accumulates root→leaf: `## Steps` concatenated, `## Preconditions`/`## Context` merged.
+  Sections: `## Preconditions`, `## Steps`, `## Context`
+- `ASSERT.md` is **case-private** (never inherited).
+  Sections: `## Expected`, `## Side Effects`, `## Errors`, `## Exit Code`
+
+## Code blocks
+
+Both `SETUP.md` and `ASSERT.md` may contain ```go...``` go code blocks. 
+
+Root `SETUP.md` defines `type Request` and `type Response` — shared by all descendants.
+
+| Function | Where | Signature | Notes |
+|----------|-------|-----------|-------|
+| `Setup` | any SETUP.md | `(t *testing.T, req *Request) error` | called root→leaf before Run; body must not be stub |
+| `Run` | any SETUP.md | `(t *testing.T, req *Request) (*Response, error)` | **deepest wins**; root provides stub so tests fail RED |
+| `Assert` | every ASSERT.md | `(t *testing.T, req *Request, resp *Response, err error)` | fail via `t.Fatal`/`t.Fatalf` |
+
+Import target package directly. For unexported functions, use **`TestExported_`** prefix:
+`func TestExported_foo() { foo() }` — then `import "mypkg"; mypkg.TestExported_foo()` in the code block.
+
+- Every `SETUP.md` must have a Go block as **final content**; child must not redefine Request/Response
+- Signatures must match exactly; `func Setup` body must not be a stub (`return nil`)
+- At least one `Run` in the chain; every `ASSERT.md` must have `func Assert`
+
+> Full spec, run: `doctest skill doc-spec show` && `doctest skill code-spec show`
 
 # Non-Negotiable Agent Boundary
 
