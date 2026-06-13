@@ -37,7 +37,7 @@ To write best doctests,  you must understand:
 
 You can run `doctest skill doc-spec show` and `doctest skill code-spec show` to learn the doctest specifications, or inspect existing doctests structure to learn conventions.
 
-## Non-Negotiable Agent Boundary
+# Non-Negotiable Agent Boundary
 
 When this workflow is requested, the implementation sub-agent is the
 `doctest agent implement` sub-agent. Do **not** replace it with another
@@ -74,9 +74,9 @@ Disallowed substitutions:
 - implementing the production change directly after tests are sealed
 - treating an existing non-doctest delegation tool as equivalent to `doctest agent implement`
 
-## Workflow
+# Workflow
 
-### Phase 1: Requirements Elaboration
+## Phase 1: Requirements Elaboration
 
 Discuss the feature with the user. Produce a design document that covers:
 
@@ -88,7 +88,9 @@ Discuss the feature with the user. Produce a design document that covers:
 
 Get explicit user approval before proceeding to test design.
 
-### Phase 2: Test Design
+**MUST**: If user presents an issue or bug that needs to be investigated and fixed, to avoid messing up with your main workflow, you MUST delegate the investigation work to a sub-agent(e.g. explore), and wait for their result. Your job must be done by strict TDD-flow.
+
+## Phase 2: Test Design
 
 Avoid unit test since we're using doctests which much advanced than unit tests for self-documentation.
 
@@ -120,7 +122,7 @@ If the feature is already correctly implemented and the tests pass before any
 code change, report that result to the user instead of delegating unnecessary
 implementation.
 
-### Phase 3: RED — Confirm Tests Fail
+## Phase 3: RED — Confirm Tests Fail
 
 Run the tests to confirm every leaf is in a failing state:
 
@@ -133,7 +135,7 @@ or an equivalent stub failure. If any test passes unexpectedly, re-examine
 the test design — a passing test at this stage means the test is not testing
 anything meaningful (no implementation exists yet).
 
-### Phase 4: Seal Tests
+## Phase 4: Seal Tests
 
 Once all tests are confirmed failing, seal them to prevent the sub-agent from
 arbitrarily modifying test cases:
@@ -154,7 +156,7 @@ ask whether to continue with an unsealed doctest delegation.
 
 **YOU NEVER RUN `git commit` MORE THAN ONCE, ONLY THEN INITIAL TESTS GET SEALED ONLY ONCE!**
 
-### Phase 5: Delegation to Sub-Agent
+## Phase 5: Delegation to Sub-Agent
 
 Invoke the doctest-managed implementation sub-agent with the design document
 and test overview:
@@ -191,7 +193,7 @@ The prompt should include:
 
 You can also run `doctest agent implement --session-id <SESSION_ID_PRINTED_IN_THE_LOG> --status` to check sub-agent's status.
 
-### Phase 6: Handle Sub-Agent Questions (Optional, Only If Sub-Agent Has Yielded Questions)
+## Phase 6: Handle Sub-Agent Questions (Optional, Only If Sub-Agent Has Yielded Questions)
 
 The sub-agent may encounter ambiguity during implementation, and it would return questions to stdout and wait for your followup.
 
@@ -222,7 +224,7 @@ completion (all tests passing) with no further questions.
 
 Do not guess about business logic or user intent. When in doubt, ask the user.
 
-### Phase 7: Verify Completion
+## Phase 7: Verify Completion
 
 When the sub-agent reports completion:
 
@@ -263,7 +265,7 @@ Also report:
 - whether any verification failed for external reasons rather than code
   reasons
 
-## Always Apply This Workflow For Followup Request/Fix
+# Always Apply This Workflow For Followup Request/Fix
 
 If after the feature request workflow loop finished, and user requests new followup, always run this workflow again:
 - brainstorm for tech design
