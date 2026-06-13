@@ -189,7 +189,9 @@ The prompt should include:
 - Any known external limitations, such as live service rate limits, and which
   local deterministic tests are authoritative
 
-### Phase 6: Handle Sub-Agent Questions
+You can also run `doctest agent implement --session-id <SESSION_ID_PRINTED_IN_THE_LOG> --status` to check sub-agent's status.
+
+### Phase 6: Handle Sub-Agent Questions (Optional, Only If Sub-Agent Has Yielded Questions)
 
 The sub-agent may encounter ambiguity during implementation, and it would return questions to stdout and wait for your followup.
 
