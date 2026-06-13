@@ -1,10 +1,10 @@
 ## Preconditions
 - Three session directories exist with different `explicit_session_id`, `agent_runner`, and `created_at`.
-- The `--list` flag lists all sessions found within the last 7 days.
+- The `--list-sessions` flag lists all sessions found within the last 7 days.
 
 ## Steps
 1. Create 3 session directories with distinct metadata.
-2. Run `doctest agent implement --list`.
+2. Run `doctest agent implement --list-sessions`.
 
 ```go
 import (
@@ -49,7 +49,7 @@ func Setup(t *testing.T, req *Request) error {
         os.WriteFile(filepath.Join(sessDir, "meta.json"), metaData, 0644)
     }
 
-    req.Args = []string{"agent", "implement", "--list"}
+    req.Args = []string{"agent", "implement", "--list-sessions"}
     return nil
 }
 ```

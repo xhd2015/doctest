@@ -84,7 +84,7 @@ Examples:
   doctest test -v ./sub-module/...
 `
 
-const agentImplementUsage = `Usage: doctest agent implement [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status] <prompt>
+const agentImplementUsage = `Usage: doctest agent implement [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status] [--list-sessions] <prompt>
 
 Spawn a sub-agent to implement code that makes doctests pass.
 Blocks until the sub-agent completes or yields questions via
@@ -96,6 +96,8 @@ instead of spawning a sub-agent.
 With --status, display the current status of an existing session
 (requires --session-id).
 
+With --list-sessions, list all sessions from the last 7 days.
+
 Options:
   --session-id ID         session to use or resume; for --trace, the session to follow
   --agent-runner RUNNER   opencode, codex, or fake-codex (default: opencode)
@@ -104,6 +106,7 @@ Options:
                           or prompts with shell special characters)
   --trace                 follow and print events from an existing session
   --status                display session status (requires --session-id)
+  --list-sessions         list all sessions from the last 7 days
   -h, --help              Show help
 `
 
@@ -141,7 +144,7 @@ func runAgent(args []string) error {
 Commands:
   generate <idea> [-d|--dir <target-dir>]
   fill-code <target-dir>
-   implement <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status]
+   implement <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status] [--list-sessions]
 `)
 		return nil
 	}
@@ -200,6 +203,7 @@ func runAgentImplement(args []string) error {
 		String("--requirement", &opts.Requirement).
 		Bool("--trace", &opts.CatchUp).
 		Bool("--status", &opts.Status).
+		Bool("--list-sessions", &opts.ListSessions).
 		Help("-h,--help", agentImplementUsage).
 		HelpNoExit().
 		Parse(args)

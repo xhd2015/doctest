@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -55,9 +56,18 @@ type Options struct {
 	Requirement string
 	CatchUp     bool
 	Status      bool
+	ListSessions bool
 }
 
 func Run(opts Options) error {
+	if opts.ListSessions {
+		if opts.SessionID != "" {
+			fmt.Fprintf(os.Stderr, "error: --list-sessions and --session-id are mutually exclusive\n")
+			return nil
+		}
+		return ListSessions()
+	}
+
 	if opts.Status {
 		if opts.SessionID == "" {
 			fmt.Fprintf(os.Stderr, "error: --status requires --session-id\n")
@@ -481,6 +491,83 @@ func ShowStatus(flagSessionID string) error {
 				fmt.Fprintf(os.Stdout, "       %s\n", l)
 			}
 		}
+	}
+
+	return nil
+}
+
+func ListSessions() error {
+	base, err := sessionsBase()
+	if err != nil {
+		return err
+	}
+
+	type sessionInfo struct {
+		ID        string
+		Runner    string
+		CreatedAt time.Time
+	}
+
+	var sessions []sessionInfo
+	today := time.Now()
+
+	for i := 0; i < 7; i++ {
+		dateDir := today.AddDate(0, 0, -i).Format("2006/01/02")
+		dayPath := filepath.Join(base, dateDir)
+		entries, err := os.ReadDir(dayPath)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() || !strings.HasPrefix(entry.Name(), "sess_") {
+				continue
+			}
+			sessDir := filepath.Join(dayPath, entry.Name())
+			metaPath := filepath.Join(sessDir, "meta.json")
+			data, err := os.ReadFile(metaPath)
+			if err != nil {
+				continue
+			}
+			var m map[string]any
+			if err := json.Unmarshal(data, &m); err != nil {
+				continue
+			}
+
+			sid, _ := m["explicit_session_id"].(string)
+			if sid == "" {
+				sid = entry.Name()
+			}
+			runner, _ := m["agent_runner"].(string)
+			if runner == "" {
+				runner = "opencode"
+			}
+
+			var createdAt time.Time
+			if ts, ok := m["created_at"].(string); ok {
+				createdAt, _ = time.Parse(time.RFC3339, ts)
+			}
+
+			sessions = append(sessions, sessionInfo{
+				ID:        sid,
+				Runner:    runner,
+				CreatedAt: createdAt,
+			})
+		}
+	}
+
+	if len(sessions) == 0 {
+		fmt.Println("No sessions found")
+		return nil
+	}
+
+	sort.Slice(sessions, func(i, j int) bool {
+		return sessions[i].CreatedAt.After(sessions[j].CreatedAt)
+	})
+
+	fmt.Printf("\nSessions (%d):\n\n", len(sessions))
+	for _, s := range sessions {
+		timeStr := s.CreatedAt.Format("2006-01-02 15:04:05")
+		fmt.Printf("%-15s %-10s %s\n", s.ID, s.Runner, timeStr)
 	}
 
 	return nil

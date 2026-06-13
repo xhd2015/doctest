@@ -1,10 +1,10 @@
 ## Preconditions
 - A fresh sessions directory with no session subdirectories.
-- The `--list` flag should report no sessions found.
+- The `--list-sessions` flag should report no sessions found.
 
 ## Steps
 1. Ensure the sessions home directory exists but is empty.
-2. Run `doctest agent implement --list`.
+2. Run `doctest agent implement --list-sessions`.
 
 ```go
 import (
@@ -18,7 +18,7 @@ func Setup(t *testing.T, req *Request) error {
     os.RemoveAll(sessHome)
     os.MkdirAll(sessHome, 0755)
 
-    req.Args = []string{"agent", "implement", "--list"}
+    req.Args = []string{"agent", "implement", "--list-sessions"}
     return nil
 }
 ```

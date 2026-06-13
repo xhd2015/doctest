@@ -1,5 +1,5 @@
 ## Preconditions
-- Tests in this group test `doctest agent implement --list`.
+- Tests in this group test `doctest agent implement --list-sessions`.
 
 ```go
 import "testing"

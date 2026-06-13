@@ -1,5 +1,5 @@
 ## Expected
-- Stderr contains an error about mutual exclusion (e.g. "cannot use --list with --session-id").
+- Stderr contains an error about mutual exclusion (e.g. "cannot use --list-sessions with --session-id").
 - Exit code is 0.
 
 ```go
