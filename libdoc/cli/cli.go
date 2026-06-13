@@ -257,6 +257,7 @@ func runSkill(args []string) error {
 	remainArgs, err := lessflags.Bool("--list", &listFlag).
 		Help("-h,--help", skillUsage).
 		HelpNoExit().
+		StopOnFirstArg().
 		Parse(args)
 	if err != nil {
 		if errors.Is(err, lessflags.ErrHelp) {
