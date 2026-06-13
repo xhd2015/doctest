@@ -388,10 +388,14 @@ func ShowStatus(flagSessionID string) error {
 		return nil
 	}
 
-	sessionDir := findSession(base, srcs.sessionID, srcs)
+	sessionDir, codexFallback := findSession(base, srcs.sessionID, srcs)
 	if sessionDir == "" {
 		fmt.Fprintf(os.Stderr, "error: session not found: %s\n", srcs.sessionID)
 		return nil
+	}
+
+	if codexFallback {
+		fmt.Fprintf(os.Stdout, "from --session-id, matching CODEX_THREAD_ID\n")
 	}
 
 	metaPath := filepath.Join(sessionDir, "meta.json")
@@ -767,7 +771,7 @@ func findOrCreateSession(threadID string, srcs *sessionIDSources) (dir string, i
 		return "", false, err
 	}
 
-	dir = findSession(base, threadID, srcs)
+	dir, _ = findSession(base, threadID, srcs)
 	if dir != "" {
 		return dir, false, nil
 	}
@@ -779,8 +783,23 @@ func findOrCreateSession(threadID string, srcs *sessionIDSources) (dir string, i
 	return dir, true, nil
 }
 
-func findSession(base, threadID string, srcs *sessionIDSources) string {
+func findSession(base, threadID string, srcs *sessionIDSources) (string, bool) {
 	matchField := sessionMatchField(srcs)
+
+	if dir := findSessionByField(base, threadID, matchField); dir != "" {
+		return dir, false
+	}
+
+	if srcs.explicitSessionID != "" && matchField != "main_agent_codex_thread_id" {
+		if dir := findSessionByField(base, threadID, "main_agent_codex_thread_id"); dir != "" {
+			return dir, true
+		}
+	}
+
+	return "", false
+}
+
+func findSessionByField(base, threadID, matchField string) string {
 	today := time.Now()
 	for i := 0; i < 7; i++ {
 		dateDir := today.AddDate(0, 0, -i).Format("2006/01/02")
