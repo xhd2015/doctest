@@ -36,6 +36,12 @@ doctest test -v ./<test-dir>
 
 If any tests fail, fix your implementation and re-run until all tests pass.
 
+And also run a full tests to ensure no regression:
+
+```sh
+doctest test -v ./...
+```
+
 ### Step 4: Report Completion
 
 When all tests pass (GREEN), report the results. The main agent will verify:

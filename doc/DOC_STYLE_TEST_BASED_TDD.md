@@ -291,6 +291,12 @@ doctest test -v ./tests
 All tests must pass (GREEN). If any test fails, feed the failure output back
 to the sub-agent for correction. Repeat until all tests pass.
 
+And also run a full tests to ensure no regression:
+
+```sh
+doctest test -v ./...
+```
+
 **Step 3 — Report:**
 
 Summarize the results to the user: how many tests passed, any test
