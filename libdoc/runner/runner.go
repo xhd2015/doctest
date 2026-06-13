@@ -271,7 +271,23 @@ func findDotDotDotDirs(basePath string) ([]string, error) {
 	}
 	dirs, err := FindDOCTestDirsWithBase(basePath, basePath)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			absBase, absErr := filepath.Abs(basePath)
+			if absErr == nil {
+				if _, ok := ResolveRoot(absBase); ok {
+					return []string{absBase}, nil
+				}
+			}
+		}
 		return nil, err
+	}
+	if len(dirs) == 0 {
+		absBase, absErr := filepath.Abs(basePath)
+		if absErr == nil {
+			if _, ok := ResolveRoot(absBase); ok {
+				return []string{absBase}, nil
+			}
+		}
 	}
 	return dirs, nil
 }
