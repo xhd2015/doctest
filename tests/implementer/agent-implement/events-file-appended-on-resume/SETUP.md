@@ -44,7 +44,7 @@ func Setup(t *testing.T, req *Request) error {
         t.Fatalf("write initial events.jsonl: %v", writeErr)
     }
 
-    writeMockConfig(t, req, `{"version":"agent-pro.fake-runner.v1","runner":"fake-codex","stdout_events":[{"type":"item.completed","item":{"id":"resume_evt","type":"message","text":"resumed and finished","status":"completed"}}]}`)
+    writeMockConfig(t, req, `{"version":"agent-pro.fake-runner.v1","runner":"fake-codex","llm_events":[{"id":"resume_evt","type":"message","text":"resumed and finished"}]}`)
     req.Args = []string{"agent", "implement", "--agent-runner", "fake-codex", "followup task"}
     return nil
 }

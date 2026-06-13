@@ -119,12 +119,10 @@ func Run(opts Options) error {
 		return fmt.Errorf("session: %w", err)
 	}
 
-	if isNew {
-		if err := writeSessionPID(sessionDir); err != nil {
-			return fmt.Errorf("write pid: %w", err)
-		}
-		defer removeSessionPID(sessionDir)
+	if err := writeSessionPID(sessionDir); err != nil {
+		return fmt.Errorf("write pid: %w", err)
 	}
+	defer removeSessionPID(sessionDir)
 
 	msgPath := filepath.Join(sessionDir, "messages.jsonl")
 	msgEntry := map[string]string{

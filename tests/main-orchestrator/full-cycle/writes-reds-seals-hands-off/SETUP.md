@@ -55,7 +55,7 @@ func Setup(t *testing.T, req *Request) error {
     }
 
     // Phase 5: Handoff
-    writeMockConfig(t, req, `{"version":"agent-pro.fake-runner.v1","runner":"fake-codex","session_id":"sess_full","stdout_events":[{"type":"item.completed","item":{"id":"m1","type":"message","text":"feature implemented","status":"completed"}}]}`)
+    writeMockConfig(t, req, `{"version":"agent-pro.fake-runner.v1","runner":"fake-codex","session_id":"sess_full","llm_events":[{"type":"message","text":"feature implemented"}]}`)
     req.Env = append(req.Env, "REPO_DIR="+repoDir)
     req.Env = append(req.Env, "CODEX_THREAD_ID=impl_test_orch_full")
     req.Args = []string{"agent", "implement", "--agent-runner", "fake-codex", "implement greet feature"}

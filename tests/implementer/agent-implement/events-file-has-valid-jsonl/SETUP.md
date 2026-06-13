@@ -14,7 +14,7 @@ import (
 
 func Setup(t *testing.T, req *Request) error {
     req.Env = append(req.Env, "CODEX_THREAD_ID=impl_test_events_valid")
-    writeMockConfig(t, req, `{"version":"agent-pro.fake-runner.v1","runner":"fake-codex","stdout_events":[{"type":"item.started","item":{"id":"r1","type":"reasoning"}},{"type":"item.completed","item":{"id":"r1","type":"reasoning","text":"thinking...","status":"completed"}},{"type":"item.completed","item":{"id":"m1","type":"message","text":"done","status":"completed"}}]}`)
+    writeMockConfig(t, req, `{"version":"agent-pro.fake-runner.v1","runner":"fake-codex","llm_events":[{"type":"think","text":"thinking..."},{"type":"message","text":"done"}]}`)
     req.Args = []string{"agent", "implement", "--agent-runner", "fake-codex", "implement the feature"}
     return nil
 }

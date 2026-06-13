@@ -355,7 +355,7 @@ Each test:
 {
   "runner": "fake-opencode",
   "session_id": "fake-session",
-  "stdout_events": [
+  "llm_events": [
     {
       "type": "text",
       "part": {

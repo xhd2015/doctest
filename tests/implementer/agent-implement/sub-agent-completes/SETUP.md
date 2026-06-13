@@ -10,7 +10,7 @@ import "testing"
 
 func Setup(t *testing.T, req *Request) error {
     req.Env = append(req.Env, "CODEX_THREAD_ID=impl_test_completes")
-    writeMockConfig(t, req, `{"version":"agent-pro.fake-runner.v1","runner":"fake-codex","stdout_events":[{"type":"item.completed","item":{"id":"m1","type":"message","text":"I have implemented the feature.","status":"completed"}}]}`)
+    writeMockConfig(t, req, `{"version":"agent-pro.fake-runner.v1","runner":"fake-codex","llm_events":[{"type":"message","text":"I have implemented the feature."}]}`)
     req.Args = []string{"agent", "implement", "--agent-runner", "fake-codex", "implement feature"}
     return nil
 }

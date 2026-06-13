@@ -44,8 +44,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         "version":"agent-pro.fake-runner.v1",
         "runner":"fake-codex",
         "session_id":"inner-cross-B",
-        "stdout_events":[
-            {"type":"item.completed","item":{"id":"m1","type":"message","text":"second call B done","status":"completed"}}
+        "llm_events":[
+            {"type":"message","text":"second call B done"}
         ]
     }`), 0644)
 

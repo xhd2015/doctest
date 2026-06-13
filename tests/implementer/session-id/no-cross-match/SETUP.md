@@ -20,8 +20,8 @@ func Setup(t *testing.T, req *Request) error {
         "version":"agent-pro.fake-runner.v1",
         "runner":"fake-codex",
         "session_id":"inner-cross-A",
-        "stdout_events":[
-            {"type":"item.completed","item":{"id":"m1","type":"message","text":"first call A done","status":"completed"}}
+        "llm_events":[
+            {"type":"message","text":"first call A done"}
         ]
     }`)
 

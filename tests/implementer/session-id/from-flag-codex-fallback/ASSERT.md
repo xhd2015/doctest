@@ -50,8 +50,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         "version":"agent-pro.fake-runner.v1",
         "runner":"fake-codex",
         "session_id":"inner-fallback-2",
-        "stdout_events":[
-            {"type":"item.completed","item":{"id":"m1","type":"message","text":"second fallback call done","status":"completed"}}
+        "llm_events":[
+            {"type":"message","text":"second fallback call done"}
         ]
     }`), 0644)
 

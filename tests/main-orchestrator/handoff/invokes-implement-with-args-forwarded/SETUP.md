@@ -13,7 +13,7 @@ import (
 
 func Setup(t *testing.T, req *Request) error {
     req.Env = append(req.Env, "CODEX_THREAD_ID=impl_test_orch_args")
-    writeMockConfig(t, req, `{"version":"agent-pro.fake-runner.v1","runner":"fake-codex","session_id":"sess_args","stdout_events":[{"type":"item.completed","item":{"id":"m1","type":"message","text":"args forwarded ok","status":"completed"}}]}`)
+    writeMockConfig(t, req, `{"version":"agent-pro.fake-runner.v1","runner":"fake-codex","session_id":"sess_args","llm_events":[{"type":"message","text":"args forwarded ok"}]}`)
     req.Args = []string{"agent", "implement", "--agent-runner", "fake-codex", "test args forwarded"}
     return nil
 }

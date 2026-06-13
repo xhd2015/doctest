@@ -1,6 +1,6 @@
 ## Expected
 - Exit code 0.
-- `events.jsonl` contains events matching the mock config `stdout_events`.
+- `events.jsonl` contains events matching the mock config `llm_events`.
 - Event count matches.
 - Event IDs match expected values.
 

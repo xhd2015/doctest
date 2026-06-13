@@ -12,8 +12,8 @@ func Setup(t *testing.T, req *Request) error {
         "version":"agent-pro.fake-runner.v1",
         "runner":"fake-codex",
         "session_id":"inner-no-thread",
-        "stdout_events":[
-            {"type":"item.completed","item":{"id":"m1","type":"message","text":"done","status":"completed"}}
+        "llm_events":[
+            {"type":"message","text":"done"}
         ]
     }`)
     req.Args = []string{"agent", "implement", "--agent-runner", "fake-codex", "some prompt"}

@@ -26,7 +26,7 @@ func Setup(t *testing.T, req *Request) error {
     }
 
     hookCmd := yieldPQ + " '{\"id\":\"1\",\"question\":\"What is the target port?\",\"options\":[{\"option\":\"3000\",\"explanation\":\"default development port\"},{\"option\":\"8080\",\"explanation\":\"common HTTP alternative\"}]}'"
-    writeMockConfig(t, req, fmt.Sprintf(`{"version":"agent-pro.fake-runner.v1","runner":"fake-codex","hook_command":%q,"hooks":[{"at":"before_exit","event":"yield","payload":{"ok":true}}],"stdout_events":[{"type":"item.completed","item":{"id":"m1","type":"message","text":"working on it","status":"completed"}}]}`, hookCmd+" {{event}}"))
+    writeMockConfig(t, req, fmt.Sprintf(`{"version":"agent-pro.fake-runner.v1","runner":"fake-codex","hook_command":%q,"hooks":[{"at":"before_exit","event":"yield","payload":{"ok":true}}],"llm_events":[{"type":"message","text":"working on it"}]}`, hookCmd+" {{event}}"))
     req.Args = []string{"agent", "implement", "--agent-runner", "fake-codex", "implement feature"}
     return nil
 }

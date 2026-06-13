@@ -24,8 +24,8 @@ func Setup(t *testing.T, req *Request) error {
         "version":"agent-pro.fake-runner.v1",
         "runner":"fake-codex",
         "session_id":"inner-codex-resume",
-        "stdout_events":[
-            {"type":"item.completed","item":{"id":"m1","type":"message","text":"first codex call done","status":"completed"}}
+        "llm_events":[
+            {"type":"message","text":"first codex call done"}
         ]
     }`)
 

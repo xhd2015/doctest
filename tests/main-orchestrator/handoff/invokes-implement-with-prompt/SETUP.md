@@ -27,7 +27,7 @@ func Setup(t *testing.T, req *Request) error {
     createDoctestTree(t, treeDir, false)
     runCmd(t, repoDir, nil, "git", "add", "tests/greet")
 
-    writeMockConfig(t, req, `{"version":"agent-pro.fake-runner.v1","runner":"fake-codex","session_id":"sess_handoff","stdout_events":[{"type":"item.completed","item":{"id":"m1","type":"message","text":"implemented greet feature","status":"completed"}}]}`)
+    writeMockConfig(t, req, `{"version":"agent-pro.fake-runner.v1","runner":"fake-codex","session_id":"sess_handoff","llm_events":[{"type":"message","text":"implemented greet feature"}]}`)
 
     req.Env = append(req.Env, "REPO_DIR="+repoDir)
     req.Env = append(req.Env, "CODEX_THREAD_ID=impl_test_orch_handoff")

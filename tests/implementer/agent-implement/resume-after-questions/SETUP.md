@@ -35,7 +35,7 @@ func Setup(t *testing.T, req *Request) error {
         t.Fatalf("write meta.json: %v", writeErr)
     }
 
-    writeMockConfig(t, req, `{"version":"agent-pro.fake-runner.v1","runner":"fake-codex","session_id":"impl_test_session_1","stdout_events":[{"type":"item.completed","item":{"id":"m1","type":"message","text":"resumed and done","status":"completed"}}]}`)
+    writeMockConfig(t, req, `{"version":"agent-pro.fake-runner.v1","runner":"fake-codex","session_id":"impl_test_session_1","llm_events":[{"type":"message","text":"resumed and done"}]}`)
     req.Args = []string{"agent", "implement", "--agent-runner", "fake-codex", "the port should be 8080"}
     return nil
 }
