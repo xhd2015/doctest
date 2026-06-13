@@ -66,7 +66,7 @@ func TestRunErrorCases(t *testing.T) {
 		{name: "generate no idea", args: []string{"agent", "generate"}, wantErr: "agent generate requires <idea>"},
 		{name: "vet no dir", args: []string{"vet"}, wantErr: "vet requires <dir>"},
 		{name: "vet nonexistent dirs", args: []string{"vet", "a", "b"}, wantErr: "no such file or directory"},
-		{name: "skill missing action", args: []string{"skill", "doc-spec"}, wantErr: "skill requires doc-spec, code-spec, tdd, or implementer plus show or install"},
+		{name: "skill missing action", args: []string{"skill", "doc-spec"}, wantErr: "skill requires doc-spec, code-spec, tdd, implementer, or designer plus show or install"},
 		{name: "skill unknown action", args: []string{"skill", "doc-spec", "nope"}, wantErr: "unknown skill action: nope"},
 		{name: "skill unknown name", args: []string{"skill", "unknown", "show"}, wantErr: "unknown skill: unknown"},
 		{name: "implement trace without session-id", args: []string{"agent", "implement", "--trace"}, wantErr: "requires --session-id"},

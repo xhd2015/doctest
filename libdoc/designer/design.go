@@ -1,4 +1,4 @@
-package implementer
+package designer
 
 import (
 	_ "embed"
@@ -17,7 +17,7 @@ type Options = subagent.Options
 
 func Run(opts Options) error {
 	return subagent.Run(subagent.Config{
-		Name:         "implementer",
+		Name:         "designer",
 		PromptContent: promptContent,
 	}, opts)
 }

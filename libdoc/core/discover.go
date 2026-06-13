@@ -34,6 +34,9 @@ func discoverTreeCasesInternal(root string, w io.Writer) ([]TreeCase, error) {
 	rootSetupPath := filepath.Join(root, "SETUP.md")
 	rootSetupContent, err := os.ReadFile(rootSetupPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil // no SETUP.md at root -> no test cases; caller reports "no tests found"
+		}
 		return nil, err
 	}
 	rootSetup, err := ParseSetupDocument(rootSetupPath, string(rootSetupContent))

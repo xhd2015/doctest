@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/xhd2015/doctest/doc"
+	"github.com/xhd2015/doctest/libdoc/designer"
 	"github.com/xhd2015/doctest/libdoc/implementer"
 	"github.com/xhd2015/skills/install"
 )
@@ -19,6 +20,7 @@ var entries = map[string]entry{
 	"code-spec":   {SkillName: "doc-style-test-code-specification", FileName: "DOC_STYLE_TEST_CODE_SPECIFICATION.md"},
 	"tdd":         {SkillName: "doc-style-test-based-tdd", FileName: "DOC_STYLE_TEST_BASED_TDD.md"},
 	"implementer": {SkillName: "doc-style-test-based-tdd-implementer", ContentFunc: func() (string, error) { return implementer.PromptContent(), nil }},
+	"designer":    {SkillName: "doc-style-test-based-tdd-designer", ContentFunc: func() (string, error) { return designer.PromptContent(), nil }},
 }
 
 func Content(name string) (string, error) {

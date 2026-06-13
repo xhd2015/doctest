@@ -10,9 +10,11 @@ import (
 	lessflags "github.com/xhd2015/less-flags"
 
 	"github.com/xhd2015/doctest/libdoc/agent"
+	"github.com/xhd2015/doctest/libdoc/designer"
 	"github.com/xhd2015/doctest/libdoc/implementer"
 	"github.com/xhd2015/doctest/libdoc/runner"
 	"github.com/xhd2015/doctest/libdoc/spec"
+	"github.com/xhd2015/doctest/libdoc/subagent"
 )
 
 const usage = `Usage: doctest <command> [options]
@@ -25,7 +27,8 @@ Commands:
 Agents:
   agent generate <idea> [-d|--dir <target-dir>] [--agent-runner RUNNER]
   agent fill-code <target-dir>
-  agent implement <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status]
+  agent implement <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status] [--list-sessions]
+  agent design <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status] [--list-sessions]
 
 Skills:
   skill --list
@@ -33,6 +36,7 @@ Skills:
   skill code-spec show|install
   skill tdd show|install
   skill implementer show|install
+  skill designer show|install
 
 Run doctest <command> --help for command-specific options.
 
@@ -55,6 +59,7 @@ const skillUsage = `Usage: doctest skill --list
        doctest skill code-spec show|install
        doctest skill tdd show|install
        doctest skill implementer show|install
+       doctest skill designer show|install
 `
 
 const vetUsage = `Usage: doctest vet [-v|--verbose] <dir...>
@@ -130,12 +135,39 @@ Options:
   -h, --help              Show help
 `
 
+const agentDesignUsage = `Usage: doctest agent design [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status] [--list-sessions] <prompt>
+
+Spawn a sub-agent to design doctest trees for new features or update
+existing test suites. The sub-agent analyzes requirements, breaks down
+parameters into mutually exclusive cases, and writes comprehensive
+doctest files.
+
+With --trace, follow and print the events of an existing session
+instead of spawning a sub-agent.
+
+With --status, display the current status of an existing session
+(requires --session-id).
+
+With --list-sessions, list all sessions from the last 7 days.
+
+Options:
+  --session-id ID         session to use or resume; for --trace, the session to follow
+  --agent-runner RUNNER   opencode, codex, or fake-codex (default: opencode)
+  --mock-config PATH      mock config JSON for fake-codex
+  --requirement PATH      read requirement from file (useful for long prompts
+                          or prompts with shell special characters)
+  --trace                 follow and print events from an existing session
+  --status                display session status (requires --session-id)
+  --list-sessions         list all sessions from the last 7 days
+  -h, --help              Show help
+`
+
 func Run(args []string) error {
 	if filepath.Base(os.Args[0]) == "yield-pending-questions" {
-		return implementer.HandleYieldPendingQuestions(args)
+		return subagent.HandleYieldPendingQuestions(args)
 	}
 	if filepath.Base(os.Args[0]) == "report-progress" {
-		return implementer.HandleReportProgress(args)
+		return subagent.HandleReportProgress(args)
 	}
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
 		fmt.Print(usage)
@@ -164,7 +196,8 @@ func runAgent(args []string) error {
 Commands:
   generate <idea> [-d|--dir <target-dir>]
   fill-code <target-dir>
-   implement <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status] [--list-sessions]
+  implement <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status] [--list-sessions]
+  design <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status] [--list-sessions]
 `)
 		return nil
 	}
@@ -182,6 +215,8 @@ Commands:
 		return agent.FillCode(args[1])
 	case "implement":
 		return runAgentImplement(args[1:])
+	case "design":
+		return runAgentDesign(args[1:])
 	default:
 		return fmt.Errorf("unknown agent command: %s", args[0])
 	}
@@ -237,6 +272,32 @@ func runAgentImplement(args []string) error {
 	return implementer.Run(opts)
 }
 
+func runAgentDesign(args []string) error {
+	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
+		fmt.Print(agentDesignUsage)
+		return nil
+	}
+	opts := designer.Options{AgentRunner: "opencode"}
+	remainArgs, err := lessflags.String("--session-id", &opts.SessionID).
+		String("--agent-runner", &opts.AgentRunner).
+		String("--mock-config", &opts.MockConfig).
+		String("--requirement", &opts.Requirement).
+		Bool("--trace", &opts.CatchUp).
+		Bool("--status", &opts.Status).
+		Bool("--list-sessions", &opts.ListSessions).
+		Help("-h,--help", agentDesignUsage).
+		HelpNoExit().
+		Parse(args)
+	if err != nil {
+		if errors.Is(err, lessflags.ErrHelp) {
+			return nil
+		}
+		return err
+	}
+	opts.Prompt = strings.Join(remainArgs, " ")
+	return designer.Run(opts)
+}
+
 func runRunner(args []string, usage string, fn func([]string) error) error {
 	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
 		fmt.Print(usage)
@@ -272,10 +333,11 @@ func runSkill(args []string) error {
 		fmt.Println("code-spec")
 		fmt.Println("tdd")
 		fmt.Println("implementer")
+		fmt.Println("designer")
 		return nil
 	}
 	if len(remainArgs) < 2 {
-		return fmt.Errorf("skill requires doc-spec, code-spec, tdd, or implementer plus show or install")
+		return fmt.Errorf("skill requires doc-spec, code-spec, tdd, implementer, or designer plus show or install")
 	}
 	switch remainArgs[1] {
 	case "show":

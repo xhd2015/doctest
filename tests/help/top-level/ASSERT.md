@@ -19,7 +19,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if resp.ExitCode != 0 {
         t.Fatalf("exit code = %d, stderr:\n%s", resp.ExitCode, resp.Stderr)
     }
-    for _, want := range []string{"Usage: doctest", "agent", "validate", "build", "test", "skill"} {
+	for _, want := range []string{"Usage: doctest", "agent", "vet", "design", "build", "test", "skill"} {
         if !strings.Contains(resp.Stdout, want) {
             t.Fatalf("stdout missing %q:\n%s", want, resp.Stdout)
         }

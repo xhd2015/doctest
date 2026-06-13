@@ -6,6 +6,8 @@
 2. Define a deeper `Run` for this leaf.
 
 ```go
+import "fmt"
+
 func Setup(t *testing.T, req *Request) error {
 	req.Action = "ignored-by-override"
 	req.Name = "leaf"
@@ -13,6 +15,6 @@ func Setup(t *testing.T, req *Request) error {
 }
 
 func Run(t *testing.T, req *Request) (*Response, error) {
-	return &Response{Message: "override run for " + req.Name}, nil
+	return &Response{Message: fmt.Sprintf("override run for %s", req.Name)}, nil
 }
 ```

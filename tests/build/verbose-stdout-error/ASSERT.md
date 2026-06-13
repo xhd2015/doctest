@@ -5,7 +5,6 @@
 
 ```go
 import (
-    "strings"
     "testing"
 )
 

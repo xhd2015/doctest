@@ -34,7 +34,7 @@ func Setup(t *testing.T, req *Request) error {
 	os.WriteFile(filepath.Join(sessDir, "meta.json"), metaData, 0644)
 
 	events := []string{
-		`{"type":"item.completed","item":{"id":"m1","type":"message","text":"Hello from trace!","status":"completed"}}`,
+		`{"type":"text","part":{"id":"m1","type":"message","text":"Hello from trace!"}}`,
 	}
 	eventsData := strings.Join(events, "\n") + "\n"
 	os.WriteFile(filepath.Join(sessDir, "events.jsonl"), []byte(eventsData), 0644)
