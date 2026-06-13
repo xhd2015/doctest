@@ -24,6 +24,7 @@ import (
 	agentprovider "github.com/xhd2015/agent-pro/agent/cli/provider"
 	"github.com/xhd2015/agent-pro/agent/cli/registry"
 	agentexec "github.com/xhd2015/agent-pro/agent/exec"
+	"github.com/xhd2015/agent-pro/agent/event/print"
 	"github.com/xhd2015/agent-pro/agent_trace/events"
 )
 
@@ -307,7 +308,7 @@ func TraceSession(flagSessionID string) error {
 				continue
 			}
 			n++
-			formatted := formatTraceEventLine(line)
+			formatted := print.FormatTraceLine(line)
 			if formatted != "" {
 				fmt.Fprintf(os.Stdout, "[%d]  %s\n", n, formatted)
 			}
@@ -344,7 +345,7 @@ func TraceSession(flagSessionID string) error {
 	go func() {
 		defer wg.Done()
 		watchErr = logs.WatchLine(ctx, eventsPath, logs.WatchLineOptions{}, func(line string) error {
-			formatted := formatTraceEventLine(line)
+			formatted := print.FormatTraceLine(line)
 			if formatted != "" {
 				fmt.Fprintf(os.Stdout, "[%d]  %s\n", n, formatted)
 			}
@@ -476,7 +477,7 @@ func ShowStatus(flagSessionID string) error {
 		fmt.Fprintf(os.Stdout, "No events yet\n")
 	} else {
 		for i, line := range eventLines {
-			formatted := formatTraceEventLine(line)
+			formatted := print.FormatTraceLine(line)
 			if formatted == "" {
 				formatted = line
 			}
@@ -592,193 +593,6 @@ func isSessionLive(sessionDir string) bool {
 		return false
 	}
 	return processExists(pid)
-}
-
-func formatTraceEventLine(line string) string {
-	trimmed := strings.TrimSpace(line)
-	if trimmed == "" || !strings.HasPrefix(trimmed, "{") {
-		return ""
-	}
-	var event struct {
-		Type      string              `json:"type"`
-		SessionID string              `json:"sessionID,omitempty"`
-		Part      *traceEventPart     `json:"part,omitempty"`
-		Error     map[string]any      `json:"error,omitempty"`
-	}
-	if err := json.Unmarshal([]byte(trimmed), &event); err != nil {
-		return ""
-	}
-
-	switch event.Type {
-	case "text":
-		if event.Part != nil {
-			text := strings.TrimSpace(event.Part.Text)
-			if text != "" {
-				return "💬   ASSISTANT\n     " + strings.ReplaceAll(text, "\n", "\n     ")
-			}
-		}
-	case "tool_use":
-		if event.Part != nil {
-			toolType := friendlyToolName(event.Part.Tool)
-			status := ""
-			if event.Part.State != nil {
-				status = event.Part.State.Status
-			}
-			switch status {
-			case "completed":
-				summary := ""
-				if event.Part.State != nil {
-					if event.Part.State.Title != "" {
-						summary = event.Part.State.Title
-					}
-					if event.Part.State.Output != "" {
-						if summary != "" {
-							summary = summary + "\n" + event.Part.State.Output
-						} else {
-							summary = event.Part.State.Output
-						}
-					}
-				}
-				if summary == "" && event.Part.State != nil && event.Part.State.Input != nil {
-					summary = toolInputSummary(event.Part.Tool, event.Part.State.Input)
-				}
-				line := "⚡  " + toolType + " (done)"
-				if summary != "" {
-					line += "\n     " + strings.ReplaceAll(summary, "\n", "\n     ")
-				}
-				return line
-			case "error", "failed":
-				errStr := ""
-				if event.Part.State != nil && event.Part.State.Error != "" {
-					errStr = event.Part.State.Error
-				}
-				line := "⚡  " + toolType + " (failed)"
-				if errStr != "" {
-					line += "\n     " + strings.ReplaceAll(errStr, "\n", "\n     ")
-				}
-				return line
-			case "in_progress", "running":
-				return "⚡  " + toolType + " (running)"
-			case "pending":
-				return "⚡  " + toolType + " (pending)"
-			default:
-				return "⚡  " + toolType
-			}
-		}
-	case "step_start":
-		return "─── Step started ───"
-	case "step_finish":
-		reason := ""
-		if event.Part != nil {
-			reason = event.Part.Reason
-		}
-		line := "─── Step finished"
-		if reason != "" {
-			line += " (" + reason + ")"
-		}
-		line += " ───"
-		return line
-	case "error":
-		errMsg := ""
-		if event.Error != nil {
-			if name, ok := event.Error["name"].(string); ok {
-				errMsg = name
-			}
-			if data, ok := event.Error["data"].(map[string]any); ok {
-				if msg, ok := data["message"].(string); ok && msg != "" {
-					errMsg = msg
-				}
-			}
-		}
-		if errMsg == "" {
-			errMsg = "unknown error"
-		}
-		return "❌  ERROR\n     " + strings.ReplaceAll(errMsg, "\n", "\n     ")
-	case "reasoning":
-		if event.Part != nil {
-			text := strings.TrimSpace(event.Part.Text)
-			if text != "" {
-				return "🧠  REASONING\n     " + strings.ReplaceAll(text, "\n", "\n     ")
-			}
-		}
-	}
-	return ""
-}
-
-type traceEventPart struct {
-	ID     string              `json:"id"`
-	Type   string              `json:"type"`
-	Tool   string              `json:"tool,omitempty"`
-	Text   string              `json:"text,omitempty"`
-	Reason string              `json:"reason,omitempty"`
-	State  *traceEventPartState `json:"state,omitempty"`
-}
-
-type traceEventPartState struct {
-	Status string         `json:"status"`
-	Error  string         `json:"error,omitempty"`
-	Title  string         `json:"title,omitempty"`
-	Output string         `json:"output,omitempty"`
-	Input  map[string]any `json:"input,omitempty"`
-}
-
-func friendlyToolName(tool string) string {
-	switch tool {
-	case "bash":
-		return "Shell"
-	case "read", "Read":
-		return "Read"
-	case "edit", "Edit":
-		return "Edit"
-	case "write", "Write":
-		return "Write"
-	case "glob", "Glob":
-		return "Glob"
-	case "grep", "Grep":
-		return "Grep"
-	case "task", "Task":
-		return "SubAgent"
-	case "todowrite", "TodoWrite":
-		return "Plan"
-	case "skill", "Skill":
-		return "Skill"
-	case "webfetch", "WebFetch":
-		return "WebFetch"
-	default:
-		return tool
-	}
-}
-
-func toolInputSummary(tool string, input map[string]any) string {
-	switch tool {
-	case "bash":
-		if cmd, ok := input["command"].(string); ok {
-			return cmd
-		}
-		if desc, ok := input["description"].(string); ok {
-			return desc
-		}
-	case "task":
-		if desc, ok := input["description"].(string); ok {
-			if prompt, ok := input["prompt"].(string); ok {
-				return desc + ": " + ellipsize(prompt, 100)
-			}
-			return desc
-		}
-	}
-	for _, key := range []string{"command", "description", "pattern", "query", "path", "filePath", "question"} {
-		if v, ok := input[key].(string); ok {
-			return ellipsize(v, 120)
-		}
-	}
-	return ""
-}
-
-func ellipsize(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
 }
 
 func resolveSessionID(flagSessionID string) (*sessionIDSources, error) {

@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/xhd2015/agent-pro v0.0.16
+	github.com/xhd2015/agent-pro v0.0.17
 	github.com/xhd2015/gitops v0.0.15
 	github.com/xhd2015/less-flags v1.0.0
 	github.com/xhd2015/skills v0.0.7

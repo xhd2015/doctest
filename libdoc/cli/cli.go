@@ -19,7 +19,7 @@ import (
 const usage = `Usage: doctest <command> [options]
 
 Commands:
-  validate <dir>
+  vet <dir>
   build <dir>
   test <dir>
 
@@ -131,8 +131,8 @@ func Run(args []string) error {
 	switch args[0] {
 	case "agent":
 		return runAgent(args[1:])
-	case "validate":
-		return runOneDir("validate", args[1:], validate.Run)
+	case "vet":
+		return runOneDir("vet", args[1:], validate.Run)
 	case "build":
 		return runRunner(args[1:], buildUsage, runner.BuildArgs)
 	case "test":
