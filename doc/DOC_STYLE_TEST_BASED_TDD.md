@@ -34,10 +34,10 @@ Prose is primary, code supplementary.
 ```
 <pkg>/tests/<feature>/
 ├── DOCTEST.md          # Overview, diagram, test index + "## How to Run"
-├── SETUP.md            # Root: shared preconditions, Request/Response types, the Run(t, req) (resp,error) function that actually runs the logic
-├── testdata/           # Fixtures (skipped)
+├── SETUP.md            # Root: shared preconditions, Request/Response types, the Run(t, req) (resp,error) function that actually runs the logic;can use DOCTEST_ROOT to refer this dir
 ├── decision/           # Grouping — no ASSERT.md, must have SETUP.md
 │   └── leaf/           # Runnable — has ASSERT.md, must have SETUP.md
+│       └── testdata/   # Fixtures (skipped)
 ```
 
 - Dir with `ASSERT.md` = runnable leaf; without = grouping node (must have SETUP.md)
@@ -45,6 +45,15 @@ Prose is primary, code supplementary.
   Sections: `## Preconditions`, `## Steps`, `## Context`
 - `ASSERT.md` is **case-private** (never inherited).
   Sections: `## Expected`, `## Side Effects`, `## Errors`, `## Exit Code`
+
+## Test Fixture Data
+
+Abstract fixture data into standalone files, not inline code.
+
+- Single file → place alongside `ASSERT.md`
+- Multiple files → place in `testdata/` alongside `ASSERT.md`
+
+Code reads them with directly filename reference as each `ASSERT.md` runs in its own directory.
 
 ## Code blocks
 
