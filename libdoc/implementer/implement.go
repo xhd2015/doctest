@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -95,6 +96,13 @@ func Run(opts Options) error {
 	sessionDir, isNew, err := findOrCreateSession(srcs.sessionID, srcs)
 	if err != nil {
 		return fmt.Errorf("session: %w", err)
+	}
+
+	if isNew {
+		if err := writeSessionPID(sessionDir); err != nil {
+			return fmt.Errorf("write pid: %w", err)
+		}
+		defer removeSessionPID(sessionDir)
 	}
 
 	msgPath := filepath.Join(sessionDir, "messages.jsonl")
@@ -246,43 +254,124 @@ func TraceSession(flagSessionID string) error {
 	}
 
 	eventsPath := filepath.Join(sessionDir, "events.jsonl")
+
+	printHeader := func(eventCount int) {
+		fmt.Fprintf(os.Stdout, "\n═══════════════════════════════════════════════════════════════\n")
+		fmt.Fprintf(os.Stdout, "  Session: %s\n", srcs.sessionID)
+		fmt.Fprintf(os.Stdout, "  Events:  %d lines\n", eventCount)
+		fmt.Fprintf(os.Stdout, "═══════════════════════════════════════════════════════════════\n\n")
+	}
+
 	data, err := os.ReadFile(eventsPath)
 	if err != nil {
-		return fmt.Errorf("read events.jsonl: %w", err)
-	}
+		if os.IsNotExist(err) {
+			printHeader(0)
+			fmt.Fprintf(os.Stdout, "  (no events yet)\n")
+		} else {
+			return fmt.Errorf("read events.jsonl: %w", err)
+		}
+	} else {
+		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+		eventCount := 0
+		for _, line := range lines {
+			if line != "" {
+				eventCount++
+			}
+		}
+		printHeader(eventCount)
 
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	eventCount := 0
-	for _, line := range lines {
-		if line != "" {
-			eventCount++
+		n := 0
+		for _, line := range lines {
+			if line == "" {
+				continue
+			}
+			n++
+			formatted := formatTraceEventLine(line)
+			if formatted != "" {
+				fmt.Fprintf(os.Stdout, "[%d]  %s\n", n, formatted)
+			}
 		}
 	}
 
-	fmt.Fprintf(os.Stdout, "\n═══════════════════════════════════════════════════════════════\n")
-	fmt.Fprintf(os.Stdout, "  Session: %s\n", srcs.sessionID)
-	fmt.Fprintf(os.Stdout, "  Events:  %d lines\n", eventCount)
-	fmt.Fprintf(os.Stdout, "═══════════════════════════════════════════════════════════════\n\n")
+	sessionLive := isSessionLive(sessionDir)
+	if !sessionLive {
+		fmt.Fprintf(os.Stdout, "\n───────────────────────────────────────────────────────────────\n")
+		fmt.Fprintf(os.Stdout, "  ✓ Done (session finished)\n")
+		fmt.Fprintf(os.Stdout, "───────────────────────────────────────────────────────────────\n")
+		return nil
+	}
 
-	n := 0
-	for _, line := range lines {
-		if line == "" {
-			continue
+	fmt.Fprintf(os.Stdout, "\n  ⏳ Following new events (Ctrl+C to stop)...\n\n")
+
+	var n int
+	if data != nil {
+		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+		for _, line := range lines {
+			if line != "" {
+				n++
+			}
 		}
-		n++
-		formatted := formatTraceEventLine(line)
-		if formatted != "" {
-			fmt.Fprintf(os.Stdout, "[%d]  %s\n", n, formatted)
+	}
+	n = n + 1
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var watchErr error
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		watchErr = logs.WatchLine(ctx, eventsPath, logs.WatchLineOptions{}, func(line string) error {
+			formatted := formatTraceEventLine(line)
+			if formatted != "" {
+				fmt.Fprintf(os.Stdout, "[%d]  %s\n", n, formatted)
+			}
+			n++
+			return nil
+		})
+	}()
+
+	for {
+		time.Sleep(2 * time.Second)
+		if !isSessionLive(sessionDir) {
+			cancel()
+			break
 		}
 	}
 
-	fmt.Fprintf(os.Stdout, "───────────────────────────────────────────────────────────────\n")
-	if eventCount > 0 {
-		fmt.Fprintf(os.Stdout, "  ✓ Done\n")
+	wg.Wait()
+
+	if watchErr != nil && watchErr != context.Canceled {
+		return watchErr
 	}
+
+	fmt.Fprintf(os.Stdout, "\n───────────────────────────────────────────────────────────────\n")
+	fmt.Fprintf(os.Stdout, "  ✓ Session finished\n")
 	fmt.Fprintf(os.Stdout, "───────────────────────────────────────────────────────────────\n")
 
 	return nil
+}
+
+func writeSessionPID(sessionDir string) error {
+	pid := os.Getpid()
+	return os.WriteFile(filepath.Join(sessionDir, "pid"), []byte(strconv.Itoa(pid)), 0644)
+}
+
+func removeSessionPID(sessionDir string) {
+	os.Remove(filepath.Join(sessionDir, "pid"))
+}
+
+func isSessionLive(sessionDir string) bool {
+	data, err := os.ReadFile(filepath.Join(sessionDir, "pid"))
+	if err != nil {
+		return false
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		return false
+	}
+	return processExists(pid)
 }
 
 func formatTraceEventLine(line string) string {
@@ -291,45 +380,185 @@ func formatTraceEventLine(line string) string {
 		return ""
 	}
 	var event struct {
-		Type string          `json:"type"`
-		Item *traceEventItem `json:"item,omitempty"`
+		Type      string              `json:"type"`
+		SessionID string              `json:"sessionID,omitempty"`
+		Part      *traceEventPart     `json:"part,omitempty"`
+		Error     map[string]any      `json:"error,omitempty"`
 	}
 	if err := json.Unmarshal([]byte(trimmed), &event); err != nil {
 		return ""
 	}
 
-	if event.Item == nil {
-		return ""
-	}
-
-	switch event.Item.Type {
-	case "message", "agent_message", "assistant_message", "output_text":
-		text := strings.TrimSpace(event.Item.Text)
-		if text != "" {
-			return "💬   ASSISTANT\n     " + strings.ReplaceAll(text, "\n", "\n     ")
+	switch event.Type {
+	case "text":
+		if event.Part != nil {
+			text := strings.TrimSpace(event.Part.Text)
+			if text != "" {
+				return "💬   ASSISTANT\n     " + strings.ReplaceAll(text, "\n", "\n     ")
+			}
 		}
-	case "command_execution":
-		cmd := event.Item.Command
-		if cmd == "" {
-			cmd = event.Item.Type
+	case "tool_use":
+		if event.Part != nil {
+			toolType := friendlyToolName(event.Part.Tool)
+			status := ""
+			if event.Part.State != nil {
+				status = event.Part.State.Status
+			}
+			switch status {
+			case "completed":
+				summary := ""
+				if event.Part.State != nil {
+					if event.Part.State.Title != "" {
+						summary = event.Part.State.Title
+					}
+					if event.Part.State.Output != "" {
+						if summary != "" {
+							summary = summary + "\n" + event.Part.State.Output
+						} else {
+							summary = event.Part.State.Output
+						}
+					}
+				}
+				if summary == "" && event.Part.State != nil && event.Part.State.Input != nil {
+					summary = toolInputSummary(event.Part.Tool, event.Part.State.Input)
+				}
+				line := "⚡  " + toolType + " (done)"
+				if summary != "" {
+					line += "\n     " + strings.ReplaceAll(summary, "\n", "\n     ")
+				}
+				return line
+			case "error", "failed":
+				errStr := ""
+				if event.Part.State != nil && event.Part.State.Error != "" {
+					errStr = event.Part.State.Error
+				}
+				line := "⚡  " + toolType + " (failed)"
+				if errStr != "" {
+					line += "\n     " + strings.ReplaceAll(errStr, "\n", "\n     ")
+				}
+				return line
+			case "in_progress", "running":
+				return "⚡  " + toolType + " (running)"
+			case "pending":
+				return "⚡  " + toolType + " (pending)"
+			default:
+				return "⚡  " + toolType
+			}
 		}
-		return "⚡  RUN\n     " + cmd
-	default:
-		text := strings.TrimSpace(event.Item.Text)
-		if text == "" {
-			text = event.Item.Type
+	case "step_start":
+		return "─── Step started ───"
+	case "step_finish":
+		reason := ""
+		if event.Part != nil {
+			reason = event.Part.Reason
 		}
-		return "🔧  " + strings.ToUpper(event.Item.Type) + "\n     " + text
+		line := "─── Step finished"
+		if reason != "" {
+			line += " (" + reason + ")"
+		}
+		line += " ───"
+		return line
+	case "error":
+		errMsg := ""
+		if event.Error != nil {
+			if name, ok := event.Error["name"].(string); ok {
+				errMsg = name
+			}
+			if data, ok := event.Error["data"].(map[string]any); ok {
+				if msg, ok := data["message"].(string); ok && msg != "" {
+					errMsg = msg
+				}
+			}
+		}
+		if errMsg == "" {
+			errMsg = "unknown error"
+		}
+		return "❌  ERROR\n     " + strings.ReplaceAll(errMsg, "\n", "\n     ")
+	case "reasoning":
+		if event.Part != nil {
+			text := strings.TrimSpace(event.Part.Text)
+			if text != "" {
+				return "🧠  REASONING\n     " + strings.ReplaceAll(text, "\n", "\n     ")
+			}
+		}
 	}
 	return ""
 }
 
-type traceEventItem struct {
-	ID      string `json:"id"`
-	Type    string `json:"type"`
-	Text    string `json:"text"`
-	Command string `json:"command"`
-	Status  string `json:"status"`
+type traceEventPart struct {
+	ID     string              `json:"id"`
+	Type   string              `json:"type"`
+	Tool   string              `json:"tool,omitempty"`
+	Text   string              `json:"text,omitempty"`
+	Reason string              `json:"reason,omitempty"`
+	State  *traceEventPartState `json:"state,omitempty"`
+}
+
+type traceEventPartState struct {
+	Status string         `json:"status"`
+	Error  string         `json:"error,omitempty"`
+	Title  string         `json:"title,omitempty"`
+	Output string         `json:"output,omitempty"`
+	Input  map[string]any `json:"input,omitempty"`
+}
+
+func friendlyToolName(tool string) string {
+	switch tool {
+	case "bash":
+		return "Shell"
+	case "read", "Read":
+		return "Read"
+	case "edit", "Edit":
+		return "Edit"
+	case "write", "Write":
+		return "Write"
+	case "glob", "Glob":
+		return "Glob"
+	case "grep", "Grep":
+		return "Grep"
+	case "task", "Task":
+		return "SubAgent"
+	case "todowrite", "TodoWrite":
+		return "Plan"
+	case "skill", "Skill":
+		return "Skill"
+	case "webfetch", "WebFetch":
+		return "WebFetch"
+	default:
+		return tool
+	}
+}
+
+func toolInputSummary(tool string, input map[string]any) string {
+	switch tool {
+	case "bash":
+		if cmd, ok := input["command"].(string); ok {
+			return cmd
+		}
+		if desc, ok := input["description"].(string); ok {
+			return desc
+		}
+	case "task":
+		if desc, ok := input["description"].(string); ok {
+			if prompt, ok := input["prompt"].(string); ok {
+				return desc + ": " + ellipsize(prompt, 100)
+			}
+			return desc
+		}
+	}
+	for _, key := range []string{"command", "description", "pattern", "query", "path", "filePath", "question"} {
+		if v, ok := input[key].(string); ok {
+			return ellipsize(v, 120)
+		}
+	}
+	return ""
+}
+
+func ellipsize(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
 
 func resolveSessionID(flagSessionID string) (*sessionIDSources, error) {
@@ -394,7 +623,9 @@ func runAgent(agentRunner, prompt, sessionID string, rawLog *sessionLogWriter) (
 		RawLog:    rawLog,
 	}
 
-	output, err := runner.Agent.Ask(context.Background(), prompt, opts, func(delta string) {})
+	output, err := runner.Agent.Ask(context.Background(), prompt, opts, func(delta string) {
+		fmt.Print(delta)
+	})
 	if err != nil {
 		return output, err
 	}
@@ -671,4 +902,13 @@ func updateSessionMeta(sessionDir, innerSessionID string, srcs *sessionIDSources
 		return err
 	}
 	return os.WriteFile(metaPath, append(newData, '\n'), 0644)
+}
+
+func processExists(pid int) bool {
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	err = process.Signal(syscall.Signal(0))
+	return err == nil
 }
