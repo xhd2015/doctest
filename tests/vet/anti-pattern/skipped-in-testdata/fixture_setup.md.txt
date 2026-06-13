@@ -1,0 +1,8 @@
+## Steps
+
+```go
+func Setup(t *testing.T, req *Request) error {
+	req.MainGo = "package main\n\nfunc main() {}"
+	return nil
+}
+```

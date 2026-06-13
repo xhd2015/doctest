@@ -1,6 +1,7 @@
 package validate
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,33 +18,54 @@ func Run(dir string) error {
 	if _, err := os.Stat(filepath.Join(dir, "DOCTEST.md")); err != nil {
 		return fmt.Errorf("%s: root must contain DOCTEST.md", dir)
 	}
-	return filepath.WalkDir(dir, func(path string, d os.DirEntry, walkErr error) error {
+
+	var antiViolations []error
+
+	err = filepath.WalkDir(dir, func(path string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
-		if !d.IsDir() || d.Name() == "testdata" {
-			if d.IsDir() && d.Name() == "testdata" {
-				return filepath.SkipDir
+
+		if d.IsDir() && d.Name() == "testdata" {
+			return filepath.SkipDir
+		}
+
+		if d.IsDir() {
+			entries, err := os.ReadDir(path)
+			if err != nil {
+				return err
+			}
+			hasSetup := false
+			hasAssert := false
+			for _, ent := range entries {
+				switch ent.Name() {
+				case "SETUP.md":
+					hasSetup = true
+				case "ASSERT.md":
+					hasAssert = true
+				}
+			}
+			if hasAssert && !hasSetup {
+				return fmt.Errorf("%s: ASSERT.md found but SETUP.md missing", path)
 			}
 			return nil
 		}
-		entries, err := os.ReadDir(path)
+
+		name := d.Name()
+		if name != "SETUP.md" && name != "ASSERT.md" {
+			return nil
+		}
+
+		content, err := os.ReadFile(path)
 		if err != nil {
-			return err
+			return nil
 		}
-		hasSetup := false
-		hasAssert := false
-		for _, ent := range entries {
-			switch ent.Name() {
-			case "SETUP.md":
-				hasSetup = true
-			case "ASSERT.md":
-				hasAssert = true
-			}
-		}
-		if hasAssert && !hasSetup {
-			return fmt.Errorf("%s: ASSERT.md found but SETUP.md missing", path)
-		}
+		antiViolations = append(antiViolations, checkFileAntiPatterns(path, string(content))...)
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	return errors.Join(antiViolations...)
 }

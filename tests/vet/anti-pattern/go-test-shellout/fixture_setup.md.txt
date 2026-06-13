@@ -1,0 +1,11 @@
+## Steps
+
+```go
+import "os/exec"
+
+func Run(t *testing.T, req *Request) (*Response, error) {
+	cmd := exec.Command("go", "test", "./pkg/foo", "-run", "TestFoo")
+	out, _ := cmd.CombinedOutput()
+	return &Response{Stdout: string(out)}, nil
+}
+```

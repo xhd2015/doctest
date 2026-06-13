@@ -1,0 +1,8 @@
+## Steps
+
+```go
+func Setup(t *testing.T, req *Request) error {
+	req.InputDir = "testdata/fixture"
+	return nil
+}
+```

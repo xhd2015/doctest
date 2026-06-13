@@ -96,6 +96,76 @@ func TestRunValidationCases(t *testing.T) {
 				return dir
 			},
 		},
+		{
+			name: "embedded go program in raw string",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				writeFile(t, dir, "DOCTEST.md", "# tests\n")
+				writeFile(t, dir, "SETUP.md", "# Setup\n\n```go\nfunc Setup(t *testing.T, req *Request) error {\n\treq.MainGo = `package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}`\n\treturn nil\n}\n```\n")
+				return dir
+			},
+			wantErr: "anti-pattern: raw Go code embedded in string literal",
+		},
+		{
+			name: "embedded go program in interpreted string",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				writeFile(t, dir, "DOCTEST.md", "# tests\n")
+				writeFile(t, dir, "SETUP.md", "# Setup\n\n```go\nfunc Setup(t *testing.T, req *Request) error {\n\treq.MainGo = \"package main\\n\\nfunc main() {}\\n\"\n\treturn nil\n}\n```\n")
+				return dir
+			},
+			wantErr: "anti-pattern: raw Go code embedded in string literal",
+		},
+		{
+			name: "go test shell-out",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				writeFile(t, dir, "DOCTEST.md", "# tests\n")
+				writeFile(t, dir, "SETUP.md", "# Setup\n\n```go\nimport \"os/exec\"\n\nfunc Run(t *testing.T, req *Request) (*Response, error) {\n\tcmd := exec.Command(\"go\", \"test\", \"./pkg/foo\", \"-run\", \"TestFoo\")\n\tout, _ := cmd.CombinedOutput()\n\treturn &Response{Stdout: string(out)}, nil\n}\n```\n")
+				return dir
+			},
+			wantErr: "anti-pattern: shelling out to 'go test'",
+		},
+		{
+			name: "valid String without both keywords",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				writeFile(t, dir, "DOCTEST.md", "# tests\n")
+				writeFile(t, dir, "SETUP.md", "# Setup\n\n```go\nfunc Setup(t *testing.T, req *Request) error {\n\treq.Msg = \"package main is the entry point\"\n\treturn nil\n}\n```\n")
+				return dir
+			},
+		},
+		{
+			name: "valid exec.Command not go test",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				writeFile(t, dir, "DOCTEST.md", "# tests\n")
+				writeFile(t, dir, "SETUP.md", "# Setup\n\n```go\nimport \"os/exec\"\n\nfunc Run(t *testing.T, req *Request) (*Response, error) {\n\tcmd := exec.Command(\"doctest\", \"build\", req.InputDir)\n\tout, _ := cmd.CombinedOutput()\n\treturn &Response{Stdout: string(out)}, nil\n}\n```\n")
+				return dir
+			},
+		},
+		{
+			name: "anti-pattern in testdata skipped",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				writeFile(t, dir, "DOCTEST.md", "# tests\n")
+				writeFile(t, dir, "SETUP.md", "## Setup\n")
+				writeFile(t, dir, "testdata/bad/SETUP.md", "# Setup\n\n```go\nfunc Setup(t *testing.T, req *Request) error {\n\treq.MainGo = `package main\nfunc main() {}`\n\treturn nil\n}\n```\n")
+				return dir
+			},
+		},
+		{
+			name: "multiple anti-patterns in one tree",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				writeFile(t, dir, "DOCTEST.md", "# tests\n")
+				writeFile(t, dir, "SETUP.md", "# Setup\n\n```go\nfunc Run(t *testing.T, req *Request) (*Response, error) {\n\tcmd := exec.Command(\"go\", \"test\", \"./pkg/foo\")\n\tout, _ := cmd.CombinedOutput()\n\treturn &Response{Stdout: string(out)}, nil\n}\n```\n")
+				writeFile(t, dir, "leaf/SETUP.md", "# Setup\n\n```go\nfunc Setup(t *testing.T, req *Request) error {\n\treq.MainGo = `package main\nfunc main() {}`\n\treturn nil\n}\n```\n")
+				writeFile(t, dir, "leaf/ASSERT.md", "# Assert\n\n```go\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}\n```\n")
+				return dir
+			},
+			wantErr: "anti-pattern: shelling out to 'go test'",
+		},
 	}
 
 	for _, tt := range tests {
