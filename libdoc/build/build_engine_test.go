@@ -50,6 +50,7 @@ func Setup(t *testing.T, req *Request) error { req.Order = append(req.Order, "pa
 func Setup(t *testing.T, req *Request) error { req.Order = append(req.Order, "leaf setup"); return nil }
 `))
 	writeTreeFile(t, root, "parent/leaf/ASSERT.md", assertDoc(`
+import "reflect"
 func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	req.Order = append(req.Order, "assert")
 	want := []string{"root setup", "parent setup", "leaf setup", "run", "assert"}
@@ -66,6 +67,7 @@ func TestSetupErrorFailsBeforeRunAndAssert(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
 	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+import "fmt"
 type Request struct{}
 type Response struct{}
 func Setup(t *testing.T, req *Request) error { return fmt.Errorf("setup failed") }
@@ -93,6 +95,7 @@ func TestRunErrorPassedToAssert(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
 	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+import "fmt"
 type Request struct{}
 type Response struct{}
 func Run(t *testing.T, req *Request) (*Response, error) { return nil, fmt.Errorf("run failed") }
