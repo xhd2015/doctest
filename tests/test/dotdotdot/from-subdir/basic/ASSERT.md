@@ -1,10 +1,7 @@
 ## Expected
 - Exit code 0.
-- `./...` from a subdirectory still finds all test trees under the module.
-- Stderr contains `alpha_test` and `beta_test`, not `hidden_test`.
-
-## Exit Code
-- Exit code 0.
+- `./...` from `alpha_test/` only finds doctest trees at or below the working directory.
+- Stderr contains `alpha_test`, does NOT contain `beta_test` or `hidden_test`.
 
 ```go
 import (
@@ -22,8 +19,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if !strings.Contains(resp.Stderr, "alpha_test") {
         t.Fatalf("stderr missing alpha_test:\n%s", resp.Stderr)
     }
-    if !strings.Contains(resp.Stderr, "beta_test") {
-        t.Fatalf("stderr missing beta_test:\n%s", resp.Stderr)
+    if strings.Contains(resp.Stderr, "beta_test") {
+        t.Fatalf("stderr should not contain beta_test (sibling, not under working dir):\n%s", resp.Stderr)
     }
     if strings.Contains(resp.Stderr, "hidden_test") {
         t.Fatalf("stderr should not contain hidden_test (nested go.mod boundary):\n%s", resp.Stderr)

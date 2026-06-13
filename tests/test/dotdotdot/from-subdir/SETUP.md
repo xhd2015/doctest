@@ -1,27 +1,20 @@
 ## Preconditions
-- A temporary project with go.mod + multiple DOCTEST.md trees exists.
+- The parent `dotdotdot` SETUP provides helpers (`createTestTree`, `createTempProject`).
+- Each leaf creates its own temp project and sets WorkDir + Args.
 
 ## Steps
-1. Create temp project via parent helper.
-2. Run `doctest test ./...` from a subdirectory of the project root.
+1. Create a temp project with appropriate DOCTEST.md trees.
+2. Run `doctest test ./...` (or `./subpath/...`) from a subdirectory.
+3. Verify discovery is scoped to the working directory, not the module root.
 
 ```go
 import (
-    "os"
-    "path/filepath"
     "testing"
+    "time"
 )
 
 func Setup(t *testing.T, req *Request) error {
-    projDir := createTempProject(t, req)
-
-    subDir := filepath.Join(projDir, "alpha_test", "simple")
-    if mkErr := os.MkdirAll(subDir, 0755); mkErr != nil {
-        t.Fatalf("mkdir subDir: %v", mkErr)
-    }
-
-    req.WorkDir = subDir
-    req.Args = []string{"test", "-v", "./..."}
+    req.Timeout = 120 * time.Second
     return nil
 }
 ```

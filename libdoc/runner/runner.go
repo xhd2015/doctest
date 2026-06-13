@@ -257,8 +257,11 @@ func runForDirs(basePath string, fn func(dir string) error) error {
 
 func findDotDotDotDirs(basePath string) ([]string, error) {
 	if basePath == "" || basePath == "." {
-		dirs, err := FindDOCTestDirs(".")
+		dirs, err := FindDOCTestDirsWithBase(".", ".")
 		if err == nil {
+			if len(dirs) == 0 {
+				return nil, fmt.Errorf("no tests found")
+			}
 			return dirs, nil
 		}
 		if !errors.Is(err, os.ErrNotExist) {
