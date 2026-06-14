@@ -100,15 +100,23 @@ Phase 1:
 doctest agent design "<design doc from Phase 1>"
 ```
 
-Prefer creating a requirement file if the request is long, or contains shell-special characters, write it
+Prefer creating a requirement file if the request two sentences long, or contains newline or shell-special characters, write it
 to a file and use `--requirement`:
 
 ```sh
-doctest agent design --requirement REQUIREMENT-<feature-brief-slug>.md
+doctest agent design --requirement REQUIREMENT-DESIGN-<context-summary-and-feature-slug>.md
 ```
+
+The requirement file must content summarized context and detailed requirement.
+
+The summarized context is for sub-agent to reference to avoid do full investigation again.
 
 The designer sub-agent will propose and create a comprehensive doctest tree
 covering happy paths, error paths, edge cases, and input variants.
+
+**NOTE:** The sub-agent may take a long time to finish — hours or even days for
+complex features. You **MUST** wait patiently and **not set a timeout** or **set a long enough timeout(e.g. 1h)**
+The sub-agent will report progress periodically back.
 
 ## Phase 3: Handle Designer Questions (Optional)
 
@@ -161,7 +169,7 @@ tree and run `git add` there. If the doctest tree is genuinely outside any Git
 repository, explicitly tell the user that tests cannot be sealed with Git and
 ask whether to continue with an unsealed doctest delegation.
 
-**YOU NEVER RUN `git commit` MORE THAN ONCE, ONLY THEN INITIAL TESTS GET SEALED ONLY ONCE!**
+**YOU NEVER RUN `git add` MORE THAN ONCE, ONLY THE INITIAL TESTS GET SEALED ONLY ONCE!**
 
 ## Phase 6: Delegation to Implementer
 
@@ -173,24 +181,21 @@ doctest agent implement "<design doc + test summary>"
 ```
 
 **NOTE:** The sub-agent may take a long time to finish — hours or even days for
-complex features. The main agent should wait patiently and **not set a timeout** or **set a long enough timeout(e.g. 1h)**
-The sub-agent will report progress
-periodically back.
+complex features. You **MUST** wait patiently and **not set a timeout** or **set a long enough timeout(e.g. 1h)**
+The sub-agent will report progress periodically back.
 
 **NOTE:** If the sub-agent return an error requiring session id, MUST use the session id provided in the error message.
 
-If the prompt is long or contains shell-special characters, write it to a file
-and use `--requirement`:
+
+Prefer creating a requirement file if the request two sentences long, or contains newline or shell-special characters, write it
+to a file and use `--requirement`:
 
 ```sh
-doctest agent implement --requirement REQUIREMENT-<feature-brief-slug>.md
+doctest agent implement --requirement REQUIREMENT-IMPLEMENT-<context-summary-and-feature-slug>.md
 ```
 
-This command is mandatory for implementation delegation in this workflow. Do not
-use any other agent or worker command in its place.
-
 The prompt should include:
-
+- summarized context so far collected
 - A concise summary of the feature and its expected behaviour
 - The test tree structure and what each leaf covers
 - The fact that tests are sealed (staged) and must not be modified
