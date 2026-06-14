@@ -11,8 +11,6 @@ jobs:
       image: golang:1.25.0
     steps:
       - uses: actions/checkout@v4
-      - name: Fix safe.directory
-        run: git config --global --add safe.directory /__w/doctest/doctest
       - name: Go test
         run: go test -v ./...
 
