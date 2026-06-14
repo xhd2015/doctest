@@ -123,6 +123,18 @@ func Test(dir string, opts core.Options) error {
 	if opts.Count > 0 {
 		testArgs = append(testArgs, fmt.Sprintf("-count=%d", opts.Count))
 	}
+	if len(cases) > 0 {
+		var runPattern strings.Builder
+		runPattern.WriteString("^(")
+		for i, tc := range cases {
+			if i > 0 {
+				runPattern.WriteByte('|')
+			}
+			runPattern.WriteString(core.TestFuncName(tc))
+		}
+		runPattern.WriteString(")$")
+		testArgs = append(testArgs, "-run", runPattern.String())
+	}
 	testArgs = append(testArgs, ".")
 
 	fmt.Fprintf(w, "cd %s && go %s\n\n", tmp, strings.Join(testArgs, " "))
