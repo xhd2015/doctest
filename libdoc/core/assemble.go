@@ -16,18 +16,24 @@ func AssembleTestSource(tc TreeCase, compileOnly bool, pkgName string, docTestRo
 	buf.WriteString("\n\n")
 
 	imports := collectImports(tc.SetupFiles, tc.AssertFile.GoBlock)
-	imports["testing"] = true
-	imports["os"] = true
-	imports["path/filepath"] = true
+	for _, pkg := range []string{"testing", "os", "path/filepath"} {
+		if _, ok := imports[pkg]; !ok {
+			imports[pkg] = &ImportSpec{Path: pkg}
+		}
+	}
 	if len(imports) > 0 {
 		buf.WriteString("import (\n")
-		importList := make([]string, 0, len(imports))
-		for pkg := range imports {
-			importList = append(importList, pkg)
+		importList := make([]*ImportSpec, 0, len(imports))
+		for _, spec := range imports {
+			importList = append(importList, spec)
 		}
-		sort.Strings(importList)
-		for _, pkg := range importList {
-			buf.WriteString("\t\"" + pkg + "\"\n")
+		sort.Slice(importList, func(i, j int) bool { return importList[i].Path < importList[j].Path })
+		for _, spec := range importList {
+			if spec.Name != "" {
+				buf.WriteString("\t" + spec.Name + " \"" + spec.Path + "\"\n")
+			} else {
+				buf.WriteString("\t\"" + spec.Path + "\"\n")
+			}
 		}
 		buf.WriteString(")\n\n")
 	}
@@ -99,21 +105,36 @@ func AssembleTestSource(tc TreeCase, compileOnly bool, pkgName string, docTestRo
 	return buf.String(), nil
 }
 
-func collectImports(setupFiles []SetupDocument, assertBlock GoBlock) map[string]bool {
-	imports := make(map[string]bool)
+func importKey(spec ImportSpec) string {
+	if spec.Name != "" {
+		return spec.Name + "\x00" + spec.Path
+	}
+	return spec.Path
+}
+
+func collectImports(setupFiles []SetupDocument, assertBlock GoBlock) map[string]*ImportSpec {
+	imports := make(map[string]*ImportSpec)
 	for _, doc := range setupFiles {
 		if doc.GoBlock == nil {
 			continue
 		}
-		for _, pkg := range doc.GoBlock.Imports {
-			if pkg != "" {
-				imports[pkg] = true
+		for _, spec := range doc.GoBlock.Imports {
+			if spec.Path == "" {
+				continue
+			}
+			key := importKey(spec)
+			if _, ok := imports[key]; !ok {
+				imports[key] = &ImportSpec{Name: spec.Name, Path: spec.Path}
 			}
 		}
 	}
-	for _, pkg := range assertBlock.Imports {
-		if pkg != "" {
-			imports[pkg] = true
+	for _, spec := range assertBlock.Imports {
+		if spec.Path == "" {
+			continue
+		}
+		key := importKey(spec)
+		if _, ok := imports[key]; !ok {
+			imports[key] = &ImportSpec{Name: spec.Name, Path: spec.Path}
 		}
 	}
 	return imports

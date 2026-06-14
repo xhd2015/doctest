@@ -127,12 +127,16 @@ func parseGoBlock(block *GoBlock) error {
 		switch d := decl.(type) {
 		case *ast.GenDecl:
 			switch d.Tok {
-			case token.IMPORT:
-				for _, spec := range d.Specs {
-					if is, ok := spec.(*ast.ImportSpec); ok {
-						block.Imports = append(block.Imports, strings.Trim(is.Path.Value, "\""))
+		case token.IMPORT:
+			for _, spec := range d.Specs {
+				if is, ok := spec.(*ast.ImportSpec); ok {
+					var name string
+					if is.Name != nil {
+						name = is.Name.Name
 					}
+					block.Imports = append(block.Imports, ImportSpec{Name: name, Path: strings.Trim(is.Path.Value, "\"")})
 				}
+			}
 			case token.TYPE:
 				for _, spec := range d.Specs {
 					if ts, ok := spec.(*ast.TypeSpec); ok {

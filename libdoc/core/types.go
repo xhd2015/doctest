@@ -2,11 +2,16 @@ package core
 
 import "io"
 
+type ImportSpec struct {
+	Name string
+	Path string
+}
+
 type GoBlock struct {
 	SourcePath string
 	Code       string
 
-	Imports   []string
+	Imports   []ImportSpec
 	TypeDecls []string
 	VarDecls  []string
 	Consts    []string
