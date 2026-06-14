@@ -14,10 +14,7 @@ jobs:
       - name: Go test
         run: go test -v ./...
 
-      - name: Install doctest
-        run: |
-          if ! command -v doctest >/dev/null 2>&1; then
-            go install github.com/xhd2015/doctest/cmd/doctest@latest
-          fi
+      - name: Build doctest
+        run: go build -o doctest ./cmd/doctest
       - name: Doctest
-        run: doctest test -v ./...
+        run: ./doctest test -v ./...
