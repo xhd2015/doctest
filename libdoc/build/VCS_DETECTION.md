@@ -4,52 +4,69 @@
 
 ### What is `-buildvcs`?
 
-Go's `go build` and `go test -c` commands support a `-buildvcs` flag that controls whether version control information (commit hash, branch, etc.) is embedded (stamped) into the resulting binary. The flag accepts three values:
+Go's `go build` and `go test -c` commands support a `-buildvcs` flag that controls whether version control information (commit hash, branch, etc.) is stamped into the resulting binary:
 
 - `true` — always stamp; error out if VCS info is unavailable
 - `false` — never stamp
-- `auto` (default) — stamp only if the main package, main module, and current directory are all in the same repository
-
-Since Go 1.18, this flag has existed. The default changed from `true` to `auto` in Go 1.21.
+- `auto` (default since Go 1.21) — stamp only if the main package, main module, and current directory are all in the same repository
 
 ### What is Git Safe Directory?
 
-Git's `safe.directory` configuration controls which repositories Git trusts. When enabled (the default in modern Git), operations like `git status` or `git rev-parse` fail with "detected dubious ownership" unless the directory is explicitly added to `safe.directory`.
+Git's `safe.directory` config controls which repositories Git trusts. When enabled (the default in modern Git), operations like `git status` or `git rev-parse` fail with "detected dubious ownership" unless the directory is added to `safe.directory`.
 
-This becomes a problem in containerized CI environments (Docker, GitHub Actions) where the filesystem user differs from the repository owner, causing Git to reject all operations.
+This is a problem in containerized CI (Docker, GitHub Actions) where the filesystem user differs from the repo owner. Notably, `actions/checkout@v4` sets `safe.directory` in a **temporary HOME override** that is discarded after checkout.
 
 ## The Problem
 
-Doctest creates temporary build directories (via `os.MkdirTemp`) to compile generated test code. These directories are **never** inside a Git working tree. When Go invokes `git` internally during `go build`/`go test -c` for VCS stamping, it can fail with:
+Doctest invokes `go build` / `go test -c` in two contexts, both vulnerable:
+
+1. **Internal temp build dirs**: Created by `os.MkdirTemp` to compile generated test code — never inside a Git working tree.
+
+2. **Project root builds**: Integration tests in `tests/SETUP.md` build the doctest binary from the module root with `go build ./cmd/doctest`. The module root IS a Git repo, but in CI containers Git may reject all operations due to "dubious ownership".
+
+Both cases produce the same error:
 
 ```
 error obtaining VCS status: exit status 128
 Use -buildvcs=false to disable VCS stamping.
 ```
 
-This occurs in CI environments where Git's `safe.directory` check fails, but the fundamental issue is that the build directory has no VCS information to stamp.
-
 ## The Solution
 
 ### Detection Logic
 
-`needsBuildVCSFlag(dir string) bool` checks two conditions:
+`NeedsBuildVCSFlag(dir string) bool` (in `libdoc/build/vcs.go`) checks two conditions:
 
-1. **Is `git` available on the system?** (`exec.LookPath("git")`)
-2. **Is the build directory inside a Git working tree?** (`git -C <dir> rev-parse --is-inside-work-tree`)
+1. **Is `git` available?** (`exec.LookPath("git")`)
+2. **Does `git rev-parse --is-inside-work-tree` succeed *and* return true?**
 
-If either check fails, the function returns `true` — meaning `-buildvcs=false` is needed.
+If either check fails — git not found, directory not in a work tree, or git commands rejected (dubious ownership) — the function returns `true`.
 
 ### Where It's Used
 
-- `libdoc/build/build.go` — `go build` command
-- `libdoc/build/test.go` — `go test -c` command
+**Engine code** (adds `-buildvcs=false` when the temp build dir has no git):
 
-Both insert `-buildvcs=false` into their argument lists when `needsBuildVCSFlag` returns true.
+- `libdoc/build/build.go` — `go build` in generated temp dir
+- `libdoc/build/test.go` — `go test -c` in generated temp dir
+
+**Test specs** (adds `-buildvcs=false` when the project root cannot be accessed by git):
+
+- `tests/SETUP.md` — builds doctest for integration tests
+- `tests/implementer/SETUP.md` — builds doctest for implementer tests
+- `tests/main-orchestrator/SETUP.md` — builds doctest for orchestrator tests
+- `tests/test/nested-workdir/SETUP.md` — builds doctest for nested workdir tests
+
+Each uses `libdocbuild.NeedsBuildVCSFlag(buildDir)` to conditionally add `-buildvcs=false`.
+
+**CI workflow** (hardcoded in `.github/workflows/test.yml` since this is a shell command, not Go code):
+
+```
+go build -buildvcs=false -o doctest ./cmd/doctest
+```
 
 ### Why Not Always Add `-buildvcs=false`?
 
-Always adding the flag would work, but it's unnecessarily defensive. When the build directory *is* inside a Git tree (e.g., a user intentionally places a `GenDir` inside their repo), we want to preserve normal VCS stamping behavior to avoid surprising behavior.
+When the build directory IS in a healthy Git tree (e.g., a user places `GenDir` inside their repo, or runs on a properly configured local machine), we preserve normal VCS stamping to avoid surprising behavior.
 
 ### Why Not Try-First-Then-Retry?
 

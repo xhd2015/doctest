@@ -15,6 +15,11 @@ jobs:
         run: go test -v ./...
 
       - name: Build doctest
-        run: go build -buildvcs=false -o doctest ./cmd/doctest
+        run: |
+          BUILDFLAGS=""
+          if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            BUILDFLAGS="-buildvcs=false"
+          fi
+          go build $BUILDFLAGS -o doctest ./cmd/doctest
       - name: Doctest
         run: ./doctest test -v ./...
