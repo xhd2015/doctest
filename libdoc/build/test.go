@@ -93,7 +93,7 @@ func Test(dir string, opts core.Options) error {
 	fmt.Fprintf(w, "cd %s && go test -c -o test.bin . && cd %s && %s/test.bin\n\n", tmp, absRoot, tmp)
 
 	buildArgs := []string{"test", "-c", "-mod=mod"}
-	if needsBuildVCSFlag(tmp) {
+	if NeedsBuildVCSFlag(tmp) {
 		buildArgs = append(buildArgs, "-buildvcs=false")
 	}
 	buildArgs = append(buildArgs, "-o", testBinPath, ".")

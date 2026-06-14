@@ -16,6 +16,8 @@ import (
     "os/exec"
     "path/filepath"
     "testing"
+
+    libdocbuild "github.com/xhd2015/doctest/libdoc/build"
 )
 
 func Setup(t *testing.T, req *Request) error {
@@ -25,8 +27,14 @@ func Setup(t *testing.T, req *Request) error {
 
     tmp := t.TempDir()
     doctestBin := filepath.Join(tmp, "doctest")
-    buildDT := exec.Command("go", "build", "-o", doctestBin, "./cmd/doctest")
-    buildDT.Dir = filepath.Join(DOCTEST_ROOT, "..")
+    buildDTDir := filepath.Join(DOCTEST_ROOT, "..")
+    buildDTArgs := []string{"build", "-o", doctestBin}
+    if libdocbuild.NeedsBuildVCSFlag(buildDTDir) {
+        buildDTArgs = append(buildDTArgs, "-buildvcs=false")
+    }
+    buildDTArgs = append(buildDTArgs, "./cmd/doctest")
+    buildDT := exec.Command("go", buildDTArgs...)
+    buildDT.Dir = buildDTDir
     if out, err := buildDT.CombinedOutput(); err != nil {
         t.Fatalf("build doctest: %v\n%s", err, string(out))
     }

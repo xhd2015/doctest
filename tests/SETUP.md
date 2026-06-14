@@ -23,6 +23,8 @@ import (
     "path/filepath"
     "testing"
     "time"
+
+    libdocbuild "github.com/xhd2015/doctest/libdoc/build"
 )
 
 type Request struct {
@@ -45,8 +47,14 @@ func Setup(t *testing.T, req *Request) error {
 
     tmp := t.TempDir()
     doctestBin := filepath.Join(tmp, "doctest")
-    build := exec.Command("go", "build", "-o", doctestBin, "./cmd/doctest")
-    build.Dir = filepath.Join(DOCTEST_ROOT, "..")
+    buildDir := filepath.Join(DOCTEST_ROOT, "..")
+    buildArgs := []string{"build", "-o", doctestBin}
+    if libdocbuild.NeedsBuildVCSFlag(buildDir) {
+        buildArgs = append(buildArgs, "-buildvcs=false")
+    }
+    buildArgs = append(buildArgs, "./cmd/doctest")
+    build := exec.Command("go", buildArgs...)
+    build.Dir = buildDir
     if out, err := build.CombinedOutput(); err != nil {
         t.Fatalf("build doctest: %v\n%s", err, string(out))
     }

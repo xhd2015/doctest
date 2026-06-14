@@ -90,7 +90,7 @@ func Build(dir string, opts core.Options) error {
 	}
 
 	goBuildArgs := []string{"build", "-mod=mod"}
-	if needsBuildVCSFlag(tmp) {
+	if NeedsBuildVCSFlag(tmp) {
 		goBuildArgs = append(goBuildArgs, "-buildvcs=false")
 	}
 	if opts.Verbose {

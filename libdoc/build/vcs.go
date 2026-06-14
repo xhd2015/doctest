@@ -4,7 +4,7 @@ import (
 	"os/exec"
 )
 
-func needsBuildVCSFlag(dir string) bool {
+func NeedsBuildVCSFlag(dir string) bool {
 	git, err := exec.LookPath("git")
 	if err != nil {
 		return true
