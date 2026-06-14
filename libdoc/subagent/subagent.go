@@ -260,7 +260,11 @@ func Run(c Config, opts Options) error {
 
 func Logf(fmtStr string, args ...interface{}) {
 	ts := time.Now().Format("2006-01-02T15:04:05")
-	fmt.Println("[" + ts + "] " + fmt.Sprintf(fmtStr, args...))
+	s := fmt.Sprintf(fmtStr, args...)
+	if !strings.HasSuffix(s, "\n") {
+		s += "\n"
+	}
+	fmt.Print("[" + ts + "] " + s)
 }
 
 type sessionIDSources struct {
@@ -295,7 +299,7 @@ func traceSession(c Config, flagSessionID string) error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			printHeader(0)
-			fmt.Fprintf(os.Stdout, "  (no events yet)\n")
+			Logf("(no events yet)")
 		} else {
 			return fmt.Errorf("read events.jsonl: %w", err)
 		}
@@ -317,7 +321,7 @@ func traceSession(c Config, flagSessionID string) error {
 			n++
 			formatted := print.FormatTraceLine(line)
 			if formatted != "" {
-				fmt.Fprintf(os.Stdout, "[%d]  %s\n", n, formatted)
+				Logf("[%d]  %s", n, formatted)
 			}
 		}
 	}
@@ -325,12 +329,12 @@ func traceSession(c Config, flagSessionID string) error {
 	sessionLive := isSessionLive(sessionDir)
 	if !sessionLive {
 		fmt.Fprintf(os.Stdout, "\n───────────────────────────────────────────────────────────────\n")
-		fmt.Fprintf(os.Stdout, "  Done (session finished)\n")
+		Logf("Done (session finished)")
 		fmt.Fprintf(os.Stdout, "───────────────────────────────────────────────────────────────\n")
 		return nil
 	}
 
-	fmt.Fprintf(os.Stdout, "\n  Following new events (Ctrl+C to stop)...\n\n")
+	Logf("Following new events (Ctrl+C to stop)...")
 
 	var n int
 	if data != nil {
@@ -354,7 +358,7 @@ func traceSession(c Config, flagSessionID string) error {
 		watchErr = logs.WatchLine(ctx, eventsPath, logs.WatchLineOptions{}, func(line string) error {
 			formatted := print.FormatTraceLine(line)
 			if formatted != "" {
-				fmt.Fprintf(os.Stdout, "[%d]  %s\n", n, formatted)
+				Logf("[%d]  %s", n, formatted)
 			}
 			n++
 			return nil
@@ -376,7 +380,7 @@ func traceSession(c Config, flagSessionID string) error {
 	}
 
 	fmt.Fprintf(os.Stdout, "\n───────────────────────────────────────────────────────────────\n")
-	fmt.Fprintf(os.Stdout, "  Session finished\n")
+	Logf("Session finished")
 	fmt.Fprintf(os.Stdout, "───────────────────────────────────────────────────────────────\n")
 
 	return nil
@@ -485,7 +489,7 @@ func showStatus(c Config, flagSessionID string) error {
 	fmt.Fprintf(os.Stdout, "═══════════════════════════════════════════════════════════════\n\n")
 
 	if eventCount == 0 {
-		fmt.Fprintf(os.Stdout, "No events yet\n")
+		Logf("No events yet")
 	} else {
 		lastEvents := eventLines
 		if len(eventLines) > 3 {
@@ -502,9 +506,9 @@ func showStatus(c Config, flagSessionID string) error {
 				rel = relativeTime(ts)
 			}
 			lines := strings.Split(formatted, "\n")
-			fmt.Fprintf(os.Stdout, "  [%d] %s — %s\n", i+1, lines[0], rel)
+			Logf("  [%d] %s — %s", i+1, lines[0], rel)
 			for _, l := range lines[1:] {
-				fmt.Fprintf(os.Stdout, "       %s\n", l)
+				Logf("       %s", l)
 			}
 		}
 	}

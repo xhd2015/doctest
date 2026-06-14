@@ -1,0 +1,65 @@
+## Expected
+- Exit code 0.
+- Header/border lines (with `═══`) have NO timestamp prefix `[...]`.
+- Event display lines (with `[%d]  ` pattern) HAVE a timestamp prefix.
+- `Done (session finished)` message HAS a timestamp prefix.
+- Separator lines (`───`) have NO timestamp prefix.
+- Stderr is empty.
+
+```go
+import (
+    "regexp"
+    "strings"
+    "testing"
+)
+
+func Assert(t *testing.T, req *Request, resp *Response, err error) {
+    if err != nil {
+        t.Fatalf("run failed: %v", err)
+    }
+    if resp.ExitCode != 0 {
+        t.Fatalf("exit code = %d, want 0\nstderr:\n%s", resp.ExitCode, resp.Stderr)
+    }
+
+    tsPrefix := regexp.MustCompile(`^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\]`)
+    eventPattern := regexp.MustCompile(`^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\] \[\d+\]  `)
+
+    lines := strings.Split(resp.Stdout, "\n")
+    foundDone := false
+    eventCount := 0
+
+    for _, line := range lines {
+        trimmed := strings.TrimSpace(line)
+        if trimmed == "" {
+            continue
+        }
+
+        hasTS := tsPrefix.MatchString(trimmed)
+        isEvent := eventPattern.MatchString(trimmed)
+        hasBorder := strings.Contains(trimmed, "═══") || strings.Contains(trimmed, "───")
+
+        if isEvent {
+            eventCount++
+            if !hasTS {
+                t.Fatalf("event line missing timestamp prefix:\n%q", line)
+            }
+        } else if strings.Contains(trimmed, "Done (session finished)") {
+            foundDone = true
+            if !hasTS {
+                t.Fatalf("'Done (session finished)' line missing timestamp prefix:\n%q", line)
+            }
+        } else if hasBorder {
+            if hasTS {
+                t.Fatalf("border line has unexpected timestamp prefix:\n%q", line)
+            }
+        }
+    }
+
+    if eventCount == 0 {
+        t.Fatal("no event lines found in output")
+    }
+    if !foundDone {
+        t.Fatal("missing 'Done (session finished)' message")
+    }
+}
+```

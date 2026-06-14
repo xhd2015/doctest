@@ -135,7 +135,7 @@ Options:
   -h, --help              Show help
 `
 
-const agentDesignUsage = `Usage: doctest agent design [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status] [--list-sessions] <prompt>
+const agentDesignerUsage = `Usage: doctest agent design [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status] [--list-sessions] <prompt>
 
 Spawn a sub-agent to design doctest trees for new features or update
 existing test suites. The sub-agent analyzes requirements, breaks down
@@ -274,7 +274,7 @@ func runAgentImplement(args []string) error {
 
 func runAgentDesign(args []string) error {
 	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
-		fmt.Print(agentDesignUsage)
+		fmt.Print(agentDesignerUsage)
 		return nil
 	}
 	opts := designer.Options{AgentRunner: "opencode"}
@@ -285,7 +285,7 @@ func runAgentDesign(args []string) error {
 		Bool("--trace", &opts.CatchUp).
 		Bool("--status", &opts.Status).
 		Bool("--list-sessions", &opts.ListSessions).
-		Help("-h,--help", agentDesignUsage).
+		Help("-h,--help", agentDesignerUsage).
 		HelpNoExit().
 		Parse(args)
 	if err != nil {

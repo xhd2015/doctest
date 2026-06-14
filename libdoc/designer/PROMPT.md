@@ -51,6 +51,13 @@ Organize tests as a decision tree following the doc-style test specification:
 The tree should be exhaustive: every valid path through the parameter space
 should lead to at least one leaf. Every error path should be covered too.
 
+If a relevant doctest tree already exists, you should inspect it,
+identify coverage gaps, and add/update tests accordingly.
+
+If the feature is already correctly implemented and the resulting tests pass
+before any code change, report that result to the user instead of delegating
+unnecessary implementation.
+
 ### Step 4: Write the Doctest Files
 
 Create the test tree following the doc-style test specification:
@@ -94,12 +101,11 @@ Write a `DOCTEST.md` that includes:
 Run validation to confirm the tree is well-formed:
 
 ```sh
-doctest vet ./tests/<feature>
-doctest build ./tests/<feature>
+doctest test ./tests/<feature>
 ```
 
 Tests may fail at runtime (RED) since no implementation exists — that's expected.
-The main agent will run `doctest test ` to confirm RED state before sealing.
+The main agent will confirm RED state before sealing the tests.
 
 ## Reporting Progress
 
