@@ -1,6 +1,8 @@
 package core
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -461,6 +463,86 @@ func WriteGeneratedCases(dir string, cases []TreeCase, compileOnly bool, w io.Wr
 		return nil, fmt.Errorf("gofmt failed: %v\n%s", err, string(out))
 	}
 	return testFiles, nil
+}
+
+func ComputeSourceHash(dir string, cases []TreeCase) (string, error) {
+	h := sha256.New()
+
+	seen := make(map[string]bool)
+	for _, tc := range cases {
+		for _, setup := range tc.SetupFiles {
+			absPath := filepath.Join(dir, setup.Path)
+			if !seen[absPath] {
+				if err := hashFileContent(h, absPath); err != nil {
+					return "", err
+				}
+				seen[absPath] = true
+			}
+		}
+		absPath := filepath.Join(dir, tc.AssertFile.Path)
+		if !seen[absPath] {
+			if err := hashFileContent(h, absPath); err != nil {
+				return "", err
+			}
+			seen[absPath] = true
+		}
+	}
+
+	if srcDir, _, ok := ResolvePkgUnderTest(dir); ok {
+		entries, err := os.ReadDir(srcDir)
+		if err != nil {
+			return "", err
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			name := entry.Name()
+			if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+				continue
+			}
+			if err := hashFileContent(h, filepath.Join(srcDir, name)); err != nil {
+				return "", err
+			}
+		}
+	}
+
+	modRoot, _, hasMod := FindModuleRoot(dir)
+	if hasMod {
+		if err := hashFileContent(h, filepath.Join(modRoot, "go.mod")); err != nil {
+			return "", err
+		}
+		goSumPath := filepath.Join(modRoot, "go.sum")
+		if _, err := os.Stat(goSumPath); err == nil {
+			if err := hashFileContent(h, goSumPath); err != nil {
+				return "", err
+			}
+		}
+	}
+
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func hashFileContent(h io.Writer, path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = io.Copy(h, f)
+	return err
+}
+
+func WriteHashFile(genDir, hash string) error {
+	return os.WriteFile(filepath.Join(genDir, "doctest.hash"), []byte(hash), 0644)
+}
+
+func ReadHashFile(genDir string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(genDir, "doctest.hash"))
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(data)), nil
 }
 
 func FilterBySubDir(cases []TreeCase, root, subDir string) []TreeCase {

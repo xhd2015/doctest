@@ -158,6 +158,7 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 	opts := core.Options{Stderr: os.Stderr, RemoveTemp: false}
 	remainArgs, err := lessflags.Bool("-v,--verbose", &opts.Verbose).
 		Bool("--rm", &opts.RemoveTemp).
+		String("--gen-dir", &opts.GenDir).
 		Int("-count", &opts.Count).
 		Parse(args)
 	if err != nil {

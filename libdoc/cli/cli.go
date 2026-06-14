@@ -93,13 +93,14 @@ Examples:
   doctest build -v ./sub-module/...
 `
 
-const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [-count=N] <dir>
+const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] <dir>
 
 Run executable Go snippets from a doc-style test directory, allow ./... patterns like go test.
 
 Options:
   -v, --verbose     Show generated test names and runner output
   --rm              Remove the temporary generated test directory
+  --gen-dir DIR     Write generated Go test files to DIR
   -count=N          Forward Go test count option to generated test binary
   -h, --help        Show help
 

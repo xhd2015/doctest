@@ -107,7 +107,7 @@ to a file and use `--requirement`:
 doctest agent design --requirement REQUIREMENT-DESIGN-<context-summary-and-feature-slug>.md
 ```
 
-The requirement file must content summarized context and detailed requirement.
+The requirement file must contain summarized context and detailed requirement.
 
 The summarized context is for sub-agent to reference to avoid do full investigation again.
 
@@ -295,5 +295,7 @@ If after the feature request workflow loop finished, and user requests new follo
 - seal tests (Phase 5)
 - delegate implementation to `doctest agent implement` (Phase 6)
 - verify (Phase 8)
+
+For `doctest agent design/implement`, their sessions are isolated(because they do different tasks), so their session ids are different. And if you've passed session id once, for followup, please also keep that same session id for continuity.
 
 --end of skill doc-style-test-based-tdd--
