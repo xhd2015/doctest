@@ -110,6 +110,7 @@ doctest agent design --requirement REQUIREMENT-DESIGN-<context-summary-and-featu
 The requirement file must contain summarized context and detailed requirement.
 
 The summarized context is for sub-agent to reference to avoid do full investigation again.
+- The requirement file starts with `REQUIREMENT-DESIGN-*`
 
 The designer sub-agent will propose and create a comprehensive doctest tree
 covering happy paths, error paths, edge cases, and input variants.
@@ -202,6 +203,7 @@ The prompt should include:
 - The exact command(s) the sub-agent should run to verify the change
 - Any known external limitations, such as live service rate limits, and which
   local deterministic tests are authoritative
+- The requirement file starts with `REQUIREMENT-IMPLEMENT-*`
 
 You can also run `doctest agent implement --session-id <SESSION_ID_PRINTED_IN_THE_LOG> --status` to check sub-agent's status.
 
