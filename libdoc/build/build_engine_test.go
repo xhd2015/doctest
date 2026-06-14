@@ -268,7 +268,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 		t.Fatalf("build: %v", err)
 	}
 
-	leafTestData, err := os.ReadFile(filepath.Join(genDir, "leaf_test.go"))
+	leafTestData, err := os.ReadFile(filepath.Join(genDir, "leaf", "leaf_test.go"))
 	if err != nil {
 		t.Fatalf("read leaf_test.go: %v", err)
 	}
@@ -479,7 +479,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("build: %v", err)
 	}
 
-	helperPath := filepath.Join(genDir, "helper.go")
+	helperPath := filepath.Join(genDir, "tests", "leaf", "helper.go")
 	helperData, err := os.ReadFile(helperPath)
 	if err != nil {
 		t.Fatalf("expected helper.go in gen dir: %v", err)
@@ -497,7 +497,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatal("expected private func in copied helper.go")
 	}
 
-	leafTestPath := filepath.Join(genDir, "leaf_test.go")
+	leafTestPath := filepath.Join(genDir, "tests", "leaf", "leaf_test.go")
 	testData, err := os.ReadFile(leafTestPath)
 	if err != nil {
 		t.Fatalf("expected leaf_test.go: %v", err)
@@ -538,10 +538,10 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 		t.Fatalf("build: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(genDir, "helper.go")); os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(genDir, "tests", "leaf", "helper.go")); os.IsNotExist(err) {
 		t.Fatal("expected helper.go to be copied")
 	}
-	if _, err := os.Stat(filepath.Join(genDir, "helper_test.go")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(genDir, "tests", "leaf", "helper_test.go")); !os.IsNotExist(err) {
 		t.Fatal("expected helper_test.go NOT to be copied")
 	}
 }
@@ -566,7 +566,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 		t.Fatalf("build: %v", err)
 	}
 
-	leafTestData, err := os.ReadFile(filepath.Join(genDir, "leaf_test.go"))
+	leafTestData, err := os.ReadFile(filepath.Join(genDir, "leaf", "leaf_test.go"))
 	if err != nil {
 		t.Fatalf("read leaf_test.go: %v", err)
 	}

@@ -1,8 +1,6 @@
 package build
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,11 +9,6 @@ import (
 
 	"github.com/xhd2015/doctest/libdoc/core"
 )
-
-func sha256HexOf(s string) string {
-	h := sha256.Sum256([]byte(s))
-	return hex.EncodeToString(h[:])
-}
 
 func Test(dir string, opts core.Options) error {
 	w := opts.Stderr
@@ -28,20 +21,23 @@ func Test(dir string, opts core.Options) error {
 
 	absRoot, _ := filepath.Abs(dir)
 
-	tmp := opts.GenDir
-	if tmp == "" {
-		cacheDir, err := os.UserCacheDir()
+	mappingGenRoot := opts.GenDir
+	if mappingGenRoot == "" {
+		var err error
+		mappingGenRoot, _, err = core.CacheMappingGenRoot(absRoot)
 		if err != nil {
 			return err
 		}
-		h := sha256HexOf(absRoot)
-		tmp = filepath.Join(cacheDir, "doctest", h)
 	}
-	if err := os.MkdirAll(tmp, 0755); err != nil {
+	if err := os.MkdirAll(mappingGenRoot, 0755); err != nil {
 		return err
 	}
 
-	fmt.Fprintf(w, "→ %s\n\n", tmp)
+	if opts.Stderr != nil {
+		fmt.Fprintf(opts.Stderr, "→ %s\n\n", mappingGenRoot)
+	} else {
+		fmt.Fprintf(os.Stderr, "→ %s\n\n", mappingGenRoot)
+	}
 
 	if opts.Verbose {
 		fmt.Fprintf(w, "doctest: %s\n\n", dir)
@@ -69,81 +65,92 @@ func Test(dir string, opts core.Options) error {
 		return fmt.Errorf("%s: no runnable test cases found", dir)
 	}
 
-	sourceHash, err := core.ComputeSourceHash(dir, cases)
-	if err != nil {
-		return fmt.Errorf("compute source hash: %w", err)
+	_, modPath, hasMod := core.FindModuleRoot(absRoot)
+	absModRoot, _ := core.MappingGenRoot(absRoot)
+
+	if err := core.WriteGoMod(mappingGenRoot, absModRoot, modPath, hasMod); err != nil {
+		return err
+	}
+	if opts.Verbose {
+		fmt.Fprintf(w, "→ %s\n", filepath.Join(mappingGenRoot, "go.mod"))
 	}
 
-	hashMatch := false
-	if existingHash, err := core.ReadHashFile(tmp); err == nil && existingHash == sourceHash {
-		hashMatch = true
+	pkgName := "testcase"
+	srcDir, origPkg, hasPkgUnderTest := core.ResolvePkgUnderTest(absRoot)
+	if hasPkgUnderTest {
+		pkgName = origPkg + "_tc"
 	}
 
-	if !hashMatch {
-		modRoot, modPath, hasMod := core.FindModuleRoot(dir)
-		if err := core.WriteGoMod(tmp, modRoot, modPath, hasMod); err != nil {
-			return err
-		}
-		if opts.Verbose {
-			fmt.Fprintf(w, "→ %s\n", filepath.Join(tmp, "go.mod"))
+	for _, tc := range cases {
+		absLeafDir := filepath.Join(absRoot, tc.Path)
+		leafDir, err := core.GenDirForLeaf(mappingGenRoot, absModRoot, absLeafDir)
+		if err != nil {
+			return fmt.Errorf("gen dir for leaf %s: %w", tc.Path, err)
 		}
 
-		pkgName := "testcase"
-		if srcDir, origPkg, ok := core.ResolvePkgUnderTest(dir); ok {
-			newPkg, err := core.CopySourceFiles(tmp, srcDir, origPkg)
-			if err != nil {
-				return fmt.Errorf("copy source files: %w", err)
-			}
-			pkgName = newPkg
-			if opts.Verbose {
-				fmt.Fprintf(w, "→ %s (copied from %s, package %s)\n", srcDir, srcDir, newPkg)
+		if hasPkgUnderTest {
+			if _, err := core.CopySourceFiles(leafDir, srcDir, origPkg); err != nil {
+				return fmt.Errorf("copy source files to %s: %w", leafDir, err)
 			}
 		}
 
-		_, err = core.WriteGeneratedCases(tmp, cases, false, nil, pkgName, absRoot)
+		testPath, err := core.WriteGeneratedCase(leafDir, tc, false, pkgName, absRoot)
 		if err != nil {
 			return err
 		}
-
-		if hasMod {
-			if err := core.TidyGoMod(tmp); err != nil {
-				return err
-			}
+		if opts.Verbose {
+			fmt.Fprintf(w, "→ %s\n", testPath)
 		}
+	}
 
-		if err := core.WriteHashFile(tmp, sourceHash); err != nil {
+	if hasMod {
+		if err := core.CondTidyGoMod(mappingGenRoot); err != nil {
 			return err
 		}
 	}
 
+	runDir := mappingGenRoot
+	isSingleLeaf := false
+	if opts.SubDir != "" {
+		subDirAbs := opts.SubDir
+		if !filepath.IsAbs(subDirAbs) {
+			subDirAbs = filepath.Join(absRoot, subDirAbs)
+		}
+		if _, err := os.Stat(filepath.Join(subDirAbs, "ASSERT.md")); err == nil {
+			isSingleLeaf = true
+		}
+		relSubDir, err := filepath.Rel(absModRoot, subDirAbs)
+		if err == nil && relSubDir != "." {
+			runDir = filepath.Join(mappingGenRoot, relSubDir)
+		}
+	}
+	if !isSingleLeaf && len(cases) == 1 && cases[0].Path != "" {
+		leafDir, _ := core.GenDirForLeaf(mappingGenRoot, absModRoot, filepath.Join(absRoot, cases[0].Path))
+		runDir = leafDir
+		isSingleLeaf = true
+	}
+
 	testArgs := []string{"test", "-mod=mod", "-v"}
-	if NeedsBuildVCSFlag(tmp) {
+	if NeedsBuildVCSFlag(runDir) {
 		testArgs = append(testArgs, "-buildvcs=false")
+	}
+	if isSingleLeaf {
+		testArgs = append(testArgs, ".")
+	} else {
+		testArgs = append(testArgs, "./...")
 	}
 	if opts.Count > 0 {
 		testArgs = append(testArgs, fmt.Sprintf("-count=%d", opts.Count))
 	}
-	if len(cases) > 0 {
-		var runPattern strings.Builder
-		runPattern.WriteString("^(")
-		for i, tc := range cases {
-			if i > 0 {
-				runPattern.WriteByte('|')
-			}
-			runPattern.WriteString(core.TestFuncName(tc))
-		}
-		runPattern.WriteString(")$")
-		testArgs = append(testArgs, "-run", runPattern.String())
-	}
-	testArgs = append(testArgs, ".")
 
-	fmt.Fprintf(w, "cd %s && go %s\n\n", tmp, strings.Join(testArgs, " "))
+
+	fmt.Fprintf(w, "cd %s && go %s\n\n", runDir, strings.Join(testArgs, " "))
 
 	goTestCmd := exec.Command("go", testArgs...)
-	goTestCmd.Dir = tmp
-	goTestCmd.Stdout = w
-	goTestCmd.Stderr = w
-	if err := goTestCmd.Run(); err != nil {
+	goTestCmd.Dir = runDir
+	out, err := goTestCmd.CombinedOutput()
+	os.Stdout.Write(out)
+	if err != nil {
 		return fmt.Errorf("go test failed: %v", err)
 	}
 	return nil

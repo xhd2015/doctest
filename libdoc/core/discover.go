@@ -1,8 +1,6 @@
 package core
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -262,7 +260,7 @@ func CaseName(path string) string {
 	if path == "" {
 		return "root"
 	}
-	return strings.NewReplacer("/", "_", string(filepath.Separator), "_", "-", "_").Replace(path)
+	return strings.NewReplacer("/", "_", string(filepath.Separator), "_", "-", "_").Replace(filepath.Base(path))
 }
 
 func TestFileName(tc TreeCase) string {
@@ -315,13 +313,17 @@ func FindModuleRoot(dir string) (modRoot string, modPath string, ok bool) {
 }
 
 func WriteGoMod(genDir, modRoot, modPath string, hasMod bool) error {
+	modFile := filepath.Join(genDir, "go.mod")
+	if _, err := os.Stat(modFile); err == nil {
+		return nil
+	}
 	var content string
 	if hasMod {
-		content = fmt.Sprintf("module testcase\n\ngo 1.21\n\nrequire %s v0.0.0\n\nreplace %s => %s\n", modPath, modPath, modRoot)
+		content = fmt.Sprintf("module testcase\n\ngo 1.21\n\nreplace %s => %s\n", modPath, modRoot)
 	} else {
 		content = "module testcase\n\ngo 1.21\n"
 	}
-	if err := os.WriteFile(filepath.Join(genDir, "go.mod"), []byte(content), 0644); err != nil {
+	if err := os.WriteFile(modFile, []byte(content), 0644); err != nil {
 		return err
 	}
 	if hasMod {
@@ -342,6 +344,21 @@ func TidyGoMod(genDir string) error {
 		return fmt.Errorf("go mod tidy: %v\n%s", err, string(out))
 	}
 	return nil
+}
+
+func CondTidyGoMod(genDir string) error {
+	markerFile := filepath.Join(genDir, "doctest.tidy-done")
+	if _, err := os.Stat(markerFile); err == nil {
+		return nil
+	}
+	if err := TidyGoMod(genDir); err != nil {
+		return err
+	}
+	f, err := os.Create(markerFile)
+	if err != nil {
+		return err
+	}
+	return f.Close()
 }
 
 func ResolvePkgUnderTest(root string) (srcDir string, origPkgName string, ok bool) {
@@ -365,7 +382,27 @@ func ResolvePkgUnderTest(root string) (srcDir string, origPkgName string, ok boo
 		return "", "", false
 	}
 	absDir := filepath.Join(modRoot, pkgName)
-	entries, err := os.ReadDir(absDir)
+	if srcDir, origPkg, ok := readGoFilesForPkg(absDir, pkgName); ok {
+		return srcDir, origPkg, true
+	}
+	entries, err := os.ReadDir(modRoot)
+	if err != nil {
+		return "", "", false
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		dir := filepath.Join(modRoot, entry.Name())
+		if srcDir, origPkg, ok := readGoFilesForPkg(dir, pkgName); ok {
+			return srcDir, origPkg, true
+		}
+	}
+	return "", "", false
+}
+
+func readGoFilesForPkg(dir string, expectedPkg string) (srcDir string, origPkgName string, ok bool) {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return "", "", false
 	}
@@ -377,7 +414,7 @@ func ResolvePkgUnderTest(root string) (srcDir string, origPkgName string, ok boo
 		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(absDir, name))
+		data, err := os.ReadFile(filepath.Join(dir, name))
 		if err != nil {
 			continue
 		}
@@ -398,14 +435,17 @@ func ResolvePkgUnderTest(root string) (srcDir string, origPkgName string, ok boo
 		} else {
 			origPkgName = pkgLine[:j]
 		}
-		if origPkgName != "" {
-			return absDir, origPkgName, true
+		if origPkgName == expectedPkg {
+			return dir, origPkgName, true
 		}
 	}
 	return "", "", false
 }
 
 func CopySourceFiles(genDir, srcDir, origPkgName string) (string, error) {
+	if err := os.MkdirAll(genDir, 0755); err != nil {
+		return "", err
+	}
 	entries, err := os.ReadDir(srcDir)
 	if err != nil {
 		return "", err
@@ -427,6 +467,12 @@ func CopySourceFiles(genDir, srcDir, origPkgName string) (string, error) {
 		}
 		content := strings.Replace(string(data), oldPkgDecl, newPkgDecl, 1)
 		dst := filepath.Join(genDir, name)
+
+		existing, _ := os.ReadFile(dst)
+		if string(existing) == content {
+			continue
+		}
+
 		if err := os.WriteFile(dst, []byte(content), 0644); err != nil {
 			return "", err
 		}
@@ -434,115 +480,80 @@ func CopySourceFiles(genDir, srcDir, origPkgName string) (string, error) {
 	return newPkgName, nil
 }
 
-func WriteGeneratedCases(dir string, cases []TreeCase, compileOnly bool, w io.Writer, pkgName string, docTestRoot string) ([]string, error) {
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, err
-	}
-	var testPaths []string
-	var testFiles []string
-	for _, tc := range cases {
-		src, err := AssembleTestSource(tc, compileOnly, pkgName, docTestRoot)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", tc.Path, err)
-		}
-		testFile := TestFileName(tc)
-		testPath := filepath.Join(dir, testFile)
-		if err := os.WriteFile(testPath, []byte(src), 0644); err != nil {
-			return nil, err
-		}
-		if w != nil {
-			fmt.Fprintf(w, "→ %s\n", testPath)
-		}
-		testPaths = append(testPaths, testPath)
-		testFiles = append(testFiles, testFile)
-	}
-	args := append([]string{"-w"}, testPaths...)
-	gofmtCmd := exec.Command("gofmt", args...)
-	gofmtCmd.Dir = dir
-	if out, err := gofmtCmd.CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("gofmt failed: %v\n%s", err, string(out))
-	}
-	return testFiles, nil
-}
-
-func ComputeSourceHash(dir string, cases []TreeCase) (string, error) {
-	h := sha256.New()
-
-	seen := make(map[string]bool)
-	for _, tc := range cases {
-		for _, setup := range tc.SetupFiles {
-			absPath := filepath.Join(dir, setup.Path)
-			if !seen[absPath] {
-				if err := hashFileContent(h, absPath); err != nil {
-					return "", err
-				}
-				seen[absPath] = true
-			}
-		}
-		absPath := filepath.Join(dir, tc.AssertFile.Path)
-		if !seen[absPath] {
-			if err := hashFileContent(h, absPath); err != nil {
-				return "", err
-			}
-			seen[absPath] = true
-		}
-	}
-
-	if srcDir, _, ok := ResolvePkgUnderTest(dir); ok {
-		entries, err := os.ReadDir(srcDir)
-		if err != nil {
-			return "", err
-		}
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-			name := entry.Name()
-			if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-				continue
-			}
-			if err := hashFileContent(h, filepath.Join(srcDir, name)); err != nil {
-				return "", err
-			}
-		}
-	}
-
-	modRoot, _, hasMod := FindModuleRoot(dir)
-	if hasMod {
-		if err := hashFileContent(h, filepath.Join(modRoot, "go.mod")); err != nil {
-			return "", err
-		}
-		goSumPath := filepath.Join(modRoot, "go.sum")
-		if _, err := os.Stat(goSumPath); err == nil {
-			if err := hashFileContent(h, goSumPath); err != nil {
-				return "", err
-			}
-		}
-	}
-
-	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
-func hashFileContent(h io.Writer, path string) error {
-	f, err := os.Open(path)
+func GenDirForLeaf(mappingGenRoot, moduleRoot, absLeafDir string) (string, error) {
+	rel, err := filepath.Rel(moduleRoot, absLeafDir)
 	if err != nil {
-		return err
+		return "", fmt.Errorf("compute relative path for leaf %s from %s: %w", absLeafDir, moduleRoot, err)
 	}
-	defer f.Close()
-	_, err = io.Copy(h, f)
-	return err
+	return filepath.Join(mappingGenRoot, rel), nil
 }
 
-func WriteHashFile(genDir, hash string) error {
-	return os.WriteFile(filepath.Join(genDir, "doctest.hash"), []byte(hash), 0644)
+func MappingGenRoot(absDoctestDir string) (string, string) {
+	modRoot, _, _ := FindModuleRoot(absDoctestDir)
+	absModRoot, _ := filepath.Abs(absDoctestDir)
+	if modRoot != "" {
+		absModRoot, _ = filepath.Abs(modRoot)
+	}
+	return absModRoot, modRoot
 }
 
-func ReadHashFile(genDir string) (string, error) {
-	data, err := os.ReadFile(filepath.Join(genDir, "doctest.hash"))
+func WriteGeneratedCase(leafDir string, tc TreeCase, compileOnly bool, pkgName string, docTestRoot string) (string, error) {
+	if err := os.MkdirAll(leafDir, 0755); err != nil {
+		return "", err
+	}
+	src, err := AssembleTestSource(tc, compileOnly, pkgName, docTestRoot)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", tc.Path, err)
+	}
+	testFile := TestFileName(tc)
+	testPath := filepath.Join(leafDir, testFile)
+
+	tmpFile, err := os.CreateTemp("", ".doctest-gen-*")
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(string(data)), nil
+	tmpPath := tmpFile.Name()
+	if _, err := tmpFile.WriteString(src); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+		return "", err
+	}
+	tmpFile.Close()
+
+	gofmtCmd := exec.Command("gofmt", "-w", tmpPath)
+	gofmtCmd.Dir = leafDir
+	if out, err := gofmtCmd.CombinedOutput(); err != nil {
+		os.Remove(tmpPath)
+		return "", fmt.Errorf("gofmt failed: %v\n%s", err, string(out))
+	}
+
+	formatted, err := os.ReadFile(tmpPath)
+	if err != nil {
+		os.Remove(tmpPath)
+		return "", err
+	}
+
+	existing, _ := os.ReadFile(testPath)
+	if string(existing) == string(formatted) {
+		os.Remove(tmpPath)
+		return testPath, nil
+	}
+
+	if err := os.Rename(tmpPath, testPath); err != nil {
+		os.Remove(tmpPath)
+		return "", err
+	}
+	return testPath, nil
+}
+
+func CacheMappingGenRoot(absDoctestDir string) (string, string, error) {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return "", "", err
+	}
+	absModRoot, _ := MappingGenRoot(absDoctestDir)
+	mappingRoot := filepath.Join(cacheDir, "doctest", "mapping-gen", absModRoot)
+	return mappingRoot, absModRoot, nil
 }
 
 func FilterBySubDir(cases []TreeCase, root, subDir string) []TreeCase {

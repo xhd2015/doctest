@@ -89,6 +89,7 @@ func AssembleTestSource(tc TreeCase, compileOnly bool, pkgName string, docTestRo
 	}
 
 	if compileOnly {
+		buf.WriteString("\t// compileOnly\n")
 		buf.WriteString("\t_ = req\n")
 		buf.WriteString("\t_ = run\n")
 		buf.WriteString("\t_ = assert\n")
