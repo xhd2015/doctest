@@ -21,11 +21,23 @@ import (
     "os"
     "os/exec"
     "path/filepath"
+    "strings"
     "testing"
     "time"
-
-    libdocbuild "github.com/xhd2015/doctest/libdoc/build"
 )
+
+func needsBuildVCSFlag(dir string) bool {
+    git, err := exec.LookPath("git")
+    if err != nil {
+        return true
+    }
+    cmd := exec.Command(git, "-C", dir, "rev-parse", "--is-inside-work-tree")
+    out, err := cmd.Output()
+    if err != nil {
+        return true
+    }
+    return strings.TrimSpace(string(out)) != "true"
+}
 
 type Request struct {
     Args []string
@@ -49,7 +61,7 @@ func Setup(t *testing.T, req *Request) error {
     doctestBin := filepath.Join(tmp, "doctest")
     buildDir := filepath.Join(DOCTEST_ROOT, "..")
     buildArgs := []string{"build", "-o", doctestBin}
-    if libdocbuild.NeedsBuildVCSFlag(buildDir) {
+    if needsBuildVCSFlag(buildDir) {
         buildArgs = append(buildArgs, "-buildvcs=false")
     }
     buildArgs = append(buildArgs, "./cmd/doctest")
