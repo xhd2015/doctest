@@ -17,7 +17,8 @@ type Options = subagent.Options
 
 func Run(opts Options) error {
 	return subagent.Run(subagent.Config{
-		Name:         "implementer",
+		RoleName:      "implementer",
+		Cmd:           "implement",
 		PromptContent: promptContent,
 	}, opts)
 }

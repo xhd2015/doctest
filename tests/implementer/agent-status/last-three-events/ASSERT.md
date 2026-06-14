@@ -3,6 +3,7 @@
 - Header shows `Events: 8 lines`.
 - Event listing shows only last 3 events (6, 7, 8): `Sixth event`, `Seventh event text here`, `Eighth event - final output`.
 - Early event content `early-event-1` must NOT appear in stdout.
+- Numbering must be absolute (matching trace positions): [6], [7], [8] NOT [1], [2], [3].
 
 ```go
 import (
@@ -35,6 +36,30 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 
     if strings.Contains(stdout, "early-event-1") {
         t.Errorf("stdout contains truncated event (early-event-1 should not appear), got:\n%s", stdout)
+    }
+
+    if strings.Contains(stdout, "[1]") {
+        t.Errorf("stdout contains [1] but should use absolute numbering [6],[7],[8], got:\n%s", stdout)
+    }
+
+    if strings.Contains(stdout, "[2]") {
+        t.Errorf("stdout contains [2] but should use absolute numbering [6],[7],[8], got:\n%s", stdout)
+    }
+
+    if strings.Contains(stdout, "[3]") {
+        t.Errorf("stdout contains [3] but should use absolute numbering [6],[7],[8], got:\n%s", stdout)
+    }
+
+    if !strings.Contains(stdout, "[6]") {
+        t.Errorf("stdout missing absolute number [6] for sixth event, got:\n%s", stdout)
+    }
+
+    if !strings.Contains(stdout, "[7]") {
+        t.Errorf("stdout missing absolute number [7] for seventh event, got:\n%s", stdout)
+    }
+
+    if !strings.Contains(stdout, "[8]") {
+        t.Errorf("stdout missing absolute number [8] for eighth event, got:\n%s", stdout)
     }
 
     if t.Failed() {

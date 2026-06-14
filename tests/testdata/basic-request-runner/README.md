@@ -6,7 +6,7 @@ This tree demonstrates executable `SETUP.md` and `ASSERT.md` snippets for
 Run it from the repository root:
 
 ```sh
-cd agents/doctest && go run . test ./tests/testdata/basic-request-runner
+cd agents/doctest && go run ./cmd/doctest test ./tests/testdata/basic-request-runner
 ```
 
 ## Tree

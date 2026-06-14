@@ -209,8 +209,8 @@ Run `doctest skill doc-spec show` for the full specification.
 go test ./libdoc/...
 
 # Doc-style integration tests (self-hosting)
-go run . test -v ./tests
+go run ./cmd/doctest test -v ./tests
 
 # Build the binary
-go build .
+go build ./cmd/doctest
 ```

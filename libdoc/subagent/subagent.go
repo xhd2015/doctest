@@ -22,13 +22,14 @@ import (
 
 	agentprovider "github.com/xhd2015/agent-pro/agent/cli/provider"
 	"github.com/xhd2015/agent-pro/agent/cli/registry"
-	agentexec "github.com/xhd2015/agent-pro/agent/exec"
 	"github.com/xhd2015/agent-pro/agent/event/print"
+	agentexec "github.com/xhd2015/agent-pro/agent/exec"
 	"github.com/xhd2015/agent-pro/agent_trace/events"
 )
 
 type Config struct {
-	Name         string // lowercase, e.g. "implementer", "designer"
+	RoleName      string // lowercase, e.g. "implementer", "designer"
+	Cmd           string
 	PromptContent string // embedded PROMPT.md content
 }
 
@@ -58,11 +59,11 @@ func (c Config) agentPrompt() string {
 }
 
 func (c Config) sessionEnvVar() string {
-	return "DOCTEST_AGENT_" + strings.ToUpper(c.Name) + "_SESSION_ID"
+	return "DOCTEST_AGENT_" + strings.ToUpper(c.RoleName) + "_SESSION_ID"
 }
 
 func (c Config) metaSessionField() string {
-	return "doctest_agent_" + c.Name + "_session_id"
+	return "doctest_agent_" + c.RoleName + "_session_id"
 }
 
 func PromptContent(c Config) string {
@@ -107,7 +108,7 @@ func Run(c Config, opts Options) error {
 		}
 	}
 	if prompt == "" {
-		return fmt.Errorf("agent %s requires <prompt>", c.Name)
+		return fmt.Errorf("agent %s requires <prompt>", c.RoleName)
 	}
 
 	agentRunner := strings.TrimSpace(opts.AgentRunner)
@@ -318,9 +319,9 @@ func traceSession(c Config, flagSessionID string) error {
 			if line == "" {
 				continue
 			}
-			n++
 			formatted := print.FormatTraceLine(line)
 			if formatted != "" {
+				n++
 				Logf("[%d]  %s", n, formatted)
 			}
 		}
@@ -340,7 +341,7 @@ func traceSession(c Config, flagSessionID string) error {
 	if data != nil {
 		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
 		for _, line := range lines {
-			if line != "" {
+			if line != "" && print.FormatTraceLine(line) != "" {
 				n++
 			}
 		}
@@ -358,9 +359,9 @@ func traceSession(c Config, flagSessionID string) error {
 		watchErr = logs.WatchLine(ctx, eventsPath, logs.WatchLineOptions{}, func(line string) error {
 			formatted := print.FormatTraceLine(line)
 			if formatted != "" {
+				n++
 				Logf("[%d]  %s", n, formatted)
 			}
-			n++
 			return nil
 		})
 	}()
@@ -506,7 +507,7 @@ func showStatus(c Config, flagSessionID string) error {
 				rel = relativeTime(ts)
 			}
 			lines := strings.Split(formatted, "\n")
-			Logf("  [%d] %s — %s", i+1, lines[0], rel)
+			Logf("  [%d] %s — %s", eventCount-len(lastEvents)+i+1, lines[0], rel)
 			for _, l := range lines[1:] {
 				Logf("       %s", l)
 			}
@@ -638,7 +639,7 @@ func resolveSessionID(c Config, flagSessionID string) (*sessionIDSources, error)
 		}, nil
 	}
 	genID := generateSessionID()
-	return nil, fmt.Errorf("cannot detect session id, if you're running inside opencode, try again with: `doctest agent %s --session-id %s <prompt>`, and use the same session id in subsequent followups, don't generate your session id, use the provided session id %s explicitly.", c.Name, genID, genID)
+	return nil, fmt.Errorf("cannot detect session id, if you're running inside opencode, try again with: `doctest agent %s --session-id %s <prompt>`, and use the same session id in subsequent followups, don't generate your session id, use the provided session id %s explicitly.", c.Cmd, genID, genID)
 }
 
 func generateSessionID() string {
@@ -768,17 +769,17 @@ func sessionsBase(c Config) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("get home dir: %w", err)
 	}
-	return filepath.Join(home, ".doctest", c.Name, "sessions"), nil
+	return filepath.Join(home, ".doctest", c.RoleName, "sessions"), nil
 }
 
 type meta struct {
-	ExplicitSessionID                string    `json:"explicit_session_id,omitempty"`
-	DoctestAgentImplSessionID        string    `json:"doctest_agent_implementer_session_id,omitempty"`
-	DoctestAgentDesignerSessionID    string    `json:"doctest_agent_designer_session_id,omitempty"`
-	MainAgentCodexThreadID           string    `json:"main_agent_codex_thread_id,omitempty"`
-	OpencodeSessionID                string    `json:"opencode_session_id,omitempty"`
-	AgentRunner                      string    `json:"agent_runner,omitempty"`
-	CreatedAt                        time.Time `json:"created_at"`
+	ExplicitSessionID             string    `json:"explicit_session_id,omitempty"`
+	DoctestAgentImplSessionID     string    `json:"doctest_agent_implementer_session_id,omitempty"`
+	DoctestAgentDesignerSessionID string    `json:"doctest_agent_designer_session_id,omitempty"`
+	MainAgentCodexThreadID        string    `json:"main_agent_codex_thread_id,omitempty"`
+	OpencodeSessionID             string    `json:"opencode_session_id,omitempty"`
+	AgentRunner                   string    `json:"agent_runner,omitempty"`
+	CreatedAt                     time.Time `json:"created_at"`
 }
 
 func findOrCreateSession(c Config, threadID string, srcs *sessionIDSources) (dir string, isNew bool, err error) {
@@ -874,9 +875,9 @@ func createSession(c Config, base, threadID string, srcs *sessionIDSources) (str
 		AgentRunner:            srcs.agentRunner,
 		CreatedAt:              now,
 	}
-	if c.Name == "implementer" {
+	if c.RoleName == "implementer" {
 		m.DoctestAgentImplSessionID = srcs.implSessionID
-	} else if c.Name == "designer" {
+	} else if c.RoleName == "designer" {
 		m.DoctestAgentDesignerSessionID = srcs.implSessionID
 	}
 
