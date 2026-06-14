@@ -11,6 +11,15 @@ jobs:
       image: golang:1.25.0
     steps:
       - uses: actions/checkout@v4
+      - name: Debug env
+        run: |
+          echo "=== go version ===" && go version
+          echo "=== go env ===" && go env GOFLAGS GOVCS GOVERSION GOROOT
+          echo "=== git version ===" && git version
+          echo "=== git config safe.directory ===" && git config --global --get-all safe.directory || true
+          echo "=== pwd ===" && pwd
+          echo "=== is inside work tree ===" && git rev-parse --is-inside-work-tree
+          echo "=== temp dir build test ===" && tmpdir=$(mktemp -d) && cd "$tmpdir" && echo 'package main; func main() {}' > main.go && go mod init testcase && go build . 2>&1; echo "build exit: $?"
       - name: Go test
         run: go test -v ./...
 
