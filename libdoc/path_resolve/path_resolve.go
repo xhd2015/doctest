@@ -203,6 +203,9 @@ func FindDOCTestDirs(cwd string) ([]string, error) {
 			}
 			return nil
 		}
+		if hasFile(path, ".git") {
+			return filepath.SkipDir
+		}
 		if hasFile(path, "go.mod") {
 			nestedPath := readModulePath(path)
 			if nestedPath == "" {
@@ -249,6 +252,7 @@ func findModuleRoot(cwd string) (dir string, modulePath string, err error) {
 	if err != nil {
 		return "", "", err
 	}
+	gitRoot, gitRootErr := git.ShowToplevel(dir)
 	for {
 		modFile := filepath.Join(dir, "go.mod")
 		data, readErr := os.ReadFile(modFile)
@@ -264,6 +268,9 @@ func findModuleRoot(cwd string) (dir string, modulePath string, err error) {
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
+			return "", "", os.ErrNotExist
+		}
+		if gitRootErr == nil && !isAncestor(gitRoot, parent) {
 			return "", "", os.ErrNotExist
 		}
 		dir = parent
