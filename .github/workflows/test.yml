@@ -15,6 +15,6 @@ jobs:
         run: go test -v ./...
 
       - name: Build doctest
-        run: go build -o doctest ./cmd/doctest
+        run: go build -buildvcs=false -o doctest ./cmd/doctest
       - name: Doctest
         run: ./doctest test -v ./...
