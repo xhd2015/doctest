@@ -40,6 +40,15 @@ func RunWithOptions(dir string, opts core.Options) error {
 			return filepath.SkipDir
 		}
 
+		if d.IsDir() && path != dir {
+			if _, err := os.Stat(filepath.Join(path, "DOCTEST.md")); err == nil {
+				if opts.Verbose {
+					fmt.Println("[vet] skipping nested DOCTEST.md boundary")
+				}
+				return filepath.SkipDir
+			}
+		}
+
 		if d.IsDir() {
 			entries, err := os.ReadDir(path)
 			if err != nil {

@@ -89,7 +89,7 @@ Discuss the feature with the user. Produce a design document that covers:
 
 Get explicit user approval before proceeding to test design.
 
-**MUST**: If user presents an issue or bug that needs to be investigated and fixed, do not guess. First delegate the investigation work to `doctest agent design` to reproduce the issue locally with tests and confirm the failure. Then proceed with strict TDD-flow.
+**MUST**: If user presents an issue or bug that needs to be investigated and fixed, user your sub-agent(e.g. explore) to analyse the issue to narrow down scope first; Then delegate to `doctest agent design` to reproduce the issue locally with tests and confirm the failure. Then proceed with strict TDD-flow.
 
 ## Phase 2: Delegate Test Design
 
