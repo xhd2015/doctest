@@ -88,6 +88,12 @@ func Test(dir string, opts core.Options) error {
 		return err
 	}
 
+	if hasMod {
+		if err := core.TidyGoMod(tmp); err != nil {
+			return err
+		}
+	}
+
 	testBinPath := filepath.Join(tmp, "test.bin")
 
 	fmt.Fprintf(w, "cd %s && go test -c -o test.bin . && cd %s && %s/test.bin\n\n", tmp, absRoot, tmp)

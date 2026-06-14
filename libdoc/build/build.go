@@ -89,6 +89,12 @@ func Build(dir string, opts core.Options) error {
 		return err
 	}
 
+	if hasMod {
+		if err := core.TidyGoMod(tmp); err != nil {
+			return err
+		}
+	}
+
 	goBuildArgs := []string{"build", "-mod=mod"}
 	if NeedsBuildVCSFlag(tmp) {
 		goBuildArgs = append(goBuildArgs, "-buildvcs=false")

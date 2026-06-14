@@ -25,20 +25,9 @@ import (
     "strings"
     "testing"
     "time"
-)
 
-func needsBuildVCSFlag(dir string) bool {
-    git, err := exec.LookPath("git")
-    if err != nil {
-        return true
-    }
-    cmd := exec.Command(git, "-C", dir, "rev-parse", "--is-inside-work-tree")
-    out, err := cmd.Output()
-    if err != nil {
-        return true
-    }
-    return strings.TrimSpace(string(out)) != "true"
-}
+    libdocbuild "github.com/xhd2015/doctest/libdoc/build"
+)
 
 func Setup(t *testing.T, req *Request) error {
     req.Timeout = 60 * time.Second
@@ -48,7 +37,7 @@ func Setup(t *testing.T, req *Request) error {
     doctestBin := filepath.Join(tmp, "doctest")
     buildDir := filepath.Join(DOCTEST_ROOT, "..")
     buildArgs := []string{"build", "-o", doctestBin}
-    if needsBuildVCSFlag(buildDir) {
+    if libdocbuild.NeedsBuildVCSFlag(buildDir) {
         buildArgs = append(buildArgs, "-buildvcs=false")
     }
     buildArgs = append(buildArgs, "./cmd/doctest")

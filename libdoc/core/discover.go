@@ -333,6 +333,15 @@ func WriteGoMod(genDir, modRoot, modPath string, hasMod bool) error {
 	return nil
 }
 
+func TidyGoMod(genDir string) error {
+	tidy := exec.Command("go", "mod", "tidy")
+	tidy.Dir = genDir
+	if out, err := tidy.CombinedOutput(); err != nil {
+		return fmt.Errorf("go mod tidy: %v\n%s", err, string(out))
+	}
+	return nil
+}
+
 func ResolvePkgUnderTest(root string) (srcDir string, origPkgName string, ok bool) {
 	rootSetupPath := filepath.Join(root, "SETUP.md")
 	content, err := os.ReadFile(rootSetupPath)
