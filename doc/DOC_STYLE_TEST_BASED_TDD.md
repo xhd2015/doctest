@@ -1,102 +1,57 @@
 ---
 name: doc-style-test-based-tdd
-description: adversarial two-agent TDD with doctests
+description: adversarial multi-agent TDD with doctests (orchestrator + tests designer + implementer)
 ---
 
 --begin of skill doc-style-test-based-tdd--
 
 # Your role
 
-You're now a TDD Expert, your job is to understand user's requirement, brainstorm enough to discuss with user; then you write tests first(rather than directly writing code), and verify them are red, and seal them.
+You're now a TDD Expert, your job is to understand user's requirement, brainstorm enough to discuss with user; then delegate test design to `doctest agent designer`, verify they are red, and seal them.
 
-Then, delegate implementation to via `doctest agent implement "simple feature"` or `doctest agent implement --requirement COMPLEX_REQUIREMENTS.md`.
+Then, delegate implementation to `doctest agent implement "simple feature"` or `doctest agent implement --requirement COMPLEX_REQUIREMENTS.md`.
 
-You are the **test writer and orchestrator**. You do not write
-implementation code, no matter it is a simple feature or a complex requirement. You must behave as the main agent, and `doctest agent implement` as sub-agent.
+You are the **orchestrator**. You do not write test
+files or implementation code, no matter it is a simple feature or a complex requirement. You must behave as the main agent, and `doctest agent designer` / `doctest agent implement` as sub-agents.
 
 Your responsibilities:
 
 1. Elaborate and brainstorm requirements with the user, ask for clarifications if anything ambiguous 
-2. Design a comprehensive doctest tree
+2. Delegate test design to `doctest agent designer` sub-agent
 3. Run tests to confirm they fail (RED)
 4. Seal the tests to prevent arbitrary modification(only once, and only seal tests, don't seal code)
-5. Hand off implementation to the sub-agent
-6. Handle questions from the sub-agent during implementation
+5. Delegate implementation to `doctest agent implement` sub-agent
+6. Handle questions from sub-agents during their work
 7. On completion: verify test integrity and confirm tests pass (GREEN)
 
-# Doctest specification
-
-A doc-style test is a test expressed as markdown in a decision tree.
-Prose is primary, code supplementary.
-
-## Layout
-
-```
-<pkg>/tests/<feature>/
-├── DOCTEST.md          # Overview, diagram, test index + "## How to Run"
-├── SETUP.md            # Root: shared preconditions, Request/Response types, the Run(t, req) (resp,error) function that actually runs the logic;can use DOCTEST_ROOT to refer this dir
-├── decision/           # Grouping — no ASSERT.md, must have SETUP.md
-│   └── leaf/           # Runnable — has ASSERT.md, must have SETUP.md
-│       └── testdata/   # Fixtures (skipped)
-```
-
-- Dir with `ASSERT.md` = runnable leaf; without = grouping node (must have SETUP.md)
-- `SETUP.md` accumulates root→leaf: `## Steps` concatenated, `## Preconditions`/`## Context` merged.
-  Sections: `## Preconditions`, `## Steps`, `## Context`
-- `ASSERT.md` is **case-private** (never inherited).
-  Sections: `## Expected`, `## Side Effects`, `## Errors`, `## Exit Code`
-
-## Test Fixture Data
-
-Abstract fixture data into standalone files, not inline code.
-
-- Single file → place alongside `ASSERT.md`
-- Multiple files → place in `testdata/` alongside `ASSERT.md`
-
-Code reads them with directly filename reference as each `ASSERT.md` runs in its own directory.
-
-## Code blocks
-
-Both `SETUP.md` and `ASSERT.md` may contain ```go...``` go code blocks. 
-
-Root `SETUP.md` defines `type Request` and `type Response` — shared by all descendants.
-
-| Function | Where | Signature | Notes |
-|----------|-------|-----------|-------|
-| `Setup` | any SETUP.md | `(t *testing.T, req *Request) error` | called root→leaf before Run; body must not be stub |
-| `Run` | any SETUP.md | `(t *testing.T, req *Request) (*Response, error)` | **deepest wins**; root provides stub so tests fail RED |
-| `Assert` | every ASSERT.md | `(t *testing.T, req *Request, resp *Response, err error)` | fail via `t.Fatal`/`t.Fatalf` |
-
-Import target package directly. For unexported functions, use **`TestExported_`** prefix:
-`func TestExported_foo() { foo() }` — then `import "mypkg"; mypkg.TestExported_foo()` in the code block.
-
-- Every `SETUP.md` must have a Go block as **final content**; child must not redefine Request/Response
-- Signatures must match exactly; `func Setup` body must not be a stub (`return nil`)
-- At least one `Run` in the chain; every `ASSERT.md` must have `func Assert`
-
-> Full spec, run: `doctest skill doc-spec show` && `doctest skill code-spec show`
+__DOCTEST_SPEC__
 
 # Non-Negotiable Agent Boundary
 
-When this workflow is requested, the implementation sub-agent is the
-`doctest agent implement` sub-agent. Do **not** replace it with another
-delegation mechanism, generic coding agent, multi-agent tool, handoff/delegation skill,
-or manually-created implementation worker.
+This workflow uses two sanctioned sub-agents:
+- **`doctest agent designer`** — for test design (Phase 2)
+- **`doctest agent implement`** — for implementation (Phase 6)
+
+Do **not** replace either with another delegation mechanism, generic coding
+agent, multi-agent tool, handoff/delegation skill, or manually-created worker.
 
 Your allowed actions as main-agent:
 
-- write or update the doc-style tests
+- elaborate and document requirements (Phase 1)
+- invoke `doctest agent designer "<design doc>"`
+- answer designer follow-up questions by invoking `doctest agent designer "<answer>"`
 - run RED tests
 - stage/seal the test files
 - invoke `doctest agent implement "<design doc + test summary>"`
-- answer follow-up questions by invoking `doctest agent implement "<answer>"`
+- answer implementer follow-up questions by invoking `doctest agent implement "<answer>"`
 - verify test integrity and GREEN results
 
 When the feature description is long or contains shell-special characters
 (`$`, `#`, `!`, etc.), write the requirement to a file and use the
-`--requirement` flag:
+`--requirement` flag for either sub-agent:
 
 ```sh
+doctest agent designer --requirement REQUIREMENT-<feature-brief-slug>.md
 doctest agent implement --requirement REQUIREMENT-<feature-brief-slug>.md
 ```
 
@@ -108,10 +63,11 @@ doctest agent implement --requirement REQUIREMENT-<feature-brief-slug>.md "<answ
 
 Disallowed substitutions:
 
-- spawning a generic worker or explorer agent for implementation
+- writing doc-style test files directly (must delegate to `doctest agent designer`)
+- spawning a generic worker or explorer agent for test design or implementation
 - using a separate delegation directory as the primary implementation mechanism
 - implementing the production change directly after tests are sealed
-- treating an existing non-doctest delegation tool as equivalent to `doctest agent implement`
+- treating an existing non-doctest delegation tool as equivalent to `doctest agent designer` or `doctest agent implement`
 
 # Workflow
 
@@ -127,41 +83,54 @@ Discuss the feature with the user. Produce a design document that covers:
 
 Get explicit user approval before proceeding to test design.
 
-**MUST**: If user presents an issue or bug that needs to be investigated and fixed, to avoid messing up with your main workflow, you MUST delegate the investigation work to a sub-agent(e.g. explore), and wait for their result. Your job must be done by strict TDD-flow.
+**MUST**: If user presents an issue or bug that needs to be investigated and fixed, do not guess. First delegate the investigation work to `doctest agent designer` to reproduce the issue locally with tests and confirm the failure. Then proceed with strict TDD-flow.
 
-## Phase 2: Test Design
+## Phase 2: Delegate Test Design
 
-Avoid unit test since we're using doctests which much advanced than unit tests for self-documentation.
+Invoke the `doctest agent designer` sub-agent with the design document from
+Phase 1:
 
-Build a doctest tree following the doc-style test specification:
+```sh
+doctest agent designer "<design doc from Phase 1>"
+```
 
-1. Propose a flat list of test cases (name + one-line description) and get
-   approval before creating directories.
-2. Create the directory structure with `SETUP.md` and `ASSERT.md` files.
-3. Embed Go code blocks in each file per the code specification:
-   - Root `SETUP.md`: define `Request` and `Response` types, and a default
-     `func Run` (a stub returning `"error not implemented"` is acceptable at
-     this stage, since the test must fail).
-   - Child `SETUP.md`: `func Setup` populating `req` fields.
-   - Leaf `ASSERT.md`: `func Assert` checking expected outcomes.
+The designer sub-agent will propose and create a comprehensive doctest tree
+covering happy paths, error paths, edge cases, and input variants.
 
-The tests must be **comprehensive**: cover happy paths, error paths, edge
-cases, and input variants. Prefer more leaves over fewer.
+If the design document is long or contains shell-special characters, write it
+to a file and use `--requirement`:
 
-If a relevant doctest tree already exists, do not skip the TDD protocol.
-Instead:
+```sh
+doctest agent designer --requirement REQUIREMENT-<feature-brief-slug>.md
+```
 
-1. Inspect the existing tests and identify coverage gaps.
-2. Add or update tests that express the new requirement.
-3. Run the relevant doctest tree and confirm the new requirement fails before
-   implementation, unless the feature is already correctly implemented.
-4. Seal the affected test files before delegation.
+If a relevant doctest tree already exists, the designer should inspect it,
+identify coverage gaps, and add/update tests accordingly.
 
-If the feature is already correctly implemented and the tests pass before any
-code change, report that result to the user instead of delegating unnecessary
-implementation.
+If the feature is already correctly implemented and the resulting tests pass
+before any code change, report that result to the user instead of delegating
+unnecessary implementation.
 
-## Phase 3: RED — Confirm Tests Fail
+## Phase 3: Handle Designer Questions (Optional)
+
+The designer sub-agent may yield questions about ambiguous requirements or
+test design decisions. When this happens:
+
+1. Read the questions from the output.
+2. Attempt to resolve based on the design document and test expectations.
+3. Escalate to the user if the question requires domain knowledge or user
+   preference.
+
+Feed answers back by re-invoking the designer:
+
+```sh
+doctest agent designer "<answers to questions>"
+```
+
+This may repeat until the designer completes the test tree. Do not guess about
+business logic or user intent. When in doubt, ask the user.
+
+## Phase 4: RED — Confirm Tests Fail
 
 Run the tests to confirm every leaf is in a failing state:
 
@@ -174,16 +143,16 @@ or an equivalent stub failure. If any test passes unexpectedly, re-examine
 the test design — a passing test at this stage means the test is not testing
 anything meaningful (no implementation exists yet).
 
-## Phase 4: Seal Tests
+## Phase 5: Seal Tests
 
-Once all tests are confirmed failing, seal them to prevent the sub-agent from
-arbitrarily modifying test cases:
+Once all tests are confirmed failing, seal them to prevent the implementer
+sub-agent from arbitrarily modifying test cases:
 
 ```sh
 git add ./tests/<test-for-this-feature>
 ```
 
-This stages the test directory. The sub-agent may still read the tests, but
+This stages the test directory. The implementer may still read the tests, but
 any modification to them will appear as an unstaged diff that the main agent
 can detect in the verification phase.
 
@@ -195,7 +164,7 @@ ask whether to continue with an unsealed doctest delegation.
 
 **YOU NEVER RUN `git commit` MORE THAN ONCE, ONLY THEN INITIAL TESTS GET SEALED ONLY ONCE!**
 
-## Phase 5: Delegation to Sub-Agent
+## Phase 6: Delegation to Implementer
 
 Invoke the doctest-managed implementation sub-agent with the design document
 and test overview:
@@ -232,7 +201,7 @@ The prompt should include:
 
 You can also run `doctest agent implement --session-id <SESSION_ID_PRINTED_IN_THE_LOG> --status` to check sub-agent's status.
 
-## Phase 6: Handle Sub-Agent Questions (Optional, Only If Sub-Agent Has Yielded Questions)
+## Phase 7: Handle Implementer Questions (Optional, Only If Sub-Agent Has Yielded Questions)
 
 The sub-agent may encounter ambiguity during implementation, and it would return questions to stdout and wait for your followup.
 
@@ -263,7 +232,7 @@ completion (all tests passing) with no further questions.
 
 Do not guess about business logic or user intent. When in doubt, ask the user.
 
-## Phase 7: Verify Completion
+## Phase 8: Verify Completion
 
 When the sub-agent reports completion:
 
@@ -316,11 +285,11 @@ Also report:
 # Always Apply This Workflow For Followup Request/Fix
 
 If after the feature request workflow loop finished, and user requests new followup, always run this workflow again:
-- brainstorm for tech design
-- design tests
-- confirm RED
-- seal tests
-- delegate implementation
-- verify 
+- brainstorm for tech design (Phase 1)
+- delegate test design to `doctest agent designer` (Phase 2)
+- confirm RED (Phase 4)
+- seal tests (Phase 5)
+- delegate implementation to `doctest agent implement` (Phase 6)
+- verify (Phase 8)
 
 --end of skill doc-style-test-based-tdd--
