@@ -2,6 +2,7 @@ package build
 
 import (
 	"os/exec"
+	"strings"
 )
 
 func NeedsBuildVCSFlag(dir string) bool {
@@ -14,5 +15,5 @@ func NeedsBuildVCSFlag(dir string) bool {
 	if err != nil {
 		return true
 	}
-	return string(out) != "true\n" && string(out) != "true\r\n"
+	return strings.TrimSpace(string(out)) == "true"
 }

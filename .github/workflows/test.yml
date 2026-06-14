@@ -14,12 +14,10 @@ jobs:
       - name: Go test
         run: go test -v ./...
 
-      - name: Build doctest
+      - name: Install doctest
         run: |
-          BUILDFLAGS=""
-          if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-            BUILDFLAGS="-buildvcs=false"
+          if ! command -v doctest >/dev/null 2>&1; then
+            go install github.com/xhd2015/doctest/cmd/doctest@latest
           fi
-          go build $BUILDFLAGS -o doctest ./cmd/doctest
       - name: Doctest
-        run: ./doctest test -v ./...
+        run: doctest test -v ./...
