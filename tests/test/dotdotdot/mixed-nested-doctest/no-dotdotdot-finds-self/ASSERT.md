@@ -20,8 +20,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if !strings.Contains(resp.Stderr, "ancestor") {
         t.Fatalf("stderr missing ancestor:\n%s", resp.Stderr)
     }
-    if !strings.Contains(resp.Stderr, "PASS") {
-        t.Fatalf("stderr missing PASS:\n%s", resp.Stderr)
+    if !strings.Contains(resp.Stdout, "PASS") {
+        t.Fatalf("stdout missing PASS:\n%s", resp.Stdout)
     }
 }
 ```

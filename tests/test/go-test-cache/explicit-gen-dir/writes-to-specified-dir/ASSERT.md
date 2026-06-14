@@ -29,22 +29,22 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if genDir == "" {
         t.Fatal("GEN_DIR not set in env")
     }
-    files, readErr := os.ReadDir(genDir)
-    if readErr != nil {
-        t.Fatalf("cannot read gen dir %s: %v\nstderr:\n%s", genDir, readErr, resp.Stderr)
-    }
-    if len(files) == 0 {
-        t.Fatalf("gen dir is empty, expected generated test files\nstderr:\n%s", resp.Stderr)
-    }
     foundTestFile := false
-    for _, f := range files {
-        if filepath.Ext(f.Name()) == ".go" {
-            foundTestFile = true
-            break
+    walkErr := filepath.WalkDir(genDir, func(path string, d os.DirEntry, err error) error {
+        if err != nil {
+            return err
         }
+        if filepath.Ext(d.Name()) == ".go" {
+            foundTestFile = true
+            return filepath.SkipAll
+        }
+        return nil
+    })
+    if walkErr != nil {
+        t.Fatalf("cannot walk gen dir %s: %v\nstderr:\n%s", genDir, walkErr, resp.Stderr)
     }
     if !foundTestFile {
-        t.Fatalf("no .go files found in gen dir %s\nfiles: %v\nstderr:\n%s", genDir, files, resp.Stderr)
+        t.Fatalf("no .go files found in gen dir %s\nstderr:\n%s", genDir, resp.Stderr)
     }
 }
 ```

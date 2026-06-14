@@ -30,8 +30,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
             t.Fatalf("stderr should not contain gitignored %s:\n%s", name, resp.Stderr)
         }
     }
-    if !strings.Contains(resp.Stderr, "PASS") {
-        t.Fatalf("stderr missing PASS:\n%s", resp.Stderr)
+    if !strings.Contains(resp.Stdout, "PASS") {
+        t.Fatalf("stdout missing PASS:\n%s", resp.Stdout)
     }
 }
 ```

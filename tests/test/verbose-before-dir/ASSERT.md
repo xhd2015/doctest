@@ -18,8 +18,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if strings.Contains(resp.Stderr, "test requires <dir>") {
         t.Fatalf("verbose flag before dir was rejected:\n%s", resp.Stderr)
     }
-    if !strings.Contains(resp.Stderr, "TestGeneratedCaseHappyPath") {
-        t.Fatalf("expected verbose test output to include generated test name, stderr:\n%s", resp.Stderr)
+    if !strings.Contains(resp.Stdout, "TestGeneratedCaseHappyPath") {
+        t.Fatalf("expected verbose test output to include generated test name, stdout:\n%s", resp.Stdout)
     }
 }
 ```

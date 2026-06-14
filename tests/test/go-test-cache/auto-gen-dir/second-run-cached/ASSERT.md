@@ -25,9 +25,9 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if state.FirstResp.ExitCode != 0 {
         t.Fatalf("first run exit %d, stderr:\n%s", state.FirstResp.ExitCode, state.FirstResp.Stderr)
     }
-    secondStderr := state.SecondResp.Stderr
-    if !strings.Contains(secondStderr, "(cached)") {
-        t.Fatalf("second run not cached; expected stderr to contain '(cached)':\n%s", secondStderr)
+    secondStdout := state.SecondResp.Stdout
+    if !strings.Contains(secondStdout, "(cached)") {
+        t.Fatalf("second run not cached; expected stdout to contain '(cached)':\n%s", secondStdout)
     }
 }
 ```

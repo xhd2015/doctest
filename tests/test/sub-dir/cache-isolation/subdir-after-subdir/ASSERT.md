@@ -29,19 +29,19 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("first run expected 2 test cases, stderr:\n%s", firstStderr)
     }
 
-    secondStderr := isoState.SecondRun.Stderr
-    if !strings.Contains(secondStderr, "1 test case") {
-        t.Fatalf("second run expected 1 test case, stderr:\n%s", secondStderr)
+    secondStdout := isoState.SecondRun.Stdout
+    if !strings.Contains(isoState.SecondRun.Stderr, "1 test case") {
+        t.Fatalf("second run expected 1 test case, stderr:\n%s", isoState.SecondRun.Stderr)
     }
 
-    if strings.Contains(secondStderr, "TestGeneratedCaseGroupALeaf1") {
-        t.Fatalf("second run expected leaf-1 NOT to run, stderr:\n%s", secondStderr)
+    if strings.Contains(secondStdout, "TestGeneratedCaseLeaf1") {
+        t.Fatalf("second run expected leaf-1 NOT to run, stdout:\n%s", secondStdout)
     }
-    if strings.Contains(secondStderr, "TestGeneratedCaseGroupALeaf2") {
-        t.Fatalf("second run expected leaf-2 NOT to run, stderr:\n%s", secondStderr)
+    if strings.Contains(secondStdout, "TestGeneratedCaseLeaf2") {
+        t.Fatalf("second run expected leaf-2 NOT to run, stdout:\n%s", secondStdout)
     }
-    if !strings.Contains(secondStderr, "TestGeneratedCaseGroupBLeaf3") {
-        t.Fatalf("second run expected leaf-3 to run, stderr:\n%s", secondStderr)
+    if !strings.Contains(secondStdout, "TestGeneratedCaseLeaf3") {
+        t.Fatalf("second run expected leaf-3 to run, stdout:\n%s", secondStdout)
     }
 }
 ```

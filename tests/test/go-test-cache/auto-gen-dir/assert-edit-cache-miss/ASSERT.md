@@ -21,13 +21,13 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if state.FirstResp == nil || state.SecondResp == nil {
         t.Fatal("multi-run state not set")
     }
-    firstStderr := state.FirstResp.Stderr
-    if !strings.Contains(firstStderr, "(cached)") {
-        t.Fatalf("first run was not cached; expected stderr to contain '(cached)':\n%s", firstStderr)
+    firstStdout := state.FirstResp.Stdout
+    if !strings.Contains(firstStdout, "(cached)") {
+        t.Fatalf("first run was not cached; expected stdout to contain '(cached)':\n%s", firstStdout)
     }
-    secondStderr := state.SecondResp.Stderr
-    if strings.Contains(secondStderr, "(cached)") {
-        t.Fatalf("second run was cached after ASSERT.md edit; expected cache miss:\n%s", secondStderr)
+    secondStdout := state.SecondResp.Stdout
+    if strings.Contains(secondStdout, "(cached)") {
+        t.Fatalf("second run was cached after ASSERT.md edit; expected cache miss:\n%s", secondStdout)
     }
 }
 ```

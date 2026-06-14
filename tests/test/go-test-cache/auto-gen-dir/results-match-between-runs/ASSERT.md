@@ -28,11 +28,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("expected exit 0, got first=%d second=%d",
             state.FirstResp.ExitCode, state.SecondResp.ExitCode)
     }
-    if !strings.Contains(state.FirstResp.Stderr, "PASS") {
-        t.Fatalf("first run missing PASS in stderr:\n%s", state.FirstResp.Stderr)
+    if !strings.Contains(state.FirstResp.Stdout, "PASS") {
+        t.Fatalf("first run missing PASS in stdout:\n%s", state.FirstResp.Stdout)
     }
-    if !strings.Contains(state.SecondResp.Stderr, "PASS") {
-        t.Fatalf("second run missing PASS in stderr:\n%s", state.SecondResp.Stderr)
+    if !strings.Contains(state.SecondResp.Stdout, "PASS") {
+        t.Fatalf("second run missing PASS in stdout:\n%s", state.SecondResp.Stdout)
     }
 }
 ```
