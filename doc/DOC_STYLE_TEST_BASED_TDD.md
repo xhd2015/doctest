@@ -166,7 +166,7 @@ implementation.
 Run the tests to confirm every leaf is in a failing state:
 
 ```sh
-doctest test -v ./tests/<test-for-this-feature>
+doctest test ./tests/<test-for-this-feature>
 ```
 
 Expected output: all tests fail with errors matching `"error not implemented"`
@@ -285,7 +285,7 @@ found, evaluate each one:
 **Step 2 — Run tests:**
 
 ```sh
-doctest test -v ./tests
+doctest test ./tests/<test-for-this-feature>/...
 ```
 
 All tests must pass (GREEN). If any test fails, feed the failure output back
@@ -294,8 +294,11 @@ to the sub-agent for correction. Repeat until all tests pass.
 And also run a full tests to ensure no regression:
 
 ```sh
-doctest test -v ./...
+# rul all tests
+doctest test ./...
 ```
+
+**IMPORTANT**: if the sub-agent report-progress that they have run `doctest test ./...` and confirmed the result is ALL PASS, then no need to run this repeatively.
 
 **Step 3 — Report:**
 

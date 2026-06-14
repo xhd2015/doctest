@@ -91,12 +91,12 @@ Write a `DOCTEST.md` that includes:
 Run validation to confirm the tree is well-formed:
 
 ```sh
-doctest vet -v ./tests/<feature>
-doctest build -v ./tests/<feature>
+doctest vet ./tests/<feature>
+doctest build ./tests/<feature>
 ```
 
 Tests may fail at runtime (RED) since no implementation exists — that's expected.
-The main agent will run `doctest test -v` to confirm RED state before sealing.
+The main agent will run `doctest test ` to confirm RED state before sealing.
 
 ## Reporting Progress
 
@@ -109,6 +109,8 @@ report-progress "Writing SETUP.md for decision node: input-source"
 report-progress "12/18 leaves written, working on error cases"
 report-progress "All leaves written, running 'doctest vet' to validate"
 ```
+
+**MUST**: You must always `report-progress` whenever running a `doctest` command, and include result in the `report-progress` so main agent does not repeat the work.
 
 ## When You Need Clarification
 

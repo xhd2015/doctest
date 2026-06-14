@@ -241,7 +241,7 @@ include a header section that tells readers how to execute all tests:
 ## How to Run
 
 ```sh
-doctest test -v ./
+doctest test ./
 ```
 ```
 

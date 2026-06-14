@@ -31,7 +31,7 @@ Write implementation files to make all tests pass. Follow these rules:
 Run the tests to confirm all pass:
 
 ```sh
-doctest test -v ./<test-dir>
+doctest test ./<test-dir>
 ```
 
 If any tests fail, fix your implementation and re-run until all tests pass.
@@ -39,7 +39,7 @@ If any tests fail, fix your implementation and re-run until all tests pass.
 And also run a full tests to ensure no regression:
 
 ```sh
-doctest test -v ./...
+doctest test ./...
 ```
 
 ### Step 4: Report Completion
@@ -48,7 +48,7 @@ When all tests pass (GREEN), report the results. The main agent will verify:
 
 ```sh
 git diff ./<test-dir>   # must show no changes to test files
-doctest test -v ./<test-dir>  # must show all GREEN
+doctest test ./<test-dir>  # must show all GREEN
 ```
 
 ## Reporting Progress
@@ -66,6 +66,8 @@ report-progress "15/18 tests passing, debugging file-not-found error"
 Call this at meaningful milestones (e.g., after reading the test tree, after
 writing each major piece of code, after each test run). Use clear, concise
 descriptions so the main agent can follow your progress.
+
+**MUST**: You must always `report-progress` whenever running a `doctest` command, and include result in the `report-progress` so main agent does not repeat the work.
 
 ## When You Need Clarification
 
@@ -110,7 +112,8 @@ report-progress "now I have a full picture of all the tests and requirement"
 report-progress "code implemented, now run doctest..."
 
 # Step 3: Verify
-doctest test -v ./tests/my-feature
+report-progress "run: doctest test ./tests/my-feature`
+doctest test ./tests/my-feature
 # Output: 15 tests, 3 failures — fix and re-run until all pass
 
 # Step 4: If blocked, ask questions
