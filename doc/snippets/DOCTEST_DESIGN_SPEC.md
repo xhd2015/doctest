@@ -2,20 +2,38 @@
 
 Both `SETUP.md` and `ASSERT.md` may contain ```go...``` go code blocks. 
 
-Root `SETUP.md` defines `type Request` and `type Response` — shared by all descendants.
+## DOCTEST.md
 
-| Function | Where | Signature | Notes |
-|----------|-------|-----------|-------|
-| `Setup` | any SETUP.md | `(t *testing.T, req *Request) error` | called root→leaf before Run; body must not be stub |
-| `Run` | any SETUP.md | `(t *testing.T, req *Request) (*Response, error)` | **deepest wins**; root provides stub so tests fail RED |
-| `Assert` | every ASSERT.md | `(t *testing.T, req *Request, resp *Response, err error)` | fail via `t.Fatal`/`t.Fatalf` |
+`DOCTEST.md` marks the root of the test tree. The whole test tree rooted from where `DOCTEST.md` begins forms a large decision tree. The root `SETUP.md` must define `type Request` and `type Response` — these types are shared by all descendants.
+
+### Tree Organization
+
+1. **Parent → child dirs**: scenarios become more concrete by narrowing one or a few params from `Request`.
+2. **Sibling dirs**: must be mutually exclusive — each tests a different scenario branch.
+
+## SETUP.md
+
+Every `SETUP.md` must have a Go block as **final content**. Child must not redefine `Request`/`Response`.
+
+| Function | Signature | Notes |
+|----------|-----------|-------|
+| `Setup` | `(t *testing.T, req *Request) error` | Called root→leaf before `Run`; body must not be stub |
+| `Run` | `(t *testing.T, req *Request) (*Response, error)` | **Deepest wins**; root provides stub so tests fail RED |
+
+At least one `Run` in the chain. Signatures must match exactly. `func Setup` body must not be a stub (`return nil`).
+
+## ASSERT.md
+
+Every `ASSERT.md` must have a `func Assert`. Signature must match exactly:
+
+```
+func Assert(t *testing.T, req *Request, resp *Response, err error)
+```
+
+Fail via `t.Fatal`/`t.Fatalf`.
 
 Import target package directly. For unexported functions, use **`TestExported_`** prefix:
 `func TestExported_foo() { foo() }` — then `import "mypkg"; mypkg.TestExported_foo()` in the code block.
-
-- Every `SETUP.md` must have a Go block as **final content**; child must not redefine Request/Response
-- Signatures must match exactly; `func Setup` body must not be a stub (`return nil`)
-- At least one `Run` in the chain; every `ASSERT.md` must have `func Assert`
 
 ## Test Fixture Data
 
