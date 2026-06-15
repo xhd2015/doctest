@@ -15,6 +15,7 @@ func Setup(t *testing.T, req *Request) error {
     cfg.TestDir = createTempTestProject(t, "mytest")
     cfg.ModifyFile = "SETUP.md"
     cfg.ModifyContent = doctestGoBlock("import \"testing\"\n\ntype Request struct{ Args []string; WorkDir string }\ntype Response struct{ ExitCode int; Stdout string; Stderr string }\n\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }\nfunc Run(t *testing.T, req *Request) (*Response, error) { return &Response{Stdout: \"modified\"}, nil }")
+    doMultiRun(t, req)
     return nil
 }
 ```

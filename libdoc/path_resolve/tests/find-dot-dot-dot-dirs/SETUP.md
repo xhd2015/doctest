@@ -9,21 +9,12 @@
 
 ```go
 import (
-	"testing"
-
-	"github.com/xhd2015/doctest/libdoc/path_resolve"
+    "testing"
 )
 
 func Setup(t *testing.T, req *Request) error {
-	_ = req
-	return nil
-}
-
-func Run(t *testing.T, req *Request) (*Response, error) {
-	dirs, err := path_resolve.FindDotDotDotDirs(req.BasePath)
-	if err != nil {
-		return &Response{ErrResult: err.Error()}, err
-	}
-	return &Response{DirsResult: dirs}, nil
+    _ = req
+    runType = "find_dot_dot_dot_dirs"
+    return nil
 }
 ```

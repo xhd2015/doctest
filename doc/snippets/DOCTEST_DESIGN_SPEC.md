@@ -4,18 +4,25 @@ Both `SETUP.md` and `ASSERT.md` may contain ```go...``` go code blocks.
 
 ## DOCTEST.md
 
-`DOCTEST.md` marks the root of the test tree. The whole test tree rooted from where `DOCTEST.md` begins forms a large decision tree. The root `SETUP.md` must define `type Request` and `type Response` — these types are shared by all descendants.
+`DOCTEST.md` marks the root of the test tree. The whole test tree rooted from where `DOCTEST.md` begins forms a large decision tree. The root `SETUP.md` must define `type Request`, `type Response`, and `func Run` — these are shared by all descendants and must not be redefined.
 
 ### Nested DOCTEST.md
 
 A subdirectory that contains its own `DOCTEST.md` becomes a **self-contained test root**. The doctest runner stops walking at `DOCTEST.md` boundaries and treats each root independently — **no inheritance crosses a `DOCTEST.md` boundary**.
 
 A nested root's `SETUP.md` must be entirely self-sufficient:
-- It must define its own `Request`/`Response` types
-- It must provide `Setup`/`Run` or let descendant SETUPs provide `Run`
+- It must define its own `Request`/`Response` types and `func Run`
+- It must provide `Setup` or let descendant SETUPs provide `Setup`
 - Any external binaries (e.g., the doctest binary for `req.Bin`) must be built or resolved within that root's own `Setup`
 - The parent root's `Setup` is never executed for leaves under a nested DOCTEST.md
 - Paths like `DOCTEST_ROOT/..` shift — from a deeper root, use `DOCTEST_ROOT/../..` to reach the module root
+
+### When to Create a Nested DOCTEST.md
+
+If two test groups cannot share the same `Run(Request, Response)` contract,
+they must be separate test trees — each rooted at its own `DOCTEST.md`. This
+happens when different scenarios call different functions, services, or
+execution strategies.
 
 ### Tree Organization
 
@@ -24,14 +31,14 @@ A nested root's `SETUP.md` must be entirely self-sufficient:
 
 ## SETUP.md
 
-Every `SETUP.md` must have a Go block as **final content**. Child must not redefine `Request`/`Response`.
+Every `SETUP.md` must have a Go block as **final content**. Child must not redefine `Request`/`Response`/`Run`.
 
 | Function | Signature | Notes |
 |----------|-----------|-------|
 | `Setup` | `(t *testing.T, req *Request) error` | Called root→leaf before `Run`; body must not be stub |
-| `Run` | `(t *testing.T, req *Request) (*Response, error)` | **Deepest wins**; root provides stub so tests fail RED |
+| `Run` | `(t *testing.T, req *Request) (*Response, error)` | **Root only**, cannot be redefined by descendants |
 
-At least one `Run` in the chain. Signatures must match exactly. `func Setup` body must not be a stub (`return nil`).
+Root must define `Run`. Non-root SETUP.md must define `Setup`. Signatures must match exactly. `func Setup` body must not be a stub (`return nil`).
 
 # Inheritance
 
@@ -41,16 +48,18 @@ At least one `Run` in the chain. Signatures must match exactly. `func Setup` bod
 
 ## Run Resolution
 
-The `Run` function follows **deepest wins**: the last `func Run` defined in the chain (closest to the leaf) is the one that executes. A child `Run` completely replaces any ancestor `Run`.
+`func Run` is defined **only at the root** `SETUP.md`. All leaves share the same `Run` function. Descendants must not redefine it.
+
+If two test scenarios need a different `Run`, they require separate test trees, each rooted at its own `DOCTEST.md`.
 
 ## Type and Helper Scoping
 
-- `type Request` and `type Response` are defined once at the root. Child `SETUP.md` files **must not** redefine them.
+- `type Request`, `type Response`, and `func Run` are defined once at the root. Child `SETUP.md` files **must not** redefine them.
 - Helper functions in ancestor SETUPs are available to descendants. A child **must not** redefine a helper with the same name.
 
 ## DOCTEST.md Boundary
 
-A `DOCTEST.md` file creates an **inheritance firewall**. No code, types, helpers, or `Setup` functions cross a `DOCTEST.md` boundary. Each tree rooted at a `DOCTEST.md` is a self-contained decision tree with its own `Request`/`Response` types and its own setup chain.
+A `DOCTEST.md` file creates an **inheritance firewall**. No code, types, helpers, `Run`, or `Setup` functions cross a `DOCTEST.md` boundary. Each tree rooted at a `DOCTEST.md` is a self-contained decision tree with its own `Request`/`Response`/`Run` and its own setup chain.
 
 ## ASSERT.md
 

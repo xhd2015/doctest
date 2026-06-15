@@ -8,18 +8,12 @@
 
 ```go
 import (
-	"testing"
-
-	"github.com/xhd2015/doctest/libdoc/path_resolve"
+    "testing"
 )
 
 func Setup(t *testing.T, req *Request) error {
-	_ = req
-	return nil
-}
-
-func Run(t *testing.T, req *Request) (*Response, error) {
-	result := path_resolve.ExtractBasePath(req.Input)
-	return &Response{StringResult: result}, nil
+    _ = req
+    runType = "extract_base_path"
+    return nil
 }
 ```

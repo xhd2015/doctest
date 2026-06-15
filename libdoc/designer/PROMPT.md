@@ -76,8 +76,8 @@ Rules:
 - `ASSERT.md` defines `## Expected`, `## Side Effects`, `## Errors`, `## Exit Code`
 - Every `SETUP.md` must end with a Go code block as final content
 - Every `ASSERT.md` must have a `func Assert` code block
-- Root `SETUP.md` defines `type Request` and `type Response`
-- Root `SETUP.md` provides a stub `func Run` returning an error (so tests start RED)
+- Root `SETUP.md` defines `type Request`, `type Response`, and `func Run` (must not be redefined by children)
+- Root `SETUP.md` provides a `func Run` (shared by all leaves; if tests need different Run, create separate DOCTEST.md root)
 - Child `SETUP.md` files provide `func Setup` (body must not be stub)
 - Import the target package directly; for unexported functions use `TestExported_` prefix
 

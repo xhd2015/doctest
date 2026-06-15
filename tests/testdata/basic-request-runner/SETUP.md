@@ -3,8 +3,7 @@
 ## Context
 
 - The root defines the shared `Request` and `Response` model.
-- The root `Run` handles the default operation for all descendants unless a
-  child defines a deeper `Run`.
+- The root `Run` handles the default operation for all descendants.
 
 ```go
 import "fmt"

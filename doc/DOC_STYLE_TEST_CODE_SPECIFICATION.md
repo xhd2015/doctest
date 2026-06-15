@@ -40,7 +40,8 @@ type Response struct {
 ```
 
 Every `SETUP.md` and `ASSERT.md` in the tree refers to the same `Request` and
-`Response` types. Child `SETUP.md` must **not** redefine these types.
+`Response` types and the same root-defined `Run` function. Child `SETUP.md` must
+**not** redefine these types or `Run`.
 
 ## Function Signatures
 
@@ -59,8 +60,8 @@ func Setup(t *testing.T, req *Request) error
 
 ### func Run
 
-Defined in at most one `SETUP.md` in the root-to-leaf chain. The **deepest**
-`Run` in the ancestor path is used. Executes the core behavior under test.
+Defined **exclusively** in the root `SETUP.md`. Executes the core behavior
+under test. Must not be redefined by any descendant (Rule 9).
 
 ```go
 func Run(t *testing.T, req *Request) (*Response, error)
@@ -69,26 +70,18 @@ func Run(t *testing.T, req *Request) (*Response, error)
 - Returns `(*Response, error)` — the `error` is passed to `Assert`, not treated
   as a test failure
 - Must implement exactly what the `## Steps` section describes
-- At least one `Run` must exist in the entire setup chain
+- If tests cannot share the same `Run(Request, Response)`, create a separate
+  test tree rooted at its own `DOCTEST.md`
 
-#### Run Override: Nearest Wins
+#### Run Is Root-Only
 
-Only the **deepest** (nearest-to-leaf) `Run` in the ancestor chain is executed.
-Any node along the path — including the leaf itself — can define its own `Run`
-to override the inherited one.
+`func Run` is defined **exclusively at the root** `SETUP.md`. No descendant
+may redefine it. All leaves under a tree share the same `Run(request) → response`
+contract.
 
-```
-Root SETUP:        func Run() → returns error "not implemented yet"
-  mode-commit/:    (no Run — inherits root's Run)
-    leaf/:         func Run() → implements commit for this specific scenario
-```
-
-The leaf uses its own `Run`, ignoring all ancestors. This allows a leaf to
-specialize behavior while still inheriting Setup from the chain above it.
-
-The convention is for the root to provide a default `Run` (e.g., a harness that
-shells out to the tool under test). Children and leaves override it only when
-they need different behavior.
+If two test scenarios need a different `Run` function, they require separate
+test trees — each rooted at its own `DOCTEST.md` with its own
+`Request`/`Response`/`Run`.
 
 #### Do Not Wrap Unit Tests
 
@@ -169,12 +162,15 @@ This sentence comes after the block and makes it non-final.
 
 ---
 
-### 3. Root SETUP.md must define `type Request` and `type Response`
+### 3. Root SETUP.md must define `type Request`, `type Response`, and `func Run`
 
 The root `SETUP.md` (the one at the tree root, not in a subdirectory) must
-declare both shared model types. All descendant files reference these types.
+declare both shared model types **and** the `Run` function. `Run` is the tree's
+core behavior contract — all leaves under this root share the same `Run`.
+Descendant files reference these types and inherit `Run`; they must not redefine
+any of them.
 
-**Violation** — root defines Response but not Request:
+**Violation** — root defines Response and Run but not Request:
 ```go
 type Response struct {
     Output string
@@ -184,19 +180,38 @@ func Run(t *testing.T, req *Request) (*Response, error) { ... }
 ```
 **Error**: `SETUP.md: must define type Request and type Response`
 
+**Violation** — root defines Request and Response but not Run:
+```go
+type Request struct {
+    Input string
+}
+
+type Response struct {
+    Output string
+}
+```
+**Error**: `SETUP.md: must have func Run`
+
 ---
 
-### 4. Every SETUP.md must have `func Setup` or `func Run`
+### 4. Root must have `func Run`; every other SETUP.md must have `func Setup`
 
-Every `SETUP.md` must contribute at least one executable function. A Go block
-with only type declarations and no functions is incomplete.
+The root `SETUP.md` must define `func Run`. Every non-root `SETUP.md` must
+contribute a `func Setup`. A Go block with only type declarations and no
+functions is incomplete.
 
-**Violation** — types only, no functions:
+**Violation** — root has only types, no Run:
 ```go
 type Request struct{ Value int }
 type Response struct{ Result int }
 ```
-**Error**: `SETUP.md: must have func Setup or func Run`
+**Error**: `SETUP.md: must have func Run`
+
+**Violation** — non-root SETUP.md has only types, no Setup:
+```go
+// (empty or only type/var declarations)
+```
+**Error**: `<dir>/SETUP.md: must have func Setup`
 
 ---
 
@@ -263,10 +278,10 @@ func Assert(t *testing.T) {
 
 ---
 
-### 9. Child SETUP.md cannot redefine `type Request` or `type Response`
+### 9. Child SETUP.md cannot redefine `type Request`, `type Response`, or `func Run`
 
-The `Request` and `Response` types are defined once at the root. Any child
-`SETUP.md` that redefines them creates a conflicting model.
+The `Request` and `Response` types and the `Run` function are defined once at
+the root. Any child `SETUP.md` that redefines them creates a conflicting model.
 
 **Violation** — leaf redefines Request:
 ```go
@@ -278,14 +293,22 @@ func Setup(t *testing.T, req *Request) error { ... }
 ```
 **Error**: `leaf/SETUP.md: child SETUP.md cannot redefine Request`
 
+**Violation** — leaf redefines Run:
+```go
+func Run(t *testing.T, req *Request) (*Response, error) { ... }
+
+func Setup(t *testing.T, req *Request) error { ... }
+```
+**Error**: `leaf/SETUP.md: child SETUP.md cannot redefine Run`
+
 ---
 
-### 10. At least one SETUP.md in the chain must define `func Run`
+### 10. Root SETUP.md must define `func Run`
 
-Every runnable leaf needs a `Run` somewhere in its ancestor chain. Without
-one, there is no executable behavior to test.
+Every runnable leaf needs a `Run` at the root. Since `Run` can only be defined
+at root (Rule 9), the root must provide one.
 
-**Violation** — entire chain has only Setup, no Run anywhere:
+**Violation** — root has only Setup, no Run:
 - Root SETUP: `func Setup(...) error { ... }` (no Run)
 - Leaf SETUP: `func Setup(...) error { ... }` (no Run)
 **Error**: `leaf/ASSERT.md: no Run(t *testing.T, req *Request) (*Response, error) in setup chain`

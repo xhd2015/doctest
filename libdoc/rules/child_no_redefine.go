@@ -14,3 +14,13 @@ func CheckChildNoRedefine(types map[string]bool, path string, ancestorDepth int)
 	}
 	return nil
 }
+
+func CheckChildNoRedefineRun(runSet bool, path string, ancestorDepth int) *Violation {
+	if ancestorDepth == 0 {
+		return nil
+	}
+	if runSet {
+		return &Violation{Path: path, Msg: fmt.Sprintf("child SETUP.md cannot redefine Run")}
+	}
+	return nil
+}

@@ -66,11 +66,9 @@ func AssembleTestSource(tc TreeCase, compileOnly bool, pkgName string, docTestRo
 	writeHelperDeclsForBlock(&buf, tc.AssertFile.GoBlock)
 
 	var run *FuncSnippet
-	for _, doc := range tc.SetupFiles {
-		if doc.GoBlock != nil && doc.GoBlock.Run != nil {
-			runCopy := *doc.GoBlock.Run
-			run = &runCopy
-		}
+	if len(tc.SetupFiles) > 0 && tc.SetupFiles[0].GoBlock != nil && tc.SetupFiles[0].GoBlock.Run != nil {
+		runCopy := *tc.SetupFiles[0].GoBlock.Run
+		run = &runCopy
 	}
 	if run == nil {
 		return "", fmt.Errorf("missing Run(t *testing.T, req *Request) (*Response, error) in setup chain")

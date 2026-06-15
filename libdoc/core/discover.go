@@ -50,7 +50,7 @@ func discoverTreeCasesInternal(root string, w io.Writer) ([]TreeCase, error) {
 		if v := rules.CheckRootHasRequestResponse(rootSetup.GoBlock.Types, "SETUP.md"); v != nil {
 			verrs = append(verrs, ValidationError{Path: v.Path, Msg: v.Msg})
 		}
-		if v := rules.CheckRootHasSetupOrRun(rootSetup.GoBlock.Setup != nil, rootSetup.GoBlock.Run != nil, "SETUP.md"); v != nil {
+		if v := rules.CheckRootHasRun(rootSetup.GoBlock.Run != nil, "SETUP.md"); v != nil {
 			verrs = append(verrs, ValidationError{Path: v.Path, Msg: v.Msg})
 		}
 	}
@@ -96,9 +96,9 @@ func discoverTreeCasesInternal(root string, w io.Writer) ([]TreeCase, error) {
 			} else if doc.GoBlock == nil {
 				rel, _ := filepath.Rel(root, setupPath)
 				verrs = append(verrs, ValidationError{Path: rel, Msg: "must have a Go code block"})
-			} else if doc.GoBlock.Setup == nil && doc.GoBlock.Run == nil {
-				rel, _ := filepath.Rel(root, setupPath)
-				verrs = append(verrs, ValidationError{Path: rel, Msg: "must have func Setup or func Run"})
+		} else if doc.GoBlock.Setup == nil {
+			rel, _ := filepath.Rel(root, setupPath)
+			verrs = append(verrs, ValidationError{Path: rel, Msg: "must have func Setup"})
 			}
 			return nil
 		}
@@ -238,6 +238,9 @@ func setupChain(root, leafDir string) ([]SetupDocument, error) {
 		relPath, _ := filepath.Rel(root, path)
 		if doc.GoBlock != nil {
 			if v := rules.CheckChildNoRedefine(doc.GoBlock.Types, relPath, i); v != nil {
+				return nil, fmt.Errorf("%s: %s", v.Path, v.Msg)
+			}
+			if v := rules.CheckChildNoRedefineRun(doc.GoBlock.Run != nil, relPath, i); v != nil {
 				return nil, fmt.Errorf("%s: %s", v.Path, v.Msg)
 			}
 			var childHelpers []string

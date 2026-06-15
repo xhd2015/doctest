@@ -14,6 +14,7 @@ func Setup(t *testing.T, req *Request) error {
     cfg.TestDir = createTempTestProject(t, "mytest")
     cfg.ModifyFile = "simple/ASSERT.md"
     cfg.ModifyContent = doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {\n    if resp.Stdout != \"modified\" {\n        t.Log(\"stdout was not modified\")\n    }\n}")
+    doMultiRun(t, req)
     return nil
 }
 ```

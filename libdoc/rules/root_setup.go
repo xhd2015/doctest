@@ -16,9 +16,9 @@ func CheckRootHasRequestResponse(types map[string]bool, path string) *Violation 
 	return nil
 }
 
-func CheckRootHasSetupOrRun(setupSet, runSet bool, path string) *Violation {
-	if !setupSet && !runSet {
-		return &Violation{Path: path, Msg: fmt.Sprintf("must have func Setup or func Run")}
+func CheckRootHasRun(runSet bool, path string) *Violation {
+	if !runSet {
+		return &Violation{Path: path, Msg: fmt.Sprintf("must have func Run")}
 	}
 	return nil
 }

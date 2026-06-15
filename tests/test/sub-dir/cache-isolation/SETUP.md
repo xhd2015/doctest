@@ -109,41 +109,40 @@ func doRun(t *testing.T, bin string, args []string, timeout time.Duration) *Resp
 	return resp
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
-	if req.Bin == "" {
-		t.Fatalf("req.Bin is not set")
-	}
+func doMultiRun(t *testing.T, req *Request) {
+    if req.Bin == "" {
+        t.Fatalf("req.Bin is not set")
+    }
 
-	treeRoot := t.TempDir()
-	createMultiGroupTree(t, treeRoot)
+    treeRoot := t.TempDir()
+    createMultiGroupTree(t, treeRoot)
 
-	var firstArgs, secondArgs []string
-	switch cisoCfg.Scenario {
-	case "subdir_after_full":
-		firstArgs = []string{"test", treeRoot}
-		secondArgs = []string{"test", filepath.Join(treeRoot, "group-a")}
-	case "full_after_subdir":
-		firstArgs = []string{"test", filepath.Join(treeRoot, "group-a")}
-		secondArgs = []string{"test", treeRoot}
-	case "subdir_after_subdir":
-		firstArgs = []string{"test", filepath.Join(treeRoot, "group-a")}
-		secondArgs = []string{"test", filepath.Join(treeRoot, "group-b")}
-	default:
-		t.Fatalf("unknown scenario: %s", cisoCfg.Scenario)
-	}
+    var firstArgs, secondArgs []string
+    switch cisoCfg.Scenario {
+    case "subdir_after_full":
+        firstArgs = []string{"test", treeRoot}
+        secondArgs = []string{"test", filepath.Join(treeRoot, "group-a")}
+    case "full_after_subdir":
+        firstArgs = []string{"test", filepath.Join(treeRoot, "group-a")}
+        secondArgs = []string{"test", treeRoot}
+    case "subdir_after_subdir":
+        firstArgs = []string{"test", filepath.Join(treeRoot, "group-a")}
+        secondArgs = []string{"test", filepath.Join(treeRoot, "group-b")}
+    default:
+        t.Fatalf("unknown scenario: %s", cisoCfg.Scenario)
+    }
 
-	runTimeout := 120 * time.Second
-	isoState.FirstRun = doRun(t, req.Bin, firstArgs, runTimeout)
-	isoState.SecondRun = doRun(t, req.Bin, secondArgs, runTimeout)
-
-	return isoState.SecondRun, nil
+    runTimeout := 120 * time.Second
+    isoState.FirstRun = doRun(t, req.Bin, firstArgs, runTimeout)
+    isoState.SecondRun = doRun(t, req.Bin, secondArgs, runTimeout)
 }
 
 func Setup(t *testing.T, req *Request) error {
-	_ = fmt.Sprintf
-	isoState.FirstRun = nil
-	isoState.SecondRun = nil
-	req.Timeout = 150 * time.Second
-	return nil
+    _ = fmt.Sprintf
+    isoState.FirstRun = nil
+    isoState.SecondRun = nil
+    req.Timeout = 150 * time.Second
+    req.Args = []string{}
+    return nil
 }
 ```

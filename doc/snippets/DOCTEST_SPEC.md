@@ -8,9 +8,10 @@ Prose is primary, code supplementary.
 ```
 <pkg>/tests/<feature>/
 ├── DOCTEST.md          # Overview, diagram, test index + "## How to Run"
-├── SETUP.md            # Root: shared preconditions, Request/Response types, the Run(t, req) (resp,error) function that actually runs the logic;can use DOCTEST_ROOT to refer this dir
-├── decision/           # Grouping — no ASSERT.md, must have SETUP.md
-│   └── leaf/           # Runnable — has ASSERT.md, must have SETUP.md
+├── SETUP.md            # Root: shared preconditions, Request/Response types, the Run(t, req) (resp,error) function that actually runs the logic; can use DOCTEST_ROOT to refer this dir
+│                       #   Request, Response, and Run cannot be redefined by any descendant
+├── <decision-slug>/           # Grouping — no ASSERT.md, must have SETUP.md
+│   └── <leaf-slug>/           # Runnable — has ASSERT.md, must have SETUP.md
 │       └── testdata/   # Fixtures (skipped)
 ```
 

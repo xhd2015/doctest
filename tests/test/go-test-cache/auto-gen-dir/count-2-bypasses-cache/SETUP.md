@@ -13,6 +13,7 @@ import (
 func Setup(t *testing.T, req *Request) error {
     cfg.TestDir = createTempTestProject(t, "mytest")
     cfg.UseCountTwo = true
+    doMultiRun(t, req)
     return nil
 }
 ```

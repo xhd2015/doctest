@@ -31,4 +31,4 @@ basic-request-runner
 | --- | --- |
 | `happy-path` | Uses inherited root `Run` after leaf setup mutates `Request`. |
 | `expected-error` | Uses inherited root `Run` and asserts the returned run error. |
-| `override-run` | Defines a leaf `Run`, proving deepest `Run` overrides root `Run`. |
+| `override-run` | Uses the root `Run`, proving children cannot redefine `Run`. |

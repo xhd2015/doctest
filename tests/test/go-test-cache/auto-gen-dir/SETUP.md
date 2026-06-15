@@ -43,50 +43,8 @@ func Setup(t *testing.T, req *Request) error {
     state.GenDir = ""
     state.FirstResp = nil
     state.SecondResp = nil
+    req.Args = []string{}
     return nil
-}
-
-func Run(t *testing.T, req *Request) (*Response, error) {
-    if req.Bin == "" {
-        t.Fatalf("req.Bin is not set")
-    }
-
-    testDir := cfg.TestDir
-    if testDir == "" {
-        testDir = createTempTestProject(t, "mytest")
-    }
-
-    baseArgs := []string{"test", testDir}
-
-    doRun(t, req.Bin, baseArgs)
-
-    resp1 := doRun(t, req.Bin, baseArgs)
-    state.FirstResp = resp1
-
-    parseGenDir(resp1.Stderr)
-
-    modified := false
-    if cfg.ModifyFile != "" && cfg.ModifyContent != "" {
-        targetPath := filepath.Join(testDir, cfg.ModifyFile)
-        if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-            t.Fatalf("mkdir for modify: %v", err)
-        }
-        if err := os.WriteFile(targetPath, []byte(cfg.ModifyContent), 0644); err != nil {
-            t.Fatalf("modify file: %v", err)
-        }
-        modified = true
-        _ = modified
-    }
-
-    args2 := baseArgs
-    if cfg.UseCountTwo {
-        args2 = append([]string{"test", testDir, "-count=2"})
-    }
-
-    resp2 := doRun(t, req.Bin, args2)
-    state.SecondResp = resp2
-
-    return resp2, nil
 }
 
 func doRun(t *testing.T, bin string, args []string) *Response {
@@ -131,5 +89,43 @@ func parseGenDir(stderr string) {
         state.GenDir = strings.TrimSpace(rest[:end])
     }
     _ = fmt.Sprintf
+}
+
+func doMultiRun(t *testing.T, req *Request) {
+    if req.Bin == "" {
+        t.Fatalf("req.Bin is not set")
+    }
+
+    testDir := cfg.TestDir
+    if testDir == "" {
+        testDir = createTempTestProject(t, "mytest")
+    }
+
+    baseArgs := []string{"test", testDir}
+
+    doRun(t, req.Bin, baseArgs)
+
+    resp1 := doRun(t, req.Bin, baseArgs)
+    state.FirstResp = resp1
+
+    parseGenDir(resp1.Stderr)
+
+    if cfg.ModifyFile != "" && cfg.ModifyContent != "" {
+        targetPath := filepath.Join(testDir, cfg.ModifyFile)
+        if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+            t.Fatalf("mkdir for modify: %v", err)
+        }
+        if err := os.WriteFile(targetPath, []byte(cfg.ModifyContent), 0644); err != nil {
+            t.Fatalf("modify file: %v", err)
+        }
+    }
+
+    args2 := baseArgs
+    if cfg.UseCountTwo {
+        args2 = append([]string{"test", testDir, "-count=2"})
+    }
+
+    resp2 := doRun(t, req.Bin, args2)
+    state.SecondResp = resp2
 }
 ```
