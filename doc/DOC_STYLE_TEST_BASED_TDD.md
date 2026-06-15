@@ -97,7 +97,9 @@ Invoke the `doctest agent design` sub-agent with the design document from
 Phase 1:
 
 ```sh
-doctest agent design "<design doc from Phase 1>"
+doctest agent design <<EOF
+<design doc from Phase 1>
+EOF
 ```
 
 Prefer creating a requirement file if the request two sentences long, or contains newline or shell-special characters, write it
@@ -132,7 +134,9 @@ test design decisions. When this happens:
 Feed answers back by re-invoking the designer:
 
 ```sh
-doctest agent design "<answers to questions>"
+doctest agent design <<EOF
+<answers to questions>
+EOF
 ```
 
 This may repeat until the designer completes the test tree. Do not guess about
@@ -178,7 +182,9 @@ Invoke the doctest-managed implementation sub-agent with the design document
 and test overview:
 
 ```sh
-doctest agent implement "<design doc + test summary>"
+doctest agent implement <<EOF
+<design doc + test summary>
+EOF
 ```
 
 **NOTE:** The sub-agent may take a long time to finish — hours or even days for
@@ -224,7 +230,9 @@ Once answers are ready, feed them back by re-invoking the sub-agent:
 
 ```sh
 # invoke with followup
-doctest agent implement "<answers to questions>"
+doctest agent implement <<EOF
+<answers to questions>
+EOF
 ```
 
 The CLI sends the message as a followup on the same thread. The sub-agent

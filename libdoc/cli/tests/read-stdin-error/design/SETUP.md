@@ -1,0 +1,14 @@
+## Preconditions
+- This group tests errors from `readStdinIfPresent()` during `doctest agent design`.
+
+## Steps
+1. Prepend `"agent"` and `"design"` to the request args.
+
+```go
+import "testing"
+
+func Setup(t *testing.T, req *Request) error {
+	req.Args = append([]string{"agent", "design"}, req.Args...)
+	return nil
+}
+```

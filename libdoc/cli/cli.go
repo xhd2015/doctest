@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -270,6 +271,13 @@ func runAgentImplement(args []string) error {
 		return err
 	}
 	opts.Prompt = strings.Join(remainArgs, " ")
+	if opts.Prompt == "" {
+		var err error
+		opts.Prompt, err = readStdinIfPresent()
+		if err != nil {
+			return err
+		}
+	}
 	return implementer.Run(opts)
 }
 
@@ -296,6 +304,13 @@ func runAgentDesign(args []string) error {
 		return err
 	}
 	opts.Prompt = strings.Join(remainArgs, " ")
+	if opts.Prompt == "" {
+		var err error
+		opts.Prompt, err = readStdinIfPresent()
+		if err != nil {
+			return err
+		}
+	}
 	return designer.Run(opts)
 }
 
@@ -353,6 +368,21 @@ func runSkill(args []string) error {
 	default:
 		return fmt.Errorf("unknown skill action: %s", remainArgs[1])
 	}
+}
+
+func readStdinIfPresent() (string, error) {
+	stat, err := os.Stdin.Stat()
+	if err != nil {
+		return "", err
+	}
+	if (stat.Mode() & os.ModeCharDevice) != 0 {
+		return "", nil
+	}
+	data, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
 
 func Main() {
