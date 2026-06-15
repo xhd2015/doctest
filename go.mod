@@ -3,14 +3,12 @@ module github.com/xhd2015/doctest
 go 1.25.0
 
 require (
-	github.com/xhd2015/agent-pro v0.0.18
+	github.com/xhd2015/agent-pro v0.0.19
 	github.com/xhd2015/gitops v0.0.15
 	github.com/xhd2015/less-flags v1.0.0
 	github.com/xhd2015/skills v0.0.7
 	golang.org/x/tools v0.45.0
 )
-
-replace github.com/xhd2015/agent-pro => /Users/xhd2015/Projects/xhd2015/doctest/external/agent-pro
 
 require (
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
