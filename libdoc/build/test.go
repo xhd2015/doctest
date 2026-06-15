@@ -178,6 +178,7 @@ func Test(dir string, opts core.Options) error {
 		runCount := 0
 		passCount := 0
 		failCount := 0
+		var failLines []string
 		var stdoutWg sync.WaitGroup
 		stdoutWg.Add(1)
 		go func() {
@@ -191,6 +192,7 @@ func Test(dir string, opts core.Options) error {
 				} else if strings.HasPrefix(line, "FAIL\t") || strings.HasPrefix(line, "FAIL ") {
 					runCount++
 					failCount++
+					failLines = append(failLines, line)
 				}
 			}
 			if scanner.Err() != nil {
@@ -207,6 +209,13 @@ func Test(dir string, opts core.Options) error {
 			fmt.Print(".")
 		}
 		fmt.Printf("  (%d Run, %d Pass, %d Fail)\n", runCount, passCount, failCount)
+
+		if len(failLines) > 0 {
+			fmt.Println()
+			for _, line := range failLines {
+				fmt.Println(line)
+			}
+		}
 
 		if len(stderrData) > 0 {
 			os.Stdout.Write(stderrData)
