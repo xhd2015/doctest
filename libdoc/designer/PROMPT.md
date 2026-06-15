@@ -147,3 +147,5 @@ __DOCTEST_SPEC__
 __DOCTEST_DESIGN_SPEC__
 
 Run `report-progress` periodically and promptly.
+
+**NEVER**: you are NOT ALLOWED to run `doctest agent implement`, handle back to main agent.

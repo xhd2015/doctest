@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -30,6 +31,7 @@ Agents:
   agent fill-code <target-dir>
   agent implement <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status] [--list-sessions]
   agent design <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status] [--list-sessions]
+  agent with --agent-runner=RUNNER [--model=MODEL] <prog> [args...]
 
 Skills:
   skill --list
@@ -200,6 +202,7 @@ Commands:
   fill-code <target-dir>
   implement <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status] [--list-sessions]
   design <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status] [--list-sessions]
+  with --agent-runner=RUNNER [--model=MODEL] <prog> [args...]
 `)
 		return nil
 	}
@@ -219,6 +222,8 @@ Commands:
 		return runAgentImplement(args[1:])
 	case "design":
 		return runAgentDesign(args[1:])
+	case "with":
+		return runAgentWith(args[1:])
 	default:
 		return fmt.Errorf("unknown agent command: %s", args[0])
 	}
@@ -253,7 +258,7 @@ func runAgentImplement(args []string) error {
 		fmt.Print(agentImplementUsage)
 		return nil
 	}
-	opts := implementer.Options{AgentRunner: "opencode"}
+	opts := implementer.Options{}
 	remainArgs, err := lessflags.String("--session-id", &opts.SessionID).
 		String("--agent-runner", &opts.AgentRunner).
 		String("--mock-config", &opts.MockConfig).
@@ -286,7 +291,7 @@ func runAgentDesign(args []string) error {
 		fmt.Print(agentDesignerUsage)
 		return nil
 	}
-	opts := designer.Options{AgentRunner: "opencode"}
+	opts := designer.Options{}
 	remainArgs, err := lessflags.String("--session-id", &opts.SessionID).
 		String("--agent-runner", &opts.AgentRunner).
 		String("--mock-config", &opts.MockConfig).
@@ -312,6 +317,65 @@ func runAgentDesign(args []string) error {
 		}
 	}
 	return designer.Run(opts)
+}
+
+func runAgentWith(args []string) error {
+	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
+		fmt.Print(`Usage: doctest agent with --agent-runner=RUNNER [--model=MODEL] <prog> [args...]
+
+Execute a program with DOCTEST_SUBAGENT_AGENT_RUNNER and optionally DOCTEST_SUBAGENT_MODEL set in its environment.
+
+Options:
+  --agent-runner=RUNNER   opencode, pi, crush, or codex (required)
+  --model=MODEL           Model override for the agent runner
+  -h, --help              Show help
+`)
+		return nil
+	}
+
+	var agentRunner string
+	var model string
+	remainArgs, err := lessflags.String("--agent-runner", &agentRunner).
+		String("--model", &model).
+		StopOnFirstArg().
+		Parse(args)
+	if err != nil {
+		if errors.Is(err, lessflags.ErrHelp) {
+			return nil
+		}
+		return err
+	}
+
+	if agentRunner == "" {
+		return fmt.Errorf("--agent-runner requires a value")
+	}
+	if len(remainArgs) == 0 {
+		return fmt.Errorf("agent with requires <prog>")
+	}
+
+	prog := remainArgs[0]
+	progArgs := remainArgs[1:]
+
+	cmd := exec.Command(prog, progArgs...)
+	cmd.Env = append(os.Environ(),
+		"DOCTEST_SUBAGENT_AGENT_RUNNER="+agentRunner,
+	)
+	if model != "" {
+		cmd.Env = append(cmd.Env, "DOCTEST_SUBAGENT_MODEL="+model)
+	}
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	err = cmd.Run()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return exitErr
+		}
+		return err
+	}
+	return nil
 }
 
 func runRunner(args []string, usage string, fn func([]string) error) error {

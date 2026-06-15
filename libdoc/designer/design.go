@@ -1,6 +1,7 @@
 package designer
 
 import (
+	"context"
 	_ "embed"
 	"os"
 	"path/filepath"
@@ -27,12 +28,14 @@ func Run(opts Options) error {
 		homeDir, _ := os.UserHomeDir()
 		opts.SessionBase = filepath.Join(homeDir, ".doctest")
 	}
-	return subagent.Run(subagent.Config{
+	return subagent.Run(context.Background(), subagent.Config{
 		RoleName:         "designer",
 		Cmd:              "design",
 		PromptContent:    promptContent,
 		SessionEnvVar:    "DOCTEST_AGENT_DESIGNER_SESSION_ID",
 		SessionMetaField: "doctest_agent_designer_session_id",
 		DebugSessionEnv:  "DOCTEST_DEBUG_SESSION_HOME",
+		AgentRunnerEnv:   "DOCTEST_SUBAGENT_AGENT_RUNNER",
+		ModelEnv:         "DOCTEST_SUBAGENT_MODEL",
 	}, opts)
 }
