@@ -120,14 +120,14 @@ func doMultiRun(t *testing.T, req *Request) {
     var firstArgs, secondArgs []string
     switch cisoCfg.Scenario {
     case "subdir_after_full":
-        firstArgs = []string{"test", treeRoot}
-        secondArgs = []string{"test", filepath.Join(treeRoot, "group-a")}
+        firstArgs = []string{"test", "-v", treeRoot}
+        secondArgs = []string{"test", "-v", filepath.Join(treeRoot, "group-a")}
     case "full_after_subdir":
-        firstArgs = []string{"test", filepath.Join(treeRoot, "group-a")}
-        secondArgs = []string{"test", treeRoot}
+        firstArgs = []string{"test", "-v", filepath.Join(treeRoot, "group-a")}
+        secondArgs = []string{"test", "-v", treeRoot}
     case "subdir_after_subdir":
-        firstArgs = []string{"test", filepath.Join(treeRoot, "group-a")}
-        secondArgs = []string{"test", filepath.Join(treeRoot, "group-b")}
+        firstArgs = []string{"test", "-v", filepath.Join(treeRoot, "group-a")}
+        secondArgs = []string{"test", "-v", filepath.Join(treeRoot, "group-b")}
     default:
         t.Fatalf("unknown scenario: %s", cisoCfg.Scenario)
     }

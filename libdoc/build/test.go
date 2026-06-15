@@ -1,11 +1,14 @@
 package build
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/xhd2015/doctest/libdoc/core"
 )
@@ -130,7 +133,10 @@ func Test(dir string, opts core.Options) error {
 		isSingleLeaf = true
 	}
 
-	testArgs := []string{"test", "-mod=mod", "-v"}
+	testArgs := []string{"test", "-mod=mod"}
+	if opts.Verbose {
+		testArgs = append(testArgs, "-v")
+	}
 	if NeedsBuildVCSFlag(runDir) {
 		testArgs = append(testArgs, "-buildvcs=false")
 	}
@@ -148,10 +154,67 @@ func Test(dir string, opts core.Options) error {
 
 	goTestCmd := exec.Command("go", testArgs...)
 	goTestCmd.Dir = runDir
-	out, err := goTestCmd.CombinedOutput()
-	os.Stdout.Write(out)
-	if err != nil {
-		return fmt.Errorf("go test failed: %v", err)
+
+	if opts.Verbose {
+		out, err := goTestCmd.CombinedOutput()
+		os.Stdout.Write(out)
+		if err != nil {
+			return fmt.Errorf("go test failed: %v", err)
+		}
+	} else {
+		stdoutPipe, err := goTestCmd.StdoutPipe()
+		if err != nil {
+			return fmt.Errorf("stdout pipe: %w", err)
+		}
+		stderrPipe, err := goTestCmd.StderrPipe()
+		if err != nil {
+			return fmt.Errorf("stderr pipe: %w", err)
+		}
+
+		if err := goTestCmd.Start(); err != nil {
+			return fmt.Errorf("go test start: %w", err)
+		}
+
+		runCount := 0
+		passCount := 0
+		failCount := 0
+		var stdoutWg sync.WaitGroup
+		stdoutWg.Add(1)
+		go func() {
+			defer stdoutWg.Done()
+			scanner := bufio.NewScanner(stdoutPipe)
+			for scanner.Scan() {
+				line := scanner.Text()
+				if strings.HasPrefix(line, "ok ") || strings.HasPrefix(line, "ok\t") {
+					runCount++
+					passCount++
+				} else if strings.HasPrefix(line, "FAIL\t") || strings.HasPrefix(line, "FAIL ") {
+					runCount++
+					failCount++
+				}
+			}
+			if scanner.Err() != nil {
+				fmt.Fprintf(os.Stderr, "read go test stdout: %v\n", scanner.Err())
+			}
+		}()
+
+		stderrData, _ := io.ReadAll(stderrPipe)
+		stdoutWg.Wait()
+
+		err = goTestCmd.Wait()
+
+		for i := 0; i < runCount; i++ {
+			fmt.Print(".")
+		}
+		fmt.Printf("  (%d Run, %d Pass, %d Fail)\n", runCount, passCount, failCount)
+
+		if len(stderrData) > 0 {
+			os.Stdout.Write(stderrData)
+		}
+
+		if err != nil {
+			return fmt.Errorf("go test: %w", err)
+		}
 	}
 	return nil
 }
