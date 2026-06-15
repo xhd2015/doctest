@@ -10,6 +10,8 @@ require (
 	golang.org/x/tools v0.45.0
 )
 
+replace github.com/xhd2015/agent-pro => /Users/xhd2015/Projects/xhd2015/doctest/external/agent-pro
+
 require (
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect

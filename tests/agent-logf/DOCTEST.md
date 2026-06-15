@@ -5,28 +5,27 @@ uses `Logf` for consistent timestamped logging `[2006-01-02T15:04:05]`, while
 non-event UI framing (borders, headers) continues without timestamps via
 `fmt.Fprintf(os.Stdout, ...)`.
 
+The `logf/` subtree is a standalone root (own `DOCTEST.md`) because it calls
+`subagent.Logf` in-process rather than shelling out.
+
 ## Decision Tree
 
 ```
 tests/agent-logf/
 ├── DOCTEST.md                     # This file
-├── SETUP.md                       # Root: stub Run (RED until implemented)
+├── SETUP.md                       # Root: Request/Response, Run shells out to doctest binary
 │
-├── logf/                          # === What function is being tested? Logf ===
-│   ├── SETUP.md                   # Capture stdout via pipe, call subagent.Logf
-│   ├── without-trailing-newline/  # Message without \n → newline appended
-│   ├── with-trailing-newline/     # Message with \n → no double newline
-│   ├── empty-message/             # Empty string → just timestamp + \n
-│   ├── format-verbs/              # Format string with %s/%d verbs and args
-│   └── special-chars/             # Multiline message, special characters
+├── logf/                          # === Standalone root (in-process Logf testing) ===
+│   ├── DOCTEST.md
+│   └── ...
 │
-├── trace-session/                 # === What function is tested? traceSession ===
-│   ├── SETUP.md                   # Create session dirs, run --trace
+├── trace-session/                 # === Shell out: doctest agent implement --trace ===
+│   ├── SETUP.md                   # Setup: sets TEST_GROUP=trace-session
 │   ├── no-events-file/            # No events.jsonl → (no events yet) via Logf
 │   └── with-events/              # Events exist, session finished → event+done lines via Logf
 │
-└── show-status/                   # === What function is tested? showStatus ===
-    ├── SETUP.md                   # Create session dirs, run --status
+└── show-status/                   # === Shell out: doctest agent implement --status ===
+    ├── SETUP.md                   # Setup: sets TEST_GROUP=show-status
     ├── session-not-found/         # No session → stderr error, no timestamp
     ├── no-events/                 # Session found, no events → "No events yet" via Logf
     └── with-events/              # Session found, events exist → event lines via Logf
@@ -34,14 +33,7 @@ tests/agent-logf/
 
 ## Test Index
 
-### Logf (5 leaves)
-| Leaf | Description |
-|------|-------------|
-| `logf/without-trailing-newline` | Message without `\n` gets `\n` appended |
-| `logf/with-trailing-newline` | Message with `\n` keeps exactly one `\n` |
-| `logf/empty-message` | Empty format string produces timestamp + `\n` |
-| `logf/format-verbs` | Format verbs (`%s`, `%d`) resolved correctly |
-| `logf/special-chars` | Multiline content, special characters preserved |
+### Logf (standalone root — see `logf/DOCTEST.md`)
 
 ### traceSession (2 leaves)
 | Leaf | Description |
@@ -59,5 +51,9 @@ tests/agent-logf/
 ## How to Run
 
 ```sh
-doctest test -v ./tests/agent-logf/
+# All shell-out tests (show-status + trace-session):
+doctest test tests/agent-logf/
+
+# In-process Logf tests:
+doctest test tests/agent-logf/logf/
 ```

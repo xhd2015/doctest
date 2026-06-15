@@ -1,6 +1,7 @@
 ## Preconditions
 - The `Logf` function is in `agent-pro/agent/subagent` and writes timestamped output to `os.Stdout`.
 - Each leaf provides a format string and optional args via environment variables.
+- This is a standalone root with its own `DOCTEST.md` because `subagent.Logf` is called in-process.
 
 ## Steps
 1. Read `LOGF_FORMAT` from `req.Env` as the format string (default: `"default"`).
@@ -18,6 +19,15 @@ import (
 
     "github.com/xhd2015/agent-pro/agent/subagent"
 )
+
+type Request struct {
+    Args []string
+    Env  []string
+}
+
+type Response struct {
+    Stdout string
+}
 
 func Setup(t *testing.T, req *Request) error {
     req.Env = append(req.Env, "TEST_GROUP=logf")
