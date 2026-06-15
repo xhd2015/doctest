@@ -18,7 +18,7 @@ func Setup(t *testing.T, req *Request) error {
     if err := os.Symlink("/bin/cp", filepath.Join(binDir, "cp")); err != nil {
         return err
     }
-    req.Env = append(req.Env, "CODEX_THREAD_ID=abc", "PATH="+binDir)
+        req.Env = append(req.Env, "DOCTEST_SUBAGENT_AGENT_RUNNER=", "CODEX_THREAD_ID=abc", "PATH="+binDir)
     return nil
 }
 ```

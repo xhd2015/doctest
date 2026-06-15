@@ -178,6 +178,7 @@ func Test(dir string, opts core.Options) error {
 		runCount := 0
 		passCount := 0
 		failCount := 0
+		cachedCount := 0
 		var failLines []string
 		var stdoutWg sync.WaitGroup
 		stdoutWg.Add(1)
@@ -189,6 +190,9 @@ func Test(dir string, opts core.Options) error {
 				if strings.HasPrefix(line, "ok ") || strings.HasPrefix(line, "ok\t") {
 					runCount++
 					passCount++
+					if strings.Contains(line, "(cached)") {
+						cachedCount++
+					}
 				} else if strings.HasPrefix(line, "FAIL\t") || strings.HasPrefix(line, "FAIL ") {
 					runCount++
 					failCount++
@@ -208,7 +212,8 @@ func Test(dir string, opts core.Options) error {
 		for i := 0; i < runCount; i++ {
 			fmt.Print(".")
 		}
-		fmt.Printf("  (%d Run, %d Pass, %d Fail)\n", runCount, passCount, failCount)
+		fmt.Printf("  (%d Run, %d Pass, %d Fail, %d Cached)", runCount, passCount, failCount, cachedCount)
+		fmt.Println()
 
 		if len(failLines) > 0 {
 			fmt.Println()

@@ -1,6 +1,6 @@
 ## Expected
 - Both runs exit 0.
-- Second run stderr does NOT contain "(cached)" because ASSERT.md changed.
+- Second run stdout contains ", 0 Cached" because ASSERT.md changed.
 
 ## Exit Code
 - Exit code 0.
@@ -22,12 +22,12 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatal("multi-run state not set")
     }
     firstStdout := state.FirstResp.Stdout
-    if !strings.Contains(firstStdout, "(cached)") {
-        t.Fatalf("first run was not cached; expected stdout to contain '(cached)':\n%s", firstStdout)
+    if !strings.Contains(firstStdout, ", 1 Cached") {
+        t.Fatalf("first run was not cached; expected stdout to contain ', 1 Cached':\n%s", firstStdout)
     }
     secondStdout := state.SecondResp.Stdout
-    if strings.Contains(secondStdout, "(cached)") {
-        t.Fatalf("second run was cached after ASSERT.md edit; expected cache miss:\n%s", secondStdout)
+    if !strings.Contains(secondStdout, ", 0 Cached") {
+        t.Fatalf("second run was cached after ASSERT.md edit; expected ', 0 Cached':\n%s", secondStdout)
     }
 }
 ```

@@ -1,7 +1,7 @@
 ## Expected
 - Both runs have the same exit code.
 - Both runs pass (exit 0).
-- Key output (ok) appears in both stdout streams.
+- Both runs show pass in output summary.
 
 ## Exit Code
 - Exit code 0.
@@ -28,11 +28,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("expected exit 0, got first=%d second=%d",
             state.FirstResp.ExitCode, state.SecondResp.ExitCode)
     }
-    if !strings.Contains(state.FirstResp.Stdout, "ok") {
-        t.Fatalf("first run missing ok in stdout:\n%s", state.FirstResp.Stdout)
+    if !strings.Contains(state.FirstResp.Stdout, "0 Fail") {
+        t.Fatalf("first run missing pass in stdout:\n%s", state.FirstResp.Stdout)
     }
-    if !strings.Contains(state.SecondResp.Stdout, "ok") {
-        t.Fatalf("second run missing ok in stdout:\n%s", state.SecondResp.Stdout)
+    if !strings.Contains(state.SecondResp.Stdout, "0 Fail") {
+        t.Fatalf("second run missing pass in stdout:\n%s", state.SecondResp.Stdout)
     }
 }
 ```

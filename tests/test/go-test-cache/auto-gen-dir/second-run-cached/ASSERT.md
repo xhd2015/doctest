@@ -1,6 +1,6 @@
 ## Expected
 - Both runs exit 0.
-- Second run stderr contains "(cached)".
+- Second run stdout (summary line) contains ", 1 Cached".
 - Second run completes faster than first (under 5 seconds total).
 
 ## Exit Code
@@ -26,8 +26,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("first run exit %d, stderr:\n%s", state.FirstResp.ExitCode, state.FirstResp.Stderr)
     }
     secondStdout := state.SecondResp.Stdout
-    if !strings.Contains(secondStdout, "(cached)") {
-        t.Fatalf("second run not cached; expected stdout to contain '(cached)':\n%s", secondStdout)
+    if !strings.Contains(secondStdout, ", 1 Cached") {
+        t.Fatalf("second run not cached; expected stdout to contain ', 1 Cached':\n%s", secondStdout)
     }
 }
 ```
