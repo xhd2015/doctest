@@ -1,5 +1,5 @@
 ## Preconditions
-- The `Logf` function is in `libdoc/subagent` and writes timestamped output to `os.Stdout`.
+- The `Logf` function is in `agent-pro/agent/subagent` and writes timestamped output to `os.Stdout`.
 - Each leaf provides a format string and optional args via environment variables.
 
 ## Steps
@@ -16,7 +16,7 @@ import (
     "strings"
     "testing"
 
-    "github.com/xhd2015/doctest/libdoc/subagent"
+    "github.com/xhd2015/agent-pro/agent/subagent"
 )
 
 func Setup(t *testing.T, req *Request) error {

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/xhd2015/doctest/libdoc/rules"
+	"golang.org/x/tools/imports"
 )
 
 func DiscoverTreeCases(root string) ([]TreeCase, error) {
@@ -323,6 +324,11 @@ func WriteGoMod(genDir, modRoot, modPath string, hasMod bool) error {
 	} else {
 		content = "module testcase\n\ngo 1.21\n"
 	}
+	if hasMod {
+		if extraReplaces := readExtraReplaces(modRoot, modPath); extraReplaces != "" {
+			content += extraReplaces
+		}
+	}
 	if err := os.WriteFile(modFile, []byte(content), 0644); err != nil {
 		return err
 	}
@@ -335,6 +341,58 @@ func WriteGoMod(genDir, modRoot, modPath string, hasMod bool) error {
 		}
 	}
 	return nil
+}
+
+func readExtraReplaces(modRoot, mainModPath string) string {
+	goModPath := filepath.Join(modRoot, "go.mod")
+	data, err := os.ReadFile(goModPath)
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(string(data), "\n")
+	inReplace := false
+	var replaces []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "replace (" {
+			inReplace = true
+			continue
+		}
+		if inReplace {
+			if trimmed == ")" {
+				inReplace = false
+				continue
+			}
+			if strings.HasPrefix(trimmed, "replace ") {
+				trimmed = strings.TrimPrefix(trimmed, "replace ")
+			}
+			replaces = append(replaces, trimmed)
+			continue
+		}
+		if strings.HasPrefix(trimmed, "replace ") {
+			replaces = append(replaces, strings.TrimPrefix(trimmed, "replace "))
+		}
+	}
+	var result strings.Builder
+	for _, r := range replaces {
+		if strings.HasPrefix(r, mainModPath+" ") || strings.HasPrefix(r, mainModPath+"\t") || r == mainModPath {
+			continue
+		}
+		parts := strings.Fields(r)
+		if len(parts) >= 3 {
+			arrowIdx := len(parts) - 2
+			if arrowIdx >= 1 && parts[arrowIdx] == "=>" {
+				absPath := parts[len(parts)-1]
+				if !filepath.IsAbs(absPath) {
+					absPath = filepath.Join(modRoot, absPath)
+				}
+				absPath = filepath.Clean(absPath)
+				modPath := strings.Join(parts[:arrowIdx], " ")
+				result.WriteString(fmt.Sprintf("replace %s => %s\n", modPath, absPath))
+			}
+		}
+	}
+	return result.String()
 }
 
 func TidyGoMod(genDir string) error {
@@ -520,21 +578,28 @@ func WriteGeneratedCase(leafDir string, tc TreeCase, compileOnly bool, pkgName s
 	}
 	tmpFile.Close()
 
-	gofmtCmd := exec.Command("gofmt", "-w", tmpPath)
-	gofmtCmd.Dir = leafDir
-	if out, err := gofmtCmd.CombinedOutput(); err != nil {
-		os.Remove(tmpPath)
-		return "", fmt.Errorf("gofmt failed: %v\n%s", err, string(out))
-	}
-
-	formatted, err := os.ReadFile(tmpPath)
+	// Use golang.org/x/tools/imports.Process instead of the goimports binary
+	// to avoid external binary dependency.
+	// gofmt is not used because imports.Process handles both formatting
+	// (via go/format internally, same as gofmt) and import cleanup
+	// (adds missing imports, removes unused ones) in a single pass.
+	srcBytes, err := os.ReadFile(tmpPath)
 	if err != nil {
+		os.Remove(tmpPath)
+		return "", err
+	}
+	res, err := imports.Process(tmpPath, srcBytes, nil)
+	if err != nil {
+		os.Remove(tmpPath)
+		return "", fmt.Errorf("format imports failed: %w", err)
+	}
+	if err := os.WriteFile(tmpPath, res, 0644); err != nil {
 		os.Remove(tmpPath)
 		return "", err
 	}
 
 	existing, _ := os.ReadFile(testPath)
-	if string(existing) == string(formatted) {
+	if string(existing) == string(res) {
 		os.Remove(tmpPath)
 		return testPath, nil
 	}

@@ -14,7 +14,7 @@ import (
 	"github.com/xhd2015/doctest/libdoc/implementer"
 	"github.com/xhd2015/doctest/libdoc/runner"
 	"github.com/xhd2015/doctest/libdoc/spec"
-	"github.com/xhd2015/doctest/libdoc/subagent"
+	"github.com/xhd2015/agent-pro/agent/subagent"
 )
 
 const usage = `Usage: doctest <command> [options]
