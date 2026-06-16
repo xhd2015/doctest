@@ -47,6 +47,14 @@ type TreeCase struct {
 	AssertFile AssertDocument
 }
 
+type ColorMode int
+
+const (
+	ColorAuto ColorMode = iota
+	ColorAlways
+	ColorNever
+)
+
 type Options struct {
 	GenDir     string
 	Verbose    bool
@@ -54,6 +62,7 @@ type Options struct {
 	RemoveTemp bool
 	Count      int
 	SubDir     string
+	Color      ColorMode
 }
 
 type ValidationError struct {

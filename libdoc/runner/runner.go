@@ -155,14 +155,36 @@ func parseBuildOptions(args []string) (core.Options, []string, error) {
 }
 
 func parseTestOptions(args []string) (core.Options, []string, error) {
-	opts := core.Options{Stderr: os.Stderr, RemoveTemp: false}
+	var sawColor, sawNoColor bool
+	for _, arg := range args {
+		if arg == "--color" {
+			sawColor = true
+		}
+		if arg == "--no-color" {
+			sawNoColor = true
+		}
+	}
+	if sawColor && sawNoColor {
+		return core.Options{}, nil, fmt.Errorf("--color and --no-color are mutually exclusive")
+	}
+
+	opts := core.Options{Stderr: os.Stderr, RemoveTemp: false, Color: core.ColorAuto}
+	var colorFlag, noColorFlag bool
 	remainArgs, err := lessflags.Bool("-v,--verbose", &opts.Verbose).
 		Bool("--rm", &opts.RemoveTemp).
 		String("--gen-dir", &opts.GenDir).
 		Int("-count", &opts.Count).
+		Bool("--color", &colorFlag).
+		Bool("--no-color", &noColorFlag).
 		Parse(args)
 	if err != nil {
 		return core.Options{}, nil, err
+	}
+	if colorFlag {
+		opts.Color = core.ColorAlways
+	}
+	if noColorFlag {
+		opts.Color = core.ColorNever
 	}
 	return opts, remainArgs, nil
 }

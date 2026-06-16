@@ -81,6 +81,63 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     return tmp
 }
 
+const (
+    singleFailLogMarker = "SINGLE_FAIL_LOG_MARKER"
+    secondFailLogMarker = "SECOND_FAIL_LOG_MARKER"
+)
+
+func createRootTestTree(t *testing.T) string {
+    t.Helper()
+    tmp := t.TempDir()
+    rootSetup := `import "testing"
+
+type Request struct{}
+type Response struct{}
+func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }`
+    os.WriteFile(filepath.Join(tmp, "SETUP.md"), []byte(doctestGoBlock(rootSetup)), 0644)
+    os.WriteFile(filepath.Join(tmp, "DOCTEST.md"), []byte("# progress-dots test tree\n"), 0644)
+    return tmp
+}
+
+func writePassLeaf(t *testing.T, root, name string) {
+    t.Helper()
+    leafDir := filepath.Join(root, name)
+    os.MkdirAll(leafDir, 0755)
+    os.WriteFile(filepath.Join(leafDir, "SETUP.md"), []byte(doctestGoBlock(`import "testing"
+func Setup(t *testing.T, req *Request) error { _ = req; return nil }`)), 0644)
+    os.WriteFile(filepath.Join(leafDir, "ASSERT.md"), []byte(doctestGoBlock(`import "testing"
+func Assert(t *testing.T, req *Request, resp *Response, err error) {}`)), 0644)
+}
+
+func writeFailLeafWithMarker(t *testing.T, root, name, marker string) {
+    t.Helper()
+    leafDir := filepath.Join(root, name)
+    os.MkdirAll(leafDir, 0755)
+    os.WriteFile(filepath.Join(leafDir, "SETUP.md"), []byte(doctestGoBlock(`import "testing"
+func Setup(t *testing.T, req *Request) error { _ = req; return nil }`)), 0644)
+    assertCode := fmt.Sprintf(`import "testing"
+func Assert(t *testing.T, req *Request, resp *Response, err error) {
+    t.Fatal(%q)
+}`, marker)
+    os.WriteFile(filepath.Join(leafDir, "ASSERT.md"), []byte(doctestGoBlock(assertCode)), 0644)
+}
+
+func createSingleFailLogTree(t *testing.T) string {
+    t.Helper()
+    tmp := createRootTestTree(t)
+    writeFailLeafWithMarker(t, tmp, "fail_1", singleFailLogMarker)
+    return tmp
+}
+
+func createSecondOfThreeFailsTree(t *testing.T) string {
+    t.Helper()
+    tmp := createRootTestTree(t)
+    writePassLeaf(t, tmp, "pass_1")
+    writeFailLeafWithMarker(t, tmp, "fail_2", secondFailLogMarker)
+    writePassLeaf(t, tmp, "pass_3")
+    return tmp
+}
+
 func Setup(t *testing.T, req *Request) error {
     req.Timeout = 120 * time.Second
     return nil

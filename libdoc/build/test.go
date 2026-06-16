@@ -180,6 +180,8 @@ func Test(dir string, opts core.Options) error {
 		failCount := 0
 		cachedCount := 0
 		var failLines []string
+		var detailLines []string
+		style := newColorStyle(opts.Color, os.Stdout)
 		var stdoutWg sync.WaitGroup
 		stdoutWg.Add(1)
 		go func() {
@@ -198,7 +200,9 @@ func Test(dir string, opts core.Options) error {
 					runCount++
 					failCount++
 					failLines = append(failLines, line)
-					os.Stdout.Write([]byte("."))
+					os.Stdout.WriteString(style.red("."))
+				} else {
+					detailLines = append(detailLines, line)
 				}
 			}
 			if scanner.Err() != nil {
@@ -211,14 +215,16 @@ func Test(dir string, opts core.Options) error {
 
 		err = goTestCmd.Wait()
 
-		fmt.Printf("  (%d Run, %d Pass, %d Fail, %d Cached)", runCount, passCount, failCount, cachedCount)
-		fmt.Println()
+		fmt.Println(formatSummary(style, runCount, passCount, failCount, cachedCount))
 
 		if len(failLines) > 0 {
 			fmt.Println()
 			for _, line := range failLines {
 				fmt.Println(line)
 			}
+		}
+		for _, line := range detailLines {
+			fmt.Println(line)
 		}
 
 		if len(stderrData) > 0 {
