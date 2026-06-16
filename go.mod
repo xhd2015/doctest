@@ -3,10 +3,10 @@ module github.com/xhd2015/doctest
 go 1.25.0
 
 require (
-	github.com/xhd2015/agent-pro v0.0.23
-	github.com/xhd2015/gitops v0.0.16
+	github.com/xhd2015/agent-pro v0.0.26
+	github.com/xhd2015/gitops v0.0.18
 	github.com/xhd2015/less-flags v1.0.0
-	github.com/xhd2015/skills v0.0.9
+	github.com/xhd2015/skills v0.0.10
 	golang.org/x/tools v0.45.0
 )
 
