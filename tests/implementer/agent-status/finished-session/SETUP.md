@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: a finished session directory exists with full `meta.json` and 5 events in `events.jsonl`
+
+```
+# implement agent reads requirement, writes code via Fake Codex
+doctest agent implement --requirement req.md -> Fake Codex -> implementation
+
+# session lifecycle
+create session -> run sub-agent -> events recorded -> yield questions -> resume
+
+# session id resolution order
+--session-id flag -> opencode discovery -> codex resume -> fake-codex -> error
+```
+
 ## Preconditions
 - A finished session directory exists with full `meta.json` and 5 events in `events.jsonl`.
 - Events use the actual opencode JSON format with `part` field and `timestamp` in milliseconds.

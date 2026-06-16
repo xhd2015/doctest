@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: a temporary project with go.mod but no DOCTEST.md trees at or below the working directory
+
+```
+# build and run test binary, report results
+doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
+
+# path patterns
+.../ -> walk tree | subdir -> run subtree | multi-dir -> aggregate results
+
+# output
+progress dots -> . F | verbose -> go test -v | count -> N tests
+```
+
 ## Preconditions
 - A temporary project with go.mod but no DOCTEST.md trees at or below the working directory.
 - A DOCTEST.md tree exists elsewhere in the module (above the working directory).

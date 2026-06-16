@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: three session directories exist with different `explicit_session_id`, `agent_runner`, and `created_at`
+
+```
+# implement agent reads requirement, writes code via Fake Codex
+doctest agent implement --requirement req.md -> Fake Codex -> implementation
+
+# session lifecycle
+create session -> run sub-agent -> events recorded -> yield questions -> resume
+
+# session id resolution order
+--session-id flag -> opencode discovery -> codex resume -> fake-codex -> error
+```
+
 ## Preconditions
 - Three session directories exist with different `explicit_session_id`, `agent_runner`, and `created_at`.
 - The `--list-sessions` flag lists all sessions found within the last 7 days.

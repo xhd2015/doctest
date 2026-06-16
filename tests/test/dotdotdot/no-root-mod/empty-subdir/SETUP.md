@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: testdata/ is an empty directory with no go.mod and no DOCTest trees
+
+```
+# build and run test binary, report results
+doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
+
+# path patterns
+.../ -> walk tree | subdir -> run subtree | multi-dir -> aggregate results
+
+# output
+progress dots -> . F | verbose -> go test -v | count -> N tests
+```
+
 ## Preconditions
 - testdata/ is an empty directory with no go.mod and no DOCTest trees.
 

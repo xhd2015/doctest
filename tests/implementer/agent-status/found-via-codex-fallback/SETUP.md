@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: a finished session exists that was created via `CODEX_THREAD_ID` (no `--session-id` flag)
+
+```
+# implement agent reads requirement, writes code via Fake Codex
+doctest agent implement --requirement req.md -> Fake Codex -> implementation
+
+# session lifecycle
+create session -> run sub-agent -> events recorded -> yield questions -> resume
+
+# session id resolution order
+--session-id flag -> opencode discovery -> codex resume -> fake-codex -> error
+```
+
 ## Preconditions
 - A finished session exists that was created via `CODEX_THREAD_ID` (no `--session-id` flag).
 - The session has `main_agent_codex_thread_id=codex-fallback-test` but NO `explicit_session_id`.

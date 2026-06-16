@@ -1,3 +1,14 @@
+# Scenario
+
+**Feature**: the `tests/testdata/child-redefines-run/` fixture has a root with Run
+
+```
+# enforce SETUP.md rules at build time
+root missing Run -> build error
+child redefines Run -> build error
+non-root missing Setup -> build error
+```
+
 ## Preconditions
 - The `tests/testdata/child-redefines-run/` fixture has a root with Run
   and a leaf SETUP.md that also defines Run, which should be rejected.

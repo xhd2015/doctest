@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: testdata/ contains a directory with .gitignore and multiple DOCTest trees (one matches .gitignore)
+
+```
+# build and run test binary, report results
+doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
+
+# path patterns
+.../ -> walk tree | subdir -> run subtree | multi-dir -> aggregate results
+
+# output
+progress dots -> . F | verbose -> go test -v | count -> N tests
+```
+
 ## Preconditions
 - testdata/ contains a directory with .gitignore and multiple DOCTest trees (one matches .gitignore).
 - There is NO git repository (no `git init`).

@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: a temp project with a package under test declaration in the root SETUP.md
+
+```
+# maps doc-style leaves to Go test packages
+doctest build/test -> mapping-gen -> leaf <-> Go package
+
+# gen-dir modes
+auto gen-dir -> one package per leaf | explicit gen-dir -> user-specified layout
+```
+
 ## Preconditions
 - A temp project with a package under test declaration in the root SETUP.md.
 

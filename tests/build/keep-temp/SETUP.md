@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: `doctest build` without `--rm` should keep the generated temp directory
+
+```
+# parse test tree, generate Go code, compile binary
+doctest build <test-dir> -> .md files -> Go code -> go build -> binary
+
+# gen-dir controls output layout
+gen-dir -> per-leaf packages -> file system
+```
+
 ## Preconditions
 - `doctest build` without `--rm` should keep the generated temp directory.
 

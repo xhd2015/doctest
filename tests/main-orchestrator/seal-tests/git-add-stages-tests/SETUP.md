@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: the repo supports git
+
+```
+# full TDD cycle: design -> RED -> seal -> implement -> GREEN
+orchestrator -> design agent -> writes tests -> RED (all fail)
+
+# seal tests, hand off to implementer
+orchestrator -> git add tests/ -> implement agent -> writes code -> GREEN (all pass)
+
+# question/answer loop
+user <--questions-- implement agent <--yields-- orchestrator -> resume
+```
+
 ## Preconditions
 - The repo supports git.
 - A test tree exists in a temp dir.

@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: the deeply nested root defines Request{ID, Data} and Response{Status, Message}
+
+```
+# DOCTEST.md creates an inheritance firewall
+parent SETUP.md -/-> nested DOCTEST.md (no cross-inheritance)
+
+# each root has its own Run, Request, Response, setup chain
+nested root -> self-contained test tree -> runs independently
+```
+
 ## Preconditions
 - The deeply nested root defines Request{ID, Data} and Response{Status, Message}.
 - Run validates ID > 0 and Data non-empty.

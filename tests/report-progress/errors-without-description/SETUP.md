@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: `PROGRESS_FILE` is set but no description argument is provided
+
+```
+# sub-agents report progress to a file
+sub-agent --writes--> progress file (env var DOCTEST_PROGRESS_FILE)
+
+# multiple entries append
+each step -> structured JSON entry -> append to file
+```
+
 ## Preconditions
 - `PROGRESS_FILE` is set but no description argument is provided.
 

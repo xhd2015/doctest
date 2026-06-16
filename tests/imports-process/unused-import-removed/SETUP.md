@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: a doctest tree with a SETUP.md that imports `"fmt"` but never calls any `fmt.*` function
+
+```
+# Go import processing during code generation
+doctest build -> parse imports -> remove unused -> report syntax errors
+```
+
 ## Preconditions
 - A doctest tree with a SETUP.md that imports `"fmt"` but never calls any `fmt.*` function.
 - `imports.Process` should remove the unused import from generated Go code.

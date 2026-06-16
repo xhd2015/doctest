@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: neither `--session-id`, `DOCTEST_AGENT_IMPLEMENTER_SESSION_ID`, nor `CODEX_THREAD_ID` is set
+
+```
+# implement agent reads requirement, writes code via Fake Codex
+doctest agent implement --requirement req.md -> Fake Codex -> implementation
+
+# session lifecycle
+create session -> run sub-agent -> events recorded -> yield questions -> resume
+
+# session id resolution order
+--session-id flag -> opencode discovery -> codex resume -> fake-codex -> error
+```
+
 ## Preconditions
 - Neither `--session-id`, `DOCTEST_AGENT_IMPLEMENTER_SESSION_ID`, nor `CODEX_THREAD_ID` is set.
 - Auto-discovery has been removed; no session ID can be resolved.

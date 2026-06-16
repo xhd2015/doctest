@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: tests for verbose stdout error
+
+```
+# parse test tree, generate Go code, compile binary
+doctest build <test-dir> -> .md files -> Go code -> go build -> binary
+
+# gen-dir controls output layout
+gen-dir -> per-leaf packages -> file system
+```
+
 ## Setup
 
 - Minimal valid doc-style tree to trigger the `doctest test -v` code path.

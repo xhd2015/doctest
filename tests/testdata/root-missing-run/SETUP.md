@@ -1,3 +1,14 @@
+# Scenario
+
+**Feature**: this fixture tree has a root SETUP.md that defines Request, Response, and Setup,
+
+```
+# tree structure validation during build/test
+root: must define Request, Response, Run
+child: must define Setup, must NOT redefine Run
+leaf: ASSERT.md with func Assert
+```
+
 # Root Missing Run Fixture
 
 ## Preconditions

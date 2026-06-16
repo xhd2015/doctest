@@ -1,3 +1,14 @@
+# Scenario
+
+**Feature**: the root defines Request, Response, and Run
+
+```
+# tree structure validation during build/test
+root: must define Request, Response, Run
+child: must define Setup, must NOT redefine Run
+leaf: ASSERT.md with func Assert
+```
+
 # Child Setup Only Valid Fixture
 
 ## Preconditions

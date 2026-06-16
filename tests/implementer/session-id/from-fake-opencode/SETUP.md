@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: both `DOCTEST_AGENT_IMPLEMENTER_SESSION_ID` and `CODEX_THREAD_ID` are set
+
+```
+# implement agent reads requirement, writes code via Fake Codex
+doctest agent implement --requirement req.md -> Fake Codex -> implementation
+
+# session lifecycle
+create session -> run sub-agent -> events recorded -> yield questions -> resume
+
+# session id resolution order
+--session-id flag -> opencode discovery -> codex resume -> fake-codex -> error
+```
+
 ## Preconditions
 - Both `DOCTEST_AGENT_IMPLEMENTER_SESSION_ID` and `CODEX_THREAD_ID` are set.
 - The env var takes priority over CODEX_THREAD_ID.

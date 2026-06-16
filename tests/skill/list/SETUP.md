@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: no skill name is required for listing
+
+```
+# expose embedded spec documents
+doctest skill <name> show -> embedded .md doc -> stdout
+
+# list available skills
+doctest skill list -> skill names -> stdout
+```
+
 ## Preconditions
 - No skill name is required for listing.
 

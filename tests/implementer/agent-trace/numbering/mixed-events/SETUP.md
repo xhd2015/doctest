@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: a finished session exists with 5 events in `events.jsonl` where 3 are displayable and 2 are non-displayable system events (step_start)
+
+```
+# implement agent reads requirement, writes code via Fake Codex
+doctest agent implement --requirement req.md -> Fake Codex -> implementation
+
+# session lifecycle
+create session -> run sub-agent -> events recorded -> yield questions -> resume
+
+# session id resolution order
+--session-id flag -> opencode discovery -> codex resume -> fake-codex -> error
+```
+
 ## Preconditions
 - A finished session exists with 5 events in `events.jsonl` where 3 are displayable and 2 are non-displayable system events (step_start).
 - The 2 system events should NOT consume trace numbers; only the 3 visible events should be numbered [1],[2],[3].

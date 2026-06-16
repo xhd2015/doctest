@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: build has scoped help with runner options
+
+```
+# top-level usage
+doctest help -> list subcommands -> stdout
+
+# scoped help
+doctest help <subcmd> -> flags, description -> stdout
+```
+
 ## Preconditions
 - Build has scoped help with runner options.
 

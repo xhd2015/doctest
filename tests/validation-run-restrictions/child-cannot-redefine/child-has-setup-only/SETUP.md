@@ -1,3 +1,14 @@
+# Scenario
+
+**Feature**: the `tests/testdata/child-setup-only-valid/` fixture has root with Run
+
+```
+# enforce SETUP.md rules at build time
+root missing Run -> build error
+child redefines Run -> build error
+non-root missing Setup -> build error
+```
+
 ## Preconditions
 - The `tests/testdata/child-setup-only-valid/` fixture has root with Run
   and an intermediate child with Setup only.

@@ -1,3 +1,14 @@
+# Scenario
+
+**Feature**: the `tests/testdata/child-no-setup/` fixture has a leaf SETUP.md with
+
+```
+# enforce SETUP.md rules at build time
+root missing Run -> build error
+child redefines Run -> build error
+non-root missing Setup -> build error
+```
+
 ## Preconditions
 - The `tests/testdata/child-no-setup/` fixture has a leaf SETUP.md with
   only type declarations and no func Setup or func Run.

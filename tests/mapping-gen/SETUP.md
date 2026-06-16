@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: the doctest module root is two levels above this test tree (`DOCTEST_ROOT/../..`)
+
+```
+# maps doc-style leaves to Go test packages
+doctest build/test -> mapping-gen -> leaf <-> Go package
+
+# gen-dir modes
+auto gen-dir -> one package per leaf | explicit gen-dir -> user-specified layout
+```
+
 ## Preconditions
 - The doctest module root is two levels above this test tree (`DOCTEST_ROOT/../..`).
 - The mapping-gen feature mirrors source directory structure under the cache root.

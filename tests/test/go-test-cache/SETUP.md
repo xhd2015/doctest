@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: the doctest binary is built by the root Setup
+
+```
+# build and run test binary, report results
+doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
+
+# path patterns
+.../ -> walk tree | subdir -> run subtree | multi-dir -> aggregate results
+
+# output
+progress dots -> . F | verbose -> go test -v | count -> N tests
+```
+
 ## Preconditions
 - The doctest binary is built by the root Setup.
 - Tests run with an extended timeout to allow for Go compilation (first run is slow).

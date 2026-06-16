@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: a doc-style test tree where two ancestor SETUP.md files define a helper
+
+```
+# parse test tree, generate Go code, compile binary
+doctest build <test-dir> -> .md files -> Go code -> go build -> binary
+
+# gen-dir controls output layout
+gen-dir -> per-leaf packages -> file system
+```
+
 ## Preconditions
 - A doc-style test tree where two ancestor SETUP.md files define a helper
   function with the same name (e.g., `func myHelper` in both root and child).

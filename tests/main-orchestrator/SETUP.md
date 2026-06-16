@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: the `doctest`, `fake-codex`, and `yield-pending-questions` binaries are available
+
+```
+# full TDD cycle: design -> RED -> seal -> implement -> GREEN
+orchestrator -> design agent -> writes tests -> RED (all fail)
+
+# seal tests, hand off to implementer
+orchestrator -> git add tests/ -> implement agent -> writes code -> GREEN (all pass)
+
+# question/answer loop
+user <--questions-- implement agent <--yields-- orchestrator -> resume
+```
+
 ## Preconditions
 - The `doctest`, `fake-codex`, and `yield-pending-questions` binaries are available.
 - The orchestrator tests verify the full TDD workflow using these binaries.

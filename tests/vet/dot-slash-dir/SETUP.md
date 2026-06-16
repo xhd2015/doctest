@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: a valid doctest tree exists in the current working directory
+
+```
+# inspect test tree for structural issues
+doctest vet <dir> -> walk tree -> report anti-patterns
+
+# anti-patterns detected
+embedded go block | go test shellout | assert without setup | skipped testdata
+```
+
 ## Preconditions
 - A valid doctest tree exists in the current working directory.
 

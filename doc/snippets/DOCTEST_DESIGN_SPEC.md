@@ -6,6 +6,20 @@ Both `SETUP.md` and `ASSERT.md` may contain ```go...``` go code blocks.
 
 `DOCTEST.md` marks the root of the test tree. The whole test tree rooted from where `DOCTEST.md` begins forms a large decision tree. The root `SETUP.md` must define `type Request`, `type Response`, and `func Run` — these are shared by all descendants and must not be redefined.
 
+### DSN (Domain Specific Notion)
+
+Every root `DOCTEST.md` must include a `# DSN (Domain Specific Notion)` section.
+DSN is like a DSL, but less formal — it models the target under test as a
+normal human mental model. It defines **participants** (actors, components,
+subsystems) and their **behaviors** (what each participant does, how they
+interact), written as plain prose (no code blocks). Think of it as a prose
+sketch of the domain that helps readers understand what the test tree is
+exercising.
+
+Each `SETUP.md`'s `# Scenario` section (see below) wraps a snippet of this
+DSN model in a ``` block, showing the subset of participants and behaviors
+relevant to that particular scenario.
+
 ### Nested DOCTEST.md
 
 A subdirectory that contains its own `DOCTEST.md` becomes a **self-contained test root**. The doctest runner stops walking at `DOCTEST.md` boundaries and treats each root independently — **no inheritance crosses a `DOCTEST.md` boundary**.
@@ -30,6 +44,42 @@ execution strategies.
 2. **Sibling dirs**: must be mutually exclusive — each tests a different scenario branch.
 
 ## SETUP.md
+
+### Scenario
+
+Every `SETUP.md` must include a `# Scenario` section as its **first** section.
+This section starts with a tag line — either `**Feature**: <description>` or `**Bug**: <description>` — followed by a ``` block containing a DSN snippet
+(from the root `DOCTEST.md`'s DSN model) that sketches the mental model with
+annotated pipeline lines (`# comment` above each `->` / `<-` line).
+
+<example-of-SETUP.md>
+# Scenario
+
+**Feature**: agent commands use fake Codex instead of a real LLM
+
+```
+# agent reads requirement, invokes Fake Codex, writes output
+doctest agent <cmd> --requirement req.md -> Fake Codex -> generated code
+
+# session state tracked in event files
+doctest <- Fake Codex (session id, events, progress)
+```
+
+## Preconditions
+- Agent commands must be able to use fake Codex instead of a real LLM.
+
+## Steps
+1. Lookup `fake-codex` from PATH; skip if not installed.
+
+## Context
+- ...
+
+```go
+func Setup(t *testing.T, req *Request) error { ... }
+```
+</example-of-SETUP.md>
+
+### Code
 
 Every `SETUP.md` must have a Go block as **final content**. Child must not redefine `Request`/`Response`/`Run`.
 

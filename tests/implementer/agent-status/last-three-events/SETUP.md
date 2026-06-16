@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: a finished session exists with 8 events in `events.jsonl`
+
+```
+# implement agent reads requirement, writes code via Fake Codex
+doctest agent implement --requirement req.md -> Fake Codex -> implementation
+
+# session lifecycle
+create session -> run sub-agent -> events recorded -> yield questions -> resume
+
+# session id resolution order
+--session-id flag -> opencode discovery -> codex resume -> fake-codex -> error
+```
+
 ## Preconditions
 - A finished session exists with 8 events in `events.jsonl`.
 - `--status` should show all 8 lines in the header but only last 3 in the listing.

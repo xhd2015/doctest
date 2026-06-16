@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: no previous command arguments are required
+
+```
+# top-level usage
+doctest help -> list subcommands -> stdout
+
+# scoped help
+doctest help <subcmd> -> flags, description -> stdout
+```
+
 ## Preconditions
 - No previous command arguments are required.
 

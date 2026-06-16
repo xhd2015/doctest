@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: test has scoped help with runner options
+
+```
+# top-level usage
+doctest help -> list subcommands -> stdout
+
+# scoped help
+doctest help <subcmd> -> flags, description -> stdout
+```
+
 ## Preconditions
 - Test has scoped help with runner options.
 

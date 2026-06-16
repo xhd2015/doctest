@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: tests in this group run the `report-progress` binary directly
+
+```
+# sub-agents report progress to a file
+sub-agent --writes--> progress file (env var DOCTEST_PROGRESS_FILE)
+
+# multiple entries append
+each step -> structured JSON entry -> append to file
+```
+
 ## Preconditions
 - Tests in this group run the `report-progress` binary directly.
 - The binary is dispatched via the doctest binary copied as `report-progress`.

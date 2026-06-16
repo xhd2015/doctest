@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: two Go modules: mod-a has DOCTEST.md + SETUP.md, mod-b has its own SETUP.md
+
+```
+# parse test tree, generate Go code, compile binary
+doctest build <test-dir> -> .md files -> Go code -> go build -> binary
+
+# gen-dir controls output layout
+gen-dir -> per-leaf packages -> file system
+```
+
 ## Preconditions
 - Two Go modules: mod-a has DOCTEST.md + SETUP.md, mod-b has its own SETUP.md.
 - Running build on a sub-dir of mod-b.

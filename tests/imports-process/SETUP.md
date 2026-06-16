@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: the doctest module root is two levels above this test tree (`DOCTEST_ROOT/../..`)
+
+```
+# Go import processing during code generation
+doctest build -> parse imports -> remove unused -> report syntax errors
+```
+
 ## Preconditions
 - The doctest module root is two levels above this test tree (`DOCTEST_ROOT/../..`).
 - Each leaf creates a temporary doctest project and runs `doctest test` on it.

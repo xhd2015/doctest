@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: a temp Go module exists with multiple subdirectories containing DOCTEST.md
+
+```
+# inspect test tree for structural issues
+doctest vet <dir> -> walk tree -> report anti-patterns
+
+# anti-patterns detected
+embedded go block | go test shellout | assert without setup | skipped testdata
+```
+
 ## Preconditions
 - A temp Go module exists with multiple subdirectories containing DOCTEST.md.
 

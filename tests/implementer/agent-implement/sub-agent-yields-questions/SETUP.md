@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: the mock config has a `before_exit` hook that calls `yield-pending-questions`
+
+```
+# implement agent reads requirement, writes code via Fake Codex
+doctest agent implement --requirement req.md -> Fake Codex -> implementation
+
+# session lifecycle
+create session -> run sub-agent -> events recorded -> yield questions -> resume
+
+# session id resolution order
+--session-id flag -> opencode discovery -> codex resume -> fake-codex -> error
+```
+
 ## Preconditions
 - The mock config has a `before_exit` hook that calls `yield-pending-questions`.
 

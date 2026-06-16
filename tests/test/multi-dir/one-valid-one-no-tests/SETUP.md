@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: a temp project exists with one valid doctest tree (`test_a`) and one non-doctest directory (`no_tests`)
+
+```
+# build and run test binary, report results
+doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
+
+# path patterns
+.../ -> walk tree | subdir -> run subtree | multi-dir -> aggregate results
+
+# output
+progress dots -> . F | verbose -> go test -v | count -> N tests
+```
+
 ## Preconditions
 - A temp project exists with one valid doctest tree (`test_a`) and one non-doctest directory (`no_tests`).
 

@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: a session directory exists with `meta.json` but no `events.jsonl`
+
+```
+# logf formats agent session events for display
+doctest agent logf <session-id> -> reads event file -> formatted text -> stdout
+
+# show-status reports session progress
+doctest agent show-status <session-id> -> session state -> stdout
+```
+
 ## Preconditions
 - A session directory exists with `meta.json` but no `events.jsonl`.
 

@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: no session ID env vars are set
+
+```
+# implement agent reads requirement, writes code via Fake Codex
+doctest agent implement --requirement req.md -> Fake Codex -> implementation
+
+# session lifecycle
+create session -> run sub-agent -> events recorded -> yield questions -> resume
+
+# session id resolution order
+--session-id flag -> opencode discovery -> codex resume -> fake-codex -> error
+```
+
 ## Preconditions
 - No session ID env vars are set.
 - No opencode ancestor exists in the process tree (doctest runner is the parent).

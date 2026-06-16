@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: `--session-id` flag is passed
+
+```
+# implement agent reads requirement, writes code via Fake Codex
+doctest agent implement --requirement req.md -> Fake Codex -> implementation
+
+# session lifecycle
+create session -> run sub-agent -> events recorded -> yield questions -> resume
+
+# session id resolution order
+--session-id flag -> opencode discovery -> codex resume -> fake-codex -> error
+```
+
 ## Preconditions
 - `--session-id` flag is passed.
 - `CODEX_THREAD_ID` is also set (should be stored for traceability but NOT used as session ID).

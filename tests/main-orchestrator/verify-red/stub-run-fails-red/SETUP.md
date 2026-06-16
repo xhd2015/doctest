@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: a doctest tree exists with a stub Run() that returns "error not implemented"
+
+```
+# full TDD cycle: design -> RED -> seal -> implement -> GREEN
+orchestrator -> design agent -> writes tests -> RED (all fail)
+
+# seal tests, hand off to implementer
+orchestrator -> git add tests/ -> implement agent -> writes code -> GREEN (all pass)
+
+# question/answer loop
+user <--questions-- implement agent <--yields-- orchestrator -> resume
+```
+
 ## Preconditions
 - A doctest tree exists with a stub Run() that returns "error not implemented".
 

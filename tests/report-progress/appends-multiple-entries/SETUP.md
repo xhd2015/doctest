@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: `PROGRESS_FILE` env var points to a writable file
+
+```
+# sub-agents report progress to a file
+sub-agent --writes--> progress file (env var DOCTEST_PROGRESS_FILE)
+
+# multiple entries append
+each step -> structured JSON entry -> append to file
+```
+
 ## Preconditions
 - `PROGRESS_FILE` env var points to a writable file.
 - The binary is invoked twice with different descriptions.

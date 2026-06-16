@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: the doctest command exposes spec documents through the skill subcommand
+
+```
+# expose embedded spec documents
+doctest skill <name> show -> embedded .md doc -> stdout
+
+# list available skills
+doctest skill list -> skill names -> stdout
+```
+
 ## Preconditions
 - The doctest command exposes spec documents through the skill subcommand.
 

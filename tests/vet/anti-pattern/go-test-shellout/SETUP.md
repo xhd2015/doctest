@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: a doctest tree with a SETUP.md that shells out to `go test` instead of calling functions directly
+
+```
+# inspect test tree for structural issues
+doctest vet <dir> -> walk tree -> report anti-patterns
+
+# anti-patterns detected
+embedded go block | go test shellout | assert without setup | skipped testdata
+```
+
 ## Preconditions
 - A doctest tree with a SETUP.md that shells out to `go test` instead of calling functions directly.
 

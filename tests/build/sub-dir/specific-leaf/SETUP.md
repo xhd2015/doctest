@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: a doc-style test tree exists with multiple leaves
+
+```
+# parse test tree, generate Go code, compile binary
+doctest build <test-dir> -> .md files -> Go code -> go build -> binary
+
+# gen-dir controls output layout
+gen-dir -> per-leaf packages -> file system
+```
+
 ## Preconditions
 - A doc-style test tree exists with multiple leaves.
 - Build a specific leaf directory.

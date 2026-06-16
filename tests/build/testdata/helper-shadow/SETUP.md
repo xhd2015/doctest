@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: tests for helper shadow
+
+```
+# parse test tree, generate Go code, compile binary
+doctest build <test-dir> -> .md files -> Go code -> go build -> binary
+
+# gen-dir controls output layout
+gen-dir -> per-leaf packages -> file system
+```
+
 ## Setup
 
 - Defines a helper function `myHelper` at the root level.

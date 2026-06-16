@@ -1,3 +1,14 @@
+# Scenario
+
+**Feature**: the doctest tree is discoverable
+
+```
+# enforce SETUP.md rules at build time
+root missing Run -> build error
+child redefines Run -> build error
+non-root missing Setup -> build error
+```
+
 ## Preconditions
 - The doctest tree is discoverable.
 - Testdata fixtures exist under `tests/testdata/` for invalid trees.

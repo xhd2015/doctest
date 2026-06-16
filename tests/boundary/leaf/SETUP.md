@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: the parent root defines Request{} and Response{} with a stub Run that returns an error
+
+```
+# DOCTEST.md creates an inheritance firewall
+parent SETUP.md -/-> nested DOCTEST.md (no cross-inheritance)
+
+# each root has its own Run, Request, Response, setup chain
+nested root -> self-contained test tree -> runs independently
+```
+
 ## Preconditions
 - The parent root defines Request{} and Response{} with a stub Run that returns an error.
 

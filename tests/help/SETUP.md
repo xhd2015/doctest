@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: the doctest command supports top-level and scoped help output
+
+```
+# top-level usage
+doctest help -> list subcommands -> stdout
+
+# scoped help
+doctest help <subcmd> -> flags, description -> stdout
+```
+
 ## Preconditions
 - The doctest command supports top-level and scoped help output.
 

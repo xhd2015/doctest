@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: the doctest binary is built from the module root (`DOCTEST_ROOT/..`)
+
+```
+# implement agent reads requirement, writes code via Fake Codex
+doctest agent implement --requirement req.md -> Fake Codex -> implementation
+
+# session lifecycle
+create session -> run sub-agent -> events recorded -> yield questions -> resume
+
+# session id resolution order
+--session-id flag -> opencode discovery -> codex resume -> fake-codex -> error
+```
+
 ## Preconditions
 - The doctest binary is built from the module root (`DOCTEST_ROOT/..`).
 - `fake-codex` is expected in PATH.

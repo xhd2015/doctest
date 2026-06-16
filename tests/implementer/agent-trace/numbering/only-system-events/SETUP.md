@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: a finished session exists with only non-displayable system events (step_start, step_finish) in `events.jsonl`
+
+```
+# implement agent reads requirement, writes code via Fake Codex
+doctest agent implement --requirement req.md -> Fake Codex -> implementation
+
+# session lifecycle
+create session -> run sub-agent -> events recorded -> yield questions -> resume
+
+# session id resolution order
+--session-id flag -> opencode discovery -> codex resume -> fake-codex -> error
+```
+
 ## Preconditions
 - A finished session exists with only non-displayable system events (step_start, step_finish) in `events.jsonl`.
 - Since no event produces visible output, no trace numbers at all should appear.

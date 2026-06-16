@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: parent dotdotdot helpers (createTestTree etc.) are available
+
+```
+# build and run test binary, report results
+doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
+
+# path patterns
+.../ -> walk tree | subdir -> run subtree | multi-dir -> aggregate results
+
+# output
+progress dots -> . F | verbose -> go test -v | count -> N tests
+```
+
 ## Preconditions
 - Parent dotdotdot helpers (createTestTree etc.) are available.
 - The CWD is a directory inside a nested git repo between a parent Go module and a child Go module with tests.

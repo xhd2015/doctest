@@ -1,3 +1,14 @@
+# Scenario
+
+**Feature**: tests for basic request runner
+
+```
+# tree structure validation during build/test
+root: must define Request, Response, Run
+child: must define Setup, must NOT redefine Run
+leaf: ASSERT.md with func Assert
+```
+
 # Global Setup
 
 ## Context

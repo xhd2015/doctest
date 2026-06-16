@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: agent commands must be able to use fake Codex instead of a real LLM
+
+```
+# agent reads requirement, invokes Fake Codex, writes output
+doctest agent <cmd> --requirement req.md -> Fake Codex -> generated code
+
+# session state tracked in event files
+doctest <- Fake Codex (session id, events, progress)
+```
+
 ## Preconditions
 - Agent commands must be able to use fake Codex instead of a real LLM.
 

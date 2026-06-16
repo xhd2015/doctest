@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: the format string is `"\n"` (empty message that already ends with newline)
+
+```
+# logf formats agent session events for display
+doctest agent logf <session-id> -> reads event file -> formatted text -> stdout
+
+# show-status reports session progress
+doctest agent show-status <session-id> -> session state -> stdout
+```
+
 ## Preconditions
 - The format string is `"\n"` (empty message that already ends with newline).
 

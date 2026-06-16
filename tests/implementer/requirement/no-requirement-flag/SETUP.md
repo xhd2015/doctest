@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: no --requirement flag is used. Only a CLI prompt is provided
+
+```
+# implement agent reads requirement, writes code via Fake Codex
+doctest agent implement --requirement req.md -> Fake Codex -> implementation
+
+# session lifecycle
+create session -> run sub-agent -> events recorded -> yield questions -> resume
+
+# session id resolution order
+--session-id flag -> opencode discovery -> codex resume -> fake-codex -> error
+```
+
 ## Preconditions
 - No --requirement flag is used. Only a CLI prompt is provided.
 

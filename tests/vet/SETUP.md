@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: the vet command checks doc-style tree structure (renamed from validate)
+
+```
+# inspect test tree for structural issues
+doctest vet <dir> -> walk tree -> report anti-patterns
+
+# anti-patterns detected
+embedded go block | go test shellout | assert without setup | skipped testdata
+```
+
 ## Preconditions
 - The vet command checks doc-style tree structure (renamed from validate).
 

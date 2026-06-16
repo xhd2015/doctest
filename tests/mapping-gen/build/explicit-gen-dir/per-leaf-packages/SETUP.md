@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: a --gen-dir is specified for build mode
+
+```
+# maps doc-style leaves to Go test packages
+doctest build/test -> mapping-gen -> leaf <-> Go package
+
+# gen-dir modes
+auto gen-dir -> one package per leaf | explicit gen-dir -> user-specified layout
+```
+
 ## Preconditions
 - A --gen-dir is specified for build mode.
 - A temp project with 2 leaves under a grouping directory exists.

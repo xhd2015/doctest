@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: this test verifies that import aliases in Go code blocks are preserved during code generation
+
+```
+# generated Go code must preserve import aliases
+doctest build -> generated .go files -> import aliases intact
+```
+
 ## Preconditions
 - This test verifies that import aliases in Go code blocks are preserved during code generation.
 - Inherits Request, Response, and Run from the parent SETUP.md chain.

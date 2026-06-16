@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: a doctest tree with a SETUP.md containing invalid Go code (unclosed string literal)
+
+```
+# Go import processing during code generation
+doctest build -> parse imports -> remove unused -> report syntax errors
+```
+
 ## Preconditions
 - A doctest tree with a SETUP.md containing invalid Go code (unclosed string literal).
 - `imports.Process` should fail and report a clean error.

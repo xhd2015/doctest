@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: no target directory argument is supplied to fill-code
+
+```
+# agent reads requirement, invokes Fake Codex, writes output
+doctest agent <cmd> --requirement req.md -> Fake Codex -> generated code
+
+# session state tracked in event files
+doctest <- Fake Codex (session id, events, progress)
+```
+
 ## Preconditions
 - No target directory argument is supplied to fill-code.
 

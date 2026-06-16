@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: two Go modules exist: mod-a has DOCTEST.md + SETUP.md, mod-b has its own SETUP.md
+
+```
+# build and run test binary, report results
+doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
+
+# path patterns
+.../ -> walk tree | subdir -> run subtree | multi-dir -> aggregate results
+
+# output
+progress dots -> . F | verbose -> go test -v | count -> N tests
+```
+
 ## Preconditions
 - Two Go modules exist: mod-a has DOCTEST.md + SETUP.md, mod-b has its own SETUP.md.
 - Running on a sub-dir of mod-b should not use mod-a's DOCTEST.md.

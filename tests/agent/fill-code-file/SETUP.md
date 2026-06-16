@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: the target path exists but is not a directory
+
+```
+# agent reads requirement, invokes Fake Codex, writes output
+doctest agent <cmd> --requirement req.md -> Fake Codex -> generated code
+
+# session state tracked in event files
+doctest <- Fake Codex (session id, events, progress)
+```
+
 ## Preconditions
 - The target path exists but is not a directory.
 

@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: a --gen-dir is specified to control where output goes
+
+```
+# maps doc-style leaves to Go test packages
+doctest build/test -> mapping-gen -> leaf <-> Go package
+
+# gen-dir modes
+auto gen-dir -> one package per leaf | explicit gen-dir -> user-specified layout
+```
+
 ## Preconditions
 - A --gen-dir is specified to control where output goes.
 

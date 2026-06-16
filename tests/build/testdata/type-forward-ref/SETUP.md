@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: tests for type forward ref
+
+```
+# parse test tree, generate Go code, compile binary
+doctest build <test-dir> -> .md files -> Go code -> go build -> binary
+
+# gen-dir controls output layout
+gen-dir -> per-leaf packages -> file system
+```
+
 ## Setup
 
 - Defines types in file-order: LocationEntry references GitInfo before GitInfo is declared.

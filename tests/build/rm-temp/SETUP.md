@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: `doctest build` with `--rm` should delete the generated temp directory
+
+```
+# parse test tree, generate Go code, compile binary
+doctest build <test-dir> -> .md files -> Go code -> go build -> binary
+
+# gen-dir controls output layout
+gen-dir -> per-leaf packages -> file system
+```
+
 ## Preconditions
 - `doctest build` with `--rm` should delete the generated temp directory.
 

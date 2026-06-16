@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: tests for child
+
+```
+# parse test tree, generate Go code, compile binary
+doctest build <test-dir> -> .md files -> Go code -> go build -> binary
+
+# gen-dir controls output layout
+gen-dir -> per-leaf packages -> file system
+```
+
 ## Setup
 
 - Redefines `myHelper` with the same name as the root.

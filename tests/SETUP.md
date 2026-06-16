@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: build the doctest binary and invoke it as a subprocess to test CLI behavior
+
+```
+# build the doctest binary from module source
+go build ./cmd/doctest -> doctest binary
+
+# invoke binary as subprocess, capture everything
+doctest <args> -> {stdout, stderr, exit code}
+```
+
 ## Preconditions
 - The doctest module root is the parent of this test tree (`DOCTEST_ROOT/..`).
 - The tests are executed by the doc-style test runner from this test tree.

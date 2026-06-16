@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: a stub test tree is written, RED confirmed, and sealed
+
+```
+# full TDD cycle: design -> RED -> seal -> implement -> GREEN
+orchestrator -> design agent -> writes tests -> RED (all fail)
+
+# seal tests, hand off to implementer
+orchestrator -> git add tests/ -> implement agent -> writes code -> GREEN (all pass)
+
+# question/answer loop
+user <--questions-- implement agent <--yields-- orchestrator -> resume
+```
+
 ## Preconditions
 - A stub test tree is written, RED confirmed, and sealed.
 - The mock config has a `before_exit` hook that calls yield-pending-questions.

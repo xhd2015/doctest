@@ -1,3 +1,14 @@
+# Scenario
+
+**Feature**: this fixture verifies that only the root Run is used in generated code,
+
+```
+# tree structure validation during build/test
+root: must define Request, Response, Run
+child: must define Setup, must NOT redefine Run
+leaf: ASSERT.md with func Assert
+```
+
 # Root Run Used Fixture
 
 ## Preconditions

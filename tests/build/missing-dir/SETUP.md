@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: no target directory argument is supplied
+
+```
+# parse test tree, generate Go code, compile binary
+doctest build <test-dir> -> .md files -> Go code -> go build -> binary
+
+# gen-dir controls output layout
+gen-dir -> per-leaf packages -> file system
+```
+
 ## Preconditions
 - No target directory argument is supplied.
 

@@ -1,3 +1,14 @@
+# Scenario
+
+**Feature**: select the default greeting action
+
+```
+# tree structure validation during build/test
+root: must define Request, Response, Run
+child: must define Setup, must NOT redefine Run
+leaf: ASSERT.md with func Assert
+```
+
 # Happy Path Setup
 
 ## Steps

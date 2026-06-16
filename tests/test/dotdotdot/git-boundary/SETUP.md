@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: tests for git boundary
+
+```
+# build and run test binary, report results
+doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
+
+# path patterns
+.../ -> walk tree | subdir -> run subtree | multi-dir -> aggregate results
+
+# output
+progress dots -> . F | verbose -> go test -v | count -> N tests
+```
+
 ## Group: git-boundary
 Tests for `./...` respecting git repository boundaries.
 

@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: no session directory exists for the given session ID
+
+```
+# logf formats agent session events for display
+doctest agent logf <session-id> -> reads event file -> formatted text -> stdout
+
+# show-status reports session progress
+doctest agent show-status <session-id> -> session state -> stdout
+```
+
 ## Preconditions
 - No session directory exists for the given session ID.
 

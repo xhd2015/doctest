@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: no --gen-dir is specified; tests are generated under the mapping-gen cache root
+
+```
+# maps doc-style leaves to Go test packages
+doctest build/test -> mapping-gen -> leaf <-> Go package
+
+# gen-dir modes
+auto gen-dir -> one package per leaf | explicit gen-dir -> user-specified layout
+```
+
 ## Preconditions
 - No --gen-dir is specified; tests are generated under the mapping-gen cache root.
 

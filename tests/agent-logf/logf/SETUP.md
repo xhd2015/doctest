@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: the `Logf` function is in `agent-pro/agent/subagent` and writes timestamped output to `os.Stdout`
+
+```
+# logf formats agent session events for display
+doctest agent logf <session-id> -> reads event file -> formatted text -> stdout
+
+# show-status reports session progress
+doctest agent show-status <session-id> -> session state -> stdout
+```
+
 ## Preconditions
 - The `Logf` function is in `agent-pro/agent/subagent` and writes timestamped output to `os.Stdout`.
 - Each leaf provides a format string and optional args via environment variables.

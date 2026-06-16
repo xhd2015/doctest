@@ -1,3 +1,14 @@
+# Scenario
+
+**Feature**: the `tests/testdata/root-missing-run/` fixture has a root SETUP.md with
+
+```
+# enforce SETUP.md rules at build time
+root missing Run -> build error
+child redefines Run -> build error
+non-root missing Setup -> build error
+```
+
 ## Preconditions
 - The `tests/testdata/root-missing-run/` fixture has a root SETUP.md with
   Request, Response, and Setup but deliberately no func Run.

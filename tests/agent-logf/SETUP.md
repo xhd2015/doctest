@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: the doctest module root is two levels above this test tree (`DOCTEST_ROOT/../..`)
+
+```
+# logf formats agent session events for display
+doctest agent logf <session-id> -> reads event file -> formatted text -> stdout
+
+# show-status reports session progress
+doctest agent show-status <session-id> -> session state -> stdout
+```
+
 ## Preconditions
 - The doctest module root is two levels above this test tree (`DOCTEST_ROOT/../..`).
 - Tests verify that `traceSession` and `showStatus` output lines use timestamped `Logf` while UI framing uses bare `fmt.Fprintf`.

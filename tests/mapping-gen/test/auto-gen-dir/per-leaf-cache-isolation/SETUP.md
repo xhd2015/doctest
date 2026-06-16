@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: a project with 2 leaves exists
+
+```
+# maps doc-style leaves to Go test packages
+doctest build/test -> mapping-gen -> leaf <-> Go package
+
+# gen-dir modes
+auto gen-dir -> one package per leaf | explicit gen-dir -> user-specified layout
+```
+
 ## Preconditions
 - A project with 2 leaves exists.
 - The auto gen dir is used for both runs.

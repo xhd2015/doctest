@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: an `events.jsonl` file exists in the session directory with two tool_use events
+
+```
+# logf formats agent session events for display
+doctest agent logf <session-id> -> reads event file -> formatted text -> stdout
+
+# show-status reports session progress
+doctest agent show-status <session-id> -> session state -> stdout
+```
+
 ## Preconditions
 - An `events.jsonl` file exists in the session directory with two tool_use events.
 - No `pid` file exists (session appears finished).

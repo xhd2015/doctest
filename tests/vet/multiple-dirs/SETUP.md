@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: two independent valid doctest trees exist in different directories
+
+```
+# inspect test tree for structural issues
+doctest vet <dir> -> walk tree -> report anti-patterns
+
+# anti-patterns detected
+embedded go block | go test shellout | assert without setup | skipped testdata
+```
+
 ## Preconditions
 - Two independent valid doctest trees exist in different directories.
 

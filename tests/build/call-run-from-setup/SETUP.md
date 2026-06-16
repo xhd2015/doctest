@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: a doc-style test tree where a child SETUP.md's `func Setup` calls `Run(t, req)`
+
+```
+# parse test tree, generate Go code, compile binary
+doctest build <test-dir> -> .md files -> Go code -> go build -> binary
+
+# gen-dir controls output layout
+gen-dir -> per-leaf packages -> file system
+```
+
 ## Preconditions
 - A doc-style test tree where a child SETUP.md's `func Setup` calls `Run(t, req)`.
 - The generator lowers `func Run` to lowercase closure `run`, but the Setup body

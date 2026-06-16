@@ -1,3 +1,18 @@
+# Scenario
+
+**Feature**: the parent dotdotdot helper functions are available
+
+```
+# build and run test binary, report results
+doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
+
+# path patterns
+.../ -> walk tree | subdir -> run subtree | multi-dir -> aggregate results
+
+# output
+progress dots -> . F | verbose -> go test -v | count -> N tests
+```
+
 ## Preconditions
 - The parent dotdotdot helper functions are available.
 

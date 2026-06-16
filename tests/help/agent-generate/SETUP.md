@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: the agent generate command has scoped help
+
+```
+# top-level usage
+doctest help -> list subcommands -> stdout
+
+# scoped help
+doctest help <subcmd> -> flags, description -> stdout
+```
+
 ## Preconditions
 - The agent generate command has scoped help.
 
