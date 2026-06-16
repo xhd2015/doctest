@@ -29,8 +29,8 @@ Commands:
 Agents:
   agent generate <idea> [-d|--dir <target-dir>] [--agent-runner RUNNER]
   agent fill-code <target-dir>
-  agent implement <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status] [--list-sessions]
-  agent design <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status] [--list-sessions]
+  agent implement <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--timeout DURATION] [--trace] [--status] [--list-sessions]
+  agent design <prompt> [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--timeout DURATION] [--trace] [--status] [--list-sessions]
   agent with --agent-runner=RUNNER [--model=MODEL] <prog> [args...]
 
 Skills:
@@ -113,7 +113,7 @@ Examples:
   doctest test -v ./sub-module/...
 `
 
-const agentImplementUsage = `Usage: doctest agent implement [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status] [--list-sessions] <prompt>
+const agentImplementUsage = `Usage: doctest agent implement [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--timeout DURATION] [--trace] [--status] [--list-sessions] <prompt>
 
 Spawn a sub-agent to implement code that makes doctests pass.
 Blocks until the sub-agent completes or yields questions via
@@ -133,13 +133,15 @@ Options:
   --mock-config PATH      mock config JSON for fake-codex
   --requirement PATH      read requirement from file (useful for long prompts
                           or prompts with shell special characters)
+  --timeout DURATION      max duration for the sub-agent (default: 1h);
+                          accepts Go-style durations like 30s, 5m, 1h, 1h30m
   --trace                 follow and print events from an existing session
   --status                display session status (requires --session-id)
   --list-sessions         list all sessions from the last 7 days
   -h, --help              Show help
 `
 
-const agentDesignerUsage = `Usage: doctest agent design [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--trace] [--status] [--list-sessions] <prompt>
+const agentDesignerUsage = `Usage: doctest agent design [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--timeout DURATION] [--trace] [--status] [--list-sessions] <prompt>
 
 Spawn a sub-agent to design doctest trees for new features or update
 existing test suites. The sub-agent analyzes requirements, breaks down
@@ -160,6 +162,8 @@ Options:
   --mock-config PATH      mock config JSON for fake-codex
   --requirement PATH      read requirement from file (useful for long prompts
                           or prompts with shell special characters)
+  --timeout DURATION      max duration for the sub-agent (default: 1h);
+                          accepts Go-style durations like 30s, 5m, 1h, 1h30m
   --trace                 follow and print events from an existing session
   --status                display session status (requires --session-id)
   --list-sessions         list all sessions from the last 7 days
@@ -259,10 +263,12 @@ func runAgentImplement(args []string) error {
 		return nil
 	}
 	opts := implementer.Options{}
+	var timeoutStr string
 	remainArgs, err := lessflags.String("--session-id", &opts.SessionID).
 		String("--agent-runner", &opts.AgentRunner).
 		String("--mock-config", &opts.MockConfig).
 		String("--requirement", &opts.Requirement).
+		String("--timeout", &timeoutStr).
 		Bool("--trace", &opts.CatchUp).
 		Bool("--status", &opts.Status).
 		Bool("--list-sessions", &opts.ListSessions).
@@ -274,6 +280,13 @@ func runAgentImplement(args []string) error {
 			return nil
 		}
 		return err
+	}
+	if timeoutStr != "" {
+		d, err := subagent.ParseTimeoutDuration(timeoutStr)
+		if err != nil {
+			return fmt.Errorf("--timeout: %w", err)
+		}
+		opts.Timeout = d
 	}
 	opts.Prompt = strings.Join(remainArgs, " ")
 	if opts.Prompt == "" {
@@ -292,10 +305,12 @@ func runAgentDesign(args []string) error {
 		return nil
 	}
 	opts := designer.Options{}
+	var timeoutStr string
 	remainArgs, err := lessflags.String("--session-id", &opts.SessionID).
 		String("--agent-runner", &opts.AgentRunner).
 		String("--mock-config", &opts.MockConfig).
 		String("--requirement", &opts.Requirement).
+		String("--timeout", &timeoutStr).
 		Bool("--trace", &opts.CatchUp).
 		Bool("--status", &opts.Status).
 		Bool("--list-sessions", &opts.ListSessions).
@@ -307,6 +322,13 @@ func runAgentDesign(args []string) error {
 			return nil
 		}
 		return err
+	}
+	if timeoutStr != "" {
+		d, err := subagent.ParseTimeoutDuration(timeoutStr)
+		if err != nil {
+			return fmt.Errorf("--timeout: %w", err)
+		}
+		opts.Timeout = d
 	}
 	opts.Prompt = strings.Join(remainArgs, " ")
 	if opts.Prompt == "" {

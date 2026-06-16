@@ -58,14 +58,16 @@ Explicitly tell user:
 For bugs: reproduce is critical; use an explore/analysis sub-agent to narrow scope
 first, then delegate to `doctest agent design` to reproduce.
 
+If there is anything needs clarification, list them and ask for user confirmation until no gap understanding user's intent.
+
 ## Phase 2 — Delegate Test Design
 
 ```sh
 # please wait enough for any sub-agent, if timeout required, set to 1h
-doctest agent design --requirement REQUIREMENT-DESIGN-<context-summary-and-feature-slug>.md
+doctest agent design --timeout 1h --requirement REQUIREMENT-DESIGN-<context-summary-and-feature-slug>.md
 
 # or for short requirement or followup
-doctest agent design <<EOF
+doctest agent design --timeout 1h <<EOF
 <design doc from Phase 1>
 EOF
 ```
@@ -74,8 +76,8 @@ Wait patiently. Do not set a timeout; use ≥1h if needed.
 
 ## Phase 3 — Designer Questions (optional)
 
-```
-doctest agent design <<EOF
+```sh
+doctest agent design --timeout 1h <<EOF
 <answers to questions>
 EOF
 ```
@@ -104,7 +106,7 @@ repo, ask the user before proceeding unsealed.
 
 ```sh
 # please wait enough for any sub-agent, if timeout required, set to 1h
-doctest agent implement --requirement REQUIREMENT-IMPLEMENT-<slug>.md
+doctest agent implement --timeout 1h --requirement REQUIREMENT-IMPLEMENT-<slug>.md
 ```
 
 The requirement file must include: summarized context, feature summary, test
