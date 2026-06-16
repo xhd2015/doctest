@@ -61,6 +61,7 @@ first, then delegate to `doctest agent design` to reproduce.
 ## Phase 2 — Delegate Test Design
 
 ```sh
+# please wait enough for any sub-agent, if timeout required, set to 1h
 doctest agent design --requirement REQUIREMENT-DESIGN-<context-summary-and-feature-slug>.md
 
 # or for short requirement or followup
@@ -69,8 +70,7 @@ doctest agent design <<EOF
 EOF
 ```
 
-Wait patiently. Do not set a timeout; use ≥1h if needed. Sub-agent reports
-progress periodically.
+Wait patiently. Do not set a timeout; use ≥1h if needed.
 
 ## Phase 3 — Designer Questions (optional)
 
@@ -102,13 +102,14 @@ repo, ask the user before proceeding unsealed.
 
 ## Phase 6 — Implement
 
-```
+```sh
+# please wait enough for any sub-agent, if timeout required, set to 1h
 doctest agent implement --requirement REQUIREMENT-IMPLEMENT-<slug>.md
 ```
 
 The requirement file must include: summarized context, feature summary, test
 tree structure, **"tests are sealed — do not modify"**, and the verify
-command. Wait patiently; do not set a timeout.
+command.
 
 To check status:
 ```
@@ -150,6 +151,9 @@ Phase 1. Design and implement sessions are isolated — use their respective
 session IDs.
 
 For `doctest agent design/implement`, their sessions are isolated(because they do different tasks), so their session ids are different. And if you've passed session id once, for followup, please also keep that same session id for continuity.
+
+Always wait subagents patiently. Do not set a timeout; use ≥1h if needed. Sub-agent reports
+progress periodically.
 
 __DOCTEST_SPEC__
 
