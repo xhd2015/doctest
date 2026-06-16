@@ -193,10 +193,12 @@ func Test(dir string, opts core.Options) error {
 					if strings.Contains(line, "(cached)") {
 						cachedCount++
 					}
+					os.Stdout.Write([]byte("."))
 				} else if strings.HasPrefix(line, "FAIL\t") || strings.HasPrefix(line, "FAIL ") {
 					runCount++
 					failCount++
 					failLines = append(failLines, line)
+					os.Stdout.Write([]byte("."))
 				}
 			}
 			if scanner.Err() != nil {
@@ -209,9 +211,6 @@ func Test(dir string, opts core.Options) error {
 
 		err = goTestCmd.Wait()
 
-		for i := 0; i < runCount; i++ {
-			fmt.Print(".")
-		}
 		fmt.Printf("  (%d Run, %d Pass, %d Fail, %d Cached)", runCount, passCount, failCount, cachedCount)
 		fmt.Println()
 

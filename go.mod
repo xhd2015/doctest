@@ -6,7 +6,7 @@ require (
 	github.com/xhd2015/agent-pro v0.0.23
 	github.com/xhd2015/gitops v0.0.15
 	github.com/xhd2015/less-flags v1.0.0
-	github.com/xhd2015/skills v0.0.7
+	github.com/xhd2015/skills v0.0.9
 	golang.org/x/tools v0.45.0
 )
 
@@ -19,7 +19,7 @@ require (
 )
 
 require (
-	github.com/xhd2015/dot-pkgs/go-pkgs v0.0.14 // indirect
+	github.com/xhd2015/dot-pkgs/go-pkgs v0.0.15 // indirect
 	github.com/xhd2015/go-coverage v1.0.41 // indirect
 	github.com/xhd2015/go-inspect v0.0.49 // indirect
 	github.com/xhd2015/less-gen v0.0.19 // indirect
