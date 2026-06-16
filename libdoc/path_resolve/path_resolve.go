@@ -69,19 +69,21 @@ func FindDotDotDotDirs(basePath string) ([]string, error) {
 		return FindDOCTestDirsFromSubdirs(".")
 	}
 	dirs, err := FindDOCTestDirsWithBase(basePath, basePath)
+	absBase, absErr := filepath.Abs(basePath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			absBase, absErr := filepath.Abs(basePath)
 			if absErr == nil {
 				if _, ok := ResolveRoot(absBase); ok {
 					return []string{absBase}, nil
 				}
 			}
+			// Fall through to WalkDir below to find DOCTEST.md
+			// directories outside of Go module hierarchy
+			dirs = nil
+		} else {
+			return nil, err
 		}
-		return nil, err
 	}
-
-	absBase, absErr := filepath.Abs(basePath)
 	if absErr == nil {
 		hasAbsBase := false
 		for _, d := range dirs {
@@ -252,7 +254,10 @@ func findModuleRoot(cwd string) (dir string, modulePath string, err error) {
 	if err != nil {
 		return "", "", err
 	}
-	gitRoot, gitRootErr := git.ShowToplevel(dir)
+	gitRoot, gitRootErr := "", errors.New("not inside git")
+	if inside, _ := git.IsInsideGit(dir); inside {
+		gitRoot, gitRootErr = git.ShowToplevel(dir)
+	}
 	for {
 		modFile := filepath.Join(dir, "go.mod")
 		data, readErr := os.ReadFile(modFile)
@@ -302,8 +307,10 @@ func FindDOCTestDirsFromSubdirs(cwd string) ([]string, error) {
 			continue
 		}
 		name := entry.Name()
-		if ignored, err := git.CheckIgnore(absCwd, name); err == nil && ignored {
-			continue
+		if inside, _ := git.IsInsideGit(absCwd); inside {
+			if ignored, err := git.CheckIgnore(absCwd, name); err == nil && ignored {
+				continue
+			}
 		}
 		subdir := filepath.Join(absCwd, name)
 		dirs, err := findDOCTestDirsInTree(subdir)
@@ -335,6 +342,10 @@ func findDOCTestDirsInTree(subdir string) ([]string, error) {
 				return nestedErr
 			}
 			dirs = append(dirs, nested...)
+			return filepath.SkipDir
+		}
+		if hasFile(path, "DOCTEST.md") {
+			dirs = append(dirs, path)
 			return filepath.SkipDir
 		}
 		return nil
