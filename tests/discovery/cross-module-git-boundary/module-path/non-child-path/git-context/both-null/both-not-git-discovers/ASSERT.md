@@ -1,10 +1,14 @@
 ## Expected
 - Exit code 0.
-- `hidden_test` IS discovered (non-child path, both null git → discover).
+- `child_test` is discovered.
 - No `warning:` on stderr.
+- No `no tests found`.
+
+## Side Effects
+- None beyond running nested doctest tree.
 
 ## Exit Code
-- Exit code 0.
+- 0
 
 ```go
 import (
@@ -20,10 +24,10 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("exit code = %d, stderr:\n%s", resp.ExitCode, resp.Stderr)
     }
     if strings.Contains(resp.Stderr, "warning:") {
-        t.Fatalf("stderr should not contain warning (both null git should discover):\n%s", resp.Stderr)
+        t.Fatalf("stderr should not contain warning (both null git, should discover):\n%s", resp.Stderr)
     }
-    if !strings.Contains(resp.Stderr, "hidden_test") {
-        t.Fatalf("stderr missing hidden_test (non-child path, both null git should discover):\n%s", resp.Stderr)
+    if !strings.Contains(resp.Stderr, "child_test") {
+        t.Fatalf("stderr missing child_test (non-child path, both null git should discover):\n%s", resp.Stderr)
     }
     if strings.Contains(resp.Stderr, "no tests found") {
         t.Fatalf("stderr should not contain 'no tests found':\n%s", resp.Stderr)

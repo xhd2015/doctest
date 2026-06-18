@@ -2,6 +2,7 @@ package path_resolve
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -206,6 +207,15 @@ func FindDOCTestDirs(cwd string) ([]string, error) {
 			return nil
 		}
 		if hasFile(path, ".git") {
+			nestedPath := readModulePath(path)
+			if nestedPath != "" {
+				ancestorGit := gitRoot(moduleRoot)
+				nestedGit := gitRoot(path)
+				if ancestorGit != nestedGit {
+					reason := gitSkipReason(ancestorGit, nestedGit)
+					warnSkippingModule(nestedPath, path, ancestorPath, reason)
+				}
+			}
 			return filepath.SkipDir
 		}
 		if hasFile(path, "go.mod") {
@@ -214,6 +224,20 @@ func FindDOCTestDirs(cwd string) ([]string, error) {
 				return filepath.SkipDir
 			}
 			if !strings.HasPrefix(nestedPath, ancestorPath+"/") {
+				ancestorGit := gitRoot(moduleRoot)
+				nestedGit := gitRoot(path)
+				if ancestorGit == nestedGit && shouldDiscoverNonChildModule(ancestorPath, nestedPath) {
+					nestedDirs, nestedErr := FindDOCTestDirs(path)
+					if nestedErr != nil {
+						return nestedErr
+					}
+					dirs = append(dirs, nestedDirs...)
+					return filepath.SkipDir
+				}
+				if ancestorGit != nestedGit {
+					reason := gitSkipReason(ancestorGit, nestedGit)
+					warnSkippingModule(nestedPath, path, ancestorPath, reason)
+				}
 				return filepath.SkipDir
 			}
 		}
@@ -233,6 +257,50 @@ func FindDOCTestDirs(cwd string) ([]string, error) {
 
 	sort.Strings(dirs)
 	return dirs, nil
+}
+
+func gitRoot(dir string) string {
+	if inside, _ := git.IsInsideGit(dir); inside {
+		root, err := git.ShowToplevel(dir)
+		if err == nil {
+			return root
+		}
+	}
+	return ""
+}
+
+func shouldDiscoverNonChildModule(ancestorPath, nestedPath string) bool {
+	family := moduleFamilyPrefix(ancestorPath)
+	if strings.HasSuffix(family, "/") {
+		return strings.HasPrefix(nestedPath, family)
+	}
+	return strings.HasPrefix(nestedPath, family)
+}
+
+func moduleFamilyPrefix(modulePath string) string {
+	if i := strings.LastIndex(modulePath, "/"); i >= 0 {
+		return modulePath[:i+1]
+	}
+	return modulePath
+}
+
+func gitSkipReason(ancestorGit, nestedGit string) string {
+	if ancestorGit != "" && nestedGit != "" {
+		return "different git repository"
+	}
+	return "git repository mismatch"
+}
+
+func warnSkippingModule(nestedPath, nestedDir, ancestorPath, reason string) {
+	if ancestorPath != "" && nestedPath != "" && !strings.HasPrefix(nestedPath, ancestorPath+"/") {
+		fmt.Fprintf(os.Stderr, "warning: skipping module %s at %s: not a child of %s (%s)\n",
+			nestedPath, nestedDir, ancestorPath, reason)
+		return
+	}
+	if nestedPath != "" {
+		fmt.Fprintf(os.Stderr, "warning: skipping module %s at %s: %s\n",
+			nestedPath, nestedDir, reason)
+	}
 }
 
 func readModulePath(dir string) string {
