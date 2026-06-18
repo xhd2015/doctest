@@ -25,7 +25,7 @@ import (
 
 func Setup(t *testing.T, req *Request) error {
     dir := t.TempDir()
-    if err := os.WriteFile(filepath.Join(dir, "DOCTEST.md"), []byte("# tests\n"), 0644); err != nil {
+    if err := os.WriteFile(filepath.Join(dir, "DOCTEST.md"), []byte("# Tests\n\n## DSN (Domain Specific Notion)\n\n### Participants\n- **system** — under test.\n\n### Behaviors\n- **run** — executes the scenario.\n"), 0644); err != nil {
         t.Fatal(err)
     }
     if err := os.MkdirAll(filepath.Join(dir, "leaf"), 0755); err != nil {

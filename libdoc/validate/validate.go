@@ -21,8 +21,16 @@ func RunWithOptions(dir string, opts core.Options) error {
 	if !info.IsDir() {
 		return fmt.Errorf("not a directory: %s", dir)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "DOCTEST.md")); err != nil {
+	doctestPath := filepath.Join(dir, "DOCTEST.md")
+	if _, err := os.Stat(doctestPath); err != nil {
 		return fmt.Errorf("%s: root must contain DOCTEST.md", dir)
+	}
+	doctestContent, err := os.ReadFile(doctestPath)
+	if err != nil {
+		return err
+	}
+	if err := checkDOCTESTSections(doctestPath, string(doctestContent)); err != nil {
+		return err
 	}
 
 	if opts.Verbose {
@@ -83,7 +91,13 @@ func RunWithOptions(dir string, opts core.Options) error {
 		if err != nil {
 			return nil
 		}
-		antiViolations = append(antiViolations, checkFileAntiPatterns(path, string(content))...)
+		text := string(content)
+		if name == "SETUP.md" {
+			if err := checkSETUPSections(path, text); err != nil {
+				return err
+			}
+		}
+		antiViolations = append(antiViolations, checkFileAntiPatterns(path, text)...)
 		return nil
 	})
 	if err != nil {

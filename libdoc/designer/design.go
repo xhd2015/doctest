@@ -31,7 +31,7 @@ func Run(opts Options) error {
 	return subagent.Run(context.Background(), subagent.Config{
 		RoleName:         "designer",
 		Cmd:              "design",
-		PromptContent:    promptContent,
+		PromptContent:    PromptContent(),
 		SessionEnvVar:    "DOCTEST_AGENT_DESIGNER_SESSION_ID",
 		SessionMetaField: "doctest_agent_designer_session_id",
 		DebugSessionEnv:  "DOCTEST_DEBUG_SESSION_HOME",

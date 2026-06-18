@@ -20,3 +20,20 @@ Prose is primary, code supplementary.
   Sections: `## Preconditions`, `## Steps`, `## Context`
 - `ASSERT.md` is **case-private** (never inherited).
   Sections: `## Expected`, `## Side Effects`, `## Errors`, `## Exit Code`
+
+## Vet
+
+Run `doctest vet <dir>` to validate tree structure before `doctest test` or
+`doctest build`. Vet checks:
+
+- Root `DOCTEST.md` exists and includes a **DSN (Domain Specific Notion)** section
+  (heading text must contain `DSN (Domain Specific Notion)`)
+- Every `SETUP.md` starts with `# Scenario` as its first section (leading
+  whitespace allowed)
+- `ASSERT.md` directories also have `SETUP.md`
+- Anti-patterns in `SETUP.md` / `ASSERT.md` code blocks (embedded Go programs,
+  `go test` shell-outs)
+
+See `doctest skill doc-spec show` and `doctest skill code-spec show` for the
+full prose and code rules; see the design spec (`doctest skill designer show`)
+for DSN and Scenario semantics.

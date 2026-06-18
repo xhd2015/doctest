@@ -9,6 +9,7 @@ Both `SETUP.md` and `ASSERT.md` may contain ```go...``` go code blocks.
 ### DSN (Domain Specific Notion)
 
 Every root `DOCTEST.md` must include a `# DSN (Domain Specific Notion)` section.
+`doctest vet` rejects roots missing this section.
 DSN is like a DSL, but less formal — it models the target under test as a
 normal human mental model. It defines **participants** (actors, components,
 subsystems) and their **behaviors** (what each participant does, how they
@@ -48,6 +49,7 @@ execution strategies.
 ### Scenario
 
 Every `SETUP.md` must include a `# Scenario` section as its **first** section.
+`doctest vet` rejects any `SETUP.md` that does not start with `# Scenario`.
 This section starts with a tag line — either `**Feature**: <description>` or `**Bug**: <description>` — followed by a ``` block containing a DSN snippet
 (from the root `DOCTEST.md`'s DSN model) that sketches the mental model with
 annotated pipeline lines (`# comment` above each `->` / `<-` line).

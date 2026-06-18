@@ -58,28 +58,13 @@ If the feature is already correctly implemented and the resulting tests pass
 before any code change, report that result to the user instead of delegating
 unnecessary implementation.
 
-### Step 4: Write the Doctest Files
+### Step 4: Write the Doctest Tree
 
-Create the test tree following the doc-style test specification:
-
-```
-<pkg>/tests/<feature>/
-├── DOCTEST.md          # Overview, decision-tree diagram, test index + "## How to Run"
-├── SETUP.md            # Root: shared preconditions, Request/Response types, stub Run()
-├── decision/           # Grouping nodes (must have SETUP.md, no ASSERT.md)
-│   └── leaf/           # Runnable leaves (must have SETUP.md + ASSERT.md)
-```
-
-Rules:
-- Dir with `ASSERT.md` = runnable leaf; without = grouping node (must have SETUP.md)
-- `SETUP.md` accumulates root→leaf: `## Preconditions`, `## Steps`, `## Context`
-- `ASSERT.md` defines `## Expected`, `## Side Effects`, `## Errors`, `## Exit Code`
-- Every `SETUP.md` must end with a Go code block as final content
-- Every `ASSERT.md` must have a `func Assert` code block
-- Root `SETUP.md` defines `type Request`, `type Response`, and `func Run` (must not be redefined by children)
-- Root `SETUP.md` provides a `func Run` (shared by all leaves; if tests need different Run, create separate DOCTEST.md root)
-- Child `SETUP.md` files provide `func Setup` (body must not be stub)
-- Import the target package directly; for unexported functions use `TestExported_` prefix
+Materialize the decision tree from Step 3 as files under `<pkg>/tests/<feature>/`.
+Follow the doc-style test specifications appended below (`__DOCTEST_SPEC__` and
+`__DOCTEST_DESIGN_SPEC__`) for all file layout, section names, DSN, Scenario,
+`Request`/`Response`/`Run`/`Setup`/`Assert` rules, and inheritance — do not
+rely on memory or improvise structure.
 
 Coverage checklist — ensure every leaf covers:
 - Happy paths for every valid input combination
@@ -88,24 +73,21 @@ Coverage checklist — ensure every leaf covers:
 - Parameter interactions
 - Prefer more leaves over fewer
 
-### Step 5: Create DOCTEST.md
+Include in `DOCTEST.md` an ASCII-art decision tree diagram, a test-leaf index,
+and a `## How to Run` section with exact commands.
 
-Write a `DOCTEST.md` that includes:
-- A brief overview of what is being tested
-- An ASCII-art decision tree diagram showing the branching structure
-- An index of all test leaves with one-line descriptions
-- A `## How to Run` section with the exact command(s)
+### Step 5: Verify with Doctest
 
-### Step 6: Verify with Doctest
-
-Run validation to confirm the tree is well-formed:
+Validate structure, then confirm runtime RED state:
 
 ```sh
+doctest vet ./tests/<feature>
 doctest test ./tests/<feature>
 ```
 
-Tests may fail at runtime (RED) since no implementation exists — that's expected.
-The main agent will confirm RED state before sealing the tests.
+`doctest vet` must pass (well-formed tree). `doctest test` may fail at runtime
+(RED) since no implementation exists — that's expected. The main agent will
+confirm RED state before sealing the tests.
 
 ## Reporting Progress
 

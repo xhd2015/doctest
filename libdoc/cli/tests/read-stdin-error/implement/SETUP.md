@@ -1,3 +1,11 @@
+# Scenario
+
+**Feature**: agent implement path exercises readStdinIfPresent error handling
+
+```
+cli.Run -> agent implement -> readStdinIfPresent -> implementer.Run
+```
+
 ## Preconditions
 - This group tests errors from `readStdinIfPresent()` during `doctest agent implement`.
 

@@ -85,13 +85,18 @@ EOF
 Escalate to user for domain-specific questions. Repeat until the designer
 completes.
 
-## Phase 4 — RED
+## Phase 4 — Vet then RED
 
-```
+```sh
+doctest vet ./tests/<feature>
 doctest test ./tests/<feature>
 ```
 
-All tests must fail. If any pass, re-examine the test design.
+`doctest vet` must pass — the tree is well-formed (including DSN in root
+`DOCTEST.md` and `# Scenario` as the first section in every `SETUP.md`).
+
+`doctest test` should fail (RED) since no implementation exists yet. If any
+test passes, re-examine the test design.
 
 ## Phase 5 — Seal (once)
 
@@ -127,6 +132,7 @@ implementer reports all tests passing.
 
 ```sh
 git diff ./tests/<feature>            # must be clean
+doctest vet ./tests/<feature>         # structure still valid
 doctest test ./tests/<feature>/...    # must be GREEN
 doctest test ./...                    # no regressions
 ```

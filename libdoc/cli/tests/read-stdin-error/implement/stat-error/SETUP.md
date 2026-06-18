@@ -1,3 +1,11 @@
+# Scenario
+
+**Bug**: closed stdin file causes Stat error during agent implement
+
+```
+closed os.Stdin -> readStdinIfPresent Stat -> error returned
+```
+
 ## Preconditions
 - `os.Stdin` is replaced with a closed file, causing `os.Stdin.Stat()` to fail.
 

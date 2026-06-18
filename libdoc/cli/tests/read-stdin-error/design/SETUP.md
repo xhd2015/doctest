@@ -1,3 +1,11 @@
+# Scenario
+
+**Feature**: agent design path exercises readStdinIfPresent error handling
+
+```
+cli.Run -> agent design -> readStdinIfPresent -> designer.Run
+```
+
 ## Preconditions
 - This group tests errors from `readStdinIfPresent()` during `doctest agent design`.
 

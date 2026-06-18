@@ -1,3 +1,15 @@
+# Scenario
+
+**Feature**: stdin read errors propagate through agent design and implement commands
+
+```
+# optional stdin before agent dispatch
+cli.Run(args) -> readStdinIfPresent -> runAgentDesign | runAgentImplement
+
+# errors must not be swallowed
+broken stdin -> Stat/ReadAll error -> returned to caller
+```
+
 ## Preconditions
 - The `cli` package is importable.
 - Tests replace `os.Stdin` with a file/pipe/directory before calling `cli.Run()`.

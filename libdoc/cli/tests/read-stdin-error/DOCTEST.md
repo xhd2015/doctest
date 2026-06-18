@@ -4,6 +4,17 @@ Verify that errors from `os.Stdin.Stat()` and `io.ReadAll()` inside
 `readStdinIfPresent()` propagate to callers (`runAgentImplement`,
 `runAgentDesign`) instead of being silently swallowed.
 
+## DSN (Domain Specific Notion)
+
+### Participants
+- **`cli.Run`** — dispatches doctest subcommands from `req.Args`.
+- **`readStdinIfPresent`** — reads optional stdin when no positional prompt is given.
+- **`runAgentDesign` / `runAgentImplement`** — agent entrypoints that call `readStdinIfPresent`.
+
+### Behaviors
+- **stdin replacement** — tests swap `os.Stdin` with a controlled file/pipe/directory.
+- **error propagation** — `Stat`/`ReadAll` failures must surface through `cli.Run`, not be swallowed.
+
 ## Decision Tree
 
 ```
