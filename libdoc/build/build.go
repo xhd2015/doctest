@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/xhd2015/doctest/libdoc/core"
+	"github.com/xhd2015/doctest/libdoc/pathfmt"
 )
 
 func Build(dir string, opts core.Options) error {
@@ -38,13 +39,13 @@ func Build(dir string, opts core.Options) error {
 	ctx.announceRoots()
 
 	if opts.Verbose {
-		fmt.Fprintf(w, "doctest: %s\n\n", dir)
+		fmt.Fprintf(w, "doctest: %s\n\n", pathfmt.DisplayPath(dir))
 		if _, err := core.DiscoverTreeCasesVerbose(dir, w); err != nil {
 			return err
 		}
 		fmt.Fprintf(w, "─── %d test cases\n\n", len(cases))
 	} else {
-		fmt.Fprintf(w, "doctest: %s\n", dir)
+		fmt.Fprintf(w, "doctest: %s\n", pathfmt.DisplayPath(dir))
 		fmt.Fprintf(w, "─── %d test cases\n", len(cases))
 	}
 
@@ -61,7 +62,7 @@ func Build(dir string, opts core.Options) error {
 	}
 	goBuildArgs = append(goBuildArgs, "./...")
 
-	fmt.Fprintf(w, "cd %s && go %s\n\n", ctx.genRoot, strings.Join(goBuildArgs, " "))
+	fmt.Fprintf(w, "cd %s && go %s\n\n", pathfmt.DisplayPath(ctx.genRoot), strings.Join(goBuildArgs, " "))
 
 	goBuildCmd := exec.Command("go", goBuildArgs...)
 	goBuildCmd.Dir = ctx.genRoot

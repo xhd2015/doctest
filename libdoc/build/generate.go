@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/xhd2015/doctest/libdoc/core"
+	"github.com/xhd2015/doctest/libdoc/pathfmt"
 )
 
 type generateContext struct {
@@ -87,10 +88,10 @@ func (ctx *generateContext) Close() {
 
 func (ctx *generateContext) announceRoots() {
 	if ctx.dumpDir != "" {
-		fmt.Fprintf(ctx.w, "→ %s\n\n", ctx.dumpDir)
+		fmt.Fprintf(ctx.w, "→ %s\n\n", pathfmt.DisplayPath(ctx.dumpDir))
 		return
 	}
-	fmt.Fprintf(ctx.w, "→ %s\n\n", ctx.genRoot)
+	fmt.Fprintf(ctx.w, "→ %s\n\n", pathfmt.DisplayPath(ctx.genRoot))
 }
 
 func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) error {
@@ -105,7 +106,7 @@ func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) 
 			return err
 		}
 		if ctx.verbose && ctx.w != nil {
-			fmt.Fprintf(ctx.w, "→ %s\n", filepath.Join(ctx.genRoot, "go.mod"))
+			fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.DisplayPath(filepath.Join(ctx.genRoot, "go.mod")))
 		}
 	}
 
@@ -128,9 +129,9 @@ func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) 
 		}
 		if ctx.verbose && ctx.w != nil {
 			if compileOnly {
-				fmt.Fprintf(ctx.w, "→ %s\n", leafDir)
+				fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.DisplayPath(leafDir))
 			} else {
-				fmt.Fprintf(ctx.w, "→ %s\n", testPath)
+				fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.DisplayPath(testPath))
 			}
 		}
 	}

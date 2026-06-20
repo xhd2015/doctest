@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/xhd2015/doctest/libdoc/core"
+	"github.com/xhd2015/doctest/libdoc/pathfmt"
 )
 
 func Test(dir string, opts core.Options) error {
@@ -44,13 +45,13 @@ func Test(dir string, opts core.Options) error {
 	ctx.announceRoots()
 
 	if opts.Verbose {
-		fmt.Fprintf(w, "doctest: %s\n\n", dir)
+		fmt.Fprintf(w, "doctest: %s\n\n", pathfmt.DisplayPath(dir))
 		if _, err := core.DiscoverTreeCasesVerbose(dir, w); err != nil {
 			return err
 		}
 		fmt.Fprintf(w, "─── %d test cases\n\n", len(cases))
 	} else {
-		fmt.Fprintf(w, "doctest: %s\n", dir)
+		fmt.Fprintf(w, "doctest: %s\n", pathfmt.DisplayPath(dir))
 		fmt.Fprintf(w, "─── %d test cases\n", len(cases))
 	}
 
@@ -76,7 +77,7 @@ func Test(dir string, opts core.Options) error {
 		testArgs = append(testArgs, fmt.Sprintf("-count=%d", opts.Count))
 	}
 
-	fmt.Fprintf(w, "cd %s && go %s\n\n", runDir, strings.Join(testArgs, " "))
+	fmt.Fprintf(w, "cd %s && go %s\n\n", pathfmt.DisplayPath(runDir), strings.Join(testArgs, " "))
 
 	goTestCmd := exec.Command("go", testArgs...)
 	goTestCmd.Dir = runDir

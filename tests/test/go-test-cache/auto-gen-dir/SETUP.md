@@ -35,6 +35,8 @@ import (
     "strings"
     "testing"
     "time"
+
+    "github.com/xhd2015/doctest/libdoc/pathfmt"
 )
 
 type multiRunCfg struct {
@@ -99,9 +101,9 @@ func parseGenDir(stderr string) {
     rest := stderr[idx+len("→ "):]
     end := strings.IndexFunc(rest, func(r rune) bool { return r == '\n' || r == ' ' })
     if end < 0 {
-        state.GenDir = strings.TrimSpace(rest)
+        state.GenDir = pathfmt.ExpandDisplayPath(strings.TrimSpace(rest))
     } else {
-        state.GenDir = strings.TrimSpace(rest[:end])
+        state.GenDir = pathfmt.ExpandDisplayPath(strings.TrimSpace(rest[:end]))
     }
     _ = fmt.Sprintf
 }
