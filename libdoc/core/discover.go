@@ -316,6 +316,73 @@ func FindModuleRoot(dir string) (modRoot string, modPath string, ok bool) {
 	}
 }
 
+// CasesImportInternalPackage reports whether any case imports a path under
+// parentModulePath/internal/ using parsed import specs from the setup chain.
+func CasesImportInternalPackage(cases []TreeCase, parentModulePath string) bool {
+	if parentModulePath == "" {
+		return false
+	}
+	prefix := parentModulePath + "/internal/"
+	for _, tc := range cases {
+		imports := collectImports(tc.SetupFiles, tc.AssertFile.GoBlock)
+		for _, spec := range imports {
+			if strings.HasPrefix(spec.Path, prefix) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// NewInternalCompileRoot creates a temp compile directory under moduleRoot.
+func NewInternalCompileRoot(moduleRoot string) (string, error) {
+	absRoot, err := filepath.Abs(moduleRoot)
+	if err != nil {
+		return "", err
+	}
+	return os.MkdirTemp(absRoot, ".doctest_run_")
+}
+
+// CopyGeneratedTree copies generated files from src to dst for gen-dir review dumps.
+// go.mod and go.sum files are not copied.
+func CopyGeneratedTree(src, dst string) error {
+	absSrc, err := filepath.Abs(src)
+	if err != nil {
+		return err
+	}
+	absDst, err := filepath.Abs(dst)
+	if err != nil {
+		return err
+	}
+	return filepath.Walk(absSrc, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(absSrc, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		target := filepath.Join(absDst, rel)
+		if info.IsDir() {
+			return os.MkdirAll(target, info.Mode().Perm())
+		}
+		if info.Name() == "go.mod" || info.Name() == "go.sum" {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			return err
+		}
+		return os.WriteFile(target, data, info.Mode().Perm())
+	})
+}
+
 func WriteGoMod(genDir, modRoot, modPath string, hasMod bool) error {
 	modFile := filepath.Join(genDir, "go.mod")
 	if _, err := os.Stat(modFile); err == nil {

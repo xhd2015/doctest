@@ -56,13 +56,13 @@ const (
 )
 
 type Options struct {
-	GenDir     string
-	Verbose    bool
-	Stderr     io.Writer
-	RemoveTemp bool
-	Count      int
-	SubDir     string
-	Color      ColorMode
+	GenDir       string
+	Verbose      bool
+	Stderr       io.Writer
+	RemoveTemp   bool
+	Count        int
+	SubDir       string
+	Color        ColorMode
 }
 
 type ValidationError struct {
