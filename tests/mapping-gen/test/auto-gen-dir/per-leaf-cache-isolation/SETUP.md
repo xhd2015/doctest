@@ -13,7 +13,6 @@ auto gen-dir -> one package per leaf | explicit gen-dir -> user-specified layout
 ## Preconditions
 - A project with 2 leaves exists.
 - The auto gen dir is used for both runs.
-- The Run function handles two executions: first run (warmup), modify one leaf, second run.
 
 ## Steps
 1. Create a project with 2 leaves: `leaf_a` and `leaf_b`.
@@ -24,75 +23,21 @@ auto gen-dir -> one package per leaf | explicit gen-dir -> user-specified layout
 
 ```go
 import (
+	"bytes"
+	"context"
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 var (
-	genDirPath string
 	firstResp  *Response
 	secondResp *Response
 )
-
-func Setup(t *testing.T, req *Request) error {
-	genDirPath = ""
-	firstResp = nil
-	secondResp = nil
-	_ = fmt.Sprintf
-	return nil
-}
-
-func Run(t *testing.T, req *Request) (*Response, error) {
-	if req.Bin == "" {
-		t.Fatalf("req.Bin is not set")
-	}
-
-	proj := t.TempDir()
-	if err := os.WriteFile(filepath.Join(proj, "go.mod"), []byte("module testproj\ngo 1.21\n"), 0644); err != nil {
-		t.Fatalf("write go.mod: %v", err)
-	}
-
-	testDir := filepath.Join(proj, "tests")
-	if err := os.MkdirAll(testDir, 0755); err != nil {
-		t.Fatalf("mkdir test dir: %v", err)
-	}
-	runCode := "func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }"
-	if err := createDoctestRoot(testDir, runCode); err != nil {
-		t.Fatalf("create doctest root: %v", err)
-	}
-	if err := createDoctestLeaf(filepath.Join(testDir, "leaf_a")); err != nil {
-		t.Fatalf("create leaf_a: %v", err)
-	}
-	if err := createDoctestLeaf(filepath.Join(testDir, "leaf_b")); err != nil {
-		t.Fatalf("create leaf_b: %v", err)
-	}
-
-	baseArgs := []string{"test", testDir}
-
-	resp1 := doRun(t, req.Bin, baseArgs)
-	genDirPath = parseGenDir(resp1.Stderr)
-	if genDirPath == "" {
-		t.Fatalf("could not parse gen dir from first run stderr:\n%s", resp1.Stderr)
-	}
-
-	leafAAssertPath := filepath.Join(testDir, "leaf_a", "ASSERT.md")
-	data, err := os.ReadFile(leafAAssertPath)
-	if err != nil {
-		t.Fatalf("read leaf_a ASSERT.md: %v", err)
-	}
-	modified := strings.Replace(string(data), "func Assert", "// modified\nfunc Assert", 1)
-	if err := os.WriteFile(leafAAssertPath, []byte(modified), 0644); err != nil {
-		t.Fatalf("modify leaf_a ASSERT.md: %v", err)
-	}
-
-	resp2 := doRun(t, req.Bin, baseArgs)
-
-	firstResp = resp1
-	secondResp = resp2
-	return resp2, nil
-}
 
 func doRun(t *testing.T, bin string, args []string) *Response {
 	t.Helper()
@@ -121,5 +66,61 @@ func doRun(t *testing.T, bin string, args []string) *Response {
 	}
 	resp.Err = err
 	return resp
+}
+
+func Setup(t *testing.T, req *Request) error {
+	firstResp = nil
+	secondResp = nil
+
+	testDir := doPerLeafCacheIsolation(t, req)
+	req.Args = append(req.Args, testDir)
+	return nil
+}
+
+func doPerLeafCacheIsolation(t *testing.T, req *Request) string {
+	t.Helper()
+	if req.Bin == "" {
+		t.Fatalf("req.Bin is not set")
+	}
+
+	proj := t.TempDir()
+	if err := os.WriteFile(filepath.Join(proj, "go.mod"), []byte("module testproj\ngo 1.21\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+
+	testDir := filepath.Join(proj, "tests")
+	if err := os.MkdirAll(testDir, 0755); err != nil {
+		t.Fatalf("mkdir test dir: %v", err)
+	}
+	runCode := "func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }"
+	if err := createDoctestRoot(testDir, runCode); err != nil {
+		t.Fatalf("create doctest root: %v", err)
+	}
+	if err := createDoctestLeaf(filepath.Join(testDir, "leaf_a")); err != nil {
+		t.Fatalf("create leaf_a: %v", err)
+	}
+	if err := createDoctestLeaf(filepath.Join(testDir, "leaf_b")); err != nil {
+		t.Fatalf("create leaf_b: %v", err)
+	}
+
+	baseArgs := []string{"test", testDir}
+
+	resp1 := doRun(t, req.Bin, baseArgs)
+
+	leafAAssertPath := filepath.Join(testDir, "leaf_a", "ASSERT.md")
+	data, err := os.ReadFile(leafAAssertPath)
+	if err != nil {
+		t.Fatalf("read leaf_a ASSERT.md: %v", err)
+	}
+	modified := strings.Replace(string(data), "func Assert", "// modified\nfunc Assert", 1)
+	if err := os.WriteFile(leafAAssertPath, []byte(modified), 0644); err != nil {
+		t.Fatalf("modify leaf_a ASSERT.md: %v", err)
+	}
+
+	resp2 := doRun(t, req.Bin, baseArgs)
+
+	firstResp = resp1
+	secondResp = resp2
+	return testDir
 }
 ```

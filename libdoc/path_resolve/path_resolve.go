@@ -110,14 +110,7 @@ func FindDotDotDotDirs(basePath string) ([]string, error) {
 				return filepath.SkipDir
 			}
 			if hasFile(path, "DOCTEST.md") {
-				alreadyCovered := false
-				for _, existing := range dirs {
-					if hasFile(existing, "DOCTEST.md") && (existing == path || isAncestor(existing, path)) {
-						alreadyCovered = true
-						break
-					}
-				}
-				if !alreadyCovered {
+				if !containsDir(dirs, path) {
 					dirs = append(dirs, path)
 				}
 				return filepath.SkipDir
@@ -248,12 +241,9 @@ func FindDOCTestDirs(cwd string) ([]string, error) {
 			}
 		}
 		if hasFile(path, "DOCTEST.md") {
-			for _, existing := range dirs {
-				if isAncestor(existing, path) {
-					return nil
-				}
+			if !containsDir(dirs, path) {
+				dirs = append(dirs, path)
 			}
-			dirs = append(dirs, path)
 		}
 		return nil
 	})
@@ -354,6 +344,15 @@ func findModuleRoot(cwd string) (dir string, modulePath string, err error) {
 		}
 		dir = parent
 	}
+}
+
+func containsDir(dirs []string, dir string) bool {
+	for _, existing := range dirs {
+		if existing == dir {
+			return true
+		}
+	}
+	return false
 }
 
 func isAncestor(ancestor, child string) bool {
