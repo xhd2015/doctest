@@ -24,6 +24,7 @@ import "testing"
 
 func Setup(t *testing.T, req *Request) error {
     req.Args = []string{`{"id":"1","question":"test"}`}
+    req.Env = append(req.Env, "QUESTION_FIFO=")
     return nil
 }
 ```

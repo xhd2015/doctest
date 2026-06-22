@@ -41,32 +41,14 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-
 	"github.com/xhd2015/doctest/libdoc/build"
 	"github.com/xhd2015/doctest/libdoc/core"
+	"github.com/xhd2015/doctest/libdoc/testtree"
 )
 
 var ansiEscape = regexp.MustCompile("\x1b\\[[0-9;]*m")
-
 var summaryFailField = regexp.MustCompile(`,\s*((?:\x1b\[[0-9;]*m)*)?(\d+ Fail)((?:\x1b\[[0-9;]*m)*)?`)
-
-type Request struct {
-	Color     core.ColorMode
-	Count     int
-	PassCount int
-	FailCount int
-	WarmCache bool
-}
-
-type Response struct {
-	Output      string
-	Dots        string
-	Summary     string
-	GenDir      string
-	TestErr     error
-}
-
-func writeFile(t *testing.T, root, rel, content string) {
+func writeFile(t *testing.T, root string, rel string, content string) {
 	t.Helper()
 	path := filepath.Join(root, rel)
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
@@ -76,7 +58,6 @@ func writeFile(t *testing.T, root, rel, content string) {
 		t.Fatal(err)
 	}
 }
-
 func itoa(i int) string {
 	if i == 0 {
 		return "0"
@@ -90,57 +71,10 @@ func itoa(i int) string {
 	}
 	return string(b[pos:])
 }
-
-func writeLeaf(t *testing.T, root, name string, fail bool) {
+func createSubTree(t *testing.T, root string, passCount int, failCount int) {
 	t.Helper()
-	assertBody := "func Assert(t *testing.T, req *Request, resp *Response, err error) {}\n"
-	if fail {
-		assertBody = "func Assert(t *testing.T, req *Request, resp *Response, err error) { t.Fatal(\"forced failure\") }\n"
-	}
-	writeFile(t, root, name+"/SETUP.md", ""+
-		"## Steps\n"+
-		"1. Leaf setup.\n\n"+
-		"\x60\x60\x60go\n"+
-		"import \"testing\"\n"+
-		"func Setup(t *testing.T, req *Request) error { _ = req; return nil }\n"+
-		"\x60\x60\x60\n")
-	writeFile(t, root, name+"/ASSERT.md", ""+
-		"## Expected\n"+
-		"- Leaf assertion.\n\n"+
-		"\x60\x60\x60go\n"+
-		assertBody+
-		"\x60\x60\x60\n")
+	testtree.WritePassFailTree(t, root, passCount, failCount)
 }
-
-func createSubTree(t *testing.T, root string, passCount, failCount int) {
-	t.Helper()
-
-	writeFile(t, root, "SETUP.md", ""+
-		"## Preconditions\n"+
-		"- Minimal harness sub-tree.\n\n"+
-		"## Steps\n"+
-		"1. Run returns immediately.\n\n"+
-		"\x60\x60\x60go\n"+
-		"import \"testing\"\n"+
-		"type Request struct{}\n"+
-		"type Response struct{}\n"+
-		"func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }\n"+
-		"\x60\x60\x60\n")
-
-	for i := 0; i < passCount; i++ {
-		name := "a_pass_" + itoa(i)
-		writeLeaf(t, root, name, false)
-	}
-	for i := 0; i < failCount; i++ {
-		name := "z_fail_" + itoa(i)
-		writeLeaf(t, root, name, true)
-	}
-
-	if passCount == 0 && failCount == 0 {
-		writeLeaf(t, root, "a_pass_0", false)
-	}
-}
-
 func splitDotsAndSummary(output string) (string, string) {
 	idx := strings.Index(output, "  (")
 	if idx < 0 {
@@ -148,16 +82,13 @@ func splitDotsAndSummary(output string) (string, string) {
 	}
 	return output[:idx], output[idx:]
 }
-
 func containsANSI(s string) bool {
 	return ansiEscape.MatchString(s)
 }
-
 func stripANSI(s string) string {
 	return ansiEscape.ReplaceAllString(s, "")
 }
-
-func metricIsColored(summary, metric string) bool {
+func metricIsColored(summary string, metric string) bool {
 	idx := strings.Index(summary, metric)
 	if idx < 0 {
 		return false
@@ -172,7 +103,6 @@ func metricIsColored(summary, metric string) bool {
 	}
 	return containsANSI(summary[start:end])
 }
-
 func failFieldIsColored(summary string) bool {
 	m := summaryFailField.FindString(summary)
 	if m == "" {
@@ -180,8 +110,7 @@ func failFieldIsColored(summary string) bool {
 	}
 	return containsANSI(m)
 }
-
-func metricIsPlain(summary, metric string) bool {
+func metricIsPlain(summary string, metric string) bool {
 	idx := strings.Index(summary, metric)
 	if idx < 0 {
 		return false
@@ -195,49 +124,5 @@ func metricIsPlain(summary, metric string) bool {
 		end = len(summary)
 	}
 	return !containsANSI(summary[start:end])
-}
-
-func Run(t *testing.T, req *Request) (*Response, error) {
-	subRoot := t.TempDir()
-	genDir := filepath.Join(t.TempDir(), "gendir")
-
-	createSubTree(t, subRoot, req.PassCount, req.FailCount)
-
-	opts := core.Options{
-		GenDir:     genDir,
-		RemoveTemp: false,
-		Color:      req.Color,
-		Count:      req.Count,
-	}
-
-	if req.WarmCache {
-		if err := build.Test(subRoot, opts); err != nil {
-			t.Fatalf("cache warmup run failed: %v", err)
-		}
-	}
-
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stdout = w
-
-	testErr := build.Test(subRoot, opts)
-	w.Close()
-	var buf bytes.Buffer
-	_, _ = io.Copy(&buf, r)
-	os.Stdout = oldStdout
-
-	output := buf.String()
-	dots, summary := splitDotsAndSummary(output)
-
-	return &Response{
-		Output:  output,
-		Dots:    dots,
-		Summary: summary,
-		GenDir:  genDir,
-		TestErr: testErr,
-	}, nil
 }
 ```

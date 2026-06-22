@@ -1,6 +1,6 @@
 ## Expected
 - DOCTEST.md, SETUP.md, basic/SETUP.md, and basic/ASSERT.md all exist.
-- The root SETUP.md contains Request and Response types and a Run function.
+- The root DOCTEST.md contains Request and Response types and a Run function.
 
 ```go
 import (
@@ -34,16 +34,16 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         }
     }
 
-    rootSetup, err := os.ReadFile(filepath.Join(dir, "SETUP.md"))
+    doctestMD, err := os.ReadFile(filepath.Join(dir, "DOCTEST.md"))
     if err != nil {
         t.Fatal(err)
     }
-    content := string(rootSetup)
+    content := string(doctestMD)
     if !strings.Contains(content, "type Request struct") {
-        t.Fatal("root SETUP.md missing Request type")
+        t.Fatal("root DOCTEST.md missing Request type")
     }
     if !strings.Contains(content, "func Run") {
-        t.Fatal("root SETUP.md missing Run function")
+        t.Fatal("root DOCTEST.md missing Run function")
     }
 }
 ```

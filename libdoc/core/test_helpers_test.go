@@ -40,3 +40,8 @@ func setupDoc(code string) string {
 func assertDoc(code string) string {
 	return "# Assert\n\nAny section names are allowed.\n\n```go\n" + strings.TrimSpace(code) + "\n```\n"
 }
+
+func doctestDoc(code string) string {
+	code = strings.TrimSpace(code)
+	return "# Tests\n\n## Version\n0.0.2\n\n## DSN (Domain Specific Notion)\n\n### Participants\n- **system** — under test.\n\n### Behaviors\n- **run** — executes.\n\n```go\n" + code + "\n```\n"
+}

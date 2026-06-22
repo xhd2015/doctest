@@ -24,6 +24,8 @@ import (
     "os"
     "path/filepath"
     "testing"
+
+    "github.com/xhd2015/doctest/libdoc/testtree"
 )
 
 func Setup(t *testing.T, req *Request) error {
@@ -35,13 +37,8 @@ func Setup(t *testing.T, req *Request) error {
     modATests := filepath.Join(modA, "tests")
     os.MkdirAll(modATests, 0755)
     os.WriteFile(filepath.Join(modA, "go.mod"), []byte("module mod-a\n\ngo 1.21\n"), 0644)
-    os.WriteFile(filepath.Join(modATests, "DOCTEST.md"), []byte("# mod-a tests\n"), 0644)
-    os.WriteFile(filepath.Join(modATests, "SETUP.md"), []byte(
-        d+"go\n"+
-        "type RequestA struct{}\n"+
-        "type ResponseA struct{}\n"+
-        "func Run(t *testing.T, req *RequestA) (*ResponseA, error) { return &ResponseA{}, nil }\n"+
-        d+"\n"), 0644)
+    modADoctest := testtree.MinimalDOCTEST("import \"testing\"\n\ntype RequestA struct{}\ntype ResponseA struct{}\n\nfunc Run(t *testing.T, req *RequestA) (*ResponseA, error) { return &ResponseA{}, nil }")
+    os.WriteFile(filepath.Join(modATests, "DOCTEST.md"), []byte(modADoctest), 0644)
     leafA := filepath.Join(modATests, "leaf-a")
     os.MkdirAll(leafA, 0755)
     os.WriteFile(filepath.Join(leafA, "SETUP.md"), []byte(d+"go\nfunc Setup(t *testing.T, req *RequestA) error { _ = req; return nil }\n"+d+"\n"), 0644)
@@ -50,12 +47,7 @@ func Setup(t *testing.T, req *Request) error {
     modB := filepath.Join(tmp, "mod-b")
     os.MkdirAll(modB, 0755)
     os.WriteFile(filepath.Join(modB, "go.mod"), []byte("module mod-b\n\ngo 1.21\n"), 0644)
-    os.WriteFile(filepath.Join(modB, "SETUP.md"), []byte(
-        d+"go\n"+
-        "type Request struct{}\n"+
-        "type Response struct{}\n"+
-        "func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }\n"+
-        d+"\n"), 0644)
+    os.WriteFile(filepath.Join(modB, "DOCTEST.md"), []byte(testtree.MinimalDOCTEST(testtree.MinimalRunGo())), 0644)
 
     subDir := filepath.Join(modB, "sub")
     os.MkdirAll(subDir, 0755)

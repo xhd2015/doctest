@@ -1,5 +1,9 @@
 # Internal Import Scan + Temp Compile + Gen-Dir Dump
 
+## Version
+0.0.2
+
+
 Tests for automatic handling of parent-module `internal/` imports: doctest scans
 assembled generated Go for `<module>/internal/` import paths, compiles in a
 temp directory under the parent module, and optionally copies output to
@@ -98,4 +102,79 @@ doctest test ./tests/build/in-module/test/internal-import-compiles
 
 # SIGINT compile-temp cleanup
 doctest test -v ./tests/build/in-module/lifecycle/sigint-leaves-compile-temp
+```
+
+```go
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+	libdocbuild "github.com/xhd2015/doctest/libdoc/build"
+)
+
+type Request struct {
+	Args	[]string
+	Env	[]string
+	WorkDir	string
+	Timeout	time.Duration
+	Bin	string
+	// InterruptDuringWriteCases sends SIGINT after the trigger leaf test file
+	// appears in verbose stderr, reproducing Ctrl-C during temp compile generation.
+	InterruptDuringWriteCases	bool
+	InterruptTriggerLeaf		int
+}
+type Response struct {
+	ExitCode	int
+	Stdout		string
+	Stderr		string
+	Err		error
+}
+func Run(t *testing.T, req *Request) (*Response, error) {
+	if req.InterruptDuringWriteCases {
+		return runDoctestInterruptedDuringWriteCases(t, req)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), req.Timeout)
+	defer cancel()
+
+	bin := req.Bin
+	if bin == "" {
+		return nil, fmt.Errorf("req.Bin is not set")
+	}
+	cmd := exec.CommandContext(ctx, bin, req.Args...)
+	cmd.Dir = req.WorkDir
+	cmd.Env = append(os.Environ(), req.Env...)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	resp := &Response{
+		Stdout:	stdout.String(),
+		Stderr:	stderr.String(),
+		Err:	err,
+	}
+	if err == nil {
+		return resp, nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		resp.ExitCode = exitErr.ExitCode()
+		return resp, nil
+	}
+	if ctx.Err() != nil {
+		return resp, ctx.Err()
+	}
+	return resp, err
+}
 ```

@@ -44,13 +44,11 @@ func Setup(t *testing.T, req *Request) error {
 	if err := os.MkdirAll(testDir, 0755); err != nil {
 		t.Fatalf("mkdir test dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(testDir, "DOCTEST.md"), []byte("# Test\n"), 0644); err != nil {
-		t.Fatalf("write DOCTEST.md: %v", err)
+	runCode := "func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }"
+	if err := createDoctestRoot(testDir, runCode); err != nil {
+		t.Fatalf("create doctest root: %v", err)
 	}
-
-	rootSetup := `- Package under test: calc
-
-` + rootSetupContent("func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }")
+	rootSetup := "- Package under test: calc\n\n" + rootSetupContent()
 	if err := os.WriteFile(filepath.Join(testDir, "SETUP.md"), []byte(rootSetup), 0644); err != nil {
 		t.Fatalf("write root SETUP.md: %v", err)
 	}

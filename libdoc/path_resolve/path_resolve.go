@@ -106,6 +106,9 @@ func FindDotDotDotDirs(basePath string) ([]string, error) {
 			if !d.IsDir() || path == absBase {
 				return nil
 			}
+			if d.Name() == "testdata" {
+				return filepath.SkipDir
+			}
 			if hasFile(path, "DOCTEST.md") {
 				alreadyCovered := false
 				for _, existing := range dirs {
@@ -199,6 +202,9 @@ func FindDOCTestDirs(cwd string) ([]string, error) {
 		}
 		if !d.IsDir() {
 			return nil
+		}
+		if d.Name() == "testdata" {
+			return filepath.SkipDir
 		}
 		if path == moduleRoot {
 			if hasFile(path, "DOCTEST.md") {

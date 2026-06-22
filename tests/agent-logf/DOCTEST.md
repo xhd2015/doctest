@@ -1,5 +1,9 @@
 # Agent Logf: Unified Event Stream Logging
 
+## Version
+0.0.2
+
+
 Verify that all event stream output from sub-agents (traceSession, showStatus)
 uses `Logf` for consistent timestamped logging `[2006-01-02T15:04:05]`, while
 non-event UI framing (borders, headers) continues without timestamps via
@@ -56,4 +60,64 @@ doctest test tests/agent-logf/
 
 # In-process Logf tests:
 doctest test tests/agent-logf/logf/
+```
+
+```go
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"testing"
+	"time"
+	libdocbuild "github.com/xhd2015/doctest/libdoc/build"
+)
+
+type Request struct {
+	Args	[]string
+	Env	[]string
+	WorkDir	string
+	Timeout	time.Duration
+	Bin	string
+}
+type Response struct {
+	ExitCode	int
+	Stdout		string
+	Stderr		string
+	Err		error
+}
+func Run(t *testing.T, req *Request) (*Response, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), req.Timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, req.Bin, req.Args...)
+	cmd.Dir = req.WorkDir
+	cmd.Env = append(os.Environ(), req.Env...)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+
+	resp := &Response{
+		Stdout:	stdout.String(),
+		Stderr:	stderr.String(),
+		Err:	err,
+	}
+	if err == nil {
+		return resp, nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		resp.ExitCode = exitErr.ExitCode()
+		return resp, nil
+	}
+	if ctx.Err() != nil {
+		return resp, ctx.Err()
+	}
+	return resp, fmt.Errorf("command failed: %w", err)
+}
 ```

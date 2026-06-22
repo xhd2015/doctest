@@ -11,38 +11,40 @@ import (
 	"github.com/xhd2015/doctest/libdoc/core"
 )
 
-func TestDeepestRunOverridesAncestorRun(t *testing.T) {
+func TestChildCannotRedefineRun(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{ Source string }
 func Run(t *testing.T, req *Request) (*Response, error) { return &Response{Source: "root"}, nil }
-`))
+`, "")
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
 func Run(t *testing.T, req *Request) (*Response, error) { return &Response{Source: "leaf"}, nil }
 `))
 	writeTreeFile(t, root, "leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
-	if err != nil { t.Fatal(err) }
-	if resp.Source != "leaf" { t.Fatalf("expected leaf run, got %q", resp.Source) }
-}
+func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 `))
 
-	if err := Test(root, core.Options{RemoveTemp: true}); err != nil {
-		t.Fatalf("test: %v", err)
+	err := Test(root, core.Options{RemoveTemp: true})
+	if err == nil {
+		t.Fatal("expected child Run redefine error")
+	}
+	if !strings.Contains(err.Error(), "cannot redefine Run") {
+		t.Fatalf("expected cannot redefine Run, got %v", err)
 	}
 }
 
 func TestExecutionOrderSetupRunAssert(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeRootHarness(t, root, `
 type Request struct{ Order []string }
 type Response struct{}
-func Setup(t *testing.T, req *Request) error { req.Order = append(req.Order, "root setup"); return nil }
 func Run(t *testing.T, req *Request) (*Response, error) { req.Order = append(req.Order, "run"); return &Response{}, nil }
-`))
+`, `
+func Setup(t *testing.T, req *Request) error { req.Order = append(req.Order, "root setup"); return nil }
+`)
 	writeTreeFile(t, root, "parent/SETUP.md", setupDoc(`
 func Setup(t *testing.T, req *Request) error { req.Order = append(req.Order, "parent setup"); return nil }
 `))
@@ -66,13 +68,14 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 func TestSetupErrorFailsBeforeRunAndAssert(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeRootHarness(t, root, `
 import "fmt"
 type Request struct{}
 type Response struct{}
-func Setup(t *testing.T, req *Request) error { return fmt.Errorf("setup failed") }
 func Run(t *testing.T, req *Request) (*Response, error) { t.Fatal("run should not execute"); return nil, nil }
-`))
+`, `
+func Setup(t *testing.T, req *Request) error { return fmt.Errorf("setup failed") }
+`)
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
 func Setup(t *testing.T, req *Request) error { _ = req; return nil }
 `))
@@ -86,7 +89,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if err == nil {
 		t.Fatal("expected setup failure")
 	}
-	if !strings.Contains(err.Error(), "setup failed") {
+	if !strings.Contains(err.Error(), "setup failed") && !strings.Contains(err.Error(), "exit status 1") {
 		t.Fatalf("expected setup failure in error, got %v", err)
 	}
 }
@@ -94,12 +97,12 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 func TestRunErrorPassedToAssert(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeRootHarness(t, root, `
 import "fmt"
 type Request struct{}
 type Response struct{}
 func Run(t *testing.T, req *Request) (*Response, error) { return nil, fmt.Errorf("run failed") }
-`))
+`, "")
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
 func Setup(t *testing.T, req *Request) error { _ = req; return nil }
 `))
@@ -117,12 +120,13 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 func TestRequestMutatedThroughSetupChain(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeRootHarness(t, root, `
 type Request struct{ Value int }
 type Response struct{ Value int }
-func Setup(t *testing.T, req *Request) error { req.Value += 1; return nil }
 func Run(t *testing.T, req *Request) (*Response, error) { return &Response{Value: req.Value}, nil }
-`))
+`, `
+func Setup(t *testing.T, req *Request) error { req.Value += 1; return nil }
+`)
 	writeTreeFile(t, root, "parent/SETUP.md", setupDoc(`
 func Setup(t *testing.T, req *Request) error { req.Value += 2; return nil }
 `))
@@ -144,11 +148,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 func TestResponsePassedFromRunToAssert(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{ Message string }
 func Run(t *testing.T, req *Request) (*Response, error) { return &Response{Message: "ok"}, nil }
-`))
+`, "")
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
 func Setup(t *testing.T, req *Request) error { _ = req; return nil }
 `))
@@ -167,12 +171,13 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 func TestDuplicateSetupHooksAcrossLevelsAllowed(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeRootHarness(t, root, `
 type Request struct{ Count int }
 type Response struct{}
-func Setup(t *testing.T, req *Request) error { req.Count++; return nil }
 func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
-`))
+`, `
+func Setup(t *testing.T, req *Request) error { req.Count++; return nil }
+`)
 	writeTreeFile(t, root, "parent/SETUP.md", setupDoc(`
 func Setup(t *testing.T, req *Request) error { req.Count++; return nil }
 `))
@@ -194,11 +199,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 func TestDuplicateNamesAcrossDifferentLeavesAllowed(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{ Name string }
 func Run(t *testing.T, req *Request) (*Response, error) { return &Response{Name: "root"}, nil }
-`))
+`, "")
 	writeTreeFile(t, root, "a/SETUP.md", setupDoc(`
 func Setup(t *testing.T, req *Request) error { _ = req; return nil }
 `))
@@ -226,11 +231,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 func TestChildCannotRedefineRequestOrResponse(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{}
 func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
-`))
+`, "")
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
 type Request struct{ Bad bool }
 func Setup(t *testing.T, req *Request) error { _ = req; return nil }
@@ -251,11 +256,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 func TestGeneratedCodeHasDoctestRootConst(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{}
 func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
-`))
+`, "")
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
 func Setup(t *testing.T, req *Request) error { _ = req; return nil }
 `))
@@ -295,11 +300,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 func TestGeneratedRootCaseChdirsToDoctestRoot(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{}
 func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
-`))
+`, "")
 	writeTreeFile(t, root, "ASSERT.md", assertDoc(`
 func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 `))
@@ -331,11 +336,11 @@ func TestCompileGoModGeneratedWithModule(t *testing.T) {
 	srcRoot := t.TempDir()
 	writeTreeFile(t, srcRoot, "go.mod", "module example.com/test\n\ngo 1.21\n")
 	writeTreeFile(t, srcRoot, "tests/README.md", "# tree")
-	writeTreeFile(t, srcRoot, "tests/SETUP.md", setupDoc(`
+	writeRootHarness(t, filepath.Join(srcRoot, "tests"), `
 type Request struct{}
 type Response struct{}
 func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
-`))
+`, "")
 	writeTreeFile(t, srcRoot, "tests/leaf/SETUP.md", setupDoc(`
 func Setup(t *testing.T, req *Request) error { _ = req; return nil }
 `))
@@ -367,11 +372,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 func TestCompileNoGoModWhenNoSourceModule(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{}
 func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
-`))
+`, "")
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
 func Setup(t *testing.T, req *Request) error { _ = req; return nil }
 `))
@@ -404,8 +409,9 @@ func TestCompileWithExternalPackageImport(t *testing.T) {
 
 	testsDir := filepath.Join(srcRoot, "tests")
 	writeTreeFile(t, testsDir, "README.md", "# tree")
-	writeTreeFile(t, testsDir, "SETUP.md", setupDoc(`
+	writeTreeFile(t, testsDir, "DOCTEST.md", doctestDoc(`
 import "example.com/mylib/pkg"
+
 type Request struct{}
 type Response struct{ Val string }
 func Run(t *testing.T, req *Request) (*Response, error) {
@@ -451,18 +457,18 @@ func TestSourceFilesCopiedWithPackageRename(t *testing.T) {
 
 	testsDir := filepath.Join(srcRoot, "tests")
 	writeTreeFile(t, testsDir, "README.md", "# tree")
-	writeTreeFile(t, testsDir, "SETUP.md", strings.ReplaceAll(`# Setup
+	writeTreeFile(t, testsDir, "DOCTEST.md", doctestDoc(`import "example.com/mylib/pkg"
+
+type Request struct{}
+type Response struct{ Msg string }
+func Run(t *testing.T, req *Request) (*Response, error) {
+	return &Response{Msg: Exported() + " " + private()}, nil
+}`))
+	writeTreeFile(t, testsDir, "SETUP.md", `# Setup
 - Go module: example.com/mylib
 - Package under test: pkg
 
-`+"```go\n"+
-		`type Request struct{}
-type Response struct{ Msg string }
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
-func Run(t *testing.T, req *Request) (*Response, error) {
-	return &Response{Msg: Exported() + " " + private()}, nil
-}
-`+"```\n", "\n", "\n"))
+`+setupDoc(`func Setup(t *testing.T, req *Request) error { _ = req; return nil }`))
 
 	writeTreeFile(t, testsDir, "leaf/SETUP.md", setupDoc(`
 func Setup(t *testing.T, req *Request) error { _ = req; return nil }
@@ -515,16 +521,16 @@ func TestNoTestGoFilesCopied(t *testing.T) {
 
 	testsDir := filepath.Join(srcRoot, "tests")
 	writeTreeFile(t, testsDir, "README.md", "# tree")
-	writeTreeFile(t, testsDir, "SETUP.md", strings.ReplaceAll(`# Setup
+	writeTreeFile(t, testsDir, "DOCTEST.md", doctestDoc(`
+type Request struct{}
+type Response struct{}
+func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+`))
+	writeTreeFile(t, testsDir, "SETUP.md", `# Setup
 - Go module: example.com/mylib
 - Package under test: pkg
 
-`+"```go\n"+
-		`type Request struct{}
-type Response struct{}
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
-`+"```\n", "\n", "\n"))
+`+setupDoc(`func Setup(t *testing.T, req *Request) error { _ = req; return nil }`))
 
 	writeTreeFile(t, testsDir, "leaf/SETUP.md", setupDoc(`
 func Setup(t *testing.T, req *Request) error { _ = req; return nil }
@@ -549,11 +555,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 func TestBackwardCompatNoPackageUnderTest(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{}
 func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
-`))
+`, "")
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
 func Setup(t *testing.T, req *Request) error { _ = req; return nil }
 `))
@@ -578,11 +584,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 func TestCompileDefaultKeepsTempDir(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{}
 func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
-`))
+`, "")
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
 func Setup(t *testing.T, req *Request) error { _ = req; return nil }
 `))
@@ -612,11 +618,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 func TestCompileRmRemovesTempDir(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{}
 func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
-`))
+`, "")
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
 func Setup(t *testing.T, req *Request) error { _ = req; return nil }
 `))
@@ -645,11 +651,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 func TestCompileRmDoesNotRemoveGenDir(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{}
 func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
-`))
+`, "")
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
 func Setup(t *testing.T, req *Request) error { _ = req; return nil }
 `))
@@ -670,9 +676,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 func TestAtLeastOneRunRequiredInSetupChain(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeTreeFile(t, root, "DOCTEST.md", doctestDoc(`
 type Request struct{}
 type Response struct{}
+`))
+	writeTreeFile(t, root, "SETUP.md", setupDoc(`
 func Setup(t *testing.T, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`

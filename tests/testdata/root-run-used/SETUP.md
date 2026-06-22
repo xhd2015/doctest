@@ -23,22 +23,10 @@ leaf: ASSERT.md with func Assert
 ```go
 import "fmt"
 
-type Request struct {
-    Name string
-}
-
-type Response struct {
-    Message string
-}
-
 func Setup(t *testing.T, req *Request) error {
-    if req.Name == "" {
-        req.Name = "world"
-    }
-    return nil
-}
-
-func Run(t *testing.T, req *Request) (*Response, error) {
-    return &Response{Message: fmt.Sprintf("hello %s", req.Name)}, nil
+	if req.Name == "" {
+		req.Name = "world"
+	}
+	return nil
 }
 ```

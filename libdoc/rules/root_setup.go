@@ -22,3 +22,13 @@ func CheckRootHasRun(runSet bool, path string) *Violation {
 	}
 	return nil
 }
+
+func CheckRootSetupNoRequestResponseRun(types map[string]bool, runSet bool, path string) *Violation {
+	if types["Request"] || types["Response"] {
+		return &Violation{Path: path, Msg: "Request and Response must be defined in DOCTEST.md, not SETUP.md"}
+	}
+	if runSet {
+		return &Violation{Path: path, Msg: "func Run must be defined in DOCTEST.md, not SETUP.md"}
+	}
+	return nil
+}

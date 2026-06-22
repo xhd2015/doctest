@@ -1,5 +1,9 @@
 # Short Display Paths — `pathfmt.DisplayPath`
 
+## Version
+0.0.2
+
+
 Unit-style doc tests for the display-only path formatter used by doctest CLI
 output. Internal filesystem operations keep real absolute paths; only user-facing
 stderr lines are shortened.
@@ -64,4 +68,29 @@ short-display-paths
 ```sh
 doctest vet ./libdoc/pathfmt/tests/short-display-paths/...
 doctest test ./libdoc/pathfmt/tests/short-display-paths/...
+```
+
+```go
+import (
+	"os"
+	"path/filepath"
+	"testing"
+	"github.com/xhd2015/doctest/libdoc/pathfmt"
+)
+
+type Request struct {
+	Path string
+}
+type Response struct {
+	Display	string
+	Cwd	string
+}
+func Run(t *testing.T, req *Request) (*Response, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	display := pathfmt.DisplayPath(req.Path)
+	return &Response{Display: display, Cwd: cwd}, nil
+}
 ```

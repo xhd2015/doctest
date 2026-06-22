@@ -24,6 +24,22 @@ func ExtractFinalGoBlock(path string, content string) (GoBlock, error) {
 	return GoBlock{SourcePath: path, Code: last.code}, nil
 }
 
+func ParseDOCTESTDocument(path string, content string) (SetupDocument, error) {
+	block, err := ExtractFinalGoBlock(path, content)
+	if err != nil {
+		return SetupDocument{}, err
+	}
+	if err := parseGoBlock(&block); err != nil {
+		return SetupDocument{}, err
+	}
+	if block.Run != nil {
+		if v := rules.CheckRunSignature(block.Run.Params, block.Run.Results, path); v != nil {
+			return SetupDocument{}, fmt.Errorf("%s: %s", v.Path, v.Msg)
+		}
+	}
+	return SetupDocument{Path: path, GoBlock: &block}, nil
+}
+
 func ParseSetupDocument(path string, content string) (SetupDocument, error) {
 	blocks := findGoBlocks(content)
 	if len(blocks) == 0 {
@@ -41,9 +57,6 @@ func ParseSetupDocument(path string, content string) (SetupDocument, error) {
 	}
 	if block.Setup != nil {
 		if v := rules.CheckSetupSignature(block.Setup.Params, block.Setup.Results, path); v != nil {
-			return SetupDocument{}, fmt.Errorf("%s: %s", v.Path, v.Msg)
-		}
-		if v := rules.CheckSetupBodyNotStub(block.Setup.Body, path); v != nil {
 			return SetupDocument{}, fmt.Errorf("%s: %s", v.Path, v.Msg)
 		}
 	}

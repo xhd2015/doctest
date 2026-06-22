@@ -1,5 +1,9 @@
 # DOCTEST.md Boundary Handling Tests
 
+## Version
+0.0.2
+
+
 These tests verify that `DOCTEST.md` creates an inheritance firewall:
 no types, helpers, or setup functions cross the boundary. Each tree
 rooted at a `DOCTEST.md` is a self-contained test tree with its own
@@ -35,4 +39,17 @@ doctest test ./tests/boundary/                       # parent root
 doctest test ./tests/boundary/nested/                # nested root
 doctest test ./tests/boundary/nested/error_edge/     # deeply nested root
 doctest vet ./tests/boundary/                        # vet must skip nested roots
+```
+
+```go
+import (
+	"fmt"
+	"testing"
+)
+
+type Request struct{}
+type Response struct{}
+func Run(t *testing.T, req *Request) (*Response, error) {
+	return nil, fmt.Errorf("stub: not implemented")
+}
 ```

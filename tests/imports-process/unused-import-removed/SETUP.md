@@ -22,7 +22,6 @@ doctest build -> parse imports -> remove unused -> report syntax errors
 import (
     "os"
     "path/filepath"
-    "strings"
     "testing"
 )
 
@@ -38,19 +37,12 @@ func Setup(t *testing.T, req *Request) error {
     }
 
     runCode := "func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }"
-    rootSetup := rootSetupContent(runCode)
-    rootSetupLines := strings.Split(rootSetup, "\n")
-    var newLines []string
-    for _, line := range rootSetupLines {
-        newLines = append(newLines, line)
-        if line == "import \"testing\"" {
-            newLines[len(newLines)-1] = "import (\n    \"testing\"\n    \"fmt\"\n)"
-        }
-    }
-    rootSetupWithUnusedImport := strings.Join(newLines, "\n")
-
-    if err := createDoctestRoot(testDir, rootSetupWithUnusedImport); err != nil {
+    if err := createDoctestRoot(testDir, runCode); err != nil {
         t.Fatalf("create doctest root: %v", err)
+    }
+    setupWithUnusedImport := doctestGoBlock("import (\n    \"testing\"\n    \"fmt\"\n)\n\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }")
+    if err := os.WriteFile(filepath.Join(testDir, "SETUP.md"), []byte(setupWithUnusedImport), 0644); err != nil {
+        t.Fatalf("write SETUP.md with unused import: %v", err)
     }
 
     leafDir := filepath.Join(testDir, "leaf")

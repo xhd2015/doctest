@@ -10,11 +10,14 @@ system -> run
 ## Steps
 
 ```go
-import "os/exec"
+import (
+	"os/exec"
+	"testing"
+)
 
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Setup(t *testing.T, req *Request) error {
 	cmd := exec.Command("go", "test", "./pkg/foo", "-run", "TestFoo")
-	out, _ := cmd.CombinedOutput()
-	return &Response{Stdout: string(out)}, nil
+	_, _ = cmd.CombinedOutput()
+	return nil
 }
 ```

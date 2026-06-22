@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/xhd2015/doctest/doc/snippets"
+	"github.com/xhd2015/doctest/version"
 
 	"github.com/xhd2015/agent-pro/agent/subagent"
 )
@@ -16,8 +17,9 @@ import (
 var promptContent string
 
 func PromptContent() string {
-	s := strings.Replace(promptContent, "__DOCTEST_SPEC__", snippets.DocTestSpec, 1)
-	s = strings.Replace(s, "__DOCTEST_DESIGN_SPEC__", snippets.DocTestDesignSpec, 1)
+	s := strings.ReplaceAll(promptContent, "__DOCTEST_SPEC__", snippets.ResolvedDocTestSpec())
+	s = strings.ReplaceAll(s, "__DOCTEST_DESIGN_SPEC__", snippets.DocTestDesignSpec)
+	s = strings.ReplaceAll(s, "__DOCTEST_VERSION__", version.Version())
 	return s
 }
 

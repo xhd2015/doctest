@@ -1,5 +1,9 @@
 # Mapping-Gen: Cache-Friendly Test Case Generation
 
+## Version
+0.0.2
+
+
 Tests for the 1-to-1 path mapping generation that mirrors the source directory
 structure under a mapping-gen cache root — each doctest leaf becomes its own
 Go package so changing one test case only invalidates the Go test cache for
@@ -63,4 +67,70 @@ doctest test ./tests/mapping-gen/build/...
 
 # Run a specific leaf
 doctest test ./tests/mapping-gen/test/explicit-gen-dir/per-leaf-packages
+```
+
+```go
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+	libdocbuild "github.com/xhd2015/doctest/libdoc/build"
+)
+
+type Request struct {
+	Args	[]string
+	Env	[]string
+	WorkDir	string
+	Timeout	time.Duration
+	Bin	string
+}
+type Response struct {
+	ExitCode	int
+	Stdout		string
+	Stderr		string
+	Err		error
+}
+func Run(t *testing.T, req *Request) (*Response, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), req.Timeout)
+	defer cancel()
+
+	bin := req.Bin
+	if bin == "" {
+		return nil, fmt.Errorf("req.Bin is not set")
+	}
+	cmd := exec.CommandContext(ctx, bin, req.Args...)
+	cmd.Dir = req.WorkDir
+	cmd.Env = append(os.Environ(), req.Env...)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	resp := &Response{
+		Stdout:	stdout.String(),
+		Stderr:	stderr.String(),
+		Err:	err,
+	}
+	if err == nil {
+		return resp, nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		resp.ExitCode = exitErr.ExitCode()
+		return resp, nil
+	}
+	if ctx.Err() != nil {
+		return resp, ctx.Err()
+	}
+	return resp, err
+}
 ```

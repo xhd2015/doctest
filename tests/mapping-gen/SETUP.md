@@ -37,25 +37,11 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 	libdocbuild "github.com/xhd2015/doctest/libdoc/build"
+	"github.com/xhd2015/doctest/libdoc/testtree"
 )
 
-type Request struct {
-	Args    []string
-	Env     []string
-	WorkDir string
-	Timeout time.Duration
-	Bin     string
-}
-
-type Response struct {
-	ExitCode int
-	Stdout   string
-	Stderr   string
-	Err      error
-}
-
+var bt = "`" + "`" + "`"
 func Setup(t *testing.T, req *Request) error {
 	req.Timeout = 120 * time.Second
 
@@ -75,73 +61,30 @@ func Setup(t *testing.T, req *Request) error {
 	req.Bin = doctestBin
 	return nil
 }
-
-func Run(t *testing.T, req *Request) (*Response, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), req.Timeout)
-	defer cancel()
-
-	bin := req.Bin
-	if bin == "" {
-		return nil, fmt.Errorf("req.Bin is not set")
-	}
-	cmd := exec.CommandContext(ctx, bin, req.Args...)
-	cmd.Dir = req.WorkDir
-	cmd.Env = append(os.Environ(), req.Env...)
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-	resp := &Response{
-		Stdout: stdout.String(),
-		Stderr: stderr.String(),
-		Err:    err,
-	}
-	if err == nil {
-		return resp, nil
-	}
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
-		resp.ExitCode = exitErr.ExitCode()
-		return resp, nil
-	}
-	if ctx.Err() != nil {
-		return resp, ctx.Err()
-	}
-	return resp, err
-}
-
-var bt = "`" + "`" + "`"
-
 func doctestGoBlock(code string) string {
 	return "## Test\n\n" + bt + "go\n" + code + bt + "\n"
 }
-
-func rootSetupContent(extraCode string) string {
-	code := "import \"testing\"\n\ntype Request struct{ Name string }\ntype Response struct{ Message string }\n\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }\n" + extraCode
-	return doctestGoBlock(code)
+func doctestBody(runCode string) string {
+	return "import \"testing\"\n\ntype Request struct{ Name string }\ntype Response struct{ Message string }\n\n" + runCode
 }
-
+func rootSetupContent() string {
+	return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }")
+}
 func leafSetupContent() string {
 	return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }")
 }
-
 func leafAssertContent() string {
 	return doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}")
 }
-
-func createDoctestRoot(dir, runCode string) error {
-	if err := os.WriteFile(filepath.Join(dir, "DOCTEST.md"), []byte("# Test\n"), 0644); err != nil {
+func createDoctestRoot(dir string, runCode string) error {
+	if err := os.WriteFile(filepath.Join(dir, "DOCTEST.md"), []byte(testtree.MinimalDOCTEST(doctestBody(runCode))), 0644); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(dir, "SETUP.md"), []byte(rootSetupContent(runCode)), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "SETUP.md"), []byte(rootSetupContent()), 0644); err != nil {
 		return err
 	}
 	return nil
 }
-
 func createDoctestLeaf(dir string) error {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
@@ -154,7 +97,6 @@ func createDoctestLeaf(dir string) error {
 	}
 	return nil
 }
-
 func createTempProject(t *testing.T, dirName string) string {
 	t.Helper()
 	tmp := t.TempDir()
@@ -171,21 +113,18 @@ func createTempProject(t *testing.T, dirName string) string {
 	}
 	return testDir
 }
-
 func assertFileExists(t *testing.T, path string) {
 	t.Helper()
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("expected file %s to exist: %v", path, err)
 	}
 }
-
 func assertFileNotExists(t *testing.T, path string) {
 	t.Helper()
 	if _, err := os.Stat(path); err == nil {
 		t.Fatalf("expected file %s to not exist", path)
 	}
 }
-
 func parseGenDir(stderr string) string {
 	idx := strings.Index(stderr, "→ ")
 	if idx < 0 {
@@ -198,7 +137,6 @@ func parseGenDir(stderr string) string {
 	}
 	return strings.TrimSpace(rest[:end])
 }
-
 func findGoModDir(startDir string) string {
 	dir := startDir
 	for {
@@ -212,5 +150,4 @@ func findGoModDir(startDir string) string {
 		dir = parent
 	}
 }
-
 ```

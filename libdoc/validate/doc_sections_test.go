@@ -2,6 +2,24 @@ package validate
 
 import "testing"
 
+func TestHasVersionSection(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    bool
+	}{
+		{name: "present", content: "## Version\n0.0.2\n", want: true},
+		{name: "missing", content: "# Tests\n", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := hasVersionSection(tt.content); got != tt.want {
+				t.Fatalf("hasVersionSection() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestHasDSNSection(t *testing.T) {
 	tests := []struct {
 		name    string

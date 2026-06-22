@@ -18,15 +18,8 @@ nested root -> self-contained test tree -> runs independently
 
 ```go
 import (
-    "fmt"
-    "testing"
+	"fmt"
+	"testing"
 )
 
-type Request struct{}
-
-type Response struct{}
-
-func Run(t *testing.T, req *Request) (*Response, error) {
-    return nil, fmt.Errorf("stub: not implemented")
-}
 ```

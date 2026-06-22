@@ -24,6 +24,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/xhd2015/doctest/libdoc/testtree"
 )
 
 func Setup(t *testing.T, req *Request) error {
@@ -37,7 +39,7 @@ func Setup(t *testing.T, req *Request) error {
 	if err := os.MkdirAll(subp, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(subp, "DOCTEST.md"), []byte("# subp tests\n\n## DSN (Domain Specific Notion)\n\n### Participants\n- **system** — under test.\n\n### Behaviors\n- **run** — executes the scenario.\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(subp, "DOCTEST.md"), []byte(testtree.VetDOCTEST()), 0644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(subp, "SETUP.md"), []byte("# Scenario\n\n**Feature**: minimal test setup\n\n\x60\x60\x60\n# minimal pipeline\nsystem -> run\n\x60\x60\x60\n\n## Setup\n"), 0644); err != nil {

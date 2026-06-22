@@ -1,5 +1,9 @@
 # Short Display Paths — `build.Test` stderr integration
 
+## Version
+0.0.2
+
+
 Integration doc tests verifying that `build.Test` stderr uses `DisplayPath` at
 the real call sites: `→` gen-root announcement, `doctest:` header, and `cd`
 command preview.
@@ -44,4 +48,53 @@ short-display-paths
 ```sh
 doctest vet ./libdoc/build/tests/short-display-paths/...
 doctest test ./libdoc/build/tests/short-display-paths/...
+```
+
+```go
+import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"github.com/xhd2015/doctest/libdoc/build"
+	"github.com/xhd2015/doctest/libdoc/core"
+)
+
+type Request struct {
+	GenDir string
+}
+type Response struct {
+	Stderr		string
+	ArrowLine	string
+	HeaderLine	string
+	CdLine		string
+	TestErr		error
+}
+func Run(t *testing.T, req *Request) (*Response, error) {
+	saveAndRestoreCwd(t)
+	projRoot := t.TempDir()
+	testRoot := createMinimalTree(t, projRoot)
+	if err := os.Chdir(projRoot); err != nil {
+		t.Fatal(err)
+	}
+
+	var stderr bytes.Buffer
+	opts := core.Options{
+		GenDir:		req.GenDir,
+		RemoveTemp:	true,
+		Stderr:		&stderr,
+	}
+	testErr := build.Test(testRoot, opts)
+	out := stderr.String()
+	arrow, header, cd := parseStderrLines(out)
+
+	return &Response{
+		Stderr:		out,
+		ArrowLine:	arrow,
+		HeaderLine:	header,
+		CdLine:		cd,
+		TestErr:	testErr,
+	}, nil
+}
 ```

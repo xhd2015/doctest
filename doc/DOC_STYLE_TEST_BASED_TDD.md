@@ -92,8 +92,10 @@ doctest vet ./tests/<feature>
 doctest test ./tests/<feature>
 ```
 
-`doctest vet` must pass — the tree is well-formed (including DSN in root
-`DOCTEST.md` and `# Scenario` as the first section in every `SETUP.md`).
+`doctest vet` must pass — the tree is well-formed (including `## Version` and
+DSN in root `DOCTEST.md`, Request/Response/Run in the `DOCTEST.md` Go block,
+and `# Scenario` as the first section in every `SETUP.md`). Current spec
+version: `__DOCTEST_VERSION__`.
 
 `doctest test` should fail (RED) since no implementation exists yet. If any
 test passes, re-examine the test design.

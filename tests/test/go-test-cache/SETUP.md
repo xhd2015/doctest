@@ -27,6 +27,8 @@ import (
     "path/filepath"
     "testing"
     "time"
+
+    "github.com/xhd2015/doctest/libdoc/testtree"
 )
 
 var bt = "`" + "`" + "`"
@@ -35,9 +37,11 @@ func doctestGoBlock(code string) string {
     return "## Test\n\n" + bt + "go\n" + code + bt + "\n"
 }
 
-func rootSetupContent(extraCode string) string {
-    code := "import \"testing\"\n\ntype Request struct{ Args []string; WorkDir string }\ntype Response struct{ ExitCode int; Stdout string; Stderr string }\n\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }\n" + extraCode
-    return doctestGoBlock(code)
+func doctestBody(extraRunCode string) string {
+    return "import \"testing\"\n\ntype Request struct{ Args []string; WorkDir string }\ntype Response struct{ ExitCode int; Stdout string; Stderr string }\n\n" + extraRunCode
+}
+func rootSetupContent() string {
+    return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }")
 }
 
 func leafSetupContent() string {
@@ -49,10 +53,10 @@ func leafAssertContent() string {
 }
 
 func createTestTree(dir string, extraRunCode string) error {
-    if err := os.WriteFile(filepath.Join(dir, "DOCTEST.md"), []byte("# Test\n"), 0644); err != nil {
+    if err := os.WriteFile(filepath.Join(dir, "DOCTEST.md"), []byte(testtree.MinimalDOCTEST(doctestBody(extraRunCode))), 0644); err != nil {
         return err
     }
-    if err := os.WriteFile(filepath.Join(dir, "SETUP.md"), []byte(rootSetupContent(extraRunCode)), 0644); err != nil {
+    if err := os.WriteFile(filepath.Join(dir, "SETUP.md"), []byte(rootSetupContent()), 0644); err != nil {
         return err
     }
     leafDir := filepath.Join(dir, "simple")

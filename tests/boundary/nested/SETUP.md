@@ -20,22 +20,8 @@ nested root -> self-contained test tree -> runs independently
 
 ```go
 import (
-    "fmt"
-    "testing"
+	"fmt"
+	"testing"
 )
 
-type Request struct {
-    Name string
-}
-
-type Response struct {
-    Greeting string
-}
-
-func Run(t *testing.T, req *Request) (*Response, error) {
-    if req.Name == "" {
-        return nil, fmt.Errorf("Name is required")
-    }
-    return &Response{Greeting: "Hello, " + req.Name + "!"}, nil
-}
 ```

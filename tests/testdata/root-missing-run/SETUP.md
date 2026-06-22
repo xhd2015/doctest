@@ -22,18 +22,10 @@ leaf: ASSERT.md with func Assert
 ```go
 import "fmt"
 
-type Request struct {
-    Input string
-}
-
-type Response struct {
-    Output string
-}
-
 func Setup(t *testing.T, req *Request) error {
-    if req.Input == "" {
-        return fmt.Errorf("Input is required")
-    }
-    return nil
+	if req.Input == "" {
+		return fmt.Errorf("Input is required")
+	}
+	return nil
 }
 ```

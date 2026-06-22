@@ -30,6 +30,8 @@ import (
     "strings"
     "testing"
     "time"
+
+    "github.com/xhd2015/doctest/libdoc/testtree"
 )
 
 func bt(n int) string {
@@ -48,37 +50,7 @@ func doctestGoBlock(code string) string {
 func createPassFailTree(t *testing.T, passCount int, failCount int) string {
     t.Helper()
     tmp := t.TempDir()
-
-    rootSetup := `import "testing"
-
-type Request struct{}
-type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }`
-    os.WriteFile(filepath.Join(tmp, "SETUP.md"), []byte(doctestGoBlock(rootSetup)), 0644)
-    os.WriteFile(filepath.Join(tmp, "DOCTEST.md"), []byte("# progress-dots test tree\n"), 0644)
-
-    for i := 0; i < passCount; i++ {
-        name := fmt.Sprintf("pass_%d", i+1)
-        leafDir := filepath.Join(tmp, name)
-        os.MkdirAll(leafDir, 0755)
-        os.WriteFile(filepath.Join(leafDir, "SETUP.md"), []byte(doctestGoBlock(`import "testing"
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }`)), 0644)
-        os.WriteFile(filepath.Join(leafDir, "ASSERT.md"), []byte(doctestGoBlock(`import "testing"
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}`)), 0644)
-    }
-
-    for i := 0; i < failCount; i++ {
-        name := fmt.Sprintf("fail_%d", i+1)
-        leafDir := filepath.Join(tmp, name)
-        os.MkdirAll(leafDir, 0755)
-        os.WriteFile(filepath.Join(leafDir, "SETUP.md"), []byte(doctestGoBlock(`import "testing"
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }`)), 0644)
-        os.WriteFile(filepath.Join(leafDir, "ASSERT.md"), []byte(doctestGoBlock(`import "testing"
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
-    t.Fatal("forced failure")
-}`)), 0644)
-    }
-
+    testtree.WritePassFailTree(t, tmp, passCount, failCount)
     return tmp
 }
 
@@ -90,13 +62,7 @@ const (
 func createRootTestTree(t *testing.T) string {
     t.Helper()
     tmp := t.TempDir()
-    rootSetup := `import "testing"
-
-type Request struct{}
-type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }`
-    os.WriteFile(filepath.Join(tmp, "SETUP.md"), []byte(doctestGoBlock(rootSetup)), 0644)
-    os.WriteFile(filepath.Join(tmp, "DOCTEST.md"), []byte("# progress-dots test tree\n"), 0644)
+    testtree.WriteFile(t, tmp, "DOCTEST.md", testtree.MinimalDOCTEST(testtree.MinimalRunGo()))
     return tmp
 }
 

@@ -24,7 +24,7 @@ Write implementation files to make all tests pass. Follow these rules:
   assertion seems wrong, ask for clarification rather than editing it.
 - Place implementation code in appropriate Go source files (not `_test.go`).
 - Use the types and function signatures expected by the test harness (defined
-  in the root `SETUP.md`).
+  in the root `DOCTEST.md` Go block). Current spec version: `__DOCTEST_VERSION__`.
 
 ### Step 3: Verify with Doctest
 

@@ -23,6 +23,8 @@ import (
     "os"
     "path/filepath"
     "testing"
+
+    "github.com/xhd2015/doctest/libdoc/testtree"
 )
 
 func Setup(t *testing.T, req *Request) error {
@@ -30,13 +32,7 @@ func Setup(t *testing.T, req *Request) error {
     bt := string(rune(96))
     d := bt + bt + bt
 
-    os.WriteFile(filepath.Join(treeRoot, "DOCTEST.md"), []byte("# sub-dir test tree\n"), 0644)
-    os.WriteFile(filepath.Join(treeRoot, "SETUP.md"), []byte(
-        d+"go\n"+
-        "type Request struct{}\n"+
-        "type Response struct{}\n"+
-        "func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }\n"+
-        d+"\n"), 0644)
+    testtree.WriteFile(t, treeRoot, "DOCTEST.md", testtree.MinimalDOCTEST(testtree.MinimalRunGo()))
 
     noLeafDir := filepath.Join(treeRoot, "no-leaf-dir")
     os.MkdirAll(noLeafDir, 0755)

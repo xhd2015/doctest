@@ -27,7 +27,7 @@ of the file. Rules:
 
 ## Request and Response Types
 
-The root `SETUP.md` defines a shared model inherited by all descendants:
+The root `DOCTEST.md` Go block defines a shared model inherited by all descendants:
 
 ```go
 type Request struct {
@@ -41,7 +41,8 @@ type Response struct {
 
 Every `SETUP.md` and `ASSERT.md` in the tree refers to the same `Request` and
 `Response` types and the same root-defined `Run` function. Child `SETUP.md` must
-**not** redefine these types or `Run`.
+**not** redefine these types or `Run`. Root `SETUP.md` (when present) must also
+**not** redefine them.
 
 ## Function Signatures
 
@@ -58,10 +59,22 @@ func Setup(t *testing.T, req *Request) error
 - Returns `error` — if non-nil, the test fails immediately (before `Run` and `Assert`)
 - Each ancestor's `Setup` is called separately; errors report which level failed
 
+### Helper functions
+
+Besides `func Setup`, any `SETUP.md` Go block may declare additional functions
+(helpers) for use within that directory's subtree:
+
+- **Root `SETUP.md`** — helpers needed by all tests (e.g. building the binary under test, shared fixture writers).
+- **Grouping or leaf `SETUP.md`** — helpers needed only by that node's descendants.
+
+Helpers are inherited from ancestors and available to all descendant `Setup`,
+`Run`, and `Assert` code. A child `SETUP.md` **must not** redefine a helper
+with the same name as an ancestor.
+
 ### func Run
 
-Defined **exclusively** in the root `SETUP.md`. Executes the core behavior
-under test. Must not be redefined by any descendant (Rule 9).
+Defined **exclusively** in the root `DOCTEST.md` Go block. Executes the core
+behavior under test. Must not be redefined by any descendant (Rule 9).
 
 ```go
 func Run(t *testing.T, req *Request) (*Response, error)
@@ -75,9 +88,9 @@ func Run(t *testing.T, req *Request) (*Response, error)
 
 #### Run Is Root-Only
 
-`func Run` is defined **exclusively at the root** `SETUP.md`. No descendant
-may redefine it. All leaves under a tree share the same `Run(request) → response`
-contract.
+`func Run` is defined **exclusively in the root** `DOCTEST.md` Go block. No
+descendant may redefine it. All leaves under a tree share the same
+`Run(request) → response` contract.
 
 If two test scenarios need a different `Run` function, they require separate
 test trees — each rooted at its own `DOCTEST.md` with its own
@@ -162,15 +175,15 @@ This sentence comes after the block and makes it non-final.
 
 ---
 
-### 3. Root SETUP.md must define `type Request`, `type Response`, and `func Run`
+### 3. Root DOCTEST.md must define `type Request`, `type Response`, and `func Run`
 
-The root `SETUP.md` (the one at the tree root, not in a subdirectory) must
-declare both shared model types **and** the `Run` function. `Run` is the tree's
-core behavior contract — all leaves under this root share the same `Run`.
-Descendant files reference these types and inherit `Run`; they must not redefine
-any of them.
+The root `DOCTEST.md` Go block (final content in the file) must declare both
+shared model types **and** the `Run` function. `Run` is the tree's core behavior
+contract — all leaves under this root share the same `Run`. Descendant files
+reference these types and inherit `Run`; they must not redefine any of them.
+Root `SETUP.md` (when present) must not define `Request`, `Response`, or `Run`.
 
-**Violation** — root defines Response and Run but not Request:
+**Violation** — DOCTEST.md defines Response and Run but not Request:
 ```go
 type Response struct {
     Output string
@@ -178,9 +191,9 @@ type Response struct {
 
 func Run(t *testing.T, req *Request) (*Response, error) { ... }
 ```
-**Error**: `SETUP.md: must define type Request and type Response`
+**Error**: `DOCTEST.md: must define type Request and type Response`
 
-**Violation** — root defines Request and Response but not Run:
+**Violation** — DOCTEST.md defines Request and Response but not Run:
 ```go
 type Request struct {
     Input string
@@ -190,22 +203,31 @@ type Response struct {
     Output string
 }
 ```
-**Error**: `SETUP.md: must have func Run`
+**Error**: `DOCTEST.md: must have func Run`
+
+**Violation** — root SETUP.md redefines shared types or Run:
+```go
+type Request struct{}
+type Response struct{}
+func Run(t *testing.T, req *Request) (*Response, error) { ... }
+```
+**Error**: `SETUP.md: Request and Response must be defined in DOCTEST.md, not SETUP.md`
 
 ---
 
-### 4. Root must have `func Run`; every other SETUP.md must have `func Setup`
+### 4. Root DOCTEST.md must have `func Run`; every SETUP.md must have `func Setup`
 
-The root `SETUP.md` must define `func Run`. Every non-root `SETUP.md` must
-contribute a `func Setup`. A Go block with only type declarations and no
-functions is incomplete.
+The root `DOCTEST.md` Go block must define `func Run`. Every `SETUP.md` along
+the ancestor chain (including optional root `SETUP.md`) must contribute a
+`func Setup`. A Go block with only type declarations and no functions is
+incomplete.
 
-**Violation** — root has only types, no Run:
+**Violation** — DOCTEST.md has only types, no Run:
 ```go
 type Request struct{ Value int }
 type Response struct{ Result int }
 ```
-**Error**: `SETUP.md: must have func Run`
+**Error**: `DOCTEST.md: must have func Run`
 
 **Violation** — non-root SETUP.md has only types, no Setup:
 ```go
@@ -280,8 +302,9 @@ func Assert(t *testing.T) {
 
 ### 9. Child SETUP.md cannot redefine `type Request`, `type Response`, or `func Run`
 
-The `Request` and `Response` types and the `Run` function are defined once at
-the root. Any child `SETUP.md` that redefines them creates a conflicting model.
+The `Request` and `Response` types and the `Run` function are defined once in
+the root `DOCTEST.md` Go block. Any `SETUP.md` that redefines them creates a
+conflicting model.
 
 **Violation** — leaf redefines Request:
 ```go
@@ -303,15 +326,15 @@ func Setup(t *testing.T, req *Request) error { ... }
 
 ---
 
-### 10. Root SETUP.md must define `func Run`
+### 10. Root DOCTEST.md must define `func Run`
 
 Every runnable leaf needs a `Run` at the root. Since `Run` can only be defined
-at root (Rule 9), the root must provide one.
+in `DOCTEST.md` (Rule 9), the root `DOCTEST.md` Go block must provide one.
 
-**Violation** — root has only Setup, no Run:
-- Root SETUP: `func Setup(...) error { ... }` (no Run)
-- Leaf SETUP: `func Setup(...) error { ... }` (no Run)
-**Error**: `leaf/ASSERT.md: no Run(t *testing.T, req *Request) (*Response, error) in setup chain`
+**Violation** — DOCTEST.md has only types, no Run:
+- DOCTEST.md Go block: `type Request` + `type Response` (no Run)
+- Leaf SETUP: `func Setup(...) error { ... }`
+**Error**: `DOCTEST.md: must have func Run`
 
 ---
 
@@ -335,7 +358,7 @@ Fixtures are minimal test case trees, each designed to trigger exactly one
 validation rule. They live under `testdata/` so they are skipped by the test
 runner's tree discovery.
 
-Each fixture is a directory with its own `SETUP.md` (root) and at least one
+Each fixture is a directory with its own `DOCTEST.md` (root) and at least one
 leaf with `SETUP.md` + `ASSERT.md`. The fixture's documents contain Go code
 that violates the rule being tested.
 
@@ -343,7 +366,7 @@ Example — `testdata/missing-request-type/`:
 
 ```
 testdata/missing-request-type/
-├── SETUP.md           # Defines Response and Run, but NO Request type
+├── DOCTEST.md         # Defines Response and Run, but NO Request type
 └── leaf/
     ├── SETUP.md       # Valid leaf setup
     └── ASSERT.md      # Valid assertion

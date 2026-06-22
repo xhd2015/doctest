@@ -26,88 +26,35 @@ doctest <args> -> {stdout, stderr, exit code}
 
 ```go
 import (
-    "bytes"
-    "context"
-    "errors"
-    "fmt"
-    "os"
-    "os/exec"
-    "path/filepath"
-    "testing"
-    "time"
-
-    libdocbuild "github.com/xhd2015/doctest/libdoc/build"
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"testing"
+	"time"
+	libdocbuild "github.com/xhd2015/doctest/libdoc/build"
 )
 
-type Request struct {
-    Args []string
-    Env []string
-    WorkDir string
-    Timeout time.Duration
-    Bin string
-}
-
-type Response struct {
-    ExitCode int
-    Stdout string
-    Stderr string
-    Err error
-}
-
 func Setup(t *testing.T, req *Request) error {
-    req.Timeout = 30 * time.Second
+	req.Timeout = 30 * time.Second
 
-    tmp := t.TempDir()
-    doctestBin := filepath.Join(tmp, "doctest")
-    buildDir := filepath.Join(DOCTEST_ROOT, "..")
-    buildArgs := []string{"build", "-o", doctestBin}
-    if libdocbuild.NeedsBuildVCSFlag(buildDir) {
-        buildArgs = append(buildArgs, "-buildvcs=false")
-    }
-    buildArgs = append(buildArgs, "./cmd/doctest")
-    build := exec.Command("go", buildArgs...)
-    build.Dir = buildDir
-    if out, err := build.CombinedOutput(); err != nil {
-        t.Fatalf("build doctest: %v\n%s", err, string(out))
-    }
-    req.Bin = doctestBin
-    return nil
-}
-
-func Run(t *testing.T, req *Request) (*Response, error) {
-    ctx, cancel := context.WithTimeout(context.Background(), req.Timeout)
-    defer cancel()
-
-    bin := req.Bin
-    if bin == "" {
-        return nil, fmt.Errorf("req.Bin is not set")
-    }
-    cmd := exec.CommandContext(ctx, bin, req.Args...)
-    cmd.Dir = req.WorkDir
-    cmd.Env = append(os.Environ(), req.Env...)
-
-    var stdout bytes.Buffer
-    var stderr bytes.Buffer
-    cmd.Stdout = &stdout
-    cmd.Stderr = &stderr
-
-    err := cmd.Run()
-    resp := &Response{
-        Stdout: stdout.String(),
-        Stderr: stderr.String(),
-        Err: err,
-    }
-    if err == nil {
-        return resp, nil
-    }
-    var exitErr *exec.ExitError
-    if errors.As(err, &exitErr) {
-        resp.ExitCode = exitErr.ExitCode()
-        return resp, nil
-    }
-    if ctx.Err() != nil {
-        return resp, ctx.Err()
-    }
-    return resp, err
+	tmp := t.TempDir()
+	doctestBin := filepath.Join(tmp, "doctest")
+	buildDir := filepath.Join(DOCTEST_ROOT, "..")
+	buildArgs := []string{"build", "-o", doctestBin}
+	if libdocbuild.NeedsBuildVCSFlag(buildDir) {
+		buildArgs = append(buildArgs, "-buildvcs=false")
+	}
+	buildArgs = append(buildArgs, "./cmd/doctest")
+	build := exec.Command("go", buildArgs...)
+	build.Dir = buildDir
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build doctest: %v\n%s", err, string(out))
+	}
+	req.Bin = doctestBin
+	return nil
 }
 ```

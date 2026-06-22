@@ -44,14 +44,26 @@ func assertDoc(code string) string {
 	return "# Assert\n\nAny section names are allowed.\n\n```go\n" + strings.TrimSpace(code) + "\n```\n"
 }
 
+func doctestDoc(code string) string {
+	return "# Tests\n\n## Version\n0.0.2\n\n## DSN (Domain Specific Notion)\n\n### Participants\n- **system** — under test.\n\n### Behaviors\n- **run** — executes.\n\n```go\n" + strings.TrimSpace(code) + "\n```\n"
+}
+
+func writeRootHarness(t *testing.T, root, doctestCode, rootSetupCode string) {
+	t.Helper()
+	writeTreeFile(t, root, "DOCTEST.md", doctestDoc(doctestCode))
+	if strings.TrimSpace(rootSetupCode) != "" {
+		writeTreeFile(t, root, "SETUP.md", setupDoc(rootSetupCode))
+	}
+}
+
 func TestBuildBasicTree(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{}
 func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
-`))
+`, "")
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
 func Setup(t *testing.T, req *Request) error { _ = req; return nil }
 `))
@@ -68,11 +80,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 func TestBuildWithGenDirCreatesGoFile(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{}
 func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
-`))
+`, "")
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
 func Setup(t *testing.T, req *Request) error { _ = req; return nil }
 `))
@@ -97,11 +109,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 func TestBuildVerboseOutput(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{}
 func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
-`))
+`, "")
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
 func Setup(t *testing.T, req *Request) error { _ = req; return nil }
 `))

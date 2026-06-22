@@ -1,5 +1,9 @@
 # Colored `doctest test` Output
 
+## Version
+0.0.2
+
+
 Tests that non-verbose `build.Test` progress output optionally emits ANSI color
 on dot progress and the summary line, controlled by `core.Options.Color`
 (`ColorAuto`, `ColorAlways`, `ColorNever`).
@@ -50,4 +54,76 @@ output-color
 doctest test ./libdoc/build/tests/output-color/...
 doctest test ./tests/help/test-options
 doctest test ./tests/test/color-flags/conflict
+```
+
+```go
+import (
+	"bytes"
+	"io"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+	"github.com/xhd2015/doctest/libdoc/build"
+	"github.com/xhd2015/doctest/libdoc/core"
+)
+
+type Request struct {
+	Color		core.ColorMode
+	Count		int
+	PassCount	int
+	FailCount	int
+	WarmCache	bool
+}
+type Response struct {
+	Output	string
+	Dots	string
+	Summary	string
+	GenDir	string
+	TestErr	error
+}
+func Run(t *testing.T, req *Request) (*Response, error) {
+	subRoot := t.TempDir()
+	genDir := filepath.Join(t.TempDir(), "gendir")
+
+	createSubTree(t, subRoot, req.PassCount, req.FailCount)
+
+	opts := core.Options{
+		GenDir:		genDir,
+		RemoveTemp:	false,
+		Color:		req.Color,
+		Count:		req.Count,
+	}
+
+	if req.WarmCache {
+		if err := build.Test(subRoot, opts); err != nil {
+			t.Fatalf("cache warmup run failed: %v", err)
+		}
+	}
+
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+
+	testErr := build.Test(subRoot, opts)
+	w.Close()
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	os.Stdout = oldStdout
+
+	output := buf.String()
+	dots, summary := splitDotsAndSummary(output)
+
+	return &Response{
+		Output:		output,
+		Dots:		dots,
+		Summary:	summary,
+		GenDir:		genDir,
+		TestErr:	testErr,
+	}, nil
+}
 ```

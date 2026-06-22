@@ -37,18 +37,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
 	"github.com/xhd2015/doctest/libdoc/pathfmt"
 )
-
-type Request struct {
-	Path string
-}
-
-type Response struct {
-	Display string
-	Cwd     string
-}
 
 func saveAndRestoreCwd(t *testing.T) string {
 	t.Helper()
@@ -61,7 +51,6 @@ func saveAndRestoreCwd(t *testing.T) string {
 	})
 	return wd
 }
-
 func chdirTo(t *testing.T, dir string) {
 	t.Helper()
 	abs, err := filepath.Abs(dir)
@@ -72,20 +61,10 @@ func chdirTo(t *testing.T, dir string) {
 		t.Fatal(err)
 	}
 }
-
 func mkdirAll(t *testing.T, dir string) {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func Run(t *testing.T, req *Request) (*Response, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, err
-	}
-	display := pathfmt.DisplayPath(req.Path)
-	return &Response{Display: display, Cwd: cwd}, nil
 }
 ```

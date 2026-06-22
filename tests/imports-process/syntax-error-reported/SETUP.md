@@ -36,10 +36,9 @@ func Setup(t *testing.T, req *Request) error {
         t.Fatalf("mkdir test dir: %v", err)
     }
 
-    brokenCode := "func Run(t *testing.T, req *Request) (*Response, error) {\n    _ = \"unclosed\n    return &Response{}, nil\n}\n"
-    rootSetup := rootSetupContent(brokenCode)
+    brokenRun := "func Run(t *testing.T, req *Request) (*Response, error) {\n    _ = \"unclosed\n    return &Response{}, nil\n}\n"
 
-    if err := createDoctestRoot(testDir, rootSetup); err != nil {
+    if err := createDoctestRoot(testDir, brokenRun); err != nil {
         t.Fatalf("create doctest root: %v", err)
     }
 

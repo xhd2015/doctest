@@ -35,6 +35,7 @@ import (
     "time"
 
     libdocbuild "github.com/xhd2015/doctest/libdoc/build"
+    "github.com/xhd2015/doctest/libdoc/testtree"
 )
 
 func Setup(t *testing.T, req *Request) error {
@@ -99,68 +100,25 @@ func createDoctestTree(t *testing.T, dir string, stub bool) {
         runBody = "return nil, fmt.Errorf(\"error not implemented\")"
     }
 
-    bt := "`"
-    goOpen := bt + bt + bt + "go"
-    goClose := bt + bt + bt
+    goBody := "import (\n" +
+        "    \"fmt\"\n" +
+        "    \"testing\"\n" +
+        ")\n\n" +
+        "type Request struct {\n" +
+        "    Name string\n" +
+        "}\n\n" +
+        "type Response struct {\n" +
+        "    Greeting string\n" +
+        "}\n\n" +
+        "func Run(t *testing.T, req *Request) (*Response, error) {\n" +
+        "    " + runBody + "\n" +
+        "}"
 
-    rootSetup := "## Preconditions\n- This is a test tree for the greet feature.\n\n## Steps\n1. Set the default name value.\n2. Run invokes the Greet function and returns the greeting.\n\n"
-    rootSetup += goOpen + "\n"
-    rootSetup += "import (\n"
-    rootSetup += "    \"fmt\"\n"
-    rootSetup += "    \"testing\"\n"
-    rootSetup += ")\n"
-    rootSetup += "\n"
-    rootSetup += "type Request struct {\n"
-    rootSetup += "    Name string\n"
-    rootSetup += "}\n"
-    rootSetup += "\n"
-    rootSetup += "type Response struct {\n"
-    rootSetup += "    Greeting string\n"
-    rootSetup += "}\n"
-    rootSetup += "\n"
-    rootSetup += "func Setup(t *testing.T, req *Request) error {\n"
-    rootSetup += "    req.Name = \"world\"\n"
-    rootSetup += "    return nil\n"
-    rootSetup += "}\n"
-    rootSetup += "\n"
-    rootSetup += "func Run(t *testing.T, req *Request) (*Response, error) {\n"
-    rootSetup += "    " + runBody + "\n"
-    rootSetup += "}\n"
-    rootSetup += goClose + "\n"
-
-    leafSetup := "## Preconditions\n- The request name is \"world\".\n\n## Steps\n1. Set req.Name to \"world\".\n\n"
-    leafSetup += goOpen + "\n"
-    leafSetup += "func Setup(t *testing.T, req *Request) error {\n"
-    leafSetup += "    req.Name = \"world\"\n"
-    leafSetup += "    return nil\n"
-    leafSetup += "}\n"
-    leafSetup += goClose + "\n"
-
-    leafAssert := "## Expected\n- The greeting is \"Hello, world!\".\n\n"
-    leafAssert += goOpen + "\n"
-    leafAssert += "func Assert(t *testing.T, req *Request, resp *Response, err error) {\n"
-    leafAssert += "    if err != nil {\n"
-    leafAssert += "        t.Fatal(err)\n"
-    leafAssert += "    }\n"
-    leafAssert += "    want := \"Hello, world!\"\n"
-    leafAssert += "    if resp.Greeting != want {\n"
-    leafAssert += "        t.Fatalf(\"expected %q, got %q\", want, resp.Greeting)\n"
-    leafAssert += "    }\n"
-    leafAssert += "}\n"
-    leafAssert += goClose + "\n"
-
-    _write := func(p, c string) {
-        if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
-            t.Fatal(err)
-        }
-        if err := os.WriteFile(p, []byte(c), 0644); err != nil {
-            t.Fatalf("write %s: %v", p, err)
-        }
-    }
-    _write(filepath.Join(dir, "DOCTEST.md"), "doctest test ./")
-    _write(filepath.Join(dir, "SETUP.md"), rootSetup)
-    _write(filepath.Join(dir, "basic", "SETUP.md"), leafSetup)
-    _write(filepath.Join(dir, "basic", "ASSERT.md"), leafAssert)
+    testtree.WriteFile(t, dir, "DOCTEST.md", testtree.MinimalDOCTEST(goBody))
+    bt := "\x60\x60\x60"
+    testtree.WriteFile(t, dir, "SETUP.md", "## Preconditions\n- This is a test tree for the greet feature.\n\n## Steps\n1. Set the default name value.\n\n"+bt+"go\nimport \"testing\"\n\nfunc Setup(t *testing.T, req *Request) error {\n    req.Name = \"world\"\n    return nil\n}\n"+bt+"\n")
+    testtree.WriteFile(t, dir, "basic/SETUP.md", "## Preconditions\n- The request name is \"world\".\n\n## Steps\n1. Set req.Name to \"world\".\n\n"+bt+"go\nfunc Setup(t *testing.T, req *Request) error {\n    req.Name = \"world\"\n    return nil\n}\n"+bt+"\n")
+    testtree.WriteFile(t, dir, "basic/ASSERT.md", "## Expected\n- The greeting is \"Hello, world!\".\n\n"+bt+"go\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {\n    if err != nil {\n        t.Fatal(err)\n    }\n    want := \"Hello, world!\"\n    if resp.Greeting != want {\n        t.Fatalf(\"expected %q, got %q\", want, resp.Greeting)\n    }\n}\n"+bt+"\n")
 }
 
 func writeFile(t *testing.T, path string, content string) {

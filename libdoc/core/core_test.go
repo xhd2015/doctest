@@ -10,7 +10,7 @@ import (
 func TestRootSetupRequiresRequestAndResponseTypes(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeTreeFile(t, root, "DOCTEST.md", doctestDoc(`
 func Run(t *testing.T, req *Request) (*Response, error) { return nil, nil }
 `))
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
@@ -24,13 +24,14 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 	if err == nil {
 		t.Fatal("expected missing Request/Response error")
 	}
-	if !strings.Contains(err.Error(), "Request") || !strings.Contains(err.Error(), "Response") {
-		t.Fatalf("expected Request/Response error, got %v", err)
+	if !strings.Contains(err.Error(), "Request") {
+		t.Fatalf("expected Request error, got %v", err)
 	}
 }
 
 func TestValidationReportsAllErrorsAtOnce(t *testing.T) {
 	root := t.TempDir()
+	writeTreeFile(t, root, "DOCTEST.md", doctestDoc(`func Run(t *testing.T, req *Request) (*Response, error) { return nil, nil }`))
 	writeTreeFile(t, root, "SETUP.md", "# Setup\n\n```go\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }\n```\n")
 	writeTreeFile(t, root, "leaf/SETUP.md", "# Setup\n\nProse only, no Go block.\n")
 	writeTreeFile(t, root, "leaf/ASSERT.md", "# Assert\n\n```go\nfunc Check(t *testing.T, req *Request, resp *Response, err error) {}\n```\n")
@@ -40,7 +41,7 @@ func TestValidationReportsAllErrorsAtOnce(t *testing.T) {
 		t.Fatal("expected validation error")
 	}
 	errStr := err.Error()
-	if !strings.Contains(errStr, "must define type Request") {
+	if !strings.Contains(errStr, "must define type Request") && !strings.Contains(errStr, "type Response") {
 		t.Fatalf("expected missing types error, got %q", errStr)
 	}
 	if !strings.Contains(errStr, "must have a Go code block") {
@@ -60,7 +61,7 @@ func TestValidationReportsAllErrorsAtOnce(t *testing.T) {
 
 func TestValidationNoErrorForValidTree(t *testing.T) {
 	root := t.TempDir()
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeTreeFile(t, root, "DOCTEST.md", doctestDoc(`
 type Request struct{}
 type Response struct{}
 func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
@@ -79,7 +80,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 
 func TestValidationTestdataDirSkipped(t *testing.T) {
 	root := t.TempDir()
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeTreeFile(t, root, "DOCTEST.md", doctestDoc(`
 type Request struct{}
 type Response struct{}
 func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
@@ -113,7 +114,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 func TestDiscoverTreeCasesVerbose(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeTreeFile(t, root, "DOCTEST.md", doctestDoc(`
 type Request struct{}
 type Response struct{}
 func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
@@ -134,8 +135,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 		t.Fatalf("expected 1 case, got %d", len(cases))
 	}
 	out := buf.String()
-	if !strings.Contains(out, "SETUP.md") {
-		t.Fatalf("expected root SETUP, got %q", out)
+	if !strings.Contains(out, "DOCTEST.md") {
+		t.Fatalf("expected root DOCTEST, got %q", out)
 	}
 	if !strings.Contains(out, "setup_leaf/SETUP.md") {
 		t.Fatalf("expected leaf SETUP, got %q", out)

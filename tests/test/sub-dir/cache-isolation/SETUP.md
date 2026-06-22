@@ -33,6 +33,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/xhd2015/doctest/libdoc/testtree"
 )
 
 type CacheIsoCfg struct {
@@ -57,9 +59,8 @@ func doctestGoBlock(code string) string {
 func createMultiGroupTree(t *testing.T, dir string) {
 	t.Helper()
 
-	rootSetupCode := "import \"testing\"\n\ntype Request struct{}\ntype Response struct{}\n\nfunc Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }\n"
-	if err := os.WriteFile(filepath.Join(dir, "SETUP.md"), []byte(doctestGoBlock(rootSetupCode)), 0644); err != nil {
-		t.Fatalf("write root SETUP.md: %v", err)
+	if err := os.WriteFile(filepath.Join(dir, "DOCTEST.md"), []byte(testtree.MinimalDOCTEST(testtree.MinimalRunGo())), 0644); err != nil {
+		t.Fatalf("write root DOCTEST.md: %v", err)
 	}
 
 	groups := []struct {

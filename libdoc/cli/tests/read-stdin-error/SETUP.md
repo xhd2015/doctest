@@ -29,62 +29,7 @@ import (
 	"io"
 	"os"
 	"testing"
-
 	"github.com/xhd2015/doctest/libdoc/cli"
 )
 
-type Request struct {
-	Args      []string
-	StdinFile *os.File
-}
-
-type Response struct {
-	Err    error
-	Stdout string
-	Stderr string
-}
-
-func Run(t *testing.T, req *Request) (*Response, error) {
-	oldStdin := os.Stdin
-	if req.StdinFile != nil {
-		os.Stdin = req.StdinFile
-		defer func() { os.Stdin = oldStdin }()
-	}
-
-	oldStdout := os.Stdout
-	rOut, wOut, err := os.Pipe()
-	if err != nil {
-		return nil, err
-	}
-	os.Stdout = wOut
-
-	oldStderr := os.Stderr
-	rErr, wErr, err := os.Pipe()
-	if err != nil {
-		wOut.Close()
-		rOut.Close()
-		return nil, err
-	}
-	os.Stderr = wErr
-
-	cliErr := cli.Run(req.Args)
-
-	wOut.Close()
-	wErr.Close()
-
-	var stdoutBuf, stderrBuf bytes.Buffer
-	io.Copy(&stdoutBuf, rOut)
-	io.Copy(&stderrBuf, rErr)
-	rOut.Close()
-	rErr.Close()
-
-	os.Stdout = oldStdout
-	os.Stderr = oldStderr
-
-	return &Response{
-		Err:    cliErr,
-		Stdout: stdoutBuf.String(),
-		Stderr: stderrBuf.String(),
-	}, nil
-}
 ```

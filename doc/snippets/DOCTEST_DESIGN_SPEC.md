@@ -4,7 +4,7 @@ Both `SETUP.md` and `ASSERT.md` may contain ```go...``` go code blocks.
 
 ## DOCTEST.md
 
-`DOCTEST.md` marks the root of the test tree. The whole test tree rooted from where `DOCTEST.md` begins forms a large decision tree. The root `SETUP.md` must define `type Request`, `type Response`, and `func Run` — these are shared by all descendants and must not be redefined.
+`DOCTEST.md` marks the root of the test tree. The whole test tree rooted from where `DOCTEST.md` begins forms a large decision tree. The root `DOCTEST.md` Go block (final content) must define `type Request`, `type Response`, and `func Run` — these are shared by all descendants and must not be redefined. Root `SETUP.md` (when present) must not redefine them.
 
 ### DSN (Domain Specific Notion)
 
@@ -25,8 +25,8 @@ relevant to that particular scenario.
 
 A subdirectory that contains its own `DOCTEST.md` becomes a **self-contained test root**. The doctest runner stops walking at `DOCTEST.md` boundaries and treats each root independently — **no inheritance crosses a `DOCTEST.md` boundary**.
 
-A nested root's `SETUP.md` must be entirely self-sufficient:
-- It must define its own `Request`/`Response` types and `func Run`
+A nested root must be entirely self-sufficient:
+- Its `DOCTEST.md` Go block must define its own `Request`/`Response` types and `func Run`
 - It must provide `Setup` or let descendant SETUPs provide `Setup`
 - Any external binaries (e.g., the doctest binary for `req.Bin`) must be built or resolved within that root's own `Setup`
 - The parent root's `Setup` is never executed for leaves under a nested DOCTEST.md
@@ -88,9 +88,9 @@ Every `SETUP.md` must have a Go block as **final content**. Child must not redef
 | Function | Signature | Notes |
 |----------|-----------|-------|
 | `Setup` | `(t *testing.T, req *Request) error` | Called root→leaf before `Run`; body must not be stub |
-| `Run` | `(t *testing.T, req *Request) (*Response, error)` | **Root only**, cannot be redefined by descendants |
+| `Run` | `(t *testing.T, req *Request) (*Response, error)` | **DOCTEST.md only**, cannot be redefined by descendants |
 
-Root must define `Run`. Non-root SETUP.md must define `Setup`. Signatures must match exactly. `func Setup` body must not be a stub (`return nil`).
+Root `DOCTEST.md` must define `Run`. Non-root `SETUP.md` must define `Setup`. Signatures must match exactly. `func Setup` body must not be a stub (`return nil`).
 
 # Inheritance
 
@@ -100,14 +100,17 @@ Root must define `Run`. Non-root SETUP.md must define `Setup`. Signatures must m
 
 ## Run Resolution
 
-`func Run` is defined **only at the root** `SETUP.md`. All leaves share the same `Run` function. Descendants must not redefine it.
+`func Run` is defined **only in the root** `DOCTEST.md` Go block. All leaves share the same `Run` function. Descendants must not redefine it.
 
 If two test scenarios need a different `Run`, they require separate test trees, each rooted at its own `DOCTEST.md`.
 
 ## Type and Helper Scoping
 
-- `type Request`, `type Response`, and `func Run` are defined once at the root. Child `SETUP.md` files **must not** redefine them.
-- Helper functions in ancestor SETUPs are available to descendants. A child **must not** redefine a helper with the same name.
+- `type Request`, `type Response`, and `func Run` are defined once in the root `DOCTEST.md` Go block. Child `SETUP.md` files **must not** redefine them.
+- Besides `func Setup`, each `SETUP.md` Go block may declare **helper functions** for its subtree:
+  - **Root `SETUP.md`** — helpers shared by every test in the tree (e.g. build binary, write fixtures).
+  - **Grouping `SETUP.md`** — helpers shared only by that node's descendants.
+- Helpers in ancestor `SETUP.md` files are inherited by descendants. A child **must not** redefine a helper with the same name.
 
 ## DOCTEST.md Boundary
 

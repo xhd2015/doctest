@@ -15,16 +15,16 @@ leaf: ASSERT.md with func Assert
 
 ```go
 import (
-    "fmt"
-    "testing"
+	"fmt"
+	"testing"
 )
 
 func Setup(t *testing.T, req *Request) error {
-    req.Action = "leaf-action"
-    return nil
+	req.Action = "leaf-action"
+	return nil
 }
 
 func Run(t *testing.T, req *Request) (*Response, error) {
-    return &Response{Result: fmt.Sprintf("child:%s", req.Action)}, nil
+	return &Response{Result: fmt.Sprintf("child:%s", req.Action)}, nil
 }
 ```

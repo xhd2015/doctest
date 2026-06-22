@@ -29,249 +29,181 @@ progress dots -> . F | verbose -> go test -v | count -> N tests
 
 ```go
 import (
-    "bytes"
-    "context"
-    "errors"
-    "fmt"
-    "os"
-    "os/exec"
-    "path/filepath"
-    "strings"
-    "testing"
-    "time"
-
-    libdocbuild "github.com/xhd2015/doctest/libdoc/build"
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+	libdocbuild "github.com/xhd2015/doctest/libdoc/build"
+	"github.com/xhd2015/doctest/libdoc/testtree"
 )
-
-type Request struct {
-    Args    []string
-    Env     []string
-    WorkDir string
-    Timeout time.Duration
-    Bin     string
-}
-
-type Response struct {
-    ExitCode int
-    Stdout   string
-    Stderr   string
-    Err      error
-}
-
-var bt = "`" + "`" + "`"
-
-func doctestGoBlock(code string) string {
-    return "## Test\n\n" + bt + "go\n" + code + bt + "\n"
-}
-
-func rootSetupContent() string {
-    code := strings.Join([]string{
-        "import \"testing\"",
-        "",
-        "type Request struct{ Args []string; Env []string; WorkDir string }",
-        "type Response struct{ ExitCode int; Stdout string; Stderr string }",
-        "",
-        "func Setup(t *testing.T, req *Request) error {",
-        "    t.Logf(\"setup\")",
-        "    return nil",
-        "}",
-        "",
-        "func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }",
-    }, "\n")
-    return doctestGoBlock(code)
-}
-
-func leafSetupContent() string {
-    return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error {\n    t.Logf(\"setup\")\n    return nil\n}")
-}
-
-func leafAssertContent() string {
-    return doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}")
-}
-
-func createTestTree(parent string, name string) error {
-    root := filepath.Join(parent, name)
-    if err := os.MkdirAll(filepath.Join(root, "simple"), 0755); err != nil {
-        return err
-    }
-    if err := os.WriteFile(filepath.Join(root, "DOCTEST.md"), []byte("# "+name+" Tests\n"), 0644); err != nil {
-        return err
-    }
-    if err := os.WriteFile(filepath.Join(root, "SETUP.md"), []byte(rootSetupContent()), 0644); err != nil {
-        return err
-    }
-    if err := os.WriteFile(filepath.Join(root, "simple", "SETUP.md"), []byte(leafSetupContent()), 0644); err != nil {
-        return err
-    }
-    if err := os.WriteFile(filepath.Join(root, "simple", "ASSERT.md"), []byte(leafAssertContent()), 0644); err != nil {
-        return err
-    }
-    return nil
-}
-
-func initGitRepo(dir string) error {
-    if out, err := exec.Command("git", "-C", dir, "init").CombinedOutput(); err != nil {
-        return fmt.Errorf("git init: %v\n%s", err, string(out))
-    }
-    return nil
-}
-
-func writeGoMod(dir, modulePath string) error {
-    content := "module " + modulePath + "\ngo 1.21\n"
-    return os.WriteFile(filepath.Join(dir, "go.mod"), []byte(content), 0644)
-}
 
 type gitMode int
-
-const (
-    gitNone gitMode = iota
-    gitSingleRepo
-    gitParentOnly
-    gitChildOnly
-    gitSeparateRepos
-)
-
 type moduleProjectConfig struct {
-    parentModulePath string
-    childDir         string
-    childModulePath  string
-    childTestName    string
-    parentTestName   string
-    git              gitMode
+	parentModulePath	string
+	childDir		string
+	childModulePath		string
+	childTestName		string
+	parentTestName		string
+	git			gitMode
 }
-
-func createModuleProject(t *testing.T, cfg moduleProjectConfig) string {
-    t.Helper()
-    tmp := t.TempDir()
-
-    if err := writeGoMod(tmp, cfg.parentModulePath); err != nil {
-        t.Fatalf("write parent go.mod: %v", err)
-    }
-
-    if cfg.parentTestName != "" {
-        if err := createTestTree(tmp, cfg.parentTestName); err != nil {
-            t.Fatalf("create parent test tree %s: %v", cfg.parentTestName, err)
-        }
-    }
-
-    childRoot := filepath.Join(tmp, cfg.childDir)
-    if err := os.MkdirAll(childRoot, 0755); err != nil {
-        t.Fatalf("mkdir child: %v", err)
-    }
-    if err := writeGoMod(childRoot, cfg.childModulePath); err != nil {
-        t.Fatalf("write child go.mod: %v", err)
-    }
-    if err := createTestTree(childRoot, cfg.childTestName); err != nil {
-        t.Fatalf("create child test tree %s: %v", cfg.childTestName, err)
-    }
-
-    switch cfg.git {
-    case gitNone:
-    case gitSingleRepo:
-        if err := initGitRepo(tmp); err != nil {
-            t.Fatalf("init single git repo: %v", err)
-        }
-    case gitParentOnly:
-        if err := initGitRepo(tmp); err != nil {
-            t.Fatalf("init parent git repo: %v", err)
-        }
-    case gitChildOnly:
-        if err := initGitRepo(childRoot); err != nil {
-            t.Fatalf("init child git repo: %v", err)
-        }
-    case gitSeparateRepos:
-        if err := initGitRepo(tmp); err != nil {
-            t.Fatalf("init parent git repo: %v", err)
-        }
-        if err := initGitRepo(childRoot); err != nil {
-            t.Fatalf("init child git repo: %v", err)
-        }
-    }
-
-    return tmp
-}
-
-func createLifelogMirrorProject(t *testing.T) string {
-    t.Helper()
-    tmp := t.TempDir()
-
-    if err := writeGoMod(tmp, "github.com/xhd2015/lifelog/tools"); err != nil {
-        t.Fatalf("write root go.mod: %v", err)
-    }
-
-    cliRoot := filepath.Join(tmp, "lifelog-cli")
-    if err := os.MkdirAll(cliRoot, 0755); err != nil {
-        t.Fatalf("mkdir lifelog-cli: %v", err)
-    }
-    if err := writeGoMod(cliRoot, "github.com/xhd2015/lifelog/lifelog-cli"); err != nil {
-        t.Fatalf("write lifelog-cli go.mod: %v", err)
-    }
-
-    if err := createTestTree(filepath.Join(cliRoot, "tests"), "skill-cli"); err != nil {
-        t.Fatalf("create skill-cli test tree: %v", err)
-    }
-
-    if err := initGitRepo(tmp); err != nil {
-        t.Fatalf("init lifelog mirror git repo: %v", err)
-    }
-
-    return tmp
-}
-
+const (
+	gitNone	gitMode	= iota
+	gitSingleRepo
+	gitParentOnly
+	gitChildOnly
+	gitSeparateRepos
+)
+var bt = "`" + "`" + "`"
 func Setup(t *testing.T, req *Request) error {
-    req.Timeout = 120 * time.Second
+	req.Timeout = 120 * time.Second
 
-    tmp := t.TempDir()
-    doctestBin := filepath.Join(tmp, "doctest")
-    buildDir := filepath.Join(DOCTEST_ROOT, "..", "..", "..")
-    buildArgs := []string{"build", "-o", doctestBin}
-    if libdocbuild.NeedsBuildVCSFlag(buildDir) {
-        buildArgs = append(buildArgs, "-buildvcs=false")
-    }
-    buildArgs = append(buildArgs, "./cmd/doctest")
-    build := exec.Command("go", buildArgs...)
-    build.Dir = buildDir
-    if out, err := build.CombinedOutput(); err != nil {
-        t.Fatalf("build doctest: %v\n%s", err, string(out))
-    }
-    req.Bin = doctestBin
-    return nil
+	tmp := t.TempDir()
+	doctestBin := filepath.Join(tmp, "doctest")
+	buildDir := filepath.Join(DOCTEST_ROOT, "..", "..", "..")
+	buildArgs := []string{"build", "-o", doctestBin}
+	if libdocbuild.NeedsBuildVCSFlag(buildDir) {
+		buildArgs = append(buildArgs, "-buildvcs=false")
+	}
+	buildArgs = append(buildArgs, "./cmd/doctest")
+	build := exec.Command("go", buildArgs...)
+	build.Dir = buildDir
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build doctest: %v\n%s", err, string(out))
+	}
+	req.Bin = doctestBin
+	return nil
 }
+func doctestGoBlock(code string) string {
+	return "## Test\n\n" + bt + "go\n" + code + bt + "\n"
+}
+func doctestBody() string {
+	return strings.Join([]string{
+		"import \"testing\"",
+		"",
+		"type Request struct{ Args []string; Env []string; WorkDir string }",
+		"type Response struct{ ExitCode int; Stdout string; Stderr string }",
+		"",
+		"func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }",
+	}, "\n")
+}
+func rootSetupContent() string {
+	return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error {\n    t.Logf(\"setup\")\n    return nil\n}")
+}
+func leafSetupContent() string {
+	return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error {\n    t.Logf(\"setup\")\n    return nil\n}")
+}
+func leafAssertContent() string {
+	return doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}")
+}
+func createTestTree(parent string, name string) error {
+	root := filepath.Join(parent, name)
+	if err := os.MkdirAll(filepath.Join(root, "simple"), 0755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(root, "DOCTEST.md"), []byte(testtree.MinimalDOCTEST(doctestBody())), 0644); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(root, "SETUP.md"), []byte(rootSetupContent()), 0644); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(root, "simple", "SETUP.md"), []byte(leafSetupContent()), 0644); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(root, "simple", "ASSERT.md"), []byte(leafAssertContent()), 0644); err != nil {
+		return err
+	}
+	return nil
+}
+func initGitRepo(dir string) error {
+	if out, err := exec.Command("git", "-C", dir, "init").CombinedOutput(); err != nil {
+		return fmt.Errorf("git init: %v\n%s", err, string(out))
+	}
+	return nil
+}
+func writeGoMod(dir string, modulePath string) error {
+	content := "module " + modulePath + "\ngo 1.21\n"
+	return os.WriteFile(filepath.Join(dir, "go.mod"), []byte(content), 0644)
+}
+func createModuleProject(t *testing.T, cfg moduleProjectConfig) string {
+	t.Helper()
+	tmp := t.TempDir()
 
-func Run(t *testing.T, req *Request) (*Response, error) {
-    ctx, cancel := context.WithTimeout(context.Background(), req.Timeout)
-    defer cancel()
+	if err := writeGoMod(tmp, cfg.parentModulePath); err != nil {
+		t.Fatalf("write parent go.mod: %v", err)
+	}
 
-    bin := req.Bin
-    if bin == "" {
-        return nil, fmt.Errorf("req.Bin is not set")
-    }
-    cmd := exec.CommandContext(ctx, bin, req.Args...)
-    cmd.Dir = req.WorkDir
-    cmd.Env = append(os.Environ(), req.Env...)
+	if cfg.parentTestName != "" {
+		if err := createTestTree(tmp, cfg.parentTestName); err != nil {
+			t.Fatalf("create parent test tree %s: %v", cfg.parentTestName, err)
+		}
+	}
 
-    var stdout bytes.Buffer
-    var stderr bytes.Buffer
-    cmd.Stdout = &stdout
-    cmd.Stderr = &stderr
+	childRoot := filepath.Join(tmp, cfg.childDir)
+	if err := os.MkdirAll(childRoot, 0755); err != nil {
+		t.Fatalf("mkdir child: %v", err)
+	}
+	if err := writeGoMod(childRoot, cfg.childModulePath); err != nil {
+		t.Fatalf("write child go.mod: %v", err)
+	}
+	if err := createTestTree(childRoot, cfg.childTestName); err != nil {
+		t.Fatalf("create child test tree %s: %v", cfg.childTestName, err)
+	}
 
-    err := cmd.Run()
-    resp := &Response{
-        Stdout: stdout.String(),
-        Stderr: stderr.String(),
-        Err:    err,
-    }
-    if err == nil {
-        return resp, nil
-    }
-    var exitErr *exec.ExitError
-    if errors.As(err, &exitErr) {
-        resp.ExitCode = exitErr.ExitCode()
-        return resp, nil
-    }
-    if ctx.Err() != nil {
-        return resp, ctx.Err()
-    }
-    return resp, err
+	switch cfg.git {
+	case gitNone:
+	case gitSingleRepo:
+		if err := initGitRepo(tmp); err != nil {
+			t.Fatalf("init single git repo: %v", err)
+		}
+	case gitParentOnly:
+		if err := initGitRepo(tmp); err != nil {
+			t.Fatalf("init parent git repo: %v", err)
+		}
+	case gitChildOnly:
+		if err := initGitRepo(childRoot); err != nil {
+			t.Fatalf("init child git repo: %v", err)
+		}
+	case gitSeparateRepos:
+		if err := initGitRepo(tmp); err != nil {
+			t.Fatalf("init parent git repo: %v", err)
+		}
+		if err := initGitRepo(childRoot); err != nil {
+			t.Fatalf("init child git repo: %v", err)
+		}
+	}
+
+	return tmp
+}
+func createLifelogMirrorProject(t *testing.T) string {
+	t.Helper()
+	tmp := t.TempDir()
+
+	if err := writeGoMod(tmp, "github.com/xhd2015/lifelog/tools"); err != nil {
+		t.Fatalf("write root go.mod: %v", err)
+	}
+
+	cliRoot := filepath.Join(tmp, "lifelog-cli")
+	if err := os.MkdirAll(cliRoot, 0755); err != nil {
+		t.Fatalf("mkdir lifelog-cli: %v", err)
+	}
+	if err := writeGoMod(cliRoot, "github.com/xhd2015/lifelog/lifelog-cli"); err != nil {
+		t.Fatalf("write lifelog-cli go.mod: %v", err)
+	}
+
+	if err := createTestTree(filepath.Join(cliRoot, "tests"), "skill-cli"); err != nil {
+		t.Fatalf("create skill-cli test tree: %v", err)
+	}
+
+	if err := initGitRepo(tmp); err != nil {
+		t.Fatalf("init lifelog mirror git repo: %v", err)
+	}
+
+	return tmp
 }
 ```

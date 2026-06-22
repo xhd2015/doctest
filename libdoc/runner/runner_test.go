@@ -71,10 +71,13 @@ func indexAfter(s, substr string) int {
 	return idx + len(substr)
 }
 
+func doctestDoc(code string) string {
+	return "# Tests\n\n## Version\n0.0.2\n\n## DSN (Domain Specific Notion)\n\n### Participants\n- **system** — under test.\n\n### Behaviors\n- **run** — executes.\n\n```go\n" + trimDocCode(code) + "\n```\n"
+}
+
 func createValidTestTree(t *testing.T, root string) {
 	t.Helper()
-	writeTreeFile(t, root, "DOCTEST.md", "# tree")
-	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+	writeTreeFile(t, root, "DOCTEST.md", doctestDoc(`
 type Request struct{}
 type Response struct{}
 func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }

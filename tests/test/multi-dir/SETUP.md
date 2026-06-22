@@ -25,8 +25,11 @@ progress dots -> . F | verbose -> go test -v | count -> N tests
 import (
     "os"
     "path/filepath"
+    "strings"
     "testing"
     "time"
+
+    "github.com/xhd2015/doctest/libdoc/testtree"
 )
 
 var bt = "`" + "`" + "`"
@@ -35,17 +38,26 @@ func doctestGoBlock(code string) string {
     return "## Test\n\n" + bt + "go\n" + code + bt + "\n"
 }
 
+func doctestBody() string {
+    return strings.Join([]string{
+        "import \"testing\"",
+        "",
+        "type Request struct{ Args []string; Env []string; WorkDir string }",
+        "type Response struct{ ExitCode int; Stdout string; Stderr string }",
+        "",
+        "func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }",
+    }, "\n")
+}
 func rootSetupContent() string {
-    code := "import \"testing\"\n\ntype Request struct{ Args []string; Env []string; WorkDir string }\ntype Response struct{ ExitCode int; Stdout string; Stderr string }\n\nfunc Setup(t *testing.T, req *Request) error {\n    t.Logf(\"setup\")\n    return nil\n}\n\nfunc Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }"
-    return doctestGoBlock(code)
+    return "# Scenario\n\n**Feature**: multi-dir test tree root\n\n## Steps\n1. Root setup.\n\n" + doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error {\n    t.Logf(\"setup\")\n    return nil\n}")
 }
 
 func leafSetupContent() string {
-    return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error {\n    t.Logf(\"setup\")\n    return nil\n}")
+    return "# Scenario\n\n**Feature**: multi-dir leaf\n\n## Steps\n1. Leaf setup.\n\n" + doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error {\n    t.Logf(\"setup\")\n    return nil\n}")
 }
 
 func leafAssertContent() string {
-    return doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}")
+    return "## Expected\n- pass\n\n" + doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}")
 }
 
 func createTestTree(parent string, name string) error {
@@ -53,7 +65,7 @@ func createTestTree(parent string, name string) error {
     if err := os.MkdirAll(filepath.Join(root, "simple"), 0755); err != nil {
         return err
     }
-    if err := os.WriteFile(filepath.Join(root, "DOCTEST.md"), []byte("# "+name+" Tests\n"), 0644); err != nil {
+    if err := os.WriteFile(filepath.Join(root, "DOCTEST.md"), []byte(testtree.MinimalDOCTEST(doctestBody())), 0644); err != nil {
         return err
     }
     if err := os.WriteFile(filepath.Join(root, "SETUP.md"), []byte(rootSetupContent()), 0644); err != nil {

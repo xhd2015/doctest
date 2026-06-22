@@ -32,31 +32,48 @@ func discoverTreeCasesInternal(root string, w io.Writer) ([]TreeCase, error) {
 
 	var verrs []ValidationError
 
-	rootSetupPath := filepath.Join(root, "SETUP.md")
-	rootSetupContent, err := os.ReadFile(rootSetupPath)
+	doctestPath := filepath.Join(root, "DOCTEST.md")
+	doctestContent, err := os.ReadFile(doctestPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil // no SETUP.md at root -> no test cases; caller reports "no tests found"
+			return nil, nil
 		}
 		return nil, err
 	}
-	rootSetup, err := ParseSetupDocument(rootSetupPath, string(rootSetupContent))
+	doctestDoc, err := ParseDOCTESTDocument(doctestPath, string(doctestContent))
 	if err != nil {
-		verrs = append(verrs, ValidationError{Path: "SETUP.md", Msg: err.Error()})
-	}
-	if rootSetup.GoBlock == nil {
-		verrs = append(verrs, ValidationError{Path: "SETUP.md", Msg: "must have a Go code block"})
+		verrs = append(verrs, ValidationError{Path: "DOCTEST.md", Msg: err.Error()})
+	} else if doctestDoc.GoBlock == nil {
+		verrs = append(verrs, ValidationError{Path: "DOCTEST.md", Msg: "must have a Go code block"})
 	} else {
-		if v := rules.CheckRootHasRequestResponse(rootSetup.GoBlock.Types, "SETUP.md"); v != nil {
+		if v := rules.CheckRootHasRequestResponse(doctestDoc.GoBlock.Types, "DOCTEST.md"); v != nil {
 			verrs = append(verrs, ValidationError{Path: v.Path, Msg: v.Msg})
 		}
-		if v := rules.CheckRootHasRun(rootSetup.GoBlock.Run != nil, "SETUP.md"); v != nil {
+		if v := rules.CheckRootHasRun(doctestDoc.GoBlock.Run != nil, "DOCTEST.md"); v != nil {
 			verrs = append(verrs, ValidationError{Path: v.Path, Msg: v.Msg})
 		}
 	}
 
+	rootSetupPath := filepath.Join(root, "SETUP.md")
+	rootSetupContent, rootSetupErr := os.ReadFile(rootSetupPath)
+	if rootSetupErr == nil {
+		rootSetup, parseErr := ParseSetupDocument(rootSetupPath, string(rootSetupContent))
+		if parseErr != nil {
+			verrs = append(verrs, ValidationError{Path: "SETUP.md", Msg: parseErr.Error()})
+		} else if rootSetup.GoBlock != nil {
+			if v := rules.CheckRootSetupNoRequestResponseRun(rootSetup.GoBlock.Types, rootSetup.GoBlock.Run != nil, "SETUP.md"); v != nil {
+				verrs = append(verrs, ValidationError{Path: v.Path, Msg: v.Msg})
+			}
+		}
+		if w != nil {
+			printSetupVerbose(w, rootSetup, "SETUP.md")
+		}
+	} else if !os.IsNotExist(rootSetupErr) {
+		return nil, rootSetupErr
+	}
+
 	if w != nil {
-		printSetupVerbose(w, rootSetup, "SETUP.md")
+		printSetupVerbose(w, doctestDoc, "DOCTEST.md")
 	}
 
 	printedSetupDirs := make(map[string]bool)
@@ -114,7 +131,7 @@ func discoverTreeCasesInternal(root string, w io.Writer) ([]TreeCase, error) {
 		if relLeaf == "." {
 			relLeaf = ""
 		}
-		setupDocs, chainErr := setupChain(root, leafDir)
+		setupDocs, chainErr := setupChain(root, leafDir, doctestDoc)
 		if chainErr != nil {
 			relAssert, _ := filepath.Rel(root, path)
 			verrs = append(verrs, ValidationError{Path: relAssert, Msg: chainErr.Error()})
@@ -217,7 +234,7 @@ func readSetup(path string) (SetupDocument, error) {
 	return ParseSetupDocument(path, string(content))
 }
 
-func setupChain(root, leafDir string) ([]SetupDocument, error) {
+func setupChain(root, leafDir string, doctestDoc SetupDocument) ([]SetupDocument, error) {
 	rel, err := filepath.Rel(root, leafDir)
 	if err != nil {
 		return nil, err
@@ -227,6 +244,10 @@ func setupChain(root, leafDir string) ([]SetupDocument, error) {
 		parts = strings.Split(rel, string(filepath.Separator))
 	}
 	var docs []SetupDocument
+	if doctestDoc.GoBlock != nil {
+		doctestDoc.Path = "DOCTEST.md"
+		docs = append(docs, doctestDoc)
+	}
 	ancestorHelpers := make(map[string]bool)
 	for i := 0; i <= len(parts); i++ {
 		dir := filepath.Join(append([]string{root}, parts[:i]...)...)

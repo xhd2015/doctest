@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/xhd2015/doctest/libdoc/core"
+	"github.com/xhd2015/doctest/libdoc/rules"
 )
 
 func Run(dir string) error {
@@ -32,12 +33,24 @@ func RunWithOptions(dir string, opts core.Options) error {
 	if err := checkDOCTESTSections(doctestPath, string(doctestContent)); err != nil {
 		return err
 	}
+	doctestDoc, err := core.ParseDOCTESTDocument(doctestPath, string(doctestContent))
+	if err != nil {
+		return err
+	}
+	if doctestDoc.GoBlock == nil {
+		return fmt.Errorf("%s: must have a Go code block", doctestPath)
+	}
+	if v := rules.CheckRootHasRequestResponse(doctestDoc.GoBlock.Types, doctestPath); v != nil {
+		return fmt.Errorf("%s: %s", v.Path, v.Msg)
+	}
+	if v := rules.CheckRootHasRun(doctestDoc.GoBlock.Run != nil, doctestPath); v != nil {
+		return fmt.Errorf("%s: %s", v.Path, v.Msg)
+	}
+	antiViolations := checkFileAntiPatterns(doctestPath, string(doctestContent))
 
 	if opts.Verbose {
 		fmt.Printf("[vet] validating %s\n", dir)
 	}
-
-	var antiViolations []error
 
 	err = filepath.WalkDir(dir, func(path string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -95,6 +108,19 @@ func RunWithOptions(dir string, opts core.Options) error {
 		if name == "SETUP.md" {
 			if err := checkSETUPSections(path, text); err != nil {
 				return err
+			}
+			setupDoc, parseErr := core.ParseSetupDocument(path, text)
+			if parseErr == nil && setupDoc.GoBlock != nil {
+				if setupDoc.GoBlock.Setup != nil && filepath.Dir(path) != dir {
+					if v := rules.CheckSetupBodyNotStub(setupDoc.GoBlock.Setup.Body, path); v != nil {
+						return fmt.Errorf("%s: %s", v.Path, v.Msg)
+					}
+				}
+				if filepath.Dir(path) == dir {
+					if v := rules.CheckRootSetupNoRequestResponseRun(setupDoc.GoBlock.Types, setupDoc.GoBlock.Run != nil, path); v != nil {
+						return fmt.Errorf("%s: %s", v.Path, v.Msg)
+					}
+				}
 			}
 		}
 		antiViolations = append(antiViolations, checkFileAntiPatterns(path, text)...)

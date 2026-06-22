@@ -1,5 +1,9 @@
 # Doctest CLI Integration Tests
 
+## Version
+0.0.2
+
+
 These doc-style tests specify the command-level contract for the doctest CLI.
 They are executable integration tests: each runnable leaf invokes the real
 doctest command, captures stdout, stderr, and exit status, and asserts concrete
@@ -34,3 +38,67 @@ configure fake Codex so no real LLM or network backend is required.
 - **`help`** — prints usage information at top-level and per subcommand.
 - **`vet`** — inspects and validates test tree structure.
 
+```go
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"testing"
+	"time"
+	libdocbuild "github.com/xhd2015/doctest/libdoc/build"
+)
+
+type Request struct {
+	Args	[]string
+	Env	[]string
+	WorkDir	string
+	Timeout	time.Duration
+	Bin	string
+}
+type Response struct {
+	ExitCode	int
+	Stdout		string
+	Stderr		string
+	Err		error
+}
+func Run(t *testing.T, req *Request) (*Response, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), req.Timeout)
+	defer cancel()
+
+	bin := req.Bin
+	if bin == "" {
+		return nil, fmt.Errorf("req.Bin is not set")
+	}
+	cmd := exec.CommandContext(ctx, bin, req.Args...)
+	cmd.Dir = req.WorkDir
+	cmd.Env = append(os.Environ(), req.Env...)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	resp := &Response{
+		Stdout:	stdout.String(),
+		Stderr:	stderr.String(),
+		Err:	err,
+	}
+	if err == nil {
+		return resp, nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		resp.ExitCode = exitErr.ExitCode()
+		return resp, nil
+	}
+	if ctx.Err() != nil {
+		return resp, ctx.Err()
+	}
+	return resp, err
+}
+```

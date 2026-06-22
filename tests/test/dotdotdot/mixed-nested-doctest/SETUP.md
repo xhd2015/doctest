@@ -26,6 +26,8 @@ import (
     "strings"
     "testing"
     "time"
+
+    "github.com/xhd2015/doctest/libdoc/testtree"
 )
 
 func mkGoBlock(code string) string {
@@ -41,14 +43,16 @@ func createMixedTestProject(t *testing.T) string {
     // ancestor DOCTEST root with non-stub Setup
     ancestorDir := filepath.Join(projDir, "ancestor")
     os.MkdirAll(ancestorDir, 0755)
-    os.WriteFile(filepath.Join(ancestorDir, "DOCTEST.md"), []byte("# Ancestor\n"), 0644)
-    os.WriteFile(filepath.Join(ancestorDir, "SETUP.md"), []byte(mkGoBlock(strings.Join([]string{
+    ancestorDoctest := testtree.MinimalDOCTEST(strings.Join([]string{
         "import \"testing\"",
         "type Request struct{}",
         "type Response struct{}",
-        "func Setup(t *testing.T, req *Request) error { t.Logf(\"ancestor setup\"); return nil }",
         "func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }",
-    }, "\n"))), 0644)
+    }, "\n"))
+    os.WriteFile(filepath.Join(ancestorDir, "DOCTEST.md"), []byte(ancestorDoctest), 0644)
+    os.WriteFile(filepath.Join(ancestorDir, "SETUP.md"), []byte(mkGoBlock(
+        "import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { t.Logf(\"ancestor setup\"); return nil }",
+    )), 0644)
 
     // leaf directory with ASSERT.md (test case within ancestor tree)
     leafDir := filepath.Join(ancestorDir, "leaf")
@@ -63,14 +67,16 @@ func createMixedTestProject(t *testing.T) string {
     // nested DOCTEST root: leaf/nested-sub2 (non-stub)
     sub2Dir := filepath.Join(leafDir, "nested-sub2")
     os.MkdirAll(sub2Dir, 0755)
-    os.WriteFile(filepath.Join(sub2Dir, "DOCTEST.md"), []byte("# Nested Sub2\n"), 0644)
-    os.WriteFile(filepath.Join(sub2Dir, "SETUP.md"), []byte(mkGoBlock(strings.Join([]string{
+    sub2Doctest := testtree.MinimalDOCTEST(strings.Join([]string{
         "import \"testing\"",
         "type Request struct{}",
         "type Response struct{}",
-        "func Setup(t *testing.T, req *Request) error { t.Logf(\"sub2 setup\"); return nil }",
         "func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }",
-    }, "\n"))), 0644)
+    }, "\n"))
+    os.WriteFile(filepath.Join(sub2Dir, "DOCTEST.md"), []byte(sub2Doctest), 0644)
+    os.WriteFile(filepath.Join(sub2Dir, "SETUP.md"), []byte(mkGoBlock(
+        "import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { t.Logf(\"sub2 setup\"); return nil }",
+    )), 0644)
 
     // nested-sub2's test leaf
     simpleDir := filepath.Join(sub2Dir, "simple")

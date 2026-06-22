@@ -7,9 +7,8 @@ Prose is primary, code supplementary.
 
 ```
 <pkg>/tests/<feature>/
-├── DOCTEST.md          # Overview, diagram, test index + "## How to Run"
-├── SETUP.md            # Root: shared preconditions, Request/Response types, the Run(t, req) (resp,error) function that actually runs the logic; can use DOCTEST_ROOT to refer this dir
-│                       #   Request, Response, and Run cannot be redefined by any descendant
+├── DOCTEST.md          # Overview, ## Version (__DOCTEST_VERSION__), diagram, test index; final ```go``` block defines Request/Response/Run
+├── SETUP.md            # Optional root: func Setup + helper funcs shared by all tests (no Request/Response/Run)
 ├── <decision-slug>/           # Grouping — no ASSERT.md, must have SETUP.md
 │   └── <leaf-slug>/           # Runnable — has ASSERT.md, must have SETUP.md
 │       └── testdata/   # Fixtures (skipped)
@@ -26,8 +25,10 @@ Prose is primary, code supplementary.
 Run `doctest vet <dir>` to validate tree structure before `doctest test` or
 `doctest build`. Vet checks:
 
-- Root `DOCTEST.md` exists and includes a **DSN (Domain Specific Notion)** section
-  (heading text must contain `DSN (Domain Specific Notion)`)
+- Root `DOCTEST.md` exists and includes **DSN (Domain Specific Notion)** and
+  **## Version** sections (version presence only; value is `__DOCTEST_VERSION__`)
+- Root `DOCTEST.md` Go block defines `type Request`, `type Response`, and `func Run`
+- Root `SETUP.md` (when present) must not define Request, Response, or Run
 - Every `SETUP.md` starts with `# Scenario` as its first section (leading
   whitespace allowed)
 - `ASSERT.md` directories also have `SETUP.md`

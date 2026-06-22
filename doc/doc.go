@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/xhd2015/doctest/doc/snippets"
+	"github.com/xhd2015/doctest/version"
 )
 
 //go:embed DOC_STYLE_TEST_SPECIFICATION.md
@@ -29,6 +30,7 @@ func Content(fileName string) (string, error) {
 	default:
 		return "", fmt.Errorf("unknown file: %s", fileName)
 	}
-	content = strings.Replace(content, "__DOCTEST_SPEC__", snippets.DocTestSpec, 1)
+	content = strings.ReplaceAll(content, "__DOCTEST_SPEC__", snippets.ResolvedDocTestSpec())
+	content = strings.ReplaceAll(content, "__DOCTEST_VERSION__", version.Version())
 	return content, nil
 }

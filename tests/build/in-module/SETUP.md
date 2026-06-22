@@ -47,31 +47,17 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 	libdocbuild "github.com/xhd2015/doctest/libdoc/build"
+	"github.com/xhd2015/doctest/libdoc/testtree"
 )
 
 const modPath = "example.com/app"
-
-type Request struct {
-	Args    []string
-	Env     []string
-	WorkDir string
-	Timeout time.Duration
-	Bin     string
-	// InterruptDuringWriteCases sends SIGINT after the trigger leaf test file
-	// appears in verbose stderr, reproducing Ctrl-C during temp compile generation.
-	InterruptDuringWriteCases bool
-	InterruptTriggerLeaf      int
-}
-
-type Response struct {
-	ExitCode int
-	Stdout   string
-	Stderr   string
-	Err      error
-}
-
+var (
+	moduleRoot	string
+	genDir		string
+	testDir		string
+)
+var bt = string([]byte{96, 96, 96})
 func Setup(t *testing.T, req *Request) error {
 	req.Timeout = 120 * time.Second
 
@@ -91,47 +77,6 @@ func Setup(t *testing.T, req *Request) error {
 	req.Bin = doctestBin
 	return nil
 }
-
-func Run(t *testing.T, req *Request) (*Response, error) {
-	if req.InterruptDuringWriteCases {
-		return runDoctestInterruptedDuringWriteCases(t, req)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), req.Timeout)
-	defer cancel()
-
-	bin := req.Bin
-	if bin == "" {
-		return nil, fmt.Errorf("req.Bin is not set")
-	}
-	cmd := exec.CommandContext(ctx, bin, req.Args...)
-	cmd.Dir = req.WorkDir
-	cmd.Env = append(os.Environ(), req.Env...)
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-	resp := &Response{
-		Stdout: stdout.String(),
-		Stderr: stderr.String(),
-		Err:    err,
-	}
-	if err == nil {
-		return resp, nil
-	}
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
-		resp.ExitCode = exitErr.ExitCode()
-		return resp, nil
-	}
-	if ctx.Err() != nil {
-		return resp, ctx.Err()
-	}
-	return resp, err
-}
-
 func runDoctestInterruptedDuringWriteCases(t *testing.T, req *Request) (*Response, error) {
 	t.Helper()
 
@@ -188,9 +133,9 @@ func runDoctestInterruptedDuringWriteCases(t *testing.T, req *Request) (*Respons
 	<-stderrDone
 
 	resp := &Response{
-		Stdout: stdoutBuf.String(),
-		Stderr: stderrBuf.String(),
-		Err:    waitErr,
+		Stdout:	stdoutBuf.String(),
+		Stderr:	stderrBuf.String(),
+		Err:	waitErr,
 	}
 	if waitErr != nil {
 		var exitErr *exec.ExitError
@@ -203,35 +148,22 @@ func runDoctestInterruptedDuringWriteCases(t *testing.T, req *Request) (*Respons
 	}
 	return resp, nil
 }
-
-var (
-	moduleRoot string
-	genDir     string
-	testDir    string
-)
-
-var bt = string([]byte{96, 96, 96})
-
 func doctestGoBlock(code string) string {
 	return "## Test\n\n" + bt + "go\n" + code + bt + "\n"
 }
-
-func createDoctestRoot(dir, extraImports, runCode string) error {
-	rootSetup := doctestGoBlock(
-		"import (\n" +
-			"\t\"testing\"\n" +
-			extraImports +
-			")\n\n" +
-			"type Request struct{}\n" +
-			"type Response struct{ Message string }\n\n" +
-			runCode,
-	)
-	if err := os.WriteFile(filepath.Join(dir, "SETUP.md"), []byte(rootSetup), 0644); err != nil {
+func createDoctestRoot(dir string, extraImports string, runCode string) error {
+	goBody := "import (\n" +
+		"\t\"testing\"\n" +
+		extraImports +
+		")\n\n" +
+		"type Request struct{}\n" +
+		"type Response struct{ Message string }\n\n" +
+		runCode
+	if err := os.WriteFile(filepath.Join(dir, "DOCTEST.md"), []byte(testtree.MinimalDOCTEST(goBody)), 0644); err != nil {
 		return err
 	}
 	return nil
 }
-
 func createDoctestLeaf(dir string) error {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
@@ -252,8 +184,7 @@ func createDoctestLeaf(dir string) error {
 	}
 	return nil
 }
-
-func copyDir(dst, src string) error {
+func copyDir(dst string, src string) error {
 	return filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -279,7 +210,6 @@ func copyDir(dst, src string) error {
 		return os.WriteFile(target, data, 0644)
 	})
 }
-
 func copyInternalModuleFixture(t *testing.T, fixtureName string) {
 	t.Helper()
 
@@ -291,12 +221,10 @@ func copyInternalModuleFixture(t *testing.T, fixtureName string) {
 	testDir = filepath.Join(moduleRoot, "tests")
 	genDir = filepath.Join(moduleRoot, "_gen")
 }
-
 func createInternalModuleProject(t *testing.T) {
 	t.Helper()
 	copyInternalModuleFixture(t, "internal-module")
 }
-
 func createInternalModuleProjectWithLeaves(t *testing.T) {
 	t.Helper()
 
@@ -308,7 +236,6 @@ func createInternalModuleProjectWithLeaves(t *testing.T) {
 	testDir = filepath.Join(moduleRoot, "tests")
 	genDir = filepath.Join(moduleRoot, "_gen")
 }
-
 func createPublicModuleProject(t *testing.T) {
 	t.Helper()
 
@@ -350,27 +277,23 @@ func createPublicModuleProject(t *testing.T) {
 
 	genDir = filepath.Join(moduleRoot, "_gen")
 }
-
 func setupModuleEnv(t *testing.T, req *Request) {
 	t.Helper()
 	req.WorkDir = moduleRoot
 	req.Env = append(req.Env, "GOWORK=off")
 }
-
 func assertFileExists(t *testing.T, path string) {
 	t.Helper()
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("expected file %s to exist: %v", path, err)
 	}
 }
-
 func assertFileNotExists(t *testing.T, path string) {
 	t.Helper()
 	if _, err := os.Stat(path); err == nil {
 		t.Fatalf("expected file %s to not exist", path)
 	}
 }
-
 func assertNestedGoMod(t *testing.T, dir string) {
 	t.Helper()
 	nestedGoMod := filepath.Join(dir, "go.mod")
@@ -387,11 +310,9 @@ func assertNestedGoMod(t *testing.T, dir string) {
 		t.Fatalf("expected replace directive for parent module, got:\n%s", goMod)
 	}
 }
-
 func generatedLeafTestPath(genRoot string) string {
 	return filepath.Join(genRoot, "tests", "leaf", "leaf_test.go")
 }
-
 func findDoctestRunDirs(root string) ([]string, error) {
 	var found []string
 	entries, err := os.ReadDir(root)
@@ -405,7 +326,6 @@ func findDoctestRunDirs(root string) ([]string, error) {
 	}
 	return found, nil
 }
-
 func assertNoDoctestRunDirs(t *testing.T, root string) {
 	t.Helper()
 	dirs, err := findDoctestRunDirs(root)
@@ -416,7 +336,6 @@ func assertNoDoctestRunDirs(t *testing.T, root string) {
 		t.Fatalf("expected no .doctest_run_* dirs under %s, found: %v", root, dirs)
 	}
 }
-
 func assertStderrUsesTempCompile(t *testing.T, resp *Response) {
 	t.Helper()
 	combined := resp.Stdout + resp.Stderr
@@ -424,7 +343,6 @@ func assertStderrUsesTempCompile(t *testing.T, resp *Response) {
 		t.Fatalf("expected stderr/stdout to reference .doctest_run_ temp compile dir, got:\nstdout:\n%s\nstderr:\n%s", resp.Stdout, resp.Stderr)
 	}
 }
-
 func assertDumpHasInternalImport(t *testing.T, dumpRoot string) {
 	t.Helper()
 	genTest := generatedLeafTestPath(dumpRoot)
@@ -437,10 +355,8 @@ func assertDumpHasInternalImport(t *testing.T, dumpRoot string) {
 		t.Fatalf("expected dump to import internal/greet, got:\n%s", string(testData))
 	}
 }
-
 func assertDumpNoNestedGoMod(t *testing.T, dumpRoot string) {
 	t.Helper()
 	assertFileNotExists(t, filepath.Join(dumpRoot, "go.mod"))
 }
-
 ```

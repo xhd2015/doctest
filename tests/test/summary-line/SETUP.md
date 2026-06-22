@@ -43,194 +43,12 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 	libdocbuild "github.com/xhd2015/doctest/libdoc/build"
+	"github.com/xhd2015/doctest/libdoc/testtree"
 )
 
-type Request struct {
-	Args    []string
-	Env     []string
-	WorkDir string
-	Timeout time.Duration
-	Bin     string
-}
-
-type Response struct {
-	ExitCode int
-	Stdout   string
-	Stderr   string
-	Err      error
-}
-
 var ansiEscape = regexp.MustCompile("\x1b\\[[0-9;]*m")
-
 var finalSummaryPlainRe = regexp.MustCompile(`^(PASS|FAIL) \(\d+/\d+\) in .+$`)
-
-func bt(n int) string {
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = '`'
-	}
-	return string(b)
-}
-
-func doctestGoBlock(code string) string {
-	fence := bt(3)
-	return "## Test\n\n" + fence + "go\n" + code + "\n" + fence + "\n"
-}
-
-func createPassFailTree(t *testing.T, passCount int, failCount int) string {
-	t.Helper()
-	tmp := t.TempDir()
-
-	rootSetup := `import "testing"
-
-type Request struct{}
-type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }`
-	if err := os.WriteFile(filepath.Join(tmp, "SETUP.md"), []byte(doctestGoBlock(rootSetup)), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(tmp, "DOCTEST.md"), []byte("# summary-line fixture\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	for i := 0; i < passCount; i++ {
-		name := fmt.Sprintf("pass_%d", i+1)
-		leafDir := filepath.Join(tmp, name)
-		if err := os.MkdirAll(leafDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(leafDir, "SETUP.md"), []byte(doctestGoBlock(`import "testing"
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }`)), 0644); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(leafDir, "ASSERT.md"), []byte(doctestGoBlock(`import "testing"
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}`)), 0644); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	for i := 0; i < failCount; i++ {
-		name := fmt.Sprintf("fail_%d", i+1)
-		leafDir := filepath.Join(tmp, name)
-		if err := os.MkdirAll(leafDir, 0755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(leafDir, "SETUP.md"), []byte(doctestGoBlock(`import "testing"
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }`)), 0644); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(leafDir, "ASSERT.md"), []byte(doctestGoBlock(`import "testing"
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
-    t.Fatal("forced failure")
-}`)), 0644); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	return tmp
-}
-
-func createEmptyDir(t *testing.T) string {
-	t.Helper()
-	tmp := t.TempDir()
-	return tmp
-}
-
-func stripANSI(s string) string {
-	return ansiEscape.ReplaceAllString(s, "")
-}
-
-func containsANSI(s string) bool {
-	return ansiEscape.MatchString(s)
-}
-
-func lastNonEmptyLine(s string) string {
-	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
-	for i := len(lines) - 1; i >= 0; i-- {
-		if strings.TrimSpace(lines[i]) != "" {
-			return lines[i]
-		}
-	}
-	return ""
-}
-
-func findResultSummary(stdout string) string {
-	for _, line := range strings.Split(stdout, "\n") {
-		plain := strings.TrimSpace(stripANSI(line))
-		if strings.HasPrefix(plain, "PASS (") || strings.HasPrefix(plain, "FAIL (") {
-			return line
-		}
-	}
-	return ""
-}
-
-func findInlineSummaryLine(stdout string) string {
-	for _, line := range strings.Split(stdout, "\n") {
-		if strings.Contains(line, " Run, ") && strings.Contains(line, " Cached") {
-			return line
-		}
-	}
-	return ""
-}
-
-func parseFinalSummaryDuration(stdout string) (time.Duration, error) {
-	line := stripANSI(strings.TrimSpace(findResultSummary(stdout)))
-	if line == "" {
-		return 0, fmt.Errorf("final summary line not found")
-	}
-	if !finalSummaryPlainRe.MatchString(line) {
-		return 0, fmt.Errorf("final summary missing duration suffix: %q", line)
-	}
-	const marker = " in "
-	idx := strings.LastIndex(line, marker)
-	if idx < 0 {
-		return 0, fmt.Errorf("final summary missing %q: %q", marker, line)
-	}
-	return time.ParseDuration(strings.TrimSpace(line[idx+len(marker):]))
-}
-
-func finalSummaryPassTokenIsColored(summary string) bool {
-	idx := strings.Index(summary, " in ")
-	if idx < 0 {
-		return false
-	}
-	return containsANSI(summary[:idx])
-}
-
-func finalSummaryDurationIsPlain(summary string) bool {
-	idx := strings.LastIndex(summary, " in ")
-	if idx < 0 {
-		return false
-	}
-	return !containsANSI(summary[idx:])
-}
-
-func countResultSummaries(stdout string) int {
-	n := 0
-	for _, line := range strings.Split(stdout, "\n") {
-		plain := strings.TrimSpace(stripANSI(line))
-		if strings.HasPrefix(plain, "PASS (") || strings.HasPrefix(plain, "FAIL (") {
-			n++
-		}
-	}
-	return n
-}
-
-func summaryIsLastLine(t *testing.T, stdout string) {
-	t.Helper()
-	summary := findResultSummary(stdout)
-	if summary == "" {
-		t.Fatalf("expected PASS/FAIL summary line in stdout:\n%s", stdout)
-	}
-	last := lastNonEmptyLine(stdout)
-	if strings.TrimSpace(last) != strings.TrimSpace(summary) {
-		t.Fatalf("summary must be last non-empty stdout line\nsummary: %q\nlast: %q\nstdout:\n%s",
-			summary, last, stdout)
-	}
-}
-
 func Setup(t *testing.T, req *Request) error {
 	req.Timeout = 120 * time.Second
 
@@ -250,41 +68,109 @@ func Setup(t *testing.T, req *Request) error {
 	req.Bin = doctestBin
 	return nil
 }
-
-func Run(t *testing.T, req *Request) (*Response, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), req.Timeout)
-	defer cancel()
-
-	bin := req.Bin
-	if bin == "" {
-		return nil, fmt.Errorf("req.Bin is not set")
+func bt(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = '`'
 	}
-	cmd := exec.CommandContext(ctx, bin, req.Args...)
-	cmd.Dir = req.WorkDir
-	cmd.Env = append(os.Environ(), req.Env...)
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-	resp := &Response{
-		Stdout: stdout.String(),
-		Stderr: stderr.String(),
-		Err:    err,
+	return string(b)
+}
+func doctestGoBlock(code string) string {
+	fence := bt(3)
+	return "## Test\n\n" + fence + "go\n" + code + "\n" + fence + "\n"
+}
+func createPassFailTree(t *testing.T, passCount int, failCount int) string {
+	t.Helper()
+	tmp := t.TempDir()
+	testtree.WritePassFailTree(t, tmp, passCount, failCount)
+	return tmp
+}
+func createEmptyDir(t *testing.T) string {
+	t.Helper()
+	tmp := t.TempDir()
+	return tmp
+}
+func stripANSI(s string) string {
+	return ansiEscape.ReplaceAllString(s, "")
+}
+func containsANSI(s string) bool {
+	return ansiEscape.MatchString(s)
+}
+func lastNonEmptyLine(s string) string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.TrimSpace(lines[i]) != "" {
+			return lines[i]
+		}
 	}
-	if err == nil {
-		return resp, nil
+	return ""
+}
+func findResultSummary(stdout string) string {
+	for _, line := range strings.Split(stdout, "\n") {
+		plain := strings.TrimSpace(stripANSI(line))
+		if strings.HasPrefix(plain, "PASS (") || strings.HasPrefix(plain, "FAIL (") {
+			return line
+		}
 	}
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
-		resp.ExitCode = exitErr.ExitCode()
-		return resp, nil
+	return ""
+}
+func findInlineSummaryLine(stdout string) string {
+	for _, line := range strings.Split(stdout, "\n") {
+		if strings.Contains(line, " Run, ") && strings.Contains(line, " Cached") {
+			return line
+		}
 	}
-	if ctx.Err() != nil {
-		return resp, ctx.Err()
+	return ""
+}
+func parseFinalSummaryDuration(stdout string) (time.Duration, error) {
+	line := stripANSI(strings.TrimSpace(findResultSummary(stdout)))
+	if line == "" {
+		return 0, fmt.Errorf("final summary line not found")
 	}
-	return resp, err
+	if !finalSummaryPlainRe.MatchString(line) {
+		return 0, fmt.Errorf("final summary missing duration suffix: %q", line)
+	}
+	const marker = " in "
+	idx := strings.LastIndex(line, marker)
+	if idx < 0 {
+		return 0, fmt.Errorf("final summary missing %q: %q", marker, line)
+	}
+	return time.ParseDuration(strings.TrimSpace(line[idx+len(marker):]))
+}
+func finalSummaryPassTokenIsColored(summary string) bool {
+	idx := strings.Index(summary, " in ")
+	if idx < 0 {
+		return false
+	}
+	return containsANSI(summary[:idx])
+}
+func finalSummaryDurationIsPlain(summary string) bool {
+	idx := strings.LastIndex(summary, " in ")
+	if idx < 0 {
+		return false
+	}
+	return !containsANSI(summary[idx:])
+}
+func countResultSummaries(stdout string) int {
+	n := 0
+	for _, line := range strings.Split(stdout, "\n") {
+		plain := strings.TrimSpace(stripANSI(line))
+		if strings.HasPrefix(plain, "PASS (") || strings.HasPrefix(plain, "FAIL (") {
+			n++
+		}
+	}
+	return n
+}
+func summaryIsLastLine(t *testing.T, stdout string) {
+	t.Helper()
+	summary := findResultSummary(stdout)
+	if summary == "" {
+		t.Fatalf("expected PASS/FAIL summary line in stdout:\n%s", stdout)
+	}
+	last := lastNonEmptyLine(stdout)
+	if strings.TrimSpace(last) != strings.TrimSpace(summary) {
+		t.Fatalf("summary must be last non-empty stdout line\nsummary: %q\nlast: %q\nstdout:\n%s",
+			summary, last, stdout)
+	}
 }
 ```
