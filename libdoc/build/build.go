@@ -63,7 +63,7 @@ func Build(dir string, opts core.Options) error {
 	}
 	goBuildArgs = append(goBuildArgs, "./...")
 
-	fmt.Fprintf(w, "cd %s && go %s\n\n", pathfmt.DisplayPath(ctx.genRoot), strings.Join(goBuildArgs, " "))
+	fmt.Fprintf(w, "cd %s && go %s\n\n", pathfmt.DisplayPath(ctx.genRoot), strings.Join(displayGoArgs(goBuildArgs), " "))
 
 	goBuildCmd := exec.Command("go", goBuildArgs...)
 	goBuildCmd.Dir = ctx.genRoot

@@ -1,7 +1,7 @@
 package core
 
 import (
-	"os"
+	"syscall"
 	"testing"
 )
 
@@ -13,8 +13,19 @@ func TestDoctestSessionIDForRunReusesEnv(t *testing.T) {
 }
 
 func TestDoctestSessionIDForRunGeneratesWhenUnset(t *testing.T) {
-	_ = os.Unsetenv(DoctestSessionIDEnv)
+	t.Setenv(DoctestSessionIDEnv, "")
 	if id := DoctestSessionIDForRun(); id == "" {
 		t.Fatal("expected non-empty generated session id")
+	}
+}
+
+func TestDoctestSessionIDForRunUsesSyscallGetenv(t *testing.T) {
+	t.Setenv(DoctestSessionIDEnv, "probe-session")
+	v, ok := syscall.Getenv(DoctestSessionIDEnv)
+	if !ok || v != "probe-session" {
+		t.Fatalf("syscall.Getenv(%q) = %q, %v", DoctestSessionIDEnv, v, ok)
+	}
+	if got := DoctestSessionIDForRun(); got != "probe-session" {
+		t.Fatalf("DoctestSessionIDForRun() = %q, want probe-session", got)
 	}
 }

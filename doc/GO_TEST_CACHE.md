@@ -106,6 +106,164 @@ Using `syscall.Getenv` (not `os.Getenv`) keeps the session value out of Go's
 test-result cache key while still giving every package in the run the same
 session id. See `tests/test/go-test-cache/env-getenv/` for proof tests.
 
+The same rule applies inside doctest itself. `build.Test` calls
+`core.DoctestSessionIDForRun()` before spawning `go test`; that helper must
+also use `syscall.Getenv`. A stray `os.Getenv("DOCTEST_SESSION_ID")` there is
+recorded in the testlog and pins the cache key to the session value — even when
+the generated test only uses `syscall.Getenv`.
+
+**Before (broken):**
+```go
+func DoctestSessionIDForRun() string {
+    if v := os.Getenv(DoctestSessionIDEnv); v != "" {
+        return v
+    }
+    return NewDoctestSessionID()
+}
+```
+
+**After (fixed):**
+```go
+func DoctestSessionIDForRun() string {
+    v, ok := syscall.Getenv(DoctestSessionIDEnv)
+    if ok && v != "" {
+        return v
+    }
+    return NewDoctestSessionID()
+}
+```
+
+## Debugging summary: cache miss on every `doctest test` rerun
+
+This section records how we diagnosed `libdoc/build/tests/dot-progress` never
+showing `N Cached` on repeat runs (~7s every time, then ~750ms with `0 Cached`).
+
+### Symptom
+
+```sh
+doctest test ./libdoc/build/tests/dot-progress   # ~900ms, 0 Cached
+doctest test ./libdoc/build/tests/dot-progress   # ~750ms, 0 Cached  (expected 1 Cached)
+```
+
+Direct `go test` on the same generated package *could* cache, but only when the
+same session id was reused; a fresh `doctest test` always missed.
+
+### What we ruled out first
+
+| Hypothesis | Check | Result |
+|------------|-------|--------|
+| `-buildvcs=false` disables cache | `go help testflag`, prior proof in this doc | Ruled out |
+| Generated test uses `os.Getenv` for session | Read `incremental_test.go` | Uses `syscall.Getenv` only |
+| `WriteGeneratedCase` rewrites `_test.go` every run | `stat` before/after `doctest test` | Size and mtime unchanged |
+| `os.Chdir` in generated test busts cache alone | Other leaves cache fine with `os.Chdir` | Not sufficient alone |
+| 5s sleep makes test uncacheable | Cold run caches after first pass | Ruled out |
+| Different `DOCTEST_SESSION_ID` per `doctest test` | Suspected, then challenged | **Not the root cause** — see below |
+
+### Step 1 — Separate "slow" from "not cached"
+
+The original test slept 5s inside `build.Test`; that was moved to
+`TestDotProgressIncremental` in `build_engine_test.go`. The doctest leaf became
+a fast fixture (two quick packages, stable temp paths). Slowness dropped to
+~900ms, but `0 Cached` remained.
+
+### Step 2 — Compare `doctest test` vs bare `go test`
+
+```sh
+doctest test ./libdoc/build/tests/dot-progress   # always executes test (~750ms)
+go test ./...  # same gen dir, immediately after  → often (cached)
+```
+
+So the test *could* be cached; something about the `doctest test` path or the
+test body prevented a hit on the next `doctest test`.
+
+### Step 3 — Use `GODEBUG=gocachetest=1`
+
+Go prints cache lookup/save lines to stderr:
+
+```sh
+GODEBUG=gocachetest=1 go test -mod=mod -buildvcs=false .
+```
+
+Look for:
+
+- `test output not found: cache entry not found` — miss
+- `save test ID … => input ID …` — result stored
+- **input ID changes between runs** — inputs hash differs even when the binary is unchanged
+
+Consecutive `doctest test` runs showed a **different input ID every time**, so
+every rerun was a cache miss regardless of session id.
+
+### Step 4 — Capture the testlog (`-test.testlogfile`)
+
+The testlog is the raw input Go hashes into the cache key:
+
+```sh
+go test -test.testlogfile=/tmp/testlog.txt .
+cat /tmp/testlog.txt
+```
+
+Each line is an operation the test binary performed: `stat`, `open`, `chdir`,
+`getenv NAME`, etc. Only entries under the package module root affect the hash
+(see §5 above); `/tmp` fixture paths are ignored.
+
+In the dot-progress testlog we found:
+
+```
+getenv DOCTEST_SESSION_ID
+```
+
+Generated harness code uses `syscall.Getenv`, which does **not** emit `getenv`
+lines. So something else in the test process still called `os.Getenv`.
+
+### Step 5 — Find who calls `os.Getenv`
+
+Search the `libdoc` tree for `Getenv` / `LookupEnv`. The hit that mattered:
+
+- `libdoc/core/session.go` — `DoctestSessionIDForRun()` used `os.Getenv`
+- Called from `libdoc/build/test.go` inside `build.Test`
+
+The dot-progress leaf calls `build.Test` **in-process** (not via `exec` of the
+`doctest` CLI). So the generated test's testlog includes `build.Test`'s
+`os.Getenv("DOCTEST_SESSION_ID")` even though the generated source only uses
+`syscall.Getenv`.
+
+### Step 6 — Confirm with before/after testlog
+
+After switching `DoctestSessionIDForRun` to `syscall.Getenv`:
+
+```sh
+go test -test.testlogfile=/tmp/testlog.txt .
+rg 'getenv DOCTEST' /tmp/testlog.txt   # no matches
+```
+
+Cache behavior after fix:
+
+```sh
+doctest test ./libdoc/build/tests/dot-progress   # ~900ms cold, 0 Cached
+doctest test ./libdoc/build/tests/dot-progress   # ~190ms, 1 Cached
+
+DOCTEST_SESSION_ID=a go test ...   # warm
+DOCTEST_SESSION_ID=b go test ...   # still (cached)
+```
+
+### Debugging checklist (reuse on future cache misses)
+
+1. **Reproduce minimally** — single leaf, `doctest test <path>` twice; note wall time and `N Cached` in the summary line.
+2. **Control experiment** — `go test` in the mapping-gen leaf dir with the same flags (`-mod=mod`, `-buildvcs=false`).
+3. **`GODEBUG=gocachetest=1`** — confirm miss vs hit; check whether **input ID** is stable across runs.
+4. **`-test.testlogfile`** — diff testlog between runs; new `getenv` or `stat` lines point at the culprit.
+5. **Search for `os.Getenv` / `os.Setenv` / `t.Setenv`** on the code path the test executes (including library calls, not only generated source).
+6. **mtime side effects** — `stat` on dirs inside the module root (see §The Fix); ensure temp files are not created inside package dirs.
+7. **`modTimeCutoff`** — wait >2s between runs when testing cache after a write.
+
+### Lesson
+
+`syscall.Getenv` in generated tests is necessary but not sufficient. Any code
+that runs **inside the test process** — including `build.Test` when a leaf
+calls it directly — must avoid `os.Getenv` for values that change per
+invocation (like `DOCTEST_SESSION_ID`). Prefer `syscall.Getenv`, or read the
+variable once in the CLI and pass it in without re-reading via `os.Getenv`.
+
 ## Key Lesson
 
 Any file creation or deletion **inside a Go package directory** between

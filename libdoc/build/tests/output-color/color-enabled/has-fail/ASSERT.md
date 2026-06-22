@@ -24,11 +24,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if plainDots != ".." {
 		t.Fatalf("expected two dots, got plain %q raw %q", plainDots, resp.Dots)
 	}
-	if !strings.HasPrefix(resp.Dots, ".") {
-		t.Fatalf("pass dot must be first and plain, dots:\n%q", resp.Dots)
-	}
-	if !containsANSI(resp.Dots[1:]) {
-		t.Fatalf("fail dot must be red, dots:\n%q", resp.Dots)
+	if strings.Count(resp.Dots, "\x1b[31m") != 1 {
+		t.Fatalf("expected exactly one red fail dot, dots:\n%q", resp.Dots)
 	}
 
 	if !metricIsColored(resp.Summary, "1 Pass") {

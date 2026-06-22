@@ -62,6 +62,7 @@ type Options struct {
 	GenDir                string
 	Verbose               bool
 	Stderr                io.Writer
+	Stdout                io.Writer
 	RemoveTemp            bool
 	Count                 int
 	Timeout               time.Duration

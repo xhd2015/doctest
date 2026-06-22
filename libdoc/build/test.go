@@ -3,6 +3,7 @@ package build
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -88,22 +89,33 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		testArgs = append(testArgs, fmt.Sprintf("-timeout=%s", opts.Timeout))
 	}
 
+	execArgs := append([]string(nil), testArgs...)
+	if !opts.Verbose {
+		execArgs = append(execArgs, "-json")
+	}
+
+	displayArgs := displayGoArgs(testArgs)
 	if opts.Verbose {
-		fmt.Fprintf(w, "cd %s && go %s\n\n", pathfmt.DisplayPath(runDir), strings.Join(testArgs, " "))
+		fmt.Fprintf(w, "cd %s && go %s\n\n", pathfmt.DisplayPath(runDir), strings.Join(displayArgs, " "))
 	} else {
-		fmt.Fprintf(w, "cd %s && go %s\n", pathfmt.DisplayPath(runDir), strings.Join(testArgs, " "))
+		fmt.Fprintf(w, "cd %s && go %s\n", pathfmt.DisplayPath(runDir), strings.Join(displayArgs, " "))
 	}
 
 	sessionID := core.DoctestSessionIDForRun()
-	goTestCmd := exec.Command("go", testArgs...)
+	goTestCmd := exec.Command("go", execArgs...)
 	goTestCmd.Dir = runDir
 	goTestCmd.Env = append(os.Environ(), core.DoctestSessionIDEnv+"="+sessionID)
+
+	stdout := opts.Stdout
+	if stdout == nil {
+		stdout = os.Stdout
+	}
 
 	if opts.Verbose {
 		start := time.Now()
 		out, err := goTestCmd.CombinedOutput()
 		elapsed := time.Since(start)
-		os.Stdout.Write(out)
+		stdout.Write(out)
 		stats.Passed = passedCases(stats.Total, countFailuresFromGoTestOutput(out))
 		if !opts.SuppressResultSummary {
 			stats.Elapsed = elapsed
@@ -132,30 +144,87 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		cachedCount := 0
 		var failLines []string
 		var detailLines []string
-		style := newColorStyle(opts.Color, os.Stdout)
+		style := newColorStyle(opts.Color, stdout)
 		var stdoutWg sync.WaitGroup
 		stdoutWg.Add(1)
 		go func() {
 			defer stdoutWg.Done()
-			scanner := bufio.NewScanner(stdoutPipe)
-			for scanner.Scan() {
-				line := scanner.Text()
-				if strings.HasPrefix(line, "ok ") || strings.HasPrefix(line, "ok\t") {
-					passCount++
-					if strings.Contains(line, "(cached)") {
-						cachedCount++
-					}
-					os.Stdout.Write([]byte("."))
-				} else if strings.HasPrefix(line, "FAIL\t") || strings.HasPrefix(line, "FAIL ") {
-					failCount++
-					failLines = append(failLines, line)
-					os.Stdout.WriteString(style.red("."))
-				} else {
-					detailLines = append(detailLines, line)
+			type goTestEvent struct {
+				Action  string `json:"Action"`
+				Package string `json:"Package"`
+				Test    string `json:"Test"`
+				Output  string `json:"Output"`
+			}
+			packageCached := make(map[string]bool)
+			failedTests := make(map[string]bool)
+			testOutputs := make(map[string][]string)
+			testKey := func(pkg, test string) string { return pkg + "\x00" + test }
+			flushTestOutput := func(key string) {
+				if failedTests[key] {
+					return
+				}
+				failedTests[key] = true
+				if buf := testOutputs[key]; len(buf) > 0 {
+					detailLines = append(detailLines, buf...)
+					delete(testOutputs, key)
 				}
 			}
-			if scanner.Err() != nil {
-				fmt.Fprintf(os.Stderr, "read go test stdout: %v\n", scanner.Err())
+			decoder := json.NewDecoder(stdoutPipe)
+			for {
+				var ev goTestEvent
+				if err := decoder.Decode(&ev); err != nil {
+					if err != io.EOF {
+						fmt.Fprintf(os.Stderr, "read go test json: %v\n", err)
+					}
+					break
+				}
+				switch ev.Action {
+				case "output":
+					trimmed := strings.TrimSpace(ev.Output)
+					if ev.Test == "" && (strings.HasPrefix(trimmed, "ok ") || strings.HasPrefix(trimmed, "ok\t")) {
+						if strings.Contains(ev.Output, "(cached)") {
+							packageCached[ev.Package] = true
+						}
+					}
+					if ev.Test == "" && (strings.HasPrefix(trimmed, "FAIL\t") || strings.HasPrefix(trimmed, "FAIL ")) {
+						failLines = append(failLines, trimmed)
+					}
+					if trimmed != "" && trimmed != "PASS" {
+						if ev.Test != "" {
+							key := testKey(ev.Package, ev.Test)
+							line := strings.TrimRight(ev.Output, "\n")
+							if strings.Contains(ev.Output, "--- FAIL:") {
+								flushTestOutput(key)
+								detailLines = append(detailLines, line)
+							} else if failedTests[key] {
+								detailLines = append(detailLines, line)
+							} else {
+								testOutputs[key] = append(testOutputs[key], line)
+							}
+						} else if !strings.HasPrefix(trimmed, "ok ") && !strings.HasPrefix(trimmed, "ok\t") &&
+							!strings.HasPrefix(trimmed, "FAIL\t") && !strings.HasPrefix(trimmed, "FAIL ") {
+							detailLines = append(detailLines, trimmed)
+						}
+					}
+				case "pass":
+					if ev.Test != "" {
+						delete(testOutputs, testKey(ev.Package, ev.Test))
+						continue
+					}
+					passCount++
+					if packageCached[ev.Package] {
+						cachedCount++
+					}
+					stdout.Write([]byte("."))
+				case "fail":
+					if ev.Test != "" {
+						key := testKey(ev.Package, ev.Test)
+						flushTestOutput(key)
+						continue
+					}
+					failCount++
+					fmt.Fprint(stdout, style.red("."))
+				}
 			}
 		}()
 
@@ -166,7 +235,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		elapsed := time.Since(start)
 		stats.Passed = passedCases(stats.Total, failCount)
 
-		fmt.Println(formatSummary(style, passCount+failCount, passCount, failCount, cachedCount, elapsed))
+		fmt.Fprintln(stdout, formatSummary(style, passCount+failCount, passCount, failCount, cachedCount, elapsed))
 
 		if !opts.SuppressResultSummary {
 			stats.Elapsed = elapsed
@@ -175,15 +244,15 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 
 		if len(failLines) > 0 {
 			for _, line := range failLines {
-				fmt.Println(line)
+				fmt.Fprintln(stdout, line)
 			}
 		}
 		for _, line := range detailLines {
-			fmt.Println(line)
+			fmt.Fprintln(stdout, line)
 		}
 
 		if len(stderrData) > 0 {
-			os.Stdout.Write(stderrData)
+			stdout.Write(stderrData)
 		}
 
 		if err != nil {
@@ -218,4 +287,17 @@ func passedCases(total, failCount int) int {
 		return 0
 	}
 	return passed
+}
+
+// displayGoArgs returns user-visible go command arguments, omitting internal flags.
+func displayGoArgs(args []string) []string {
+	out := make([]string, 0, len(args))
+	for _, a := range args {
+		switch a {
+		case "-mod=mod", "-json":
+			continue
+		}
+		out = append(out, a)
+	}
+	return out
 }

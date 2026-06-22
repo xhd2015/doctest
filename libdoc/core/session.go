@@ -1,7 +1,7 @@
 package core
 
 import (
-	"os"
+	"syscall"
 
 	"github.com/google/uuid"
 )
@@ -17,9 +17,11 @@ func NewDoctestSessionID() string {
 
 // DoctestSessionIDForRun returns the session id for the current doctest test
 // invocation. It reuses DOCTEST_SESSION_ID from the environment when already set;
-// otherwise it generates a new UUID.
+// otherwise it generates a new UUID. Uses syscall.Getenv so reads are not
+// recorded in the go test cache input log.
 func DoctestSessionIDForRun() string {
-	if v := os.Getenv(DoctestSessionIDEnv); v != "" {
+	v, ok := syscall.Getenv(DoctestSessionIDEnv)
+	if ok && v != "" {
 		return v
 	}
 	return NewDoctestSessionID()

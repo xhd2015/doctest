@@ -7,8 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/xhd2015/doctest/libdoc/core"
+	"github.com/xhd2015/doctest/libdoc/testtree"
 )
 
 func TestChildCannotRedefineRun(t *testing.T) {
@@ -456,6 +458,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 
 	cmd := exec.Command("go", "test", "-count=1", "./...")
 	cmd.Dir = genDir
+	cmd.Env = append(os.Environ(), core.DoctestSessionIDEnv+"=test-session")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("go test in gen dir failed: %v\n%s", err, out)
 	}
@@ -708,5 +711,71 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 	}
 	if !strings.Contains(err.Error(), "Run") {
 		t.Fatalf("expected missing Run error, got %v", err)
+	}
+}
+
+func TestDotProgressIncremental(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow dot progress timing test")
+	}
+
+	subRoot := t.TempDir()
+	testtree.WriteMinimalRunnableTree(t, subRoot, []testtree.LeafSpec{
+		{Name: "a_fast", Steps: "No setup needed.", Expected: "Always passes."},
+		{Name: "z_slow", Steps: "Sleep 2 seconds to simulate a long-running test.", Expected: "Always passes.",
+			SetupGo: "import (\"testing\"; \"time\")\n\nfunc Setup(t *testing.T, req *Request) error { time.Sleep(2 * time.Second); return nil }"},
+	})
+
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+
+	type dotInfo struct {
+		firstDot time.Duration
+		output   string
+	}
+	ch := make(chan dotInfo, 1)
+	start := time.Now()
+	go func() {
+		var buf bytes.Buffer
+		firstDot := time.Duration(-1)
+		tmp := make([]byte, 1)
+		for {
+			n, readErr := r.Read(tmp)
+			if n > 0 {
+				buf.WriteByte(tmp[0])
+				if tmp[0] == '.' && firstDot < 0 {
+					firstDot = time.Since(start)
+				}
+			}
+			if readErr != nil {
+				break
+			}
+		}
+		ch <- dotInfo{firstDot, buf.String()}
+	}()
+
+	if err := Test(subRoot, core.Options{RemoveTemp: true, Count: 1}); err != nil {
+		t.Fatalf("build.Test: %v", err)
+	}
+	w.Close()
+	info := <-ch
+	os.Stdout = oldStdout
+
+	totalElapsed := time.Since(start)
+	incremental := info.firstDot >= 0 && (totalElapsed-info.firstDot) > 800*time.Millisecond
+	if !incremental {
+		t.Fatal("dots are NOT printed incrementally — the first dot appeared after the slow package finished")
+	}
+
+	inlineIdx := strings.Index(info.output, "  (")
+	if inlineIdx < 0 {
+		t.Fatalf("expected summary line in output:\n%s", info.output)
+	}
+	if dots := strings.Count(info.output[:inlineIdx], "."); dots != 2 {
+		t.Fatalf("expected 2 dots before summary, got %d. output:\n%s", dots, info.output)
 	}
 }

@@ -31,6 +31,8 @@ import (
     "path/filepath"
     "testing"
     "time"
+
+    "github.com/xhd2015/doctest/libdoc/testtree"
 )
 
 const envCacheProbeVar = "DOCTEST_SESSION_ID"
@@ -64,10 +66,11 @@ func Setup(t *testing.T, req *Request) error {
 }
 
 func createTestTreeWithLeafSetup(dir string, leafSetupGo string) error {
-    if err := os.WriteFile(filepath.Join(dir, "DOCTEST.md"), []byte("# Test\n"), 0644); err != nil {
+    runCode := "func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }"
+    if err := os.WriteFile(filepath.Join(dir, "DOCTEST.md"), []byte(testtree.MinimalDOCTEST(doctestBody(runCode))), 0644); err != nil {
         return err
     }
-    if err := os.WriteFile(filepath.Join(dir, "SETUP.md"), []byte(rootSetupContent("func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }")), 0644); err != nil {
+    if err := os.WriteFile(filepath.Join(dir, "SETUP.md"), []byte(rootSetupContent()), 0644); err != nil {
         return err
     }
     leafDir := filepath.Join(dir, "simple")

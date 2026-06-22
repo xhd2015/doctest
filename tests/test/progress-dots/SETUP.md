@@ -57,6 +57,7 @@ func createPassFailTree(t *testing.T, passCount int, failCount int) string {
 const (
     singleFailLogMarker = "SINGLE_FAIL_LOG_MARKER"
     secondFailLogMarker = "SECOND_FAIL_LOG_MARKER"
+    unwantedNonVerboseLogfMarker = "UNWANTED_NONVERBOSE_LOGF_MARKER"
 )
 
 func createRootTestTree(t *testing.T) string {
@@ -87,6 +88,22 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     t.Fatal(%q)
 }`, marker)
     os.WriteFile(filepath.Join(leafDir, "ASSERT.md"), []byte(doctestGoBlock(assertCode)), 0644)
+}
+
+func createLogfPassTree(t *testing.T) string {
+    t.Helper()
+    tmp := createRootTestTree(t)
+    leafDir := filepath.Join(tmp, "logf_leaf")
+    os.MkdirAll(leafDir, 0755)
+    setupCode := fmt.Sprintf(`import "testing"
+func Setup(t *testing.T, req *Request) error {
+    t.Logf(%q)
+    return nil
+}`, unwantedNonVerboseLogfMarker)
+    os.WriteFile(filepath.Join(leafDir, "SETUP.md"), []byte(doctestGoBlock(setupCode)), 0644)
+    os.WriteFile(filepath.Join(leafDir, "ASSERT.md"), []byte(doctestGoBlock(`import "testing"
+func Assert(t *testing.T, req *Request, resp *Response, err error) {}`)), 0644)
+    return tmp
 }
 
 func createSingleFailLogTree(t *testing.T) string {

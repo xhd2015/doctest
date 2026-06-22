@@ -18,8 +18,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("expected exit code 0, got %d\nstdout:\n%s\nstderr:\n%s",
 			resp.ExitCode, resp.Stdout, resp.Stderr)
 	}
-	if !strings.Contains(resp.Stderr, "go test -mod=mod -v") {
-		t.Fatalf("expected stderr to contain 'go test -mod=mod -v', got:\n%s", resp.Stderr)
+	if !strings.Contains(resp.Stderr, "go test -v") {
+		t.Fatalf("expected stderr to contain 'go test -v', got:\n%s", resp.Stderr)
 	}
 	summary := findResultSummary(resp.Stdout)
 	plainSummary := stripANSI(strings.TrimSpace(summary))
