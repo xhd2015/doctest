@@ -83,6 +83,9 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	if opts.Count > 0 {
 		testArgs = append(testArgs, fmt.Sprintf("-count=%d", opts.Count))
 	}
+	if opts.Timeout > 0 {
+		testArgs = append(testArgs, fmt.Sprintf("-timeout=%s", opts.Timeout))
+	}
 
 	if opts.Verbose {
 		fmt.Fprintf(w, "cd %s && go %s\n\n", pathfmt.DisplayPath(runDir), strings.Join(testArgs, " "))

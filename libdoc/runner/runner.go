@@ -212,6 +212,7 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 		Bool("--rm", &opts.RemoveTemp).
 		String("--gen-dir", &opts.GenDir).
 		Int("-count", &opts.Count).
+		Duration("--timeout", &opts.Timeout).
 		Bool("--color", &colorFlag).
 		Bool("--no-color", &noColorFlag).
 		Parse(args)

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func writeTreeFile(t *testing.T, root, rel, content string) {
@@ -177,5 +178,25 @@ func TestParseTestOptionsRemoveTempFlag(t *testing.T) {
 	}
 	if !opts.RemoveTemp {
 		t.Fatal("expected RemoveTemp=true with --rm flag, got false")
+	}
+}
+
+func TestParseTestOptionsTimeoutFlag(t *testing.T) {
+	opts, remain, err := parseTestOptions([]string{"--timeout", "45s", "somedir"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.Timeout != 45*time.Second {
+		t.Fatalf("expected Timeout=45s, got %v", opts.Timeout)
+	}
+	if len(remain) != 1 || remain[0] != "somedir" {
+		t.Fatalf("expected remainArgs [somedir], got %v", remain)
+	}
+}
+
+func TestParseTestOptionsTimeoutInvalid(t *testing.T) {
+	_, _, err := parseTestOptions([]string{"--timeout", "bogus", "somedir"})
+	if err == nil {
+		t.Fatal("expected error for invalid --timeout value")
 	}
 }

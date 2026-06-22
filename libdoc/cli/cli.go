@@ -96,7 +96,7 @@ Examples:
   doctest build -v ./sub-module/...
 `
 
-const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [--color] [--no-color] <dir>
+const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [--timeout DURATION] [--color] [--no-color] <dir>
 
 Run executable Go snippets from a doc-style test directory, allow ./... patterns like go test.
 
@@ -105,6 +105,9 @@ Options:
   --rm              Remove the temporary generated test directory
   --gen-dir DIR     Write generated Go test files to DIR
   -count=N          Forward Go test count option to generated test binary
+  --timeout DURATION
+                    Forward Go test timeout to generated test binary
+                    (e.g. 30s, 5m, 1h); omitted uses go test default (10m)
   --color           Force ANSI color in non-verbose progress output
   --no-color        Disable ANSI color in non-verbose progress output
   -h, --help        Show help

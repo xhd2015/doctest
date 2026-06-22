@@ -1,6 +1,9 @@
 package core
 
-import "io"
+import (
+	"io"
+	"time"
+)
 
 type ImportSpec struct {
 	Name string
@@ -61,6 +64,7 @@ type Options struct {
 	Stderr                io.Writer
 	RemoveTemp            bool
 	Count                 int
+	Timeout               time.Duration
 	SubDir                string
 	Color                 ColorMode
 	SuppressResultSummary bool
