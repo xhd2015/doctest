@@ -31,13 +31,51 @@ func BuildArgs(args []string) error {
 }
 
 func Test(args []string) error {
-	return processArgs(args, "test", parseTestOptions, func(dir string, opts core.Options) error {
-		err := runnerbuild.Test(dir, opts)
+	opts, remainArgs, err := parseTestOptions(args)
+	if err != nil {
+		return err
+	}
+	if len(remainArgs) < 1 {
+		return fmt.Errorf("test requires <dir>")
+	}
+
+	opts.SuppressResultSummary = true
+	var stats runnerbuild.TestRunStats
+	runFn := func(dir string, o core.Options) error {
+		o.SuppressResultSummary = true
+		s, err := runnerbuild.TestWithStats(dir, o)
+		stats.Passed += s.Passed
+		stats.Total += s.Total
 		if err != nil && strings.Contains(err.Error(), "no runnable test cases found") {
 			return ErrNoTestsFound
 		}
 		return err
-	})
+	}
+
+	var runErr error
+	if len(remainArgs) == 1 {
+		runErr = processSingleArg(remainArgs[0], opts, runFn)
+	} else {
+		runErr = processMultiArg(remainArgs, opts, runFn)
+	}
+
+	if stats.Total > 0 {
+		runnerbuild.PrintResultSummary(opts, stats)
+	}
+
+	if runErr != nil {
+		if errors.Is(runErr, ErrNoTestsFound) && stats.Total == 0 {
+			return ErrNoTestsFound
+		}
+		return runErr
+	}
+	if stats.Total == 0 {
+		return ErrNoTestsFound
+	}
+	if stats.Passed < stats.Total {
+		return fmt.Errorf("%d of %d tests passed", stats.Passed, stats.Total)
+	}
+	return nil
 }
 
 func VetArgs(args []string) error {

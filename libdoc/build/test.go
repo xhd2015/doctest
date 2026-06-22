@@ -2,6 +2,7 @@ package build
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -15,6 +16,11 @@ import (
 )
 
 func Test(dir string, opts core.Options) error {
+	_, err := TestWithStats(dir, opts)
+	return err
+}
+
+func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	w := opts.Stderr
 	if w == nil {
 		w = os.Stderr
@@ -27,36 +33,36 @@ func Test(dir string, opts core.Options) error {
 
 	cases, err = core.DiscoverTreeCases(dir)
 	if err != nil {
-		return err
+		return TestRunStats{}, err
 	}
 	if opts.SubDir != "" {
 		cases = core.FilterBySubDir(cases, dir, opts.SubDir)
 	}
 	if len(cases) == 0 {
-		return fmt.Errorf("%s: no runnable test cases found", dir)
+		return TestRunStats{}, fmt.Errorf("%s: no runnable test cases found", dir)
 	}
+
+	stats := TestRunStats{Total: len(cases)}
 
 	ctx, err := newGenerateContext(dir, opts, cases, w, false, opts.Verbose)
 	if err != nil {
-		return err
+		return TestRunStats{}, err
 	}
 	defer ctx.Close()
 
-	ctx.announceRoots()
-
 	if opts.Verbose {
+		ctx.announceRoots()
 		fmt.Fprintf(w, "doctest: %s\n\n", pathfmt.DisplayPath(dir))
 		if _, err := core.DiscoverTreeCasesVerbose(dir, w); err != nil {
-			return err
+			return TestRunStats{}, err
 		}
 		fmt.Fprintf(w, "─── %d test cases\n\n", len(cases))
 	} else {
-		fmt.Fprintf(w, "doctest: %s\n", pathfmt.DisplayPath(dir))
-		fmt.Fprintf(w, "─── %d test cases\n", len(cases))
+		fmt.Fprintf(w, "doctest: %s (%d tests)\n", pathfmt.DisplayPath(dir), len(cases))
 	}
 
 	if err := ctx.writeCases(cases, false); err != nil {
-		return err
+		return TestRunStats{}, err
 	}
 
 	runDir, isSingleLeaf := ctx.runDir(absRoot, opts, cases)
@@ -77,7 +83,11 @@ func Test(dir string, opts core.Options) error {
 		testArgs = append(testArgs, fmt.Sprintf("-count=%d", opts.Count))
 	}
 
-	fmt.Fprintf(w, "cd %s && go %s\n\n", pathfmt.DisplayPath(runDir), strings.Join(testArgs, " "))
+	if opts.Verbose {
+		fmt.Fprintf(w, "cd %s && go %s\n\n", pathfmt.DisplayPath(runDir), strings.Join(testArgs, " "))
+	} else {
+		fmt.Fprintf(w, "cd %s && go %s\n", pathfmt.DisplayPath(runDir), strings.Join(testArgs, " "))
+	}
 
 	goTestCmd := exec.Command("go", testArgs...)
 	goTestCmd.Dir = runDir
@@ -85,24 +95,27 @@ func Test(dir string, opts core.Options) error {
 	if opts.Verbose {
 		out, err := goTestCmd.CombinedOutput()
 		os.Stdout.Write(out)
+		stats.Passed = passedCases(stats.Total, countFailuresFromGoTestOutput(out))
+		if !opts.SuppressResultSummary {
+			PrintResultSummary(opts, stats)
+		}
 		if err != nil {
-			return fmt.Errorf("go test failed: %v", err)
+			return stats, fmt.Errorf("go test failed: %v", err)
 		}
 	} else {
 		stdoutPipe, err := goTestCmd.StdoutPipe()
 		if err != nil {
-			return fmt.Errorf("stdout pipe: %w", err)
+			return TestRunStats{}, fmt.Errorf("stdout pipe: %w", err)
 		}
 		stderrPipe, err := goTestCmd.StderrPipe()
 		if err != nil {
-			return fmt.Errorf("stderr pipe: %w", err)
+			return TestRunStats{}, fmt.Errorf("stderr pipe: %w", err)
 		}
 
 		if err := goTestCmd.Start(); err != nil {
-			return fmt.Errorf("go test start: %w", err)
+			return TestRunStats{}, fmt.Errorf("go test start: %w", err)
 		}
 
-		runCount := 0
 		passCount := 0
 		failCount := 0
 		cachedCount := 0
@@ -117,14 +130,12 @@ func Test(dir string, opts core.Options) error {
 			for scanner.Scan() {
 				line := scanner.Text()
 				if strings.HasPrefix(line, "ok ") || strings.HasPrefix(line, "ok\t") {
-					runCount++
 					passCount++
 					if strings.Contains(line, "(cached)") {
 						cachedCount++
 					}
 					os.Stdout.Write([]byte("."))
 				} else if strings.HasPrefix(line, "FAIL\t") || strings.HasPrefix(line, "FAIL ") {
-					runCount++
 					failCount++
 					failLines = append(failLines, line)
 					os.Stdout.WriteString(style.red("."))
@@ -141,11 +152,15 @@ func Test(dir string, opts core.Options) error {
 		stdoutWg.Wait()
 
 		err = goTestCmd.Wait()
+		stats.Passed = passedCases(stats.Total, failCount)
 
-		fmt.Println(formatSummary(style, runCount, passCount, failCount, cachedCount))
+		fmt.Println(formatSummary(style, passCount+failCount, passCount, failCount, cachedCount))
+
+		if !opts.SuppressResultSummary {
+			PrintResultSummary(opts, stats)
+		}
 
 		if len(failLines) > 0 {
-			fmt.Println()
 			for _, line := range failLines {
 				fmt.Println(line)
 			}
@@ -159,12 +174,35 @@ func Test(dir string, opts core.Options) error {
 		}
 
 		if err != nil {
-			return fmt.Errorf("go test: %w", err)
+			return stats, fmt.Errorf("go test: %w", err)
 		}
 	}
 
 	if err := ctx.syncDump(); err != nil {
-		return err
+		return stats, err
 	}
-	return nil
+	if !opts.Verbose {
+		fmt.Fprintln(w)
+	}
+	return stats, nil
+}
+
+func countFailuresFromGoTestOutput(out []byte) int {
+	failures := 0
+	scanner := bufio.NewScanner(bytes.NewReader(out))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "FAIL\t") || strings.HasPrefix(line, "FAIL ") {
+			failures++
+		}
+	}
+	return failures
+}
+
+func passedCases(total, failCount int) int {
+	passed := total - failCount
+	if passed < 0 {
+		return 0
+	}
+	return passed
 }

@@ -65,6 +65,11 @@ func (c colorStyle) gray(s string) string {
 	return ansiGray + s + ansiReset
 }
 
+type TestRunStats struct {
+	Passed int
+	Total  int
+}
+
 func formatSummary(style colorStyle, runCount, passCount, failCount, cachedCount int) string {
 	runSeg := fmt.Sprintf("%d Run", runCount)
 	passSeg := fmt.Sprintf("%d Pass", passCount)
@@ -84,4 +89,27 @@ func formatSummary(style colorStyle, runCount, passCount, failCount, cachedCount
 	}
 
 	return fmt.Sprintf("  (%s, %s, %s, %s)", runSeg, passSeg, failSeg, cachedSeg)
+}
+
+func formatResultSummary(style colorStyle, passed, total int) string {
+	if passed == total {
+		s := fmt.Sprintf("PASS (%d/%d)", passed, total)
+		if style.enabled {
+			return style.green(s)
+		}
+		return s
+	}
+	s := fmt.Sprintf("FAIL (%d/%d)", passed, total)
+	if style.enabled {
+		return style.red(s)
+	}
+	return s
+}
+
+func PrintResultSummary(opts core.Options, stats TestRunStats) {
+	if stats.Total == 0 {
+		return
+	}
+	style := newColorStyle(opts.Color, os.Stdout)
+	fmt.Println(formatResultSummary(style, stats.Passed, stats.Total))
 }

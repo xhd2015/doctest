@@ -409,7 +409,7 @@ func runRunner(args []string, usage string, fn func([]string) error) error {
 	}
 	err := fn(args)
 	if errors.Is(err, runner.ErrNoTestsFound) {
-		fmt.Fprintln(os.Stderr, "no tests found")
+		fmt.Fprintln(os.Stderr, "no tests")
 		return nil
 	}
 	return err

@@ -28,8 +28,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if !strings.Contains(resp.Stderr, "child_test") {
         t.Fatalf("stderr missing child_test (child module path should be discovered):\n%s", resp.Stderr)
     }
-    if strings.Contains(resp.Stderr, "no tests found") {
-        t.Fatalf("stderr should not contain 'no tests found':\n%s", resp.Stderr)
+    if strings.Contains(resp.Stderr, "no tests") {
+        t.Fatalf("stderr should not contain 'no tests':\n%s", resp.Stderr)
     }
     if !strings.Contains(resp.Stdout, "PASS") {
         t.Fatalf("stdout missing PASS:\n%s", resp.Stdout)

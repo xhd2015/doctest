@@ -15,8 +15,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if resp.ExitCode != 0 {
         t.Fatalf("expected zero exit, got %d\nstdout:\n%s\nstderr:\n%s", resp.ExitCode, resp.Stdout, resp.Stderr)
     }
-    if !strings.Contains(resp.Stderr, "1 test case") {
-        t.Fatalf("expected 1 test case, stderr:\n%s", resp.Stderr)
+    if !strings.Contains(resp.Stderr, "(1 tests)") {
+        t.Fatalf("expected (1 tests) in stderr, got:\n%s", resp.Stderr)
     }
     if strings.Contains(resp.Stderr, "leaf_a") {
         t.Fatalf("expected leaf-a (mod-a) NOT to run, stderr:\n%s", resp.Stderr)

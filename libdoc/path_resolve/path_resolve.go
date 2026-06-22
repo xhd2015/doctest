@@ -12,7 +12,7 @@ import (
 	"github.com/xhd2015/gitops/git"
 )
 
-var ErrNoTestsFound = errors.New("no tests found")
+var ErrNoTestsFound = errors.New("no tests")
 
 var errNoModuleFound = errors.New("no module found")
 
@@ -60,7 +60,7 @@ func FindDotDotDotDirs(basePath string) ([]string, error) {
 		dirs, err := FindDOCTestDirsWithBase(".", ".")
 		if err == nil {
 			if len(dirs) == 0 {
-				return nil, errors.New("no tests found")
+				return nil, errors.New("no tests")
 			}
 			return dirs, nil
 		}
@@ -129,7 +129,7 @@ func FindDotDotDotDirs(basePath string) ([]string, error) {
 				return []string{absBase}, nil
 			}
 		}
-		return nil, errors.New("no tests found")
+		return nil, errors.New("no tests")
 	}
 	return dirs, nil
 }

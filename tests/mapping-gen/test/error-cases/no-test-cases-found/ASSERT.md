@@ -1,6 +1,6 @@
 ## Expected
-- Command exits 0 (no tests found is printed to stderr but not an error exit).
-- Stderr contains "no tests found".
+- Command exits 0 (no tests is printed to stderr but not an error exit).
+- Stderr contains "no tests".
 - No test cases are run.
 
 ## Exit Code
@@ -21,8 +21,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	}
 
 	combined := resp.Stderr + "\n" + resp.Stdout
-	if !strings.Contains(combined, "no tests found") {
-		t.Fatalf("expected 'no tests found' in output:\nstderr:\n%s\nstdout:\n%s", resp.Stderr, resp.Stdout)
+	if !strings.Contains(combined, "no tests") {
+		t.Fatalf("expected 'no tests' in output:\nstderr:\n%s\nstdout:\n%s", resp.Stderr, resp.Stdout)
 	}
 }
 ```

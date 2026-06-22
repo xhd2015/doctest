@@ -29,9 +29,9 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if !strings.Contains(resp.Stdout, "PASS") {
         t.Errorf("stdout missing PASS:\n%s", resp.Stdout)
     }
-    // Should NOT report "no tests found" or "file does not exist"
-    if strings.Contains(resp.Stderr, "no tests found") {
-        t.Errorf("stderr contains 'no tests found' but should find tests:\n%s", resp.Stderr)
+    // Should NOT report "no tests" or "file does not exist"
+    if strings.Contains(resp.Stderr, "no tests") {
+        t.Errorf("stderr contains 'no tests' but should find tests:\n%s", resp.Stderr)
     }
     if strings.Contains(resp.Stderr, "file does not exist") {
         t.Errorf("stderr contains 'file does not exist' but the path exists:\n%s", resp.Stderr)

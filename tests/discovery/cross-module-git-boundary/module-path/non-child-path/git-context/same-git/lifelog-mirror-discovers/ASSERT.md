@@ -2,7 +2,7 @@
 - Exit code 0.
 - `skill-cli` tests are discovered.
 - No `warning:` on stderr.
-- No `no tests found`.
+- No `no tests`.
 
 ## Side Effects
 - None beyond running nested doctest tree.
@@ -29,8 +29,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if !strings.Contains(resp.Stderr, "skill-cli") {
         t.Fatalf("stderr missing skill-cli (lifelog mirror should discover lifelog-cli tests):\n%s", resp.Stderr)
     }
-    if strings.Contains(resp.Stderr, "no tests found") {
-        t.Fatalf("stderr should not contain 'no tests found':\n%s", resp.Stderr)
+    if strings.Contains(resp.Stderr, "no tests") {
+        t.Fatalf("stderr should not contain 'no tests':\n%s", resp.Stderr)
     }
     if !strings.Contains(resp.Stdout, "PASS") {
         t.Fatalf("stdout missing PASS:\n%s", resp.Stdout)

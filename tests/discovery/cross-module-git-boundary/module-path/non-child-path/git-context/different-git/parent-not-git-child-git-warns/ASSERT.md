@@ -1,7 +1,7 @@
 ## Expected
 - Child tests are NOT discovered.
 - Stderr contains `warning:` with `git repository mismatch`.
-- Stderr contains `no tests found`.
+- Stderr contains `no tests`.
 
 ## Errors
 - None from the doctest runner itself; command exits with failure due to no tests.
@@ -20,7 +20,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("run failed: %v", err)
     }
     if resp.ExitCode == 0 {
-        t.Fatalf("expected non-zero exit code (child skipped, no tests found), got 0\nstderr:\n%s", resp.Stderr)
+        t.Fatalf("expected non-zero exit code (child skipped, no tests), got 0\nstderr:\n%s", resp.Stderr)
     }
     if !strings.Contains(resp.Stderr, "warning:") {
         t.Fatalf("stderr missing warning (parent not git, child git should warn):\n%s", resp.Stderr)
@@ -31,8 +31,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if !strings.Contains(resp.Stderr, "parent/cli") {
         t.Fatalf("stderr missing nested module path in warning:\n%s", resp.Stderr)
     }
-    if !strings.Contains(resp.Stderr, "no tests found") {
-        t.Fatalf("stderr missing 'no tests found':\n%s", resp.Stderr)
+    if !strings.Contains(resp.Stderr, "no tests") {
+        t.Fatalf("stderr missing 'no tests':\n%s", resp.Stderr)
     }
 }
 ```

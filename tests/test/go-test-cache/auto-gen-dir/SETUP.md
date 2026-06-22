@@ -94,18 +94,30 @@ func doRun(t *testing.T, bin string, args []string) *Response {
 }
 
 func parseGenDir(stderr string) {
-    idx := strings.Index(stderr, "→ ")
-    if idx < 0 {
+    for _, line := range strings.Split(stderr, "\n") {
+        trimmed := strings.TrimSpace(line)
+        if !strings.HasPrefix(trimmed, "cd ") || !strings.Contains(trimmed, " && go ") {
+            continue
+        }
+        path := strings.TrimSpace(strings.TrimPrefix(trimmed, "cd "))
+        path = strings.Split(path, " && go ")[0]
+        path = pathfmt.ExpandDisplayPath(path)
+        dir := path
+        for {
+            if strings.Contains(dir, "mapping-gen") {
+                if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+                    state.GenDir = dir
+                    return
+                }
+            }
+            parent := filepath.Dir(dir)
+            if parent == dir {
+                break
+            }
+            dir = parent
+        }
         return
     }
-    rest := stderr[idx+len("→ "):]
-    end := strings.IndexFunc(rest, func(r rune) bool { return r == '\n' || r == ' ' })
-    if end < 0 {
-        state.GenDir = pathfmt.ExpandDisplayPath(strings.TrimSpace(rest))
-    } else {
-        state.GenDir = pathfmt.ExpandDisplayPath(strings.TrimSpace(rest[:end]))
-    }
-    _ = fmt.Sprintf
 }
 
 func doMultiRun(t *testing.T, req *Request) {
