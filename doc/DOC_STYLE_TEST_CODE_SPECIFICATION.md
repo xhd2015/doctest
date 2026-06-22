@@ -463,6 +463,12 @@ The test can access `DOCTEST_ROOT` constant defined as the root of all tests, us
 req.InputDir = filepath.Join(DOCTEST_ROOT, "testdata", "child-redefines-request")
 ```
 
+Each generated test function also defines `DOCTEST_SESSION_ID` that is unique per `doctest test` run. Use it for session-scoped cache directories, locks, or other cross-package coordination:
+
+```go
+cacheDir := filepath.Join(os.TempDir(), "my-harness-"+DOCTEST_SESSION_ID)
+```
+
 To reference testdata placed alongside a test case (under its own directory),
 use a relative path — it resolves against the case directory:
 

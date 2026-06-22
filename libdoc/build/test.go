@@ -94,8 +94,10 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		fmt.Fprintf(w, "cd %s && go %s\n", pathfmt.DisplayPath(runDir), strings.Join(testArgs, " "))
 	}
 
+	sessionID := core.DoctestSessionIDForRun()
 	goTestCmd := exec.Command("go", testArgs...)
 	goTestCmd.Dir = runDir
+	goTestCmd.Env = append(os.Environ(), core.DoctestSessionIDEnv+"="+sessionID)
 
 	if opts.Verbose {
 		start := time.Now()

@@ -3,6 +3,7 @@ module github.com/xhd2015/doctest
 go 1.25.0
 
 require (
+	github.com/google/uuid v1.6.0
 	github.com/xhd2015/agent-pro v0.0.31
 	github.com/xhd2015/gitops v0.0.18
 	github.com/xhd2015/less-flags v1.0.0
@@ -12,7 +13,6 @@ require (
 
 require (
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/xhd2015/dot-pkgs/go-pkgs v0.0.15 // indirect
 	github.com/xhd2015/go-coverage v1.0.41 // indirect
 	github.com/xhd2015/go-inspect v0.0.49 // indirect

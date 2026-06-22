@@ -16,7 +16,7 @@ func AssembleTestSource(tc TreeCase, compileOnly bool, pkgName string, docTestRo
 	buf.WriteString("\n\n")
 
 	imports := collectImports(tc.SetupFiles, tc.AssertFile.GoBlock)
-	for _, pkg := range []string{"testing", "os", "path/filepath"} {
+	for _, pkg := range []string{"testing", "os", "path/filepath", "syscall"} {
 		if _, ok := imports[pkg]; !ok {
 			imports[pkg] = &ImportSpec{Path: pkg}
 		}
@@ -46,6 +46,10 @@ func AssembleTestSource(tc TreeCase, compileOnly bool, pkgName string, docTestRo
 	buf.WriteString("\tconst DOCTEST_ROOT = `")
 	buf.WriteString(escapedRoot)
 	buf.WriteString("`\n")
+	buf.WriteString("\tDOCTEST_SESSION_ID, __sessionOk := syscall.Getenv(\"DOCTEST_SESSION_ID\")\n")
+	buf.WriteString("\tif !__sessionOk || DOCTEST_SESSION_ID == \"\" {\n")
+	buf.WriteString("\t\tt.Fatalf(\"DOCTEST_SESSION_ID not set\")\n")
+	buf.WriteString("\t}\n")
 	buf.WriteString("\t__origWd, __wdErr := os.Getwd()\n")
 	buf.WriteString("\tif __wdErr != nil {\n")
 	buf.WriteString("\t\tt.Fatal(__wdErr)\n")

@@ -90,6 +90,22 @@ instead of inside the package directory prevents the directory mtime from
 changing. The temp file is then renamed into the leaf directory only when the
 content actually differs.
 
+## Session ID and environment variables
+
+`doctest test` sets `DOCTEST_SESSION_ID` to a new UUID for each invocation and
+injects it into generated tests as:
+
+```go
+DOCTEST_SESSION_ID, ok := syscall.Getenv("DOCTEST_SESSION_ID")
+if !ok || DOCTEST_SESSION_ID == "" {
+    t.Fatalf("DOCTEST_SESSION_ID not set")
+}
+```
+
+Using `syscall.Getenv` (not `os.Getenv`) keeps the session value out of Go's
+test-result cache key while still giving every package in the run the same
+session id. See `tests/test/go-test-cache/env-getenv/` for proof tests.
+
 ## Key Lesson
 
 Any file creation or deletion **inside a Go package directory** between

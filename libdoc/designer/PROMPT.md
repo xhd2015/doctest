@@ -66,6 +66,10 @@ Follow the doc-style test specifications appended below (`__DOCTEST_SPEC__` and
 `Request`/`Response`/`Run`/`Setup`/`Assert` rules, and inheritance — do not
 rely on memory or improvise structure.
 
+Generated tests expose `DOCTEST_ROOT` and `DOCTEST_SESSION_ID` (per
+`doctest test` run). Use `DOCTEST_SESSION_ID` in harness code for
+session-scoped shared directories or locks across parallel packages.
+
 Coverage checklist — ensure every leaf covers:
 - Happy paths for every valid input combination
 - Error paths for every invalid input

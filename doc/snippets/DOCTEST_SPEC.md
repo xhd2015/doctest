@@ -7,8 +7,9 @@ Prose is primary, code supplementary.
 
 ```
 <pkg>/tests/<feature>/
-├── DOCTEST.md          # Overview, ## Version (__DOCTEST_VERSION__), diagram, test index; final ```go``` block defines Request/Response/Run
-├── SETUP.md            # Optional root: func Setup + helper funcs shared by all tests (no Request/Response/Run)
+├── DOCTEST.md          # Overview, ## Version (__DOCTEST_VERSION__), diagram, test index + "## How to Run"; final ```go``` block defines Request/Response types, the Run(t, req) (resp,error) function that actually runs the logic;
+├── SETUP.md            # Optional Root: shared preconditions, func Setup + helper funcs shared by all tests, can use DOCTEST_ROOT to refer root dir and DOCTEST_SESSION_ID for cross-test data sharing or locking
+│                       #   Request, Response, and Run cannot be redefined by any descendant
 ├── <decision-slug>/           # Grouping — no ASSERT.md, must have SETUP.md
 │   └── <leaf-slug>/           # Runnable — has ASSERT.md, must have SETUP.md
 │       └── testdata/   # Fixtures (skipped)

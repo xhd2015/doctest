@@ -31,6 +31,7 @@ A nested root must be entirely self-sufficient:
 - Any external binaries (e.g., the doctest binary for `req.Bin`) must be built or resolved within that root's own `Setup`
 - The parent root's `Setup` is never executed for leaves under a nested DOCTEST.md
 - Paths like `DOCTEST_ROOT/..` shift — from a deeper root, use `DOCTEST_ROOT/../..` to reach the module root
+- `DOCTEST_SESSION_ID` is shared within one `doctest test` run
 
 ### When to Create a Nested DOCTEST.md
 

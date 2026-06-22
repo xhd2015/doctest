@@ -167,3 +167,50 @@ func TestFindModuleRootNotFound(t *testing.T) {
 		t.Fatal("expected no module root")
 	}
 }
+
+func TestAssembleTestSourceIncludesDoctestSessionID(t *testing.T) {
+	root := t.TempDir()
+	tc := TreeCase{
+		Name: "leaf",
+		Path: "leaf",
+		SetupFiles: []SetupDocument{{
+			Path: "",
+			GoBlock: &GoBlock{
+				Run: &FuncSnippet{
+					Name:    "Run",
+					Params:  "t *testing.T, req *Request",
+					Results: "(*Response, error)",
+					Body:    "{ return &Response{}, nil }",
+				},
+				Types: map[string]bool{"Request": true, "Response": true},
+				TypeDecls: []string{
+					"type Request struct{}",
+					"type Response struct{}",
+				},
+			},
+		}},
+		AssertFile: AssertDocument{
+			GoBlock: GoBlock{
+				Assert: &FuncSnippet{
+					Name:   "Assert",
+					Params: "t *testing.T, req *Request, resp *Response, err error",
+					Body:   "{}",
+				},
+			},
+		},
+	}
+
+	src, err := AssembleTestSource(tc, false, "leaf_tc", root)
+	if err != nil {
+		t.Fatalf("assemble: %v", err)
+	}
+	if !strings.Contains(src, "DOCTEST_SESSION_ID, __sessionOk := syscall.Getenv(\"DOCTEST_SESSION_ID\")") {
+		t.Fatalf("expected DOCTEST_SESSION_ID assignment, got:\n%s", src)
+	}
+	if !strings.Contains(src, "t.Fatalf(\"DOCTEST_SESSION_ID not set\")") {
+		t.Fatalf("expected DOCTEST_SESSION_ID missing fatal, got:\n%s", src)
+	}
+	if !strings.Contains(src, "\"syscall\"") {
+		t.Fatalf("expected syscall import, got:\n%s", src)
+	}
+}
