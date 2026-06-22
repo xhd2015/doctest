@@ -23,8 +23,13 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("expected non-zero exit, got 0\nstdout:\n%s\nstderr:\n%s",
 			resp.Stdout, resp.Stderr)
 	}
-	if !strings.Contains(resp.Stdout, "...  (3 Run, 2 Pass, 1 Fail, 0 Cached)") {
-		t.Fatalf("expected inline progress summary, got:\n%s", resp.Stdout)
+	inline := findInlineSummaryLine(resp.Stdout)
+	if inline == "" {
+		t.Fatalf("expected inline progress summary with duration, got:\n%s", resp.Stdout)
+	}
+	plainInline := stripANSI(strings.TrimSpace(inline))
+	if !strings.Contains(plainInline, "(3 Run, 2 Pass, 1 Fail, 0 Cached) in ") {
+		t.Fatalf("expected (3 Run, 2 Pass, 1 Fail, 0 Cached) in <duration>, got %q", plainInline)
 	}
 
 	hasFailTab := false
@@ -43,8 +48,12 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	}
 
 	summary := findResultSummary(resp.Stdout)
-	if stripANSI(strings.TrimSpace(summary)) != "FAIL (2/3)" {
-		t.Fatalf("expected FAIL (2/3) summary, got %q\nstdout:\n%s", summary, resp.Stdout)
+	plainSummary := stripANSI(strings.TrimSpace(summary))
+	if !strings.HasPrefix(plainSummary, "FAIL (2/3) in ") {
+		t.Fatalf("expected FAIL (2/3) in <duration>, got %q\nstdout:\n%s", plainSummary, resp.Stdout)
+	}
+	if _, err := parseFinalSummaryDuration(resp.Stdout); err != nil {
+		t.Fatalf("final duration must parse: %v\nsummary: %q", err, summary)
 	}
 	summaryIsLastLine(t, resp.Stdout)
 

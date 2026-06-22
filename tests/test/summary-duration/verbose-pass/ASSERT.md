@@ -2,7 +2,8 @@
 
 - Command succeeds.
 - stderr shows the go test command includes `-v`.
-- stdout ends with `PASS (1/1)` after verbose go-test output.
+- stdout has no inline `(N Run, ...)` summary.
+- stdout ends with `PASS (1/1) in <duration>` after verbose go-test output.
 
 ```go
 import (
@@ -20,6 +21,9 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	}
 	if !strings.Contains(resp.Stderr, "go test -mod=mod -v") {
 		t.Fatalf("expected stderr to contain 'go test -mod=mod -v', got:\n%s", resp.Stderr)
+	}
+	if findInlineSummaryLine(resp.Stdout) != "" {
+		t.Fatalf("verbose mode must not print inline dot summary, got:\n%s", resp.Stdout)
 	}
 	summary := findResultSummary(resp.Stdout)
 	plainSummary := stripANSI(strings.TrimSpace(summary))

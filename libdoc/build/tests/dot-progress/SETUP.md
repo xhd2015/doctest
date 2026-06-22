@@ -132,18 +132,10 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 	// Build Response.
 	incremental := info.firstDot >= 0 && info.firstDot < 4*time.Second
 
-	lines := strings.Split(strings.TrimRight(info.output, "\n"), "\n")
-	summaryLineIdx := -1
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.Contains(trimmed, "PASS (") || strings.Contains(trimmed, "FAIL (") {
-			summaryLineIdx = i
-			break
-		}
-	}
+	inlineIdx := strings.Index(info.output, "  (")
 	dotCount := 0
-	if summaryLineIdx > 0 {
-		dotCount = strings.Count(strings.Join(lines[:summaryLineIdx], "\n"), ".")
+	if inlineIdx > 0 {
+		dotCount = strings.Count(info.output[:inlineIdx], ".")
 	}
 
 	if testErr != nil {

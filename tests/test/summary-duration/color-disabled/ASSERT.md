@@ -1,7 +1,8 @@
 ## Expected
 
 - Command succeeds.
-- Summary is plain `PASS (1/1)` with no ANSI escape sequences anywhere in stdout.
+- Summary is plain `PASS (1/1) in <duration>` with no ANSI escape sequences anywhere in stdout.
+- Inline summary duration is also plain text.
 
 ```go
 import (
@@ -19,6 +20,13 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	}
 	if containsANSI(resp.Stdout) {
 		t.Fatalf("stdout must not contain ANSI with --no-color, got:\n%s", resp.Stdout)
+	}
+	inline := findInlineSummaryLine(resp.Stdout)
+	if inline == "" {
+		t.Fatalf("expected inline summary with duration, got:\n%s", resp.Stdout)
+	}
+	if _, err := parseInlineSummaryDuration(inline); err != nil {
+		t.Fatalf("inline duration must parse: %v", err)
 	}
 	summary := findResultSummary(resp.Stdout)
 	plainSummary := strings.TrimSpace(summary)

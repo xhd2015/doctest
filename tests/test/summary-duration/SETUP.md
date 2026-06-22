@@ -1,16 +1,13 @@
 # Scenario
 
-**Feature**: end-of-run summary line after `doctest test` completes
+**Feature**: elapsed time in per-suite and final test summaries
 
 ```
-# discover leaves, run packages, aggregate stats
-doctest test <dirs> -> discover leaves -> go test per leaf -> accumulate Passed/Total
+# discover leaves, run packages, measure wall time
+doctest test <dirs> -> discover leaves -> go test per suite -> inline (N Run, ...) in DURATION
 
-# final summary (stdout when Total>0)
-runner -> PASS(passed/total) | FAIL(passed/total)
-
-# no runnable leaves
-runner -> stderr "no tests" (exit 0)
+# final aggregate
+runner -> PASS(passed/total) in DURATION | FAIL(passed/total) in DURATION
 ```
 
 ## Preconditions
@@ -26,9 +23,10 @@ runner -> stderr "no tests" (exit 0)
 
 ## Context
 
-- Non-verbose runs include per-suite `(N Run, N Pass, N Fail, N Cached)` after dots.
-- The aggregated `PASS(x/y)` or `FAIL(x/y)` line is the last non-empty stdout line when cases exist.
+- Non-verbose runs include per-suite `(N Run, N Pass, N Fail, N Cached) in DURATION` after dots.
+- The aggregated `PASS (x/y) in DURATION` or `FAIL (x/y) in DURATION` line is the last non-empty stdout line when cases exist.
 - Color tests use `--color` or `--no-color` CLI flags.
+- Duration uses display formatting: sub-second values as integers (e.g. `949ms`); ≥1s with at most 2 decimal digits (e.g. `1.37s`). Assertions parse rather than match exact values.
 
 ```go
 import (
@@ -64,6 +62,8 @@ type Response struct {
 
 var ansiEscape = regexp.MustCompile("\x1b\\[[0-9;]*m")
 
+var inlineSummaryPlainRe = regexp.MustCompile(`\(\d+ Run, \d+ Pass, \d+ Fail, \d+ Cached\) in (.+)`)
+
 var finalSummaryPlainRe = regexp.MustCompile(`^(PASS|FAIL) \(\d+/\d+\) in .+$`)
 
 func bt(n int) string {
@@ -91,7 +91,7 @@ func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, ni
 	if err := os.WriteFile(filepath.Join(tmp, "SETUP.md"), []byte(doctestGoBlock(rootSetup)), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(tmp, "DOCTEST.md"), []byte("# summary-line fixture\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "DOCTEST.md"), []byte("# summary-duration fixture\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -132,9 +132,42 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	return tmp
 }
 
-func createEmptyDir(t *testing.T) string {
+func createSlowLeafTree(t *testing.T) string {
 	t.Helper()
 	tmp := t.TempDir()
+
+	rootSetup := `import "testing"
+
+type Request struct{}
+type Response struct{}
+func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }`
+	if err := os.WriteFile(filepath.Join(tmp, "SETUP.md"), []byte(doctestGoBlock(rootSetup)), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "DOCTEST.md"), []byte("# summary-duration slow fixture\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	leafDir := filepath.Join(tmp, "slow_1")
+	if err := os.MkdirAll(leafDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	slowSetup := `import (
+	"testing"
+	"time"
+)
+func Setup(t *testing.T, req *Request) error {
+	time.Sleep(time.Second)
+	return nil
+}`
+	if err := os.WriteFile(filepath.Join(leafDir, "SETUP.md"), []byte(doctestGoBlock(slowSetup)), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(leafDir, "ASSERT.md"), []byte(doctestGoBlock(`import "testing"
+func Assert(t *testing.T, req *Request, resp *Response, err error) {}`)), 0644); err != nil {
+		t.Fatal(err)
+	}
+
 	return tmp
 }
 
@@ -166,6 +199,17 @@ func findResultSummary(stdout string) string {
 	return ""
 }
 
+func countResultSummaries(stdout string) int {
+	n := 0
+	for _, line := range strings.Split(stdout, "\n") {
+		plain := strings.TrimSpace(stripANSI(line))
+		if strings.HasPrefix(plain, "PASS (") || strings.HasPrefix(plain, "FAIL (") {
+			n++
+		}
+	}
+	return n
+}
+
 func findInlineSummaryLine(stdout string) string {
 	for _, line := range strings.Split(stdout, "\n") {
 		if strings.Contains(line, " Run, ") && strings.Contains(line, " Cached") {
@@ -173,6 +217,26 @@ func findInlineSummaryLine(stdout string) string {
 		}
 	}
 	return ""
+}
+
+func countInlineSummaries(stdout string) int {
+	n := 0
+	for _, line := range strings.Split(stdout, "\n") {
+		plain := stripANSI(strings.TrimSpace(line))
+		if inlineSummaryPlainRe.MatchString(plain) {
+			n++
+		}
+	}
+	return n
+}
+
+func parseInlineSummaryDuration(line string) (time.Duration, error) {
+	plain := stripANSI(strings.TrimSpace(line))
+	matches := inlineSummaryPlainRe.FindStringSubmatch(plain)
+	if len(matches) < 2 {
+		return 0, fmt.Errorf("inline summary not found in %q", line)
+	}
+	return time.ParseDuration(strings.TrimSpace(matches[1]))
 }
 
 func parseFinalSummaryDuration(stdout string) (time.Duration, error) {
@@ -191,6 +255,20 @@ func parseFinalSummaryDuration(stdout string) (time.Duration, error) {
 	return time.ParseDuration(strings.TrimSpace(line[idx+len(marker):]))
 }
 
+func inlineDurationIsGray(stdout string) bool {
+	line := findInlineSummaryLine(stdout)
+	if line == "" {
+		return false
+	}
+	const marker = ") in "
+	idx := strings.LastIndex(line, marker)
+	if idx < 0 {
+		return false
+	}
+	durSeg := line[idx+len(marker):]
+	return containsANSI(durSeg)
+}
+
 func finalSummaryPassTokenIsColored(summary string) bool {
 	idx := strings.Index(summary, " in ")
 	if idx < 0 {
@@ -205,17 +283,6 @@ func finalSummaryDurationIsPlain(summary string) bool {
 		return false
 	}
 	return !containsANSI(summary[idx:])
-}
-
-func countResultSummaries(stdout string) int {
-	n := 0
-	for _, line := range strings.Split(stdout, "\n") {
-		plain := strings.TrimSpace(stripANSI(line))
-		if strings.HasPrefix(plain, "PASS (") || strings.HasPrefix(plain, "FAIL (") {
-			n++
-		}
-	}
-	return n
 }
 
 func summaryIsLastLine(t *testing.T, stdout string) {

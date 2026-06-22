@@ -39,10 +39,17 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 			dotsBefore, resp.Output)
 	}
 
-	// No dots after the summary.
-	afterSummary := resp.Output[summaryIdx:]
-	if strings.Contains(afterSummary, ".") {
-		t.Fatalf("unexpected dots after summary: %q", afterSummary)
+	// No progress-dot lines after the inline summary (duration decimals are OK).
+	inlineEnd := strings.Index(resp.Output[summaryIdx:], "\n")
+	rest := ""
+	if inlineEnd >= 0 {
+		rest = resp.Output[summaryIdx+inlineEnd+1:]
+	}
+	for _, line := range strings.Split(rest, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" && strings.Trim(trimmed, ".") == "" {
+			t.Fatalf("unexpected progress dots after inline summary: %q", line)
+		}
 	}
 }
 ```

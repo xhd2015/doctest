@@ -14,8 +14,12 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if err != nil {
         t.Fatalf("run failed unexpectedly: %v", err)
     }
-    if !strings.Contains(resp.Stdout, "...  (3 Run, 2 Pass, 1 Fail, 0 Cached)") {
-        t.Fatalf("expected stdout to contain '...  (3 Run, 2 Pass, 1 Fail, 0 Cached)', got:\nstdout:\n%s\nstderr:\n%s", resp.Stdout, resp.Stderr)
+    inline := findInlineSummaryLine(resp.Stdout)
+    if inline == "" {
+        t.Fatalf("expected inline progress summary with duration, got:\n%s", resp.Stdout)
+    }
+    if !strings.Contains(inline, "(3 Run, 2 Pass, 1 Fail, 0 Cached) in ") {
+        t.Fatalf("expected (3 Run, 2 Pass, 1 Fail, 0 Cached) in <duration>, got %q", inline)
     }
     hasFail := false
     for _, line := range strings.Split(resp.Stdout, "\n") {

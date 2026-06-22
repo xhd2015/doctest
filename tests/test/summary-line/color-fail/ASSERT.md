@@ -25,11 +25,15 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if summary == "" {
 		t.Fatalf("expected FAIL summary line, got:\n%s", resp.Stdout)
 	}
-	if stripANSI(strings.TrimSpace(summary)) != "FAIL (0/1)" {
-		t.Fatalf("expected FAIL (0/1), got %q", summary)
+	plainSummary := stripANSI(strings.TrimSpace(summary))
+	if !strings.HasPrefix(plainSummary, "FAIL (0/1) in ") {
+		t.Fatalf("expected FAIL (0/1) in <duration>, got %q", plainSummary)
 	}
-	if !containsANSI(summary) {
-		t.Fatalf("expected red ANSI on entire FAIL (0/1) token, got plain %q", summary)
+	if !finalSummaryPassTokenIsColored(summary) {
+		t.Fatalf("expected red ANSI on FAIL (0/1) token, got plain %q", summary)
+	}
+	if !finalSummaryDurationIsPlain(summary) {
+		t.Fatalf("expected plain duration suffix after ' in ', got %q", summary)
 	}
 }
 ```

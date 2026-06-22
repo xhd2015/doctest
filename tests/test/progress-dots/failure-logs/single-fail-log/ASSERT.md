@@ -24,8 +24,12 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("stdout must contain failure marker %q\nstdout:\n%s\nstderr:\n%s",
 			singleFailLogMarker, resp.Stdout, resp.Stderr)
 	}
-	if !strings.Contains(resp.Stdout, ".  (1 Run, 0 Pass, 1 Fail, 0 Cached)") {
-		t.Fatalf("expected summary line in stdout, got:\n%s", resp.Stdout)
+	inline := findInlineSummaryLine(resp.Stdout)
+	if inline == "" {
+		t.Fatalf("expected inline summary with duration in stdout, got:\n%s", resp.Stdout)
+	}
+	if !strings.Contains(inline, "(1 Run, 0 Pass, 1 Fail, 0 Cached) in ") {
+		t.Fatalf("expected (1 Run, 0 Pass, 1 Fail, 0 Cached) in <duration>, got %q", inline)
 	}
 }
 ```

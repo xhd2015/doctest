@@ -23,9 +23,13 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 			countResultSummaries(resp.Stdout), resp.Stdout)
 	}
 	summary := findResultSummary(resp.Stdout)
-	if stripANSI(strings.TrimSpace(summary)) != "PASS (3/3)" {
-		t.Fatalf("expected PASS (3/3) aggregated summary, got %q\nstdout:\n%s",
-			summary, resp.Stdout)
+	plainSummary := stripANSI(strings.TrimSpace(summary))
+	if !strings.HasPrefix(plainSummary, "PASS (3/3) in ") {
+		t.Fatalf("expected PASS (3/3) in <duration> aggregated summary, got %q\nstdout:\n%s",
+			plainSummary, resp.Stdout)
+	}
+	if _, err := parseFinalSummaryDuration(resp.Stdout); err != nil {
+		t.Fatalf("final duration must parse: %v\nsummary: %q", err, summary)
 	}
 	summaryIsLastLine(t, resp.Stdout)
 	if !strings.Contains(resp.Stdout, " Run, ") {

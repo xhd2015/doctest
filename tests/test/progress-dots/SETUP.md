@@ -27,6 +27,7 @@ import (
     "fmt"
     "os"
     "path/filepath"
+    "strings"
     "testing"
     "time"
 )
@@ -136,6 +137,15 @@ func createSecondOfThreeFailsTree(t *testing.T) string {
     writeFailLeafWithMarker(t, tmp, "fail_2", secondFailLogMarker)
     writePassLeaf(t, tmp, "pass_3")
     return tmp
+}
+
+func findInlineSummaryLine(stdout string) string {
+    for _, line := range strings.Split(stdout, "\n") {
+        if strings.Contains(line, " Run, ") && strings.Contains(line, " Cached") {
+            return line
+        }
+    }
+    return ""
 }
 
 func Setup(t *testing.T, req *Request) error {

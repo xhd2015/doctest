@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/xhd2015/less-flags"
 	runnerbuild "github.com/xhd2015/doctest/libdoc/build"
@@ -40,6 +41,7 @@ func Test(args []string) error {
 	}
 
 	opts.SuppressResultSummary = true
+	start := time.Now()
 	var stats runnerbuild.TestRunStats
 	runFn := func(dir string, o core.Options) error {
 		o.SuppressResultSummary = true
@@ -60,6 +62,7 @@ func Test(args []string) error {
 	}
 
 	if stats.Total > 0 {
+		stats.Elapsed = time.Since(start)
 		runnerbuild.PrintResultSummary(opts, stats)
 	}
 

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/xhd2015/doctest/libdoc/core"
 )
@@ -66,11 +68,29 @@ func (c colorStyle) gray(s string) string {
 }
 
 type TestRunStats struct {
-	Passed int
-	Total  int
+	Passed  int
+	Total   int
+	Elapsed time.Duration
 }
 
-func formatSummary(style colorStyle, runCount, passCount, failCount, cachedCount int) string {
+func formatDisplayDuration(d time.Duration) string {
+	if d >= time.Second {
+		secs := float64(d) / float64(time.Second)
+		s := fmt.Sprintf("%.2f", secs)
+		s = strings.TrimRight(s, "0")
+		s = strings.TrimRight(s, ".")
+		return s + "s"
+	}
+	if d >= time.Millisecond {
+		return fmt.Sprintf("%dms", d/time.Millisecond)
+	}
+	if d >= time.Microsecond {
+		return fmt.Sprintf("%dµs", d/time.Microsecond)
+	}
+	return fmt.Sprintf("%dns", d/time.Nanosecond)
+}
+
+func formatSummary(style colorStyle, runCount, passCount, failCount, cachedCount int, elapsed time.Duration) string {
 	runSeg := fmt.Sprintf("%d Run", runCount)
 	passSeg := fmt.Sprintf("%d Pass", passCount)
 	failSeg := fmt.Sprintf("%d Fail", failCount)
@@ -88,22 +108,28 @@ func formatSummary(style colorStyle, runCount, passCount, failCount, cachedCount
 		cachedSeg = style.gray(cachedSeg)
 	}
 
-	return fmt.Sprintf("  (%s, %s, %s, %s)", runSeg, passSeg, failSeg, cachedSeg)
+	durSeg := formatDisplayDuration(elapsed)
+	if style.enabled {
+		durSeg = style.gray(durSeg)
+	}
+
+	return fmt.Sprintf("  (%s, %s, %s, %s) in %s", runSeg, passSeg, failSeg, cachedSeg, durSeg)
 }
 
-func formatResultSummary(style colorStyle, passed, total int) string {
+func formatResultSummary(style colorStyle, passed, total int, elapsed time.Duration) string {
+	suffix := fmt.Sprintf(" in %s", formatDisplayDuration(elapsed))
 	if passed == total {
-		s := fmt.Sprintf("PASS (%d/%d)", passed, total)
+		token := fmt.Sprintf("PASS (%d/%d)", passed, total)
 		if style.enabled {
-			return style.green(s)
+			return style.green(token) + suffix
 		}
-		return s
+		return token + suffix
 	}
-	s := fmt.Sprintf("FAIL (%d/%d)", passed, total)
+	token := fmt.Sprintf("FAIL (%d/%d)", passed, total)
 	if style.enabled {
-		return style.red(s)
+		return style.red(token) + suffix
 	}
-	return s
+	return token + suffix
 }
 
 func PrintResultSummary(opts core.Options, stats TestRunStats) {
@@ -111,5 +137,5 @@ func PrintResultSummary(opts core.Options, stats TestRunStats) {
 		return
 	}
 	style := newColorStyle(opts.Color, os.Stdout)
-	fmt.Println(formatResultSummary(style, stats.Passed, stats.Total))
+	fmt.Println(formatResultSummary(style, stats.Passed, stats.Total, stats.Elapsed))
 }

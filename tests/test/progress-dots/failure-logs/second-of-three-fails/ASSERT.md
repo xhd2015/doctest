@@ -43,8 +43,12 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if failTabCount != 1 {
 		t.Fatalf("expected exactly one FAIL\\t line, got %d\nstdout:\n%s", failTabCount, resp.Stdout)
 	}
-	if !strings.Contains(resp.Stdout, "...  (3 Run, 2 Pass, 1 Fail, 0 Cached)") {
-		t.Fatalf("expected summary line, got:\n%s", resp.Stdout)
+	inline := findInlineSummaryLine(resp.Stdout)
+	if inline == "" {
+		t.Fatalf("expected inline summary with duration, got:\n%s", resp.Stdout)
+	}
+	if !strings.Contains(inline, "(3 Run, 2 Pass, 1 Fail, 0 Cached) in ") {
+		t.Fatalf("expected (3 Run, 2 Pass, 1 Fail, 0 Cached) in <duration>, got %q", inline)
 	}
 }
 ```

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/xhd2015/doctest/libdoc/core"
 	"github.com/xhd2015/doctest/libdoc/pathfmt"
@@ -97,10 +98,13 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	goTestCmd.Dir = runDir
 
 	if opts.Verbose {
+		start := time.Now()
 		out, err := goTestCmd.CombinedOutput()
+		elapsed := time.Since(start)
 		os.Stdout.Write(out)
 		stats.Passed = passedCases(stats.Total, countFailuresFromGoTestOutput(out))
 		if !opts.SuppressResultSummary {
+			stats.Elapsed = elapsed
 			PrintResultSummary(opts, stats)
 		}
 		if err != nil {
@@ -119,6 +123,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		if err := goTestCmd.Start(); err != nil {
 			return TestRunStats{}, fmt.Errorf("go test start: %w", err)
 		}
+		start := time.Now()
 
 		passCount := 0
 		failCount := 0
@@ -156,11 +161,13 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		stdoutWg.Wait()
 
 		err = goTestCmd.Wait()
+		elapsed := time.Since(start)
 		stats.Passed = passedCases(stats.Total, failCount)
 
-		fmt.Println(formatSummary(style, passCount+failCount, passCount, failCount, cachedCount))
+		fmt.Println(formatSummary(style, passCount+failCount, passCount, failCount, cachedCount, elapsed))
 
 		if !opts.SuppressResultSummary {
+			stats.Elapsed = elapsed
 			PrintResultSummary(opts, stats)
 		}
 
