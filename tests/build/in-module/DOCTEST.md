@@ -51,8 +51,10 @@ in-module/                                    Root: build doctest binary, temp m
 │                                              → nested testcase go.mod + replace, exit 0
 │
 └── lifecycle/                                Temp directory lifecycle
-    └── compile-temp-removed                  internal import + --gen-dir
-                                               → .doctest_run_* gone after run, dump remains
+    ├── compile-temp-removed                  internal import + --gen-dir
+    │                                          → .doctest_run_* gone after run, dump remains
+    └── sigint-leaves-compile-temp            SIGINT during writeCases
+                                                → .doctest_run_* removed (interrupt cleanup)
 ```
 
 ## Test Index
@@ -65,6 +67,14 @@ in-module/                                    Root: build doctest binary, temp m
 | 4 | `build/no-nested-gomod-in-dump` | `doctest build` dumps `*_test.go` without nested go.mod |
 | 5 | `legacy/nested-module-unchanged` | Public import + outside gen-dir preserves legacy nested module |
 | 6 | `lifecycle/compile-temp-removed` | `.doctest_run_*` removed after test; `--gen-dir` dump persists |
+| 7 | `lifecycle/sigint-leaves-compile-temp` | SIGINT during `writeCases` removes `.doctest_run_*` under module root |
+
+## Testdata
+
+| Fixture | Location | Used by |
+|---------|----------|---------|
+| `internal-module` | `testdata/internal-module/` | Single-leaf internal import |
+| 40-leaf module | `lifecycle/sigint-leaves-compile-temp/testdata/` | SIGINT repro (`leaf01`…`leaf40`) |
 
 ## How to Run
 
@@ -85,4 +95,7 @@ doctest test ./tests/build/in-module/legacy/...
 
 # Run a specific leaf
 doctest test ./tests/build/in-module/test/internal-import-compiles
+
+# SIGINT compile-temp cleanup
+doctest test -v ./tests/build/in-module/lifecycle/sigint-leaves-compile-temp
 ```

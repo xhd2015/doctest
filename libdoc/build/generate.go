@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"sync"
 
 	"github.com/xhd2015/doctest/libdoc/core"
 	"github.com/xhd2015/doctest/libdoc/pathfmt"
@@ -22,6 +24,7 @@ type generateContext struct {
 	dumpDir         string
 	internalCompile bool
 	removeLegacyTmp bool
+	closeOnce       sync.Once
 }
 
 func newGenerateContext(dir string, opts core.Options, cases []core.TreeCase, w io.Writer, forBuild bool, verbose bool) (*generateContext, error) {
@@ -78,12 +81,27 @@ func newGenerateContext(dir string, opts core.Options, cases []core.TreeCase, w 
 }
 
 func (ctx *generateContext) Close() {
-	if ctx.compileRoot != "" {
-		os.RemoveAll(ctx.compileRoot)
+	ctx.closeOnce.Do(func() {
+		if ctx.compileRoot != "" {
+			os.RemoveAll(ctx.compileRoot)
+		}
+		if ctx.removeLegacyTmp && ctx.dumpDir == "" {
+			os.RemoveAll(ctx.genRoot)
+		}
+	})
+}
+
+func (ctx *generateContext) installInterruptCleanup() {
+	if ctx.compileRoot == "" && !ctx.removeLegacyTmp {
+		return
 	}
-	if ctx.removeLegacyTmp && ctx.dumpDir == "" {
-		os.RemoveAll(ctx.genRoot)
-	}
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt)
+	go func() {
+		<-ch
+		ctx.Close()
+		os.Exit(130)
+	}()
 }
 
 func (ctx *generateContext) announceRoots() {

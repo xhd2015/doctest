@@ -35,10 +35,12 @@ public imports only -> cache/outside gen-dir -> module testcase + replace
 
 ```go
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -57,6 +59,10 @@ type Request struct {
 	WorkDir string
 	Timeout time.Duration
 	Bin     string
+	// InterruptDuringWriteCases sends SIGINT after the trigger leaf test file
+	// appears in verbose stderr, reproducing Ctrl-C during temp compile generation.
+	InterruptDuringWriteCases bool
+	InterruptTriggerLeaf      int
 }
 
 type Response struct {
@@ -87,6 +93,9 @@ func Setup(t *testing.T, req *Request) error {
 }
 
 func Run(t *testing.T, req *Request) (*Response, error) {
+	if req.InterruptDuringWriteCases {
+		return runDoctestInterruptedDuringWriteCases(t, req)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), req.Timeout)
 	defer cancel()
 
@@ -121,6 +130,78 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 		return resp, ctx.Err()
 	}
 	return resp, err
+}
+
+func runDoctestInterruptedDuringWriteCases(t *testing.T, req *Request) (*Response, error) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), req.Timeout)
+	defer cancel()
+
+	bin := req.Bin
+	if bin == "" {
+		return nil, fmt.Errorf("req.Bin is not set")
+	}
+	triggerLeaf := req.InterruptTriggerLeaf
+	if triggerLeaf <= 0 {
+		triggerLeaf = 15
+	}
+	trigger := fmt.Sprintf("leaf%02d_test.go", triggerLeaf)
+
+	cmd := exec.CommandContext(ctx, bin, req.Args...)
+	cmd.Dir = req.WorkDir
+	cmd.Env = append(os.Environ(), req.Env...)
+
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("stdout pipe: %w", err)
+	}
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("stderr pipe: %w", err)
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("start doctest: %w", err)
+	}
+
+	var stdoutBuf, stderrBuf strings.Builder
+	interrupted := false
+	stderrDone := make(chan struct{})
+	go func() {
+		defer close(stderrDone)
+		scanner := bufio.NewScanner(stderrPipe)
+		for scanner.Scan() {
+			line := scanner.Text()
+			stderrBuf.WriteString(line)
+			stderrBuf.WriteByte('\n')
+			if !interrupted && strings.Contains(line, trigger) {
+				interrupted = true
+				_ = cmd.Process.Signal(os.Interrupt)
+			}
+		}
+	}()
+	go func() {
+		_, _ = io.Copy(&stdoutBuf, stdoutPipe)
+	}()
+
+	waitErr := cmd.Wait()
+	<-stderrDone
+
+	resp := &Response{
+		Stdout: stdoutBuf.String(),
+		Stderr: stderrBuf.String(),
+		Err:    waitErr,
+	}
+	if waitErr != nil {
+		var exitErr *exec.ExitError
+		if errors.As(waitErr, &exitErr) {
+			resp.ExitCode = exitErr.ExitCode()
+		}
+	}
+	if !interrupted {
+		return resp, fmt.Errorf("never sent SIGINT: trigger %q not seen in stderr:\n%s", trigger, resp.Stderr)
+	}
+	return resp, nil
 }
 
 var (
@@ -172,45 +253,59 @@ func createDoctestLeaf(dir string) error {
 	return nil
 }
 
-func createInternalModuleProject(t *testing.T) {
+func copyDir(dst, src string) error {
+	return filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, relErr := filepath.Rel(src, path)
+		if relErr != nil {
+			return relErr
+		}
+		if rel == "." {
+			return nil
+		}
+		target := filepath.Join(dst, rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0755)
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			return err
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		return os.WriteFile(target, data, 0644)
+	})
+}
+
+func copyInternalModuleFixture(t *testing.T, fixtureName string) {
 	t.Helper()
 
+	fixtureSrc := filepath.Join(DOCTEST_ROOT, "testdata", fixtureName)
 	moduleRoot = t.TempDir()
-	if err := os.WriteFile(
-		filepath.Join(moduleRoot, "go.mod"),
-		[]byte("module "+modPath+"\n\ngo 1.21\n"),
-		0644,
-	); err != nil {
-		t.Fatalf("write go.mod: %v", err)
+	if err := copyDir(moduleRoot, fixtureSrc); err != nil {
+		t.Fatalf("copy fixture %s: %v", fixtureName, err)
 	}
-
-	greetDir := filepath.Join(moduleRoot, "internal", "greet")
-	if err := os.MkdirAll(greetDir, 0755); err != nil {
-		t.Fatalf("mkdir internal/greet: %v", err)
-	}
-	if err := os.WriteFile(
-		filepath.Join(greetDir, "greet.go"),
-		[]byte("package greet\n\nfunc Hello() string { return \"hi\" }\n"),
-		0644,
-	); err != nil {
-		t.Fatalf("write greet.go: %v", err)
-	}
-
 	testDir = filepath.Join(moduleRoot, "tests")
-	if err := os.MkdirAll(testDir, 0755); err != nil {
-		t.Fatalf("mkdir tests: %v", err)
-	}
-	extraImports := "\t\"" + modPath + "/internal/greet\"\n"
-	runCode := "func Run(t *testing.T, req *Request) (*Response, error) {\n" +
-		"\treturn &Response{Message: greet.Hello()}, nil\n" +
-		"}"
-	if err := createDoctestRoot(testDir, extraImports, runCode); err != nil {
-		t.Fatalf("create doctest root: %v", err)
-	}
-	if err := createDoctestLeaf(filepath.Join(testDir, "leaf")); err != nil {
-		t.Fatalf("create doctest leaf: %v", err)
-	}
+	genDir = filepath.Join(moduleRoot, "_gen")
+}
 
+func createInternalModuleProject(t *testing.T) {
+	t.Helper()
+	copyInternalModuleFixture(t, "internal-module")
+}
+
+func createInternalModuleProjectWithLeaves(t *testing.T) {
+	t.Helper()
+
+	fixtureSrc := "./testdata"
+	moduleRoot = t.TempDir()
+	if err := copyDir(moduleRoot, fixtureSrc); err != nil {
+		t.Fatalf("copy fixture %s: %v", fixtureSrc, err)
+	}
+	testDir = filepath.Join(moduleRoot, "tests")
 	genDir = filepath.Join(moduleRoot, "_gen")
 }
 

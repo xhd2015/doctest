@@ -48,6 +48,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	if err != nil {
 		return TestRunStats{}, err
 	}
+	ctx.installInterruptCleanup()
 	defer ctx.Close()
 
 	if opts.Verbose {

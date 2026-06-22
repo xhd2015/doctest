@@ -34,6 +34,7 @@ func Build(dir string, opts core.Options) error {
 	if err != nil {
 		return err
 	}
+	ctx.installInterruptCleanup()
 	defer ctx.Close()
 
 	ctx.announceRoots()
