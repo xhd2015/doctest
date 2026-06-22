@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"sync"
 
 	"github.com/xhd2015/doctest/libdoc/core"
@@ -194,4 +195,37 @@ func (ctx *generateContext) runDir(absRoot string, opts core.Options, cases []co
 		isSingleLeaf = true
 	}
 	return runDir, isSingleLeaf
+}
+
+func (ctx *generateContext) scopedMultiRunDir(absRoot string) string {
+	runDir := ctx.genRoot
+	relRoot, err := filepath.Rel(ctx.absModRoot, absRoot)
+	if err == nil && relRoot != "." {
+		runDir = filepath.Join(ctx.genRoot, relRoot)
+	}
+	return runDir
+}
+
+func (ctx *generateContext) packageArgsForCases(runDir, absRoot string, cases []core.TreeCase) ([]string, error) {
+	seen := make(map[string]bool)
+	args := make([]string, 0, len(cases))
+	for _, tc := range cases {
+		absLeaf := filepath.Join(absRoot, tc.Path)
+		leafGen, err := core.GenDirForLeaf(ctx.genRoot, ctx.absModRoot, absLeaf)
+		if err != nil {
+			return nil, err
+		}
+		rel, err := filepath.Rel(runDir, leafGen)
+		if err != nil {
+			return nil, fmt.Errorf("package path for %s: %w", tc.Path, err)
+		}
+		arg := "./" + filepath.ToSlash(rel)
+		if seen[arg] {
+			continue
+		}
+		seen[arg] = true
+		args = append(args, arg)
+	}
+	sort.Strings(args)
+	return args, nil
 }

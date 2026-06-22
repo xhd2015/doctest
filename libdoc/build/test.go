@@ -70,6 +70,18 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 
 	runDir, isSingleLeaf := ctx.runDir(absRoot, opts, cases)
 
+	var packageArgs []string
+	if isSingleLeaf {
+		packageArgs = []string{"."}
+	} else {
+		runDir = ctx.scopedMultiRunDir(absRoot)
+		var pkgErr error
+		packageArgs, pkgErr = ctx.packageArgsForCases(runDir, absRoot, cases)
+		if pkgErr != nil {
+			return TestRunStats{}, pkgErr
+		}
+	}
+
 	testArgs := []string{"test", "-mod=mod"}
 	if opts.Verbose {
 		testArgs = append(testArgs, "-v")
@@ -77,11 +89,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	if NeedsBuildVCSFlag(runDir) {
 		testArgs = append(testArgs, "-buildvcs=false")
 	}
-	if isSingleLeaf {
-		testArgs = append(testArgs, ".")
-	} else {
-		testArgs = append(testArgs, "./...")
-	}
+	testArgs = append(testArgs, packageArgs...)
 	if opts.Count > 0 {
 		testArgs = append(testArgs, fmt.Sprintf("-count=%d", opts.Count))
 	}

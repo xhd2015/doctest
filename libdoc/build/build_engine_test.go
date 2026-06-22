@@ -13,6 +13,46 @@ import (
 	"github.com/xhd2015/doctest/libdoc/testtree"
 )
 
+func TestMultiCaseRunIgnoresStaleNestedDoctestPackages(t *testing.T) {
+	root := t.TempDir()
+	writeTreeFile(t, root, "README.md", "# tree")
+	writeRootHarness(t, root, `
+type Request struct{}
+type Response struct{}
+func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+`, "")
+	writeTreeFile(t, root, "parent/SETUP.md", setupDoc(`
+func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+`))
+	writeTreeFile(t, root, "parent/ASSERT.md", assertDoc(`
+func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+`))
+
+	nested := filepath.Join(root, "nested")
+	writeTreeFile(t, nested, "README.md", "# nested")
+	writeRootHarness(t, nested, `
+type Request struct{}
+type Response struct{}
+func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+`, "")
+	writeTreeFile(t, nested, "bad/SETUP.md", setupDoc(`
+func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+`))
+	writeTreeFile(t, nested, "bad/ASSERT.md", assertDoc(`
+func Assert(t *testing.T, req *Request, resp *Response, err error) {
+	t.Fatal("nested doctest should not run when testing parent tree")
+}
+`))
+
+	genDir := filepath.Join(t.TempDir(), "generated")
+	if err := Test(nested, core.Options{GenDir: genDir}); err == nil {
+		t.Fatal("expected nested doctest to fail")
+	}
+	if err := Test(root, core.Options{GenDir: genDir}); err != nil {
+		t.Fatalf("parent doctest should ignore stale nested generated packages: %v", err)
+	}
+}
+
 func TestChildCannotRedefineRun(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
