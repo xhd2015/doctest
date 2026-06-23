@@ -41,6 +41,8 @@ All code changes happen exclusively through two sub-agents:
 Do not replace them with generic workers, handoff agents, or any other
 delegation mechanism.
 
+If you've already reproduced a bug with written doctests, and confirm they're RED, then you can skip the design → RED stages, start directly from seal step.
+
 # Workflow (8 Phases)
 
 Every feature request, bug fix, or followup follows this loop.

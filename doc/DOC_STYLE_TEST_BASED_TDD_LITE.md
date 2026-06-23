@@ -31,6 +31,8 @@ design tests → RED → seal → implement → GREEN
 
 You write the doctest tree **and** the implementation yourself.
 
+If you've already reproduced a bug with written doctests, and confirm they're RED, then you can jump start from seal step. 
+
 You may use sub-agent to explore/analysis to narrow bug scope before writing
 tests. All file edits (tests and source) are yours.
 
