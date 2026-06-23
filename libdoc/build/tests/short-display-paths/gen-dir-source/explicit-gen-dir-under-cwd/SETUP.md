@@ -1,6 +1,6 @@
 # Scenario
 
-**Feature**: explicit `--gen-dir` under project cwd displays as `→ ./_gen`
+**Feature**: explicit `--gen-dir` under project cwd displays as `→ _gen`
 
 ```
 # gen-dir modes

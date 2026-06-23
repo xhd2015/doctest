@@ -1,7 +1,7 @@
 ## Expected
 
 - `build.Test` succeeds (`resp.TestErr` is nil).
-- `resp.HeaderLine` starts with `doctest: ./` (test tree under cwd).
+- `resp.HeaderLine` starts with `doctest: tests/` (test tree under cwd, no `./` prefix).
 - `resp.CdLine` contains `~/` and `mapping-gen` (gen run dir under home cache).
 - `resp.CdLine` does **not** contain the raw absolute home path.
 
@@ -30,8 +30,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if resp.HeaderLine == "" {
 		t.Fatalf("missing doctest line in stderr:\n%s", resp.Stderr)
 	}
-	if !strings.HasPrefix(resp.HeaderLine, "doctest: ./") {
-		t.Fatalf("doctest line must use ./ prefix, got %q", resp.HeaderLine)
+	if !strings.HasPrefix(resp.HeaderLine, "doctest: tests/") {
+		t.Fatalf("doctest line must use cwd-relative path without ./ prefix, got %q", resp.HeaderLine)
 	}
 	if !strings.Contains(resp.HeaderLine, "(1 tests)") {
 		t.Fatalf("header must include test count, got %q", resp.HeaderLine)

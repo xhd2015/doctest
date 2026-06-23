@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/xhd2015/doctest/libdoc/core"
-	"github.com/xhd2015/doctest/libdoc/pathfmt"
+	"github.com/xhd2015/dot-pkgs/go-pkgs/pathfmt"
 )
 
 func Build(dir string, opts core.Options) error {
@@ -40,13 +40,13 @@ func Build(dir string, opts core.Options) error {
 	ctx.announceRoots()
 
 	if opts.Verbose {
-		fmt.Fprintf(w, "doctest: %s\n\n", pathfmt.DisplayPath(dir))
+		fmt.Fprintf(w, "doctest: %s\n\n", pathfmt.Short(dir))
 		if _, err := core.DiscoverTreeCasesVerbose(dir, w); err != nil {
 			return err
 		}
 		fmt.Fprintf(w, "─── %d test cases\n\n", len(cases))
 	} else {
-		fmt.Fprintf(w, "doctest: %s\n", pathfmt.DisplayPath(dir))
+		fmt.Fprintf(w, "doctest: %s\n", pathfmt.Short(dir))
 		fmt.Fprintf(w, "─── %d test cases\n", len(cases))
 	}
 
@@ -63,7 +63,7 @@ func Build(dir string, opts core.Options) error {
 	}
 	goBuildArgs = append(goBuildArgs, "./...")
 
-	fmt.Fprintf(w, "cd %s && go %s\n\n", pathfmt.DisplayPath(ctx.genRoot), strings.Join(displayGoArgs(goBuildArgs), " "))
+	fmt.Fprintf(w, "cd %s && go %s\n\n", pathfmt.Short(ctx.genRoot), strings.Join(displayGoArgs(goBuildArgs), " "))
 
 	goBuildCmd := exec.Command("go", goBuildArgs...)
 	goBuildCmd.Dir = ctx.genRoot

@@ -36,7 +36,7 @@ import (
     "testing"
     "time"
 
-    "github.com/xhd2015/doctest/libdoc/pathfmt"
+    "github.com/xhd2015/dot-pkgs/go-pkgs/pathfmt"
 )
 
 type multiRunCfg struct {
@@ -101,7 +101,7 @@ func parseGenDir(stderr string) {
         }
         path := strings.TrimSpace(strings.TrimPrefix(trimmed, "cd "))
         path = strings.Split(path, " && go ")[0]
-        path = pathfmt.ExpandDisplayPath(path)
+        path = pathfmt.Expand(path)
         dir := path
         for {
             if strings.Contains(dir, "mapping-gen") {

@@ -52,6 +52,7 @@ doctest-structure/                              [operation mode]
 │
 ├── skill-show/                                 Target: version injection in prompts
 │   ├── skill-tdd-show                          → doctest skill tdd show
+│   ├── skill-tdd-lite-show                     → doctest skill tdd-lite show
 │   ├── skill-designer-show                     → doctest skill designer show
 │   └── skill-implementer-show                  → doctest skill implementer show
 │
@@ -72,6 +73,7 @@ doctest-structure/                              [operation mode]
 | `vet/run-in-doctest/missing-types` | Vet fails when `DOCTEST.md` Go block lacks `Request` or `Response` |
 | `vet/run-in-setup/rejected` | Vet fails when `Request`/`Response`/`Run` remain in root `SETUP.md` |
 | `skill-show/skill-tdd-show` | `doctest skill tdd show` contains `0.0.2`, no placeholder |
+| `skill-show/skill-tdd-lite-show` | `doctest skill tdd-lite show` contains `0.0.2`, no placeholder |
 | `skill-show/skill-designer-show` | `doctest skill designer show` contains `0.0.2`, no placeholder |
 | `skill-show/skill-implementer-show` | `doctest skill implementer show` contains `0.0.2`, no placeholder |
 | `integration/build-runs` | `doctest build` succeeds on minimal new-layout tree |

@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/xhd2015/doctest/libdoc/core"
-	"github.com/xhd2015/doctest/libdoc/pathfmt"
+	"github.com/xhd2015/dot-pkgs/go-pkgs/pathfmt"
 )
 
 func Test(dir string, opts core.Options) error {
@@ -55,13 +55,13 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 
 	if opts.Verbose {
 		ctx.announceRoots()
-		fmt.Fprintf(w, "doctest: %s\n\n", pathfmt.DisplayPath(dir))
+		fmt.Fprintf(w, "doctest: %s\n\n", pathfmt.Short(dir))
 		if _, err := core.DiscoverTreeCasesVerbose(dir, w); err != nil {
 			return TestRunStats{}, err
 		}
 		fmt.Fprintf(w, "─── %d test cases\n\n", len(cases))
 	} else {
-		fmt.Fprintf(w, "doctest: %s (%d tests)\n", pathfmt.DisplayPath(dir), len(cases))
+		fmt.Fprintf(w, "doctest: %s (%d tests)\n", pathfmt.Short(dir), len(cases))
 	}
 
 	if err := ctx.writeCases(cases, false); err != nil {
@@ -104,9 +104,9 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 
 	displayArgs := displayGoArgs(testArgs)
 	if opts.Verbose {
-		fmt.Fprintf(w, "cd %s && go %s\n\n", pathfmt.DisplayPath(runDir), strings.Join(displayArgs, " "))
+		fmt.Fprintf(w, "cd %s && go %s\n\n", pathfmt.Short(runDir), strings.Join(displayArgs, " "))
 	} else {
-		fmt.Fprintf(w, "cd %s && go %s\n", pathfmt.DisplayPath(runDir), strings.Join(displayArgs, " "))
+		fmt.Fprintf(w, "cd %s && go %s\n", pathfmt.Short(runDir), strings.Join(displayArgs, " "))
 	}
 
 	sessionID := core.DoctestSessionIDForRun()

@@ -24,8 +24,8 @@ command preview.
 - **Auto gen dir** — mapping-gen cache under home; `→` and `cd` lines use `~/...`
   instead of `/Users/...`.
 - **Explicit gen dir under cwd** — user `--gen-dir` under project; `→` line uses
-  `./_gen` when cwd is the project root.
-- **Test dir under cwd** — `doctest:` line uses `./` prefix for the source tree path.
+  `_gen` when cwd is the project root.
+- **Test dir under cwd** — `doctest:` line uses cwd-relative path without `./` prefix.
 
 ## Decision Tree
 
@@ -33,15 +33,15 @@ command preview.
 short-display-paths
 └── gen-dir-source              [how gen root is chosen]
     ├── mapping-gen-cache       auto cache dir → ~/.../mapping-gen/...
-    └── explicit-gen-dir-under-cwd  --gen-dir ./_gen under project
+    └── explicit-gen-dir-under-cwd  --gen-dir _gen under project
 ```
 
 ## Test Index
 
 | Leaf | Description |
 |------|-------------|
-| `gen-dir-source/mapping-gen-cache` | Auto gen dir stderr uses `~/...mapping-gen...`; `doctest:` uses `./`; no raw home absolute |
-| `gen-dir-source/explicit-gen-dir-under-cwd` | Explicit `_gen` under project displays as `→ ./_gen` |
+| `gen-dir-source/mapping-gen-cache` | Auto gen dir stderr uses `~/...mapping-gen...`; `doctest:` uses cwd-relative path; no raw home absolute |
+| `gen-dir-source/explicit-gen-dir-under-cwd` | Explicit `_gen` under project displays as `→ _gen` |
 
 ## How to Run
 

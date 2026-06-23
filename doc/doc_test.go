@@ -31,6 +31,28 @@ func TestContent_DocStyleTestCodeSpecification(t *testing.T) {
 	}
 }
 
+func TestContent_TDDLiteResolvesSpecPlaceholders(t *testing.T) {
+	content, err := Content("DOC_STYLE_TEST_BASED_TDD_LITE.md")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, placeholder := range []string{"__DOCTEST_SPEC__", "__DOCTEST_DESIGN_SPEC__", "__DOCTEST_VERSION__"} {
+		if strings.Contains(content, placeholder) {
+			t.Fatalf("Content() still contains unresolved placeholder %q", placeholder)
+		}
+	}
+	for _, want := range []string{
+		"<DOCTEST_SPEC>",
+		"<DOCTEST_DESIGN_SPEC>",
+		"DSN (Domain Specific Notion)",
+		"# Scenario",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("Content() missing %q", want)
+		}
+	}
+}
+
 func TestContent_UnknownFile(t *testing.T) {
 	_, err := Content("nonexistent.md")
 	if err == nil {

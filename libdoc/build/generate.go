@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"github.com/xhd2015/doctest/libdoc/core"
-	"github.com/xhd2015/doctest/libdoc/pathfmt"
+	"github.com/xhd2015/dot-pkgs/go-pkgs/pathfmt"
 )
 
 type generateContext struct {
@@ -107,10 +107,10 @@ func (ctx *generateContext) installInterruptCleanup() {
 
 func (ctx *generateContext) announceRoots() {
 	if ctx.dumpDir != "" {
-		fmt.Fprintf(ctx.w, "→ %s\n\n", pathfmt.DisplayPath(ctx.dumpDir))
+		fmt.Fprintf(ctx.w, "→ %s\n\n", pathfmt.Short(ctx.dumpDir))
 		return
 	}
-	fmt.Fprintf(ctx.w, "→ %s\n\n", pathfmt.DisplayPath(ctx.genRoot))
+	fmt.Fprintf(ctx.w, "→ %s\n\n", pathfmt.Short(ctx.genRoot))
 }
 
 func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) error {
@@ -125,7 +125,7 @@ func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) 
 			return err
 		}
 		if ctx.verbose && ctx.w != nil {
-			fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.DisplayPath(filepath.Join(ctx.genRoot, "go.mod")))
+			fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(filepath.Join(ctx.genRoot, "go.mod")))
 		}
 	}
 
@@ -148,9 +148,9 @@ func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) 
 		}
 		if ctx.verbose && ctx.w != nil {
 			if compileOnly {
-				fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.DisplayPath(leafDir))
+				fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(leafDir))
 			} else {
-				fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.DisplayPath(testPath))
+				fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(testPath))
 			}
 		}
 	}
