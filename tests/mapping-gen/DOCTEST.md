@@ -9,6 +9,19 @@ structure under a mapping-gen cache root — each doctest leaf becomes its own
 Go package so changing one test case only invalidates the Go test cache for
 that specific leaf.
 
+## DSN (Domain Specific Notion)
+
+### Participants
+- **doctest** — generates per-leaf Go packages under a mapping-gen cache root.
+- **source module** — the project `go.mod` that supplies replace directives and dependencies.
+- **generated module** — the `testcase` module written into the cache with a replace back to the source tree.
+
+### Behaviors
+- **mirror** — copy doctest leaves into cache paths that mirror the source tree.
+- **scaffold go.mod** — write a generated `go.mod` with replace directives derived from the source module.
+- **tidy** — run `go mod tidy` once per stable source `go.mod` fingerprint.
+- **invalidate** — refresh generated `go.mod` when the source `go.mod` or `go.sum` changes.
+
 ## Decision Tree
 
 ```
@@ -27,8 +40,10 @@ mapping-gen/                          Root: builds doctest binary, defines helpe
 │   │   │                              → tests run and pass (exit 0)
 │   │   ├── per-leaf-cache-isolation/ 2 leaves, modify one, verify cache isolation
 │   │   │                              → unchanged leaf cached, changed leaf rebuilds
-│   │   └── nested-rename-parent-passes/ nested fails, dir renamed, parent passes
-│   │                                  → stale nested cache ignored by parent scope
+│   │   ├── nested-rename-parent-passes/ nested fails, dir renamed, parent passes
+│   │   │                              → stale nested cache ignored by parent scope
+│   │   └── root-gomod-update-regenerates/ root go.mod replace removed after cache warm
+│   │                                      → cached go.mod must drop stale replace
 │   │
 │   └── error-cases/                  Error paths
 │       └── no-test-cases-found/      Empty doctest dir (no ASSERT.md leaves)
@@ -52,9 +67,10 @@ mapping-gen/                          Root: builds doctest binary, defines helpe
 | 3 | `test/auto-gen-dir/single-leaf-runs` | Single leaf test passes using auto mapping-gen cache dir |
 | 4 | `test/auto-gen-dir/per-leaf-cache-isolation` | Modifying one leaf's ASSERT.md only invalidates that leaf's cache |
 | 5 | `test/auto-gen-dir/nested-rename-parent-passes` | Nested leaf fails, dir renamed + fixed, parent run ignores stale nested cache |
-| 6 | `test/error-cases/no-test-cases-found` | Empty doctest tree returns error |
-| 7 | `build/explicit-gen-dir/per-leaf-packages` | Build mode generates per-leaf dirs with compile-only stubs |
-| 8 | `build/auto-gen-dir/compiles-successfully` | Build mode succeeds with auto temp dir |
+| 6 | `test/auto-gen-dir/root-gomod-update-regenerates` | Root go.mod replace removed after cache warm; cached go.mod must regenerate |
+| 7 | `test/error-cases/no-test-cases-found` | Empty doctest tree returns error |
+| 8 | `build/explicit-gen-dir/per-leaf-packages` | Build mode generates per-leaf dirs with compile-only stubs |
+| 9 | `build/auto-gen-dir/compiles-successfully` | Build mode succeeds with auto temp dir |
 
 ## How to Run
 

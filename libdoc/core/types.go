@@ -69,6 +69,7 @@ type Options struct {
 	SubDir                string
 	Color                 ColorMode
 	SuppressResultSummary bool
+	ChangedOnly           bool
 }
 
 type ValidationError struct {

@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -213,4 +214,72 @@ func TestAssembleTestSourceIncludesDoctestSessionID(t *testing.T) {
 	if !strings.Contains(src, "\"syscall\"") {
 		t.Fatalf("expected syscall import, got:\n%s", src)
 	}
+}
+
+func TestWriteGoModSkipsWhenSourceUnchanged(t *testing.T) {
+	modRoot := t.TempDir()
+	genDir := filepath.Join(t.TempDir(), "gen")
+	writeTreeFile(t, modRoot, "go.mod", "module example.com/a\n\ngo 1.21\n")
+
+	if err := WriteGoMod(genDir, modRoot, "example.com/a", true); err != nil {
+		t.Fatalf("first WriteGoMod: %v", err)
+	}
+	first, err := os.ReadFile(filepath.Join(genDir, "go.mod"))
+	if err != nil {
+		t.Fatalf("read first go.mod: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(genDir, "doctest.tidy-done"), []byte("done"), 0644); err != nil {
+		t.Fatalf("write tidy marker: %v", err)
+	}
+
+	if err := WriteGoMod(genDir, modRoot, "example.com/a", true); err != nil {
+		t.Fatalf("second WriteGoMod: %v", err)
+	}
+	second, err := os.ReadFile(filepath.Join(genDir, "go.mod"))
+	if err != nil {
+		t.Fatalf("read second go.mod: %v", err)
+	}
+	if string(first) != string(second) {
+		t.Fatalf("expected cached go.mod to be unchanged")
+	}
+	if _, err := os.Stat(filepath.Join(genDir, "doctest.tidy-done")); err != nil {
+		t.Fatalf("expected tidy marker to remain when source go.mod unchanged: %v", err)
+	}
+}
+
+func TestWriteGoModRegeneratesWhenSourceChanges(t *testing.T) {
+	modRoot := t.TempDir()
+	genDir := filepath.Join(t.TempDir(), "gen")
+	writeTreeFile(t, modRoot, "go.mod", "module example.com/a\n\ngo 1.21\n\nreplace localdep => ./dep\n")
+
+	if err := WriteGoMod(genDir, modRoot, "example.com/a", true); err != nil {
+		t.Fatalf("first WriteGoMod: %v", err)
+	}
+	if !strings.Contains(readFileString(t, filepath.Join(genDir, "go.mod")), "replace localdep") {
+		t.Fatal("expected first go.mod to include replace localdep")
+	}
+	if err := os.WriteFile(filepath.Join(genDir, "doctest.tidy-done"), []byte("done"), 0644); err != nil {
+		t.Fatalf("write tidy marker: %v", err)
+	}
+
+	writeTreeFile(t, modRoot, "go.mod", "module example.com/a\n\ngo 1.21\n")
+	if err := WriteGoMod(genDir, modRoot, "example.com/a", true); err != nil {
+		t.Fatalf("second WriteGoMod: %v", err)
+	}
+	updated := readFileString(t, filepath.Join(genDir, "go.mod"))
+	if strings.Contains(updated, "replace localdep") {
+		t.Fatalf("expected regenerated go.mod to drop stale replace:\n%s", updated)
+	}
+	if _, err := os.Stat(filepath.Join(genDir, "doctest.tidy-done")); !os.IsNotExist(err) {
+		t.Fatalf("expected tidy marker removed after source go.mod change, err=%v", err)
+	}
+}
+
+func readFileString(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(data)
 }

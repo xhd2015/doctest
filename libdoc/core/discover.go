@@ -1,6 +1,8 @@
 package core
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +14,8 @@ import (
 	"github.com/xhd2015/doctest/libdoc/rules"
 	"golang.org/x/tools/imports"
 )
+
+const goModFingerprintFile = "doctest.gomod-fp"
 
 func DiscoverTreeCases(root string) ([]TreeCase, error) {
 	return discoverTreeCasesInternal(root, nil)
@@ -404,11 +408,49 @@ func CopyGeneratedTree(src, dst string) error {
 	})
 }
 
-func WriteGoMod(genDir, modRoot, modPath string, hasMod bool) error {
-	modFile := filepath.Join(genDir, "go.mod")
-	if _, err := os.Stat(modFile); err == nil {
-		return nil
+func goModSourceFingerprint(modRoot, modPath string, hasMod bool) (string, error) {
+	h := sha256.New()
+	if _, err := fmt.Fprintf(h, "hasMod=%t\nmodPath=%s\nmodRoot=%s\n", hasMod, modPath, modRoot); err != nil {
+		return "", err
 	}
+	goModPath := filepath.Join(modRoot, "go.mod")
+	if data, err := os.ReadFile(goModPath); err == nil {
+		if _, err := h.Write(data); err != nil {
+			return "", err
+		}
+	} else if !os.IsNotExist(err) {
+		return "", err
+	}
+	if _, err := h.Write([]byte{0}); err != nil {
+		return "", err
+	}
+	goSumPath := filepath.Join(modRoot, "go.sum")
+	if data, err := os.ReadFile(goSumPath); err == nil {
+		if _, err := h.Write(data); err != nil {
+			return "", err
+		}
+	} else if !os.IsNotExist(err) {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func WriteGoMod(genDir, modRoot, modPath string, hasMod bool) error {
+	fp, err := goModSourceFingerprint(modRoot, modPath, hasMod)
+	if err != nil {
+		return err
+	}
+	modFile := filepath.Join(genDir, "go.mod")
+	markerFile := filepath.Join(genDir, goModFingerprintFile)
+	if old, err := os.ReadFile(markerFile); err == nil && string(old) == fp {
+		if _, err := os.Stat(modFile); err == nil {
+			return nil
+		}
+	}
+	if err := os.MkdirAll(genDir, 0755); err != nil {
+		return err
+	}
+
 	var content string
 	if hasMod {
 		content = fmt.Sprintf("module testcase\n\ngo 1.21\n\nreplace %s => %s\n", modPath, modRoot)
@@ -429,8 +471,14 @@ func WriteGoMod(genDir, modRoot, modPath string, hasMod bool) error {
 			if err := os.WriteFile(filepath.Join(genDir, "go.sum"), data, 0644); err != nil {
 				return err
 			}
+		} else {
+			os.Remove(filepath.Join(genDir, "go.sum"))
 		}
 	}
+	if err := os.WriteFile(markerFile, []byte(fp), 0644); err != nil {
+		return err
+	}
+	os.Remove(filepath.Join(genDir, "doctest.tidy-done"))
 	return nil
 }
 

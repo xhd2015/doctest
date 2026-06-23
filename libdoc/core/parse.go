@@ -18,10 +18,25 @@ func ExtractFinalGoBlock(path string, content string) (GoBlock, error) {
 		return GoBlock{}, fmt.Errorf("%s: missing go block", path)
 	}
 	last := blocks[len(blocks)-1]
-	if strings.TrimSpace(content[last.end:]) != "" {
+	if trailing := strings.TrimSpace(content[last.end:]); trailing != "" && !isAllowedTrailingContent(trailing) {
 		return GoBlock{}, fmt.Errorf("%s: go block must be final content", path)
 	}
 	return GoBlock{SourcePath: path, Code: last.code}, nil
+}
+
+func isAllowedTrailingContent(s string) bool {
+	rest := strings.TrimSpace(s)
+	for rest != "" {
+		if !strings.HasPrefix(rest, "<!--") {
+			return false
+		}
+		end := strings.Index(rest, "-->")
+		if end < 0 {
+			return false
+		}
+		rest = strings.TrimSpace(rest[end+len("-->"):])
+	}
+	return true
 }
 
 func ParseDOCTESTDocument(path string, content string) (SetupDocument, error) {

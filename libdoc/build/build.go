@@ -26,6 +26,17 @@ func Build(dir string, opts core.Options) error {
 	if opts.SubDir != "" {
 		cases = core.FilterBySubDir(cases, dir, opts.SubDir)
 	}
+	if opts.ChangedOnly {
+		gitRoot, changedFiles, err := core.ChangedGitFiles(dir)
+		if err != nil {
+			return err
+		}
+		cases = core.FilterByChangedFiles(cases, dir, gitRoot, changedFiles)
+		if len(cases) == 0 {
+			fmt.Fprintln(w, core.NoTestsChangedMessage)
+			return nil
+		}
+	}
 	if len(cases) == 0 {
 		return fmt.Errorf("%s: no runnable test cases found", dir)
 	}

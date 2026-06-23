@@ -66,12 +66,13 @@ const skillUsage = `Usage: doctest skill --list
        doctest skill designer show|install
 `
 
-const vetUsage = `Usage: doctest vet [-v|--verbose] <dir...>
+const vetUsage = `Usage: doctest vet [-v|--verbose] [--changed] <dir...>
 
 Validate doc-test tree structure and anti-patterns, allow ./... patterns like go build.
 
 Options:
   -v, --verbose     Show directories and files being validated
+  --changed         Only validate doctest files affected by git working-tree changes
   -h, --help        Show help
 
 Examples:
@@ -80,7 +81,7 @@ Examples:
   doctest vet -v ./sub-module/...
 `
 
-const buildUsage = `Usage: doctest build [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] <dir>
+const buildUsage = `Usage: doctest build [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [--changed] <dir>
 
 Validate generated snippets compile without executing behavior,,allow ./... patterns like go build.
 
@@ -89,6 +90,7 @@ Options:
   --rm              Remove the temporary generated test directory
   --gen-dir DIR     Write generated Go test files to DIR
   -count=N          Forward Go test count option to generated build
+  --changed         Only build doctest leaves affected by git working-tree changes
   -h, --help        Show help
 
 Examples:
@@ -97,7 +99,7 @@ Examples:
   doctest build -v ./sub-module/...
 `
 
-const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [--timeout DURATION] [--color] [--no-color] <dir>
+const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [--timeout DURATION] [--color] [--no-color] [--changed] <dir>
 
 Run executable Go snippets from a doc-style test directory, allow ./... patterns like go test.
 
@@ -111,6 +113,7 @@ Options:
                     (e.g. 30s, 5m, 1h); omitted uses go test default (10m)
   --color           Force ANSI color in non-verbose progress output
   --no-color        Disable ANSI color in non-verbose progress output
+  --changed         Only run doctest leaves affected by git working-tree changes
   -h, --help        Show help
 
 Examples:

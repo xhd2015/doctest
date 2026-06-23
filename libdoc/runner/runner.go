@@ -48,6 +48,9 @@ func Test(args []string) error {
 		s, err := runnerbuild.TestWithStats(dir, o)
 		stats.Passed += s.Passed
 		stats.Total += s.Total
+		if s.NoTestsChanged {
+			stats.NoTestsChanged = true
+		}
 		if err != nil && strings.Contains(err.Error(), "no runnable test cases found") {
 			return ErrNoTestsFound
 		}
@@ -73,6 +76,9 @@ func Test(args []string) error {
 		return runErr
 	}
 	if stats.Total == 0 {
+		if stats.NoTestsChanged {
+			return nil
+		}
 		return ErrNoTestsFound
 	}
 	if stats.Passed < stats.Total {
@@ -188,6 +194,7 @@ func parseBuildOptions(args []string) (core.Options, []string, error) {
 		Bool("--rm", &opts.RemoveTemp).
 		String("--gen-dir", &opts.GenDir).
 		Int("-count", &opts.Count).
+		Bool("--changed", &opts.ChangedOnly).
 		Parse(args)
 	if err != nil {
 		return core.Options{}, nil, err
@@ -218,6 +225,7 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 		Duration("--timeout", &opts.Timeout).
 		Bool("--color", &colorFlag).
 		Bool("--no-color", &noColorFlag).
+		Bool("--changed", &opts.ChangedOnly).
 		Parse(args)
 	if err != nil {
 		return core.Options{}, nil, err
@@ -234,6 +242,7 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 func parseVetOptions(args []string) (core.Options, []string, error) {
 	opts := core.Options{Stderr: os.Stderr}
 	remainArgs, err := lessflags.Bool("-v,--verbose", &opts.Verbose).
+		Bool("--changed", &opts.ChangedOnly).
 		Parse(args)
 	if err != nil {
 		return core.Options{}, nil, err

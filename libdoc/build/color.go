@@ -68,9 +68,10 @@ func (c colorStyle) gray(s string) string {
 }
 
 type TestRunStats struct {
-	Passed  int
-	Total   int
-	Elapsed time.Duration
+	Passed         int
+	Total          int
+	Elapsed        time.Duration
+	NoTestsChanged bool
 }
 
 func formatDisplayDuration(d time.Duration) string {
