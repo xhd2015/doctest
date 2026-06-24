@@ -1,9 +1,9 @@
 ---
-name: doc-style-test-based-tdd-lite
+name: doctest-tdd-lite
 description: single-agent doctest TDD (design + implement inline, no sub-agent delegation)
 ---
 
---begin of skill doc-style-test-based-tdd-lite--
+--begin of skill doctest-tdd-lite--
 
 # Gate
 
@@ -201,4 +201,4 @@ __DOCTEST_SPEC__
 __DOCTEST_DESIGN_SPEC__
 </DOCTEST_DESIGN_SPEC>
 
---end of skill doc-style-test-based-tdd-lite--
+--end of skill doctest-tdd-lite--

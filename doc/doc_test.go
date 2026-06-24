@@ -32,7 +32,7 @@ func TestContent_DocStyleTestCodeSpecification(t *testing.T) {
 }
 
 func TestContent_TDDLiteResolvesSpecPlaceholders(t *testing.T) {
-	content, err := Content("DOC_STYLE_TEST_BASED_TDD_LITE.md")
+	content, err := Content("DOCTEST_TDD_LITE.md")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

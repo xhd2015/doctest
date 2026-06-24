@@ -1,9 +1,9 @@
 ---
-name: doc-style-test-based-tdd
+name: doctest-tdd
 description: adversarial multi-agent TDD with doctests (orchestrator + tests designer + implementer)
 ---
 
---begin of skill doc-style-test-based-tdd--
+--begin of skill doctest-tdd--
 
 # Gate
 
@@ -169,4 +169,4 @@ progress periodically.
 
 __DOCTEST_SPEC__
 
---end of skill doc-style-test-based-tdd--
+--end of skill doctest-tdd--

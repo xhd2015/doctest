@@ -18,8 +18,8 @@ type entry struct {
 var entries = map[string]entry{
 	"doc-spec":    {SkillName: "doc-style-test-specification", FileName: "DOC_STYLE_TEST_SPECIFICATION.md"},
 	"code-spec":   {SkillName: "doc-style-test-code-specification", FileName: "DOC_STYLE_TEST_CODE_SPECIFICATION.md"},
-	"tdd":         {SkillName: "doc-style-test-based-tdd", FileName: "DOC_STYLE_TEST_BASED_TDD.md"},
-	"tdd-lite":    {SkillName: "doc-style-test-based-tdd-lite", FileName: "DOC_STYLE_TEST_BASED_TDD_LITE.md"},
+	"tdd":         {SkillName: "doctest-tdd", FileName: "DOCTEST_TDD.md"},
+	"tdd-lite":    {SkillName: "doctest-tdd-lite", FileName: "DOCTEST_TDD_LITE.md"},
 	"implementer": {SkillName: "doc-style-test-based-tdd-implementer", ContentFunc: func() (string, error) { return implementer.PromptContent(), nil }},
 	"designer":    {SkillName: "doc-style-test-based-tdd-designer", ContentFunc: func() (string, error) { return designer.PromptContent(), nil }},
 }

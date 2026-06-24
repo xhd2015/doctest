@@ -19,7 +19,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("exit code = %d, stderr:\n%s", resp.ExitCode, resp.Stderr)
     }
     for _, want := range []string{
-        "doc-style-test-based-tdd-lite",
+        "doctest-tdd-lite",
         "single-agent doctest TDD",
         "Phase 1 — Requirements",
         "Phase 6 — Verify",

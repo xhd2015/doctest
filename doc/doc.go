@@ -15,11 +15,11 @@ var docStyleTestSpecification string
 //go:embed DOC_STYLE_TEST_CODE_SPECIFICATION.md
 var docStyleTestCodeSpecification string
 
-//go:embed DOC_STYLE_TEST_BASED_TDD.md
-var docStyleTestBasedTDD string
+//go:embed DOCTEST_TDD.md
+var doctestTDD string
 
-//go:embed DOC_STYLE_TEST_BASED_TDD_LITE.md
-var docStyleTestBasedTDDLITE string
+//go:embed DOCTEST_TDD_LITE.md
+var doctestTDDLITE string
 
 func Content(fileName string) (string, error) {
 	var content string
@@ -28,10 +28,10 @@ func Content(fileName string) (string, error) {
 		content = docStyleTestSpecification
 	case "DOC_STYLE_TEST_CODE_SPECIFICATION.md":
 		content = docStyleTestCodeSpecification
-	case "DOC_STYLE_TEST_BASED_TDD.md":
-		content = docStyleTestBasedTDD
-	case "DOC_STYLE_TEST_BASED_TDD_LITE.md":
-		content = docStyleTestBasedTDDLITE
+	case "DOCTEST_TDD.md":
+		content = doctestTDD
+	case "DOCTEST_TDD_LITE.md":
+		content = doctestTDDLITE
 	default:
 		return "", fmt.Errorf("unknown file: %s", fileName)
 	}

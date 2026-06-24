@@ -6,8 +6,6 @@ Run the tests to ensure all results are correct (passing).
 
 Sub-agent continuity is maintained via thread ID.
 
-Main agent will be run as a skill, put the doc into /Users/xhd2015/Projects/xhd2015/agent-pro/agents/doctest/doc/DOC_STYLE_TEST_BASED_TDD.md
-
 follow TDD style, write doctests first, run them and expect failure(for those expecting error, the error message would be wrong because the implementation may only be a stub return "error not implemented"), then run `git add <test-dir>` to seal tests, then goes to implementation, run the tests, fix code to address failures until all tests are green
 
 The whole system is a practice of TDD: write tests that fail first, then correct implementation until success.

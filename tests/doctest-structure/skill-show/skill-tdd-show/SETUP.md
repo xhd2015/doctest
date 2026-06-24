@@ -4,7 +4,7 @@
 
 ```
 # TDD skill document served to stdout
-doctest skill tdd show -> DOC_STYLE_TEST_BASED_TDD.md with version 0.0.2
+doctest skill tdd show -> DOCTEST_TDD.md with version 0.0.2
 ```
 
 ## Preconditions
