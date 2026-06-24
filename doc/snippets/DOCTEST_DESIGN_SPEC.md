@@ -42,8 +42,26 @@ execution strategies.
 
 ### Tree Organization
 
-1. **Parent → child dirs**: scenarios become more concrete by narrowing one or a few params from `Request`.
-2. **Sibling dirs**: must be mutually exclusive — each tests a different scenario branch.
+Doctest trees are decision trees. Design them using the **MECE** principle
+(Mutually Exclusive, Collectively Exhaustive):
+
+1. **Mutually exclusive siblings**: each sibling dir tests a distinct branch —
+   no two siblings should cover the same scenario.
+2. **Collectively exhaustive siblings (pragmatic)**: at each split, sibling
+   dirs should cover all **meaningful** outcomes for that factor. Do not force
+   branches for trivial, duplicate, or low-value cases; avoid gaps where an
+   important case has no branch.
+
+**Significance ordering**: place factors with the **largest impact on behavior
+or outcome** at **higher** ancestor dirs; reserve **least significant** factors
+(minor variants, edge values) for **lower** descendant dirs. Each parent→child
+step should narrow `Request` by one or a few params, preferring the
+highest-impact unresolved factor first.
+
+3. **Parent → child dirs**: scenarios become more concrete by narrowing one or
+   a few params from `Request` (most significant first).
+4. **Sibling dirs**: must be MECE — mutually exclusive and pragmatically
+   collectively exhaustive for the factor being split at that level.
 
 ## SETUP.md
 
