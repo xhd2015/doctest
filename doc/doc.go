@@ -21,6 +21,12 @@ var doctestTDD string
 //go:embed DOCTEST_TDD_LITE.md
 var doctestTDDLITE string
 
+//go:embed DOCTEST_REPRODUCE.md
+var doctestReproduce string
+
+//go:embed DOCTEST_REVIEW.md
+var doctestReview string
+
 func Content(fileName string) (string, error) {
 	var content string
 	switch fileName {
@@ -32,6 +38,10 @@ func Content(fileName string) (string, error) {
 		content = doctestTDD
 	case "DOCTEST_TDD_LITE.md":
 		content = doctestTDDLITE
+	case "DOCTEST_REPRODUCE.md":
+		content = doctestReproduce
+	case "DOCTEST_REVIEW.md":
+		content = doctestReview
 	default:
 		return "", fmt.Errorf("unknown file: %s", fileName)
 	}

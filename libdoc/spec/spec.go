@@ -20,6 +20,8 @@ var entries = map[string]entry{
 	"code-spec":   {SkillName: "doc-style-test-code-specification", FileName: "DOC_STYLE_TEST_CODE_SPECIFICATION.md"},
 	"tdd":         {SkillName: "doctest-tdd", FileName: "DOCTEST_TDD.md"},
 	"tdd-lite":    {SkillName: "doctest-tdd-lite", FileName: "DOCTEST_TDD_LITE.md"},
+	"reproduce":   {SkillName: "doctest-reproduce", FileName: "DOCTEST_REPRODUCE.md"},
+	"review":      {SkillName: "doctest-review", FileName: "DOCTEST_REVIEW.md"},
 	"implementer": {SkillName: "doc-style-test-based-tdd-implementer", ContentFunc: func() (string, error) { return implementer.PromptContent(), nil }},
 	"designer":    {SkillName: "doc-style-test-based-tdd-designer", ContentFunc: func() (string, error) { return designer.PromptContent(), nil }},
 }
