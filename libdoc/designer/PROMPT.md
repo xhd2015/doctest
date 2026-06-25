@@ -25,6 +25,23 @@ Read and understand the requirement. Identify:
 - Expected outcomes for common scenarios
 - Error conditions and how they surface
 
+#### User test suggestions (starting point)
+
+The requirement may include example or suggested test cases. Treat those as a
+**starting point**, not the final tree:
+
+- **Extend** — add scenarios the user did not list (error paths, edge cases,
+  parameter interactions, coverage gaps).
+- **Reorganize** — do not mirror the user's list order or grouping if a better
+  hierarchy exists.
+- **Apply MECE** — sibling branches at each level must be mutually exclusive
+  and pragmatically collectively exhaustive for the split factor.
+- **Most-significant first** — order grouping levels by parameter significance
+  (largest behavioral impact highest in the tree), per Step 2 and the design spec.
+
+When user suggestions conflict with MECE or significance ordering, prefer the
+principles over preserving the original list structure.
+
 ### Step 2: Analyze and Prioritize Parameters
 
 List every parameter/input and determine:
