@@ -9,6 +9,35 @@ import (
 	"github.com/xhd2015/doctest/libdoc/testtree"
 )
 
+func TestFilterByChangedFilesIgnoresSiblingStrayFiles(t *testing.T) {
+	_, treeDir := changedFixtureRepo(t)
+	assertPath := filepath.Join(treeDir, "leaf_a", "ASSERT.md")
+	content, err := os.ReadFile(assertPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(assertPath, append(content, []byte("\n<!-- changed -->\n")...), 0644); err != nil {
+		t.Fatal(err)
+	}
+	strayPath := filepath.Join(treeDir, "leaf_b", "stray.go")
+	if err := os.WriteFile(strayPath, []byte("package leaf_b\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	gitRoot, changed, err := ChangedGitFiles(treeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases, err := DiscoverTreeCases(treeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	filtered := FilterByChangedFiles(cases, treeDir, gitRoot, changed)
+	if len(filtered) != 1 || filtered[0].Path != "leaf_a" {
+		t.Fatalf("filtered = %#v, want [leaf_a] (sibling stray file must not widen runs)", filtered)
+	}
+}
+
 func TestFilterByChangedFilesLeafAssert(t *testing.T) {
 	_, treeDir := changedFixtureRepo(t)
 	assertPath := filepath.Join(treeDir, "leaf_a", "ASSERT.md")

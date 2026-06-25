@@ -161,12 +161,15 @@ func leafAffectedByGroupSetup(leafPath, groupDir string) bool {
 }
 
 func leafAffectedByPath(leafPath, rel string) bool {
+	rel = filepath.ToSlash(rel)
 	if leafPath == "" {
-		return rel == "ASSERT.md" || !strings.Contains(rel, "/")
+		if rel == "ASSERT.md" {
+			return true
+		}
+		return strings.HasPrefix(rel, "testdata/")
 	}
-	if rel == filepath.Join(leafPath, "ASSERT.md") {
+	if rel == leafPath+"/ASSERT.md" {
 		return true
 	}
-	prefix := leafPath + "/"
-	return strings.HasPrefix(rel, prefix)
+	return strings.HasPrefix(rel, leafPath+"/testdata/")
 }

@@ -22,8 +22,8 @@ files in the working tree are processed. Change detection uses
   filtered by the CLI.
 - **Changed-file mapper** — maps each changed path to affected leaves: root
   `DOCTEST.md` affects all leaves; group `SETUP.md` affects descendant leaves;
-  leaf `ASSERT.md`, `testdata/**`, or any file under a leaf affects that leaf
-  only.
+  leaf `ASSERT.md` or `testdata/**` under a leaf affects that leaf only.
+  Unrelated non-doctest files under a sibling leaf are ignored.
 
 ### Behaviors
 
@@ -51,6 +51,10 @@ files in the working tree are processed. Change detection uses
     └── in-git-repo
         ├── test
         │   ├── assert-only           (1 leaf runs)
+        │   ├── assert-only-dotdotdot (1 leaf runs via ./...)
+        │   ├── assert-only-subpath-dotdotdot (1 leaf runs via ./tests/...)
+        │   ├── sibling-stray-untracked (1 leaf runs; sibling stray ignored)
+        │   ├── sibling-stray-subpath-dotdotdot (1 leaf runs via ./tests/...; sibling stray ignored)
         │   ├── parent-setup          (2 leaves run)
         │   ├── root-doctest          (2 leaves run)
         │   ├── new-untracked-leaf    (1 new leaf runs)
@@ -76,6 +80,10 @@ files in the working tree are processed. Change detection uses
 | not-git build | `git-context/not-git-repo/build/` |
 | not-git vet | `git-context/not-git-repo/vet/` |
 | test assert-only | `git-context/in-git-repo/test/assert-only/` |
+| test assert-only dotdotdot | `git-context/in-git-repo/test/assert-only-dotdotdot/` |
+| test assert-only subpath dotdotdot | `git-context/in-git-repo/test/assert-only-subpath-dotdotdot/` |
+| test sibling stray untracked | `git-context/in-git-repo/test/sibling-stray-untracked/` |
+| test sibling stray subpath dotdotdot | `git-context/in-git-repo/test/sibling-stray-subpath-dotdotdot/` |
 | test parent-setup | `git-context/in-git-repo/test/parent-setup/` |
 | test root-doctest | `git-context/in-git-repo/test/root-doctest/` |
 | test new-untracked | `git-context/in-git-repo/test/new-untracked-leaf/` |
