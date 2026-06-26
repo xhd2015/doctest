@@ -3,12 +3,196 @@ package core
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/xhd2015/gitops/git"
 )
 
 const NoTestsChangedMessage = "no tests changed"
+
+// ChangedRunInfo summarizes how --changed filtered a doctest tree.
+type ChangedRunInfo struct {
+	TotalInTree  int
+	ChangedCount int
+	Detail       string
+}
+
+// ChangedRunInfoForTree computes changed-run metadata for a doctest tree.
+func ChangedRunInfoForTree(allCases []TreeCase, doctestRoot, gitRoot string, changedFiles []string) ChangedRunInfo {
+	total := len(allCases)
+	if len(changedFiles) == 0 {
+		return ChangedRunInfo{TotalInTree: total}
+	}
+	filtered := FilterByChangedFiles(allCases, doctestRoot, gitRoot, changedFiles)
+	return ChangedRunInfo{
+		TotalInTree:  total,
+		ChangedCount: len(filtered),
+		Detail:       formatChangedDetail(allCases, filtered, doctestRoot, gitRoot, changedFiles),
+	}
+}
+
+// ShouldAnnounceChangedRun reports whether to print a --changed status line.
+// Zero-change trees are announced only in verbose mode.
+func ShouldAnnounceChangedRun(info ChangedRunInfo, verbose bool) bool {
+	return verbose || info.ChangedCount > 0
+}
+
+// FormatDoctestAnnouncement formats the doctest status line on stderr.
+func FormatDoctestAnnouncement(shortPath string, info ChangedRunInfo, changedOnly bool, runningCount int) string {
+	if !changedOnly {
+		return fmt.Sprintf("doctest: %s (%d tests)", shortPath, runningCount)
+	}
+	return fmt.Sprintf("doctest: %s (%d tests%s)", shortPath, info.TotalInTree, formatChangedSuffix(info))
+}
+
+func formatChangedSuffix(info ChangedRunInfo) string {
+	if info.ChangedCount == 0 {
+		return ", --changed: 0 tests"
+	}
+	if info.Detail == "" {
+		return fmt.Sprintf(", --changed: %d tests", info.ChangedCount)
+	}
+	return fmt.Sprintf(", --changed: %d tests, %s", info.ChangedCount, info.Detail)
+}
+
+func formatChangedDetail(allCases, filtered []TreeCase, doctestRoot, gitRoot string, changedFiles []string) string {
+	if len(filtered) == 0 {
+		return ""
+	}
+
+	filteredSet := make(map[string]bool, len(filtered))
+	for _, tc := range filtered {
+		filteredSet[tc.Path] = true
+	}
+
+	direct := directlyAffectedLeaves(allCases, doctestRoot, gitRoot, changedFiles)
+	assigned := make(map[string]bool, len(direct))
+	for leaf := range direct {
+		assigned[leaf] = true
+	}
+
+	var parts []string
+	if n := len(direct); n > 0 {
+		parts = append(parts, leafCountPhrase(n))
+	}
+
+	absRoot := canonicalAbsPath(doctestRoot)
+	absGitRoot := canonicalAbsPath(gitRoot)
+
+	if doctestRootChanged(absRoot, absGitRoot, changedFiles) {
+		if others := countUnassigned(filteredSet, assigned); others > 0 {
+			parts = append(parts, fmt.Sprintf("1 DOCTEST.md affecting %d other tests", others))
+			markUnassigned(filteredSet, assigned)
+		}
+	}
+
+	if rootSetupChanged(absRoot, absGitRoot, changedFiles) {
+		if others := countUnassigned(filteredSet, assigned); others > 0 {
+			parts = append(parts, fmt.Sprintf("1 SETUP.md affecting %d other tests", others))
+			markUnassigned(filteredSet, assigned)
+		}
+	}
+
+	for _, groupDir := range changedGroupSetupDirs(absRoot, absGitRoot, changedFiles) {
+		others := 0
+		for path := range filteredSet {
+			if assigned[path] {
+				continue
+			}
+			if leafAffectedByGroupSetup(path, groupDir) {
+				others++
+				assigned[path] = true
+			}
+		}
+		if others > 0 {
+			parts = append(parts, fmt.Sprintf("1 %s/SETUP.md affecting %d other tests", groupDir, others))
+		}
+	}
+
+	return strings.Join(parts, " + ")
+}
+
+func directlyAffectedLeaves(allCases []TreeCase, doctestRoot, gitRoot string, changedFiles []string) map[string]bool {
+	affected := make(map[string]bool)
+	absRoot := canonicalAbsPath(doctestRoot)
+	absGitRoot := canonicalAbsPath(gitRoot)
+
+	for _, cf := range changedFiles {
+		absChanged := filepath.Join(absGitRoot, cf)
+		rel, ok := relUnder(absRoot, absChanged)
+		if !ok {
+			continue
+		}
+		rel = filepath.ToSlash(rel)
+		if rel == "DOCTEST.md" || filepath.Base(rel) == "SETUP.md" {
+			continue
+		}
+		for _, tc := range allCases {
+			if leafAffectedByPath(tc.Path, rel) {
+				affected[tc.Path] = true
+			}
+		}
+	}
+	return affected
+}
+
+func rootSetupChanged(absRoot, absGitRoot string, changedFiles []string) bool {
+	for _, cf := range changedFiles {
+		absChanged := filepath.Join(absGitRoot, cf)
+		rel, ok := relUnder(absRoot, absChanged)
+		if ok && rel == "SETUP.md" {
+			return true
+		}
+	}
+	return false
+}
+
+func changedGroupSetupDirs(absRoot, absGitRoot string, changedFiles []string) []string {
+	seen := make(map[string]bool)
+	var dirs []string
+	for _, cf := range changedFiles {
+		absChanged := filepath.Join(absGitRoot, cf)
+		rel, ok := relUnder(absRoot, absChanged)
+		if !ok || filepath.Base(rel) != "SETUP.md" {
+			continue
+		}
+		groupDir := filepath.ToSlash(filepath.Dir(rel))
+		if groupDir == "." {
+			continue
+		}
+		if seen[groupDir] {
+			continue
+		}
+		seen[groupDir] = true
+		dirs = append(dirs, groupDir)
+	}
+	sort.Strings(dirs)
+	return dirs
+}
+
+func countUnassigned(filteredSet, assigned map[string]bool) int {
+	n := 0
+	for path := range filteredSet {
+		if !assigned[path] {
+			n++
+		}
+	}
+	return n
+}
+
+func markUnassigned(filteredSet, assigned map[string]bool) {
+	for path := range filteredSet {
+		assigned[path] = true
+	}
+}
+
+func leafCountPhrase(n int) string {
+	if n == 1 {
+		return "1 leaf"
+	}
+	return fmt.Sprintf("%d leaves", n)
+}
 
 // ChangedGitFiles resolves the git repository root and returns on-disk changed
 // file paths relative to that root.

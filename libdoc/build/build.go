@@ -16,24 +16,29 @@ func Build(dir string, opts core.Options) error {
 		w = os.Stderr
 	}
 
-	var cases []core.TreeCase
+	var allCases, cases []core.TreeCase
 	var err error
 
-	cases, err = core.DiscoverTreeCases(dir)
+	allCases, err = core.DiscoverTreeCases(dir)
 	if err != nil {
 		return err
 	}
 	if opts.SubDir != "" {
-		cases = core.FilterBySubDir(cases, dir, opts.SubDir)
+		allCases = core.FilterBySubDir(allCases, dir, opts.SubDir)
 	}
+
+	cases = allCases
 	if opts.ChangedOnly {
 		gitRoot, changedFiles, err := core.ChangedGitFiles(dir)
 		if err != nil {
 			return err
 		}
-		cases = core.FilterByChangedFiles(cases, dir, gitRoot, changedFiles)
+		changedInfo := core.ChangedRunInfoForTree(allCases, dir, gitRoot, changedFiles)
+		cases = core.FilterByChangedFiles(allCases, dir, gitRoot, changedFiles)
+		if core.ShouldAnnounceChangedRun(changedInfo, opts.Verbose) {
+			fmt.Fprintln(w, core.FormatDoctestAnnouncement(pathfmt.Short(dir), changedInfo, true, 0))
+		}
 		if len(cases) == 0 {
-			fmt.Fprintln(w, core.NoTestsChangedMessage)
 			return nil
 		}
 	}

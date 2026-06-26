@@ -30,24 +30,30 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 
 	absRoot, _ := filepath.Abs(dir)
 
-	var cases []core.TreeCase
+	var allCases, cases []core.TreeCase
 	var err error
 
-	cases, err = core.DiscoverTreeCases(dir)
+	allCases, err = core.DiscoverTreeCases(dir)
 	if err != nil {
 		return TestRunStats{}, err
 	}
 	if opts.SubDir != "" {
-		cases = core.FilterBySubDir(cases, dir, opts.SubDir)
+		allCases = core.FilterBySubDir(allCases, dir, opts.SubDir)
 	}
+
+	var changedInfo core.ChangedRunInfo
+	cases = allCases
 	if opts.ChangedOnly {
 		gitRoot, changedFiles, err := core.ChangedGitFiles(dir)
 		if err != nil {
 			return TestRunStats{}, err
 		}
-		cases = core.FilterByChangedFiles(cases, dir, gitRoot, changedFiles)
+		changedInfo = core.ChangedRunInfoForTree(allCases, dir, gitRoot, changedFiles)
+		cases = core.FilterByChangedFiles(allCases, dir, gitRoot, changedFiles)
+		if core.ShouldAnnounceChangedRun(changedInfo, opts.Verbose) {
+			fmt.Fprintln(w, core.FormatDoctestAnnouncement(pathfmt.Short(dir), changedInfo, true, 0))
+		}
 		if len(cases) == 0 {
-			fmt.Fprintln(w, core.NoTestsChangedMessage)
 			return TestRunStats{NoTestsChanged: true}, nil
 		}
 	}
@@ -79,12 +85,16 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 
 	if opts.Verbose {
 		ctx.announceRoots()
-		fmt.Fprintf(w, "doctest: %s\n\n", pathfmt.Short(dir))
+		if opts.ChangedOnly {
+			fmt.Fprintln(w)
+		} else {
+			fmt.Fprintf(w, "doctest: %s\n\n", pathfmt.Short(dir))
+		}
 		if _, err := core.DiscoverTreeCasesVerbose(dir, w); err != nil {
 			return TestRunStats{}, err
 		}
 		fmt.Fprintf(w, "─── %d test cases\n\n", len(cases))
-	} else {
+	} else if !opts.ChangedOnly {
 		fmt.Fprintf(w, "doctest: %s (%d tests)\n", pathfmt.Short(dir), len(cases))
 	}
 

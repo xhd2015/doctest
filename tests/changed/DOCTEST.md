@@ -31,7 +31,7 @@ files in the working tree are processed. Change detection uses
   mapping, run or compile only affected leaves; unchanged siblings are skipped.
 - **`--changed` on vet** — validate only changed doctest markdown files; root
   `DOCTEST.md` is not blanket-validated when unchanged.
-- **No matching changes** — print `no tests changed` to stderr and exit 0.
+- **No matching changes** — silent stderr and exit 0; with `-v`, print `doctest: <path> (N tests, --changed: 0 tests)`.
 - **Non-git directory** — hard error; `--changed` requires a git repository.
 - **Help** — each subcommand documents `--changed` in its usage output.
 

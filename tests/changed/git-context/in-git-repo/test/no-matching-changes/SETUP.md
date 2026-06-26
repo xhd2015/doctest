@@ -4,7 +4,7 @@
 
 ```
 # no affected doctest files
-doctest test --changed -> stderr warning "no tests changed" -> exit 0
+doctest test --changed -> silent stderr -> exit 0 | with -v -> stderr shows "--changed: 0 tests"
 ```
 
 ## Preconditions
