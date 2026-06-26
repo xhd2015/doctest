@@ -1,0 +1,21 @@
+# Scenario
+
+**Feature**: R2 — regex requires full line
+
+```
+# parsed pattern compared to actual output
+Parser -> Matcher: Pattern
+Matcher <- actual CLI output
+Matcher -> pass or line-numbered diff
+```
+
+## Steps
+1. Set template/actual fields for R2 — regex requires full line.
+
+```go
+func Setup(t *testing.T, req *Request) error {
+	req.Template = "<regex>\n^\\.+$\n</regex>"
+	req.Actual = "..  (2 Run)"
+	return nil
+}
+```
