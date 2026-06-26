@@ -1,8 +1,9 @@
 ---
 name: doctest-review
 description: >-
-  Reviews doctest trees for design quality — clear DSN, MECE hierarchy, and
-  significance-ordered decision factors — against the doctest design spec.
+  Reviews doctest trees for design quality — clear DSN, MECE hierarchy,
+  significance-ordered decision factors, and run-profile labels (slow, heavy,
+  flaky) — against the doctest design spec.
 ---
 
 --begin of skill doctest-review--
@@ -19,6 +20,8 @@ Your strengths:
 - Verifying significance ordering — most impactful factors high, minor variants low
 - Spotting structural anti-patterns (overlapping siblings, missing branches, wrong nesting)
 - Running `doctest vet` to catch mechanical spec violations before design critique
+- Auditing `ASSERT.md` YAML frontmatter — whether slow, heavy, and flaky leaves are
+  labeled, explained, and grouped for discovery-mode skip
 
 ## Scope
 
@@ -38,7 +41,9 @@ A **review report** per reviewed root (each `DOCTEST.md` boundary is one root):
 5. **Significance ordering** — whether high-impact factors appear above low-impact ones
 6. **Scenario quality** — do `SETUP.md` `# Scenario` sections use clear DSN snippets?
 7. **Mechanical checks** — `doctest vet` result for the tree
-8. **Recommendations** — prioritized, actionable; distinguish must-fix vs nice-to-have
+8. **Run profile / label audit** — inventory of labeled leaves, cost-signal heuristics,
+   missing or misapplied labels, grouping notes
+9. **Recommendations** — prioritized, actionable; distinguish must-fix vs nice-to-have
 
 Return absolute paths for every tree and node you discuss.
 
@@ -81,7 +86,35 @@ Return absolute paths for every tree and node you discuss.
    - Leaves must have focused `ASSERT.md` expectations — not vacuous checks.
    - Scenario snippets should annotate pipeline lines (`# comment` above `->` / `<-`).
 
-7. **Report**
+7. **Audit run profile and labels**
+   - Enumerate every leaf `ASSERT.md`; read optional YAML frontmatter (`label`, `explanation`).
+   - Scan ancestor `SETUP.md` files and the leaf's own `ASSERT.md` Go block for **cost
+     signals** (read-only — do not require `doctest test`):
+     - **Slow**: `time.Sleep`, long `req.Timeout` / `context.WithTimeout`, prose mentioning
+       slow compile or multi-second waits
+     - **Heavy**: `exec.Command` / subprocess chains, full binary builds in Setup, large
+       temp trees, real network or filesystem I/O
+     - **Flaky**: retry/poll loops, timing assertions, background goroutines, external
+       services, race-prone shared state, prose mentioning intermittent failures
+     - **Manual / UI**: human steps in Preconditions/Steps, GUI or accessibility automation
+   - For each leaf with signals, check canonical labels from the design spec:
+     `slow`, `heavy`, `flaky`, `manual`, `ui-automation` (domain labels like `integration`
+     are fine but do not replace run-profile labels).
+   - Severity rules:
+     - Signals present, no `label` → **major** (runs in discovery when it should skip)
+     - `label: flaky` or `label: manual` with empty `explanation` → **major**
+     - `explanation` documents skip intent but no `label` → **major** (explanation alone
+       does not skip)
+     - Correct labels under an `e2e/` / `slow/` / `integration/` grouping → **ok**
+     - Expensive unlabeled leaf beside fast siblings at same level → **major**
+     - Every leaf labeled when only a few are expensive → **suggestion**
+   - Check root `DOCTEST.md` **How to Run** documents discovery skip and how to run labeled
+     leaves explicitly when the tree has skip-worthy cases.
+   - Emit a table per root:
+
+     | Leaf path | Labels | Explanation | Signals | Verdict |
+
+8. **Report**
    - One section per root. Use severity labels: **critical**, **major**, **minor**, **suggestion**.
    - End with a short prioritized backlog the user can tackle in order.
 
@@ -109,6 +142,13 @@ Return absolute paths for every tree and node you discuss.
 - [ ] `Request`/`Response`/`Run` defined only in root `DOCTEST.md`
 - [ ] Nested `DOCTEST.md` used only when `Run` contracts genuinely differ
 
+### Run profile / labels
+- [ ] Slow, heavy, flaky, manual, or UI leaves have appropriate `label:` in ASSERT frontmatter
+- [ ] `flaky` and `manual` labels include a non-empty `explanation`
+- [ ] Skip-worthy leaves are not relying on `explanation` alone (that does not skip)
+- [ ] Expensive leaves grouped under `e2e/`, `slow/`, `integration/`, or similar — not mixed unlabeled among fast siblings
+- [ ] Root **How to Run** documents skip policy when labeled leaves exist
+
 ## Guidelines
 
 - Prefer evidence over opinion — cite dir names, DSN quotes, and sibling lists.
@@ -128,6 +168,10 @@ Return absolute paths for every tree and node you discuss.
 - Grouping dirs without a clear split factor (grab-bag directories)
 - Low-impact params (e.g. single flag variant) at the top of the tree
 - Duplicate `Run` contracts in one tree — should be separate `DOCTEST.md` roots
+- Leaf with `time.Sleep`, subprocess, or external-service setup but no `label` — slows CI discovery runs
+- `label: flaky` or `label: manual` without `explanation` — reader cannot judge when to run or how to debug
+- `explanation` describing manual/slow intent but no `label` — leaf still runs in discovery
+- Expensive leaves at the same tree level as fast unit-style leaves without labels or grouping
 
 # SPECS
 
