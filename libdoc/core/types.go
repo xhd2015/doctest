@@ -39,15 +39,27 @@ type SetupDocument struct {
 }
 
 type AssertDocument struct {
-	Path    string
-	GoBlock GoBlock
+	Path        string
+	GoBlock     GoBlock
+	Frontmatter AssertFrontmatter
 }
 
 type TreeCase struct {
-	Name       string
-	Path       string
-	SetupFiles []SetupDocument
-	AssertFile AssertDocument
+	Name        string
+	Path        string
+	SetupFiles  []SetupDocument
+	AssertFile  AssertDocument
+	Labels      []string
+	Explanation string
+}
+
+// SkippedCase records a labeled leaf omitted from a discovery-mode test run.
+type SkippedCase struct {
+	Name        string
+	Path        string
+	Labels      []string
+	Explanation string
+	DisplayPath string
 }
 
 type ColorMode int
@@ -70,6 +82,7 @@ type Options struct {
 	Color                 ColorMode
 	SuppressResultSummary bool
 	ChangedOnly           bool
+	ExplicitLeaf          bool
 }
 
 type ValidationError struct {

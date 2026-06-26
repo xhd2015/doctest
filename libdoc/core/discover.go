@@ -157,10 +157,12 @@ func discoverTreeCasesInternal(root string, w io.Writer) ([]TreeCase, error) {
 			verrs = append(verrs, ValidationError{Path: v.Path, Msg: v.Msg})
 		}
 		tc := TreeCase{
-			Name:       CaseName(relLeaf),
-			Path:       relLeaf,
-			SetupFiles: setupDocs,
-			AssertFile: assertDoc,
+			Name:        CaseName(relLeaf),
+			Path:        relLeaf,
+			SetupFiles:  setupDocs,
+			AssertFile:  assertDoc,
+			Labels:      append([]string(nil), assertDoc.Frontmatter.Labels...),
+			Explanation: assertDoc.Frontmatter.Explanation,
 		}
 		cases = append(cases, tc)
 

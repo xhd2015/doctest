@@ -51,11 +51,24 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 			return TestRunStats{NoTestsChanged: true}, nil
 		}
 	}
+
+	skipLabeled := !opts.ExplicitLeaf
+	cases, skipped := core.PartitionLabeledCases(cases, skipLabeled)
+	for i := range skipped {
+		skipped[i].DisplayPath = SkippedDisplayPath(dir, skipped[i].Path)
+	}
 	if len(cases) == 0 {
+		if len(skipped) > 0 {
+			stats := TestRunStats{Skipped: skipped}
+			if !opts.SuppressResultSummary {
+				PrintSkippedSummary(skipped)
+			}
+			return stats, nil
+		}
 		return TestRunStats{}, fmt.Errorf("%s: no runnable test cases found", dir)
 	}
 
-	stats := TestRunStats{Total: len(cases)}
+	stats := TestRunStats{Total: len(cases), Skipped: skipped}
 
 	ctx, err := newGenerateContext(dir, opts, cases, w, false, opts.Verbose)
 	if err != nil {
@@ -138,6 +151,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		stats.Passed = passedCases(stats.Total, countFailuresFromGoTestOutput(out))
 		if !opts.SuppressResultSummary {
 			stats.Elapsed = elapsed
+			PrintSkippedSummary(stats.Skipped)
 			PrintResultSummary(opts, stats)
 		}
 		if err != nil {
@@ -258,6 +272,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 
 		if !opts.SuppressResultSummary {
 			stats.Elapsed = elapsed
+			PrintSkippedSummary(stats.Skipped)
 			PrintResultSummary(opts, stats)
 		}
 

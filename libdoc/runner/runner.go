@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -48,6 +47,7 @@ func Test(args []string) error {
 		s, err := runnerbuild.TestWithStats(dir, o)
 		stats.Passed += s.Passed
 		stats.Total += s.Total
+		stats.Skipped = append(stats.Skipped, s.Skipped...)
 		if s.NoTestsChanged {
 			stats.NoTestsChanged = true
 		}
@@ -64,19 +64,25 @@ func Test(args []string) error {
 		runErr = processMultiArg(remainArgs, opts, runFn)
 	}
 
+	if len(stats.Skipped) > 0 {
+		runnerbuild.PrintSkippedSummary(stats.Skipped)
+	}
 	if stats.Total > 0 {
 		stats.Elapsed = time.Since(start)
 		runnerbuild.PrintResultSummary(opts, stats)
 	}
 
 	if runErr != nil {
-		if errors.Is(runErr, ErrNoTestsFound) && stats.Total == 0 {
+		if errors.Is(runErr, ErrNoTestsFound) && stats.Total == 0 && len(stats.Skipped) == 0 {
 			return ErrNoTestsFound
+		}
+		if errors.Is(runErr, ErrNoTestsFound) && len(stats.Skipped) > 0 {
+			return nil
 		}
 		return runErr
 	}
 	if stats.Total == 0 {
-		if stats.NoTestsChanged {
+		if stats.NoTestsChanged || len(stats.Skipped) > 0 {
 			return nil
 		}
 		return ErrNoTestsFound
@@ -119,15 +125,17 @@ func processSingleArg(arg string, opts core.Options, fn func(string, core.Option
 			}
 			o := opts
 			o.SubDir = dir
+			o.ExplicitLeaf = false
 			return fn(root, o)
 		})
 	}
-	targetDir, _ := filepath.Abs(arg)
+	targetDir, explicitLeaf := resolveTestTarget(arg)
 	root, ok := path_resolve.ResolveRoot(targetDir)
 	if !ok {
 		root = targetDir
 	}
 	opts.SubDir = targetDir
+	opts.ExplicitLeaf = explicitLeaf
 	return fn(root, opts)
 }
 
@@ -147,6 +155,7 @@ func processMultiArg(args []string, opts core.Options, fn func(string, core.Opti
 				}
 				o := opts
 				o.SubDir = dir
+				o.ExplicitLeaf = false
 				return fn(root, o)
 			})
 			if err != nil {
@@ -160,13 +169,14 @@ func processMultiArg(args []string, opts core.Options, fn func(string, core.Opti
 			}
 			continue
 		}
-		targetDir, _ := filepath.Abs(arg)
+		targetDir, explicitLeaf := resolveTestTarget(arg)
 		root, ok := path_resolve.ResolveRoot(targetDir)
 		if !ok {
 			root = targetDir
 		}
 		o := opts
 		o.SubDir = targetDir
+		o.ExplicitLeaf = explicitLeaf
 		err := fn(root, o)
 		if errors.Is(err, ErrNoTestsFound) {
 			continue

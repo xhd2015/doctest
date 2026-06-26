@@ -112,6 +112,9 @@ func validateChangedFile(dir, path string, opts core.Options, antiViolations *[]
 		if _, err := os.Stat(filepath.Join(leafDir, "SETUP.md")); err != nil {
 			return fmt.Errorf("%s: ASSERT.md found but SETUP.md missing", leafDir)
 		}
+		if _, err := core.ParseAssertDocument(path, text); err != nil {
+			return err
+		}
 		*antiViolations = append(*antiViolations, checkFileAntiPatterns(path, text)...)
 	}
 	return nil
@@ -201,6 +204,11 @@ func runFull(dir string, opts core.Options) error {
 			return nil
 		}
 		text := string(content)
+		if name == "ASSERT.md" {
+			if _, err := core.ParseAssertDocument(path, text); err != nil {
+				return err
+			}
+		}
 		if name == "SETUP.md" {
 			if err := checkSETUPSections(path, text); err != nil {
 				return err

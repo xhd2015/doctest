@@ -13,6 +13,7 @@ import (
 
 	"github.com/xhd2015/doctest/libdoc/agent"
 	"github.com/xhd2015/doctest/libdoc/designer"
+	"github.com/xhd2015/doctest/libdoc/edit"
 	"github.com/xhd2015/doctest/libdoc/implementer"
 	"github.com/xhd2015/doctest/libdoc/runner"
 	"github.com/xhd2015/doctest/libdoc/spec"
@@ -25,6 +26,7 @@ Commands:
   vet [-v|--verbose] <dir...>
   build <dir>
   test <dir>
+  edit <leaf-path> [--add-label NAME] [--add-explanation TEXT]
 
 Agents:
   agent generate <idea> [-d|--dir <target-dir>] [--agent-runner RUNNER]
@@ -99,6 +101,20 @@ Examples:
   doctest build -v ./
   doctest build -v ./...
   doctest build -v ./sub-module/...
+`
+
+const editUsage = `Usage: doctest edit <leaf-path> [--add-label NAME] [--add-explanation TEXT]
+
+Update YAML frontmatter on a single concrete doctest leaf ASSERT.md.
+
+Options:
+  --add-label NAME          Append a label (idempotent; warns if already set)
+  --add-explanation TEXT    Set or append explanation (appends with "; " when present)
+  -h, --help                Show help
+
+Examples:
+  doctest edit ./tests/feature/ui-leaf --add-label ui-automation --add-explanation "AX window test"
+  doctest edit ./tests/feature/ui-leaf/ASSERT.md --add-label manual
 `
 
 const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [--timeout DURATION] [--color] [--no-color] [--changed] <dir>
@@ -201,6 +217,8 @@ func Run(args []string) error {
 		return runRunner(args[1:], buildUsage, runner.BuildArgs)
 	case "test":
 		return runRunner(args[1:], testUsage, runner.Test)
+	case "edit":
+		return runEdit(args[1:])
 	case "skill":
 		return runSkill(args[1:])
 	default:
@@ -468,6 +486,24 @@ func runSkill(args []string) error {
 	default:
 		return fmt.Errorf("unknown skill action: %s", remainArgs[1])
 	}
+}
+
+func runEdit(args []string) error {
+	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
+		fmt.Print(editUsage)
+		return nil
+	}
+	var addLabel, addExplanation string
+	remainArgs, err := lessflags.String("--add-label", &addLabel).
+		String("--add-explanation", &addExplanation).
+		Parse(args)
+	if err != nil {
+		return err
+	}
+	if len(remainArgs) != 1 {
+		return fmt.Errorf("edit requires exactly one concrete leaf path")
+	}
+	return edit.Edit(remainArgs[0], addLabel, addExplanation)
 }
 
 func readStdinIfPresent() (string, error) {

@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/xhd2015/doctest/libdoc/core"
+	"github.com/xhd2015/dot-pkgs/go-pkgs/pathfmt"
 )
 
 const (
@@ -72,6 +74,7 @@ type TestRunStats struct {
 	Total          int
 	Elapsed        time.Duration
 	NoTestsChanged bool
+	Skipped        []core.SkippedCase
 }
 
 func formatDisplayDuration(d time.Duration) string {
@@ -133,10 +136,33 @@ func formatResultSummary(style colorStyle, passed, total int, elapsed time.Durat
 	return token + suffix
 }
 
+func PrintSkippedSummary(skipped []core.SkippedCase) {
+	if len(skipped) == 0 {
+		return
+	}
+	fmt.Printf("SKIPPED %d TESTS\n", len(skipped))
+	for _, s := range skipped {
+		fmt.Printf("  %s\n", s.DisplayPath)
+		fmt.Printf("    label: %s\n", strings.Join(s.Labels, ", "))
+		if s.Explanation != "" {
+			fmt.Printf("    explanation: %s\n", s.Explanation)
+		}
+	}
+	fmt.Println()
+}
+
 func PrintResultSummary(opts core.Options, stats TestRunStats) {
 	if stats.Total == 0 {
 		return
 	}
 	style := newColorStyle(opts.Color, os.Stdout)
 	fmt.Println(formatResultSummary(style, stats.Passed, stats.Total, stats.Elapsed))
+}
+
+func SkippedDisplayPath(doctestRoot, leafPath string) string {
+	short := pathfmt.Short(doctestRoot)
+	if leafPath == "" {
+		return short
+	}
+	return short + "/" + filepath.ToSlash(leafPath)
 }

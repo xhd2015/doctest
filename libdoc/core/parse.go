@@ -84,6 +84,11 @@ func ParseSetupDocument(path string, content string) (SetupDocument, error) {
 }
 
 func ParseAssertDocument(path string, content string) (AssertDocument, error) {
+	fm, body, err := ParseAssertFrontmatter(path, content)
+	if err != nil {
+		return AssertDocument{}, err
+	}
+	content = body
 	blocks := findGoBlocks(content)
 	if len(blocks) == 0 {
 		return AssertDocument{}, fmt.Errorf("%s: missing go block", path)
@@ -104,7 +109,7 @@ func ParseAssertDocument(path string, content string) (AssertDocument, error) {
 	if v := rules.CheckAssertSignature(block.Assert.Params, block.Assert.Results, path); v != nil {
 		return AssertDocument{}, fmt.Errorf("%s: %s", v.Path, v.Msg)
 	}
-	return AssertDocument{Path: path, GoBlock: block}, nil
+	return AssertDocument{Path: path, GoBlock: block, Frontmatter: fm}, nil
 }
 
 type mdBlock struct {
