@@ -117,6 +117,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	}
 
 	testArgs := []string{"test", "-mod=mod"}
+	testArgs = append(testArgs, ctx.goCommandExtraArgs()...)
 	if opts.Verbose {
 		testArgs = append(testArgs, "-v")
 	}

@@ -71,6 +71,7 @@ func Build(dir string, opts core.Options) error {
 	}
 
 	goBuildArgs := []string{"build", "-mod=mod"}
+	goBuildArgs = append(goBuildArgs, ctx.goCommandExtraArgs()...)
 	if NeedsBuildVCSFlag(ctx.genRoot) {
 		goBuildArgs = append(goBuildArgs, "-buildvcs=false")
 	}

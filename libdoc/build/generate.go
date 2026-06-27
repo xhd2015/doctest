@@ -18,12 +18,16 @@ type generateContext struct {
 	verbose         bool
 	absRoot         string
 	absModRoot      string
+	modRoot         string
 	modPath         string
 	hasMod          bool
 	genRoot         string
 	compileRoot     string
 	dumpDir         string
 	internalCompile bool
+	assertImport    bool
+	assertCacheDir  string
+	modfilePath     string
 	removeLegacyTmp bool
 	closeOnce       sync.Once
 }
@@ -35,16 +39,27 @@ func newGenerateContext(dir string, opts core.Options, cases []core.TreeCase, w 
 	}
 	modRoot, modPath, hasMod := core.FindModuleRoot(absRoot)
 	absModRoot, _ := core.MappingGenRoot(absRoot)
+	assertImport := core.CasesImportAssertPackage(cases, modPath)
 
 	ctx := &generateContext{
 		w:       w,
 		verbose: verbose,
 		absRoot: absRoot,
 		absModRoot: absModRoot,
+		modRoot: modRoot,
 		modPath: modPath,
 		hasMod:  hasMod,
 		dumpDir: opts.GenDir,
 		internalCompile: hasMod && core.CasesImportInternalPackage(cases, modPath),
+		assertImport: assertImport,
+	}
+
+	if assertImport {
+		cacheDir, err := core.MaterializeAssertModule()
+		if err != nil {
+			return nil, err
+		}
+		ctx.assertCacheDir = cacheDir
 	}
 
 	if ctx.internalCompile {
@@ -83,6 +98,9 @@ func newGenerateContext(dir string, opts core.Options, cases []core.TreeCase, w 
 
 func (ctx *generateContext) Close() {
 	ctx.closeOnce.Do(func() {
+		if ctx.modfilePath != "" {
+			os.Remove(ctx.modfilePath)
+		}
 		if ctx.compileRoot != "" {
 			os.RemoveAll(ctx.compileRoot)
 		}
@@ -121,11 +139,20 @@ func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) 
 	}
 
 	if !ctx.internalCompile {
-		if err := core.WriteGoMod(ctx.genRoot, ctx.absModRoot, ctx.modPath, ctx.hasMod); err != nil {
+		if err := core.WriteGoMod(ctx.genRoot, ctx.absModRoot, ctx.modPath, ctx.hasMod, ctx.assertImport, ctx.assertCacheDir); err != nil {
 			return err
 		}
 		if ctx.verbose && ctx.w != nil {
 			fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(filepath.Join(ctx.genRoot, "go.mod")))
+		}
+	} else if ctx.assertImport {
+		modfilePath, err := core.WriteInternalModfile(ctx.modRoot, ctx.assertCacheDir)
+		if err != nil {
+			return err
+		}
+		ctx.modfilePath = modfilePath
+		if ctx.verbose && ctx.w != nil {
+			fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(modfilePath))
 		}
 	}
 
@@ -228,4 +255,11 @@ func (ctx *generateContext) packageArgsForCases(runDir, absRoot string, cases []
 	}
 	sort.Strings(args)
 	return args, nil
+}
+
+func (ctx *generateContext) goCommandExtraArgs() []string {
+	if ctx.internalCompile && ctx.assertImport && ctx.modfilePath != "" {
+		return []string{"-modfile=" + ctx.modfilePath}
+	}
+	return nil
 }

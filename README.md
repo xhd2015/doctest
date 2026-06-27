@@ -214,3 +214,8 @@ go run ./cmd/doctest test -v ./tests
 # Build the binary
 go build ./cmd/doctest
 ```
+
+Git hooks:
+```sh
+go run github.com/xhd2015/git-hooks@latest pre-commit add "script-pre-commit" go run ./script/git-hooks/pre-commit
+```

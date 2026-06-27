@@ -410,9 +410,9 @@ func CopyGeneratedTree(src, dst string) error {
 	})
 }
 
-func goModSourceFingerprint(modRoot, modPath string, hasMod bool) (string, error) {
+func goModSourceFingerprint(modRoot, modPath string, hasMod bool, withAssertReplace bool, assertCacheDir string) (string, error) {
 	h := sha256.New()
-	if _, err := fmt.Fprintf(h, "hasMod=%t\nmodPath=%s\nmodRoot=%s\n", hasMod, modPath, modRoot); err != nil {
+	if _, err := fmt.Fprintf(h, "hasMod=%t\nmodPath=%s\nmodRoot=%s\nwithAssertReplace=%t\nassertCacheDir=%s\n", hasMod, modPath, modRoot, withAssertReplace, assertCacheDir); err != nil {
 		return "", err
 	}
 	goModPath := filepath.Join(modRoot, "go.mod")
@@ -437,8 +437,8 @@ func goModSourceFingerprint(modRoot, modPath string, hasMod bool) (string, error
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-func WriteGoMod(genDir, modRoot, modPath string, hasMod bool) error {
-	fp, err := goModSourceFingerprint(modRoot, modPath, hasMod)
+func WriteGoMod(genDir, modRoot, modPath string, hasMod bool, withAssertReplace bool, assertCacheDir string) error {
+	fp, err := goModSourceFingerprint(modRoot, modPath, hasMod, withAssertReplace, assertCacheDir)
 	if err != nil {
 		return err
 	}
@@ -463,6 +463,9 @@ func WriteGoMod(genDir, modRoot, modPath string, hasMod bool) error {
 		if extraReplaces := readExtraReplaces(modRoot, modPath); extraReplaces != "" {
 			content += extraReplaces
 		}
+	}
+	if withAssertReplace && assertCacheDir != "" {
+		content += fmt.Sprintf("replace %s => %s\n", AssertImportPath, assertCacheDir)
 	}
 	if err := os.WriteFile(modFile, []byte(content), 0644); err != nil {
 		return err

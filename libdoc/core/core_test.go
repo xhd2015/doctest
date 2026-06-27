@@ -221,7 +221,7 @@ func TestWriteGoModSkipsWhenSourceUnchanged(t *testing.T) {
 	genDir := filepath.Join(t.TempDir(), "gen")
 	writeTreeFile(t, modRoot, "go.mod", "module example.com/a\n\ngo 1.21\n")
 
-	if err := WriteGoMod(genDir, modRoot, "example.com/a", true); err != nil {
+	if err := WriteGoMod(genDir, modRoot, "example.com/a", true, false, ""); err != nil {
 		t.Fatalf("first WriteGoMod: %v", err)
 	}
 	first, err := os.ReadFile(filepath.Join(genDir, "go.mod"))
@@ -232,7 +232,7 @@ func TestWriteGoModSkipsWhenSourceUnchanged(t *testing.T) {
 		t.Fatalf("write tidy marker: %v", err)
 	}
 
-	if err := WriteGoMod(genDir, modRoot, "example.com/a", true); err != nil {
+	if err := WriteGoMod(genDir, modRoot, "example.com/a", true, false, ""); err != nil {
 		t.Fatalf("second WriteGoMod: %v", err)
 	}
 	second, err := os.ReadFile(filepath.Join(genDir, "go.mod"))
@@ -252,7 +252,7 @@ func TestWriteGoModRegeneratesWhenSourceChanges(t *testing.T) {
 	genDir := filepath.Join(t.TempDir(), "gen")
 	writeTreeFile(t, modRoot, "go.mod", "module example.com/a\n\ngo 1.21\n\nreplace localdep => ./dep\n")
 
-	if err := WriteGoMod(genDir, modRoot, "example.com/a", true); err != nil {
+	if err := WriteGoMod(genDir, modRoot, "example.com/a", true, false, ""); err != nil {
 		t.Fatalf("first WriteGoMod: %v", err)
 	}
 	if !strings.Contains(readFileString(t, filepath.Join(genDir, "go.mod")), "replace localdep") {
@@ -263,7 +263,7 @@ func TestWriteGoModRegeneratesWhenSourceChanges(t *testing.T) {
 	}
 
 	writeTreeFile(t, modRoot, "go.mod", "module example.com/a\n\ngo 1.21\n")
-	if err := WriteGoMod(genDir, modRoot, "example.com/a", true); err != nil {
+	if err := WriteGoMod(genDir, modRoot, "example.com/a", true, false, ""); err != nil {
 		t.Fatalf("second WriteGoMod: %v", err)
 	}
 	updated := readFileString(t, filepath.Join(genDir, "go.mod"))
