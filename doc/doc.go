@@ -27,6 +27,9 @@ var doctestReproduce string
 //go:embed DOCTEST_REVIEW.md
 var doctestReview string
 
+//go:embed DOCTEST_OUTPUT_ASSERT.md
+var doctestOutputAssert string
+
 func Content(fileName string) (string, error) {
 	var content string
 	switch fileName {
@@ -42,6 +45,8 @@ func Content(fileName string) (string, error) {
 		content = doctestReproduce
 	case "DOCTEST_REVIEW.md":
 		content = doctestReview
+	case "DOCTEST_OUTPUT_ASSERT.md":
+		content = doctestOutputAssert
 	default:
 		return "", fmt.Errorf("unknown file: %s", fileName)
 	}

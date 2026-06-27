@@ -213,9 +213,24 @@ ASSERT.md describes the expected outcomes for a **single** leaf. It has structur
 sections; use only those relevant to the specific scenario:
 
 ```markdown
+## Expected Output
+Optional but **recommended** when asserting CLI or text output with the
+`github.com/xhd2015/doctest/assert` DSL. Fenced block mirrors the template
+passed to `assert.Output` — not required by `doctest vet`. See
+`doctest skill output-assert show`.
+
+```
+<contains>
+Usage: mytool
+<start-with>
+  build
+</start-with>
+</contains>
+```
+
 ## Expected
 - Observable outcome that confirms success
-- e.g. "stdout contains 'moved: /a -> /b'"
+- e.g. "stdout matches output template (see Expected Output)"
 - e.g. "the response body has field 'status' equal to 'ok'"
 
 ## Side Effects

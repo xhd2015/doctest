@@ -40,6 +40,7 @@ Skills:
   skill doc-spec show|install
   skill code-spec show|install
   skill tdd show|install
+  skill output-assert show|install
   skill implementer show|install
   skill designer show|install
 
@@ -66,6 +67,7 @@ const skillUsage = `Usage: doctest skill --list
        doctest skill tdd-lite show|install
        doctest skill reproduce show|install
        doctest skill review show|install
+       doctest skill output-assert show|install
        doctest skill implementer show|install
        doctest skill designer show|install
 `
@@ -466,12 +468,13 @@ func runSkill(args []string) error {
 		fmt.Println("tdd-lite")
 		fmt.Println("reproduce")
 		fmt.Println("review")
+		fmt.Println("output-assert")
 		fmt.Println("implementer")
 		fmt.Println("designer")
 		return nil
 	}
 	if len(remainArgs) < 2 {
-		return fmt.Errorf("skill requires doc-spec, code-spec, tdd, tdd-lite, reproduce, review, implementer, or designer plus show or install")
+		return fmt.Errorf("skill requires doc-spec, code-spec, tdd, tdd-lite, reproduce, review, output-assert, implementer, or designer plus show or install")
 	}
 	switch remainArgs[1] {
 	case "show":

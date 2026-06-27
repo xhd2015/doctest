@@ -134,6 +134,41 @@ func Assert(t *testing.T, req *Request, resp *Response, err error)
 - If `Run` should fail, check that `err` matches the expected error
 - All assertions go through `t.Fatal`/`t.Fatalf` — no bare `return` for failures
 
+### Output assertions (`github.com/xhd2015/doctest/assert`)
+
+When validating **CLI or text output**, use the output assert template DSL instead
+of `strings.Contains` loops or hand-rolled `strings.Index` / `strings.Count`
+parsing. Full tag registry: `doctest skill output-assert show`.
+
+```go
+import "github.com/xhd2015/doctest/assert"
+
+// Full bounded output (default):
+assert.Output(t, resp.Stdout, `literal line
+<optional>
+optional noise
+</optional>
+trailer`)
+
+// Contiguous excerpt inside a longer log:
+p := assert.MustParse(template)
+if err := assert.Match(p, resp.Output, assert.Contains()); err != nil {
+    t.Fatal(err)
+}
+```
+
+Optionally document the same template in a `## Expected Output` fenced block
+(recommended for readability; not required by vet).
+
+**Prefer DSL constructs over:**
+
+| Legacy | DSL |
+|--------|-----|
+| `strings.Contains` loop | `<contains>` + `<start-with>` |
+| Dot/summary parsing | `<regex>^\.+$</regex>` + literals |
+| Dual platform `Contains` | `<any-of><expect>…</expect></any-of>` |
+| `metricIsColored` helpers | `<ansi-color bold gray>…</ansi-color>` |
+
 ## Validation Rules
 
 All files are validated by `doctest build`. Rules are checked
@@ -400,12 +435,25 @@ func Setup(t *testing.T, req *Request) error {
 Asserts the expected compile outcome using `func Assert`:
 
 ````markdown
+## Expected Output
+
+```
+<any-of>
+<expect>
+<expected error text>
+</expect>
+</any-of>
+```
+
 ## Expected
 - Compile fails
-- Error message contains "<expected error text>"
+- Error message matches output template
 
 ```go
-import "strings"
+import (
+    "testing"
+    "github.com/xhd2015/doctest/assert"
+)
 
 func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if err != nil {
@@ -414,9 +462,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if resp.Passed {
         t.Fatal("expected compile to fail")
     }
-    if !strings.Contains(resp.Output, "<expected error text>") {
-        t.Fatalf("expected '<expected error text>' in output, got:\n%s", resp.Output)
-    }
+    assert.Output(t, resp.Output, `<any-of>
+<expect>
+<expected error text>
+</expect>
+</any-of>`)
 }
 ```
 ````

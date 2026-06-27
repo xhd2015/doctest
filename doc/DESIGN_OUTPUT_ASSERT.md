@@ -1,10 +1,34 @@
 # Output Assert DSL — Design Document
 
-> **Status:** Draft — iterate here before implementation.
+> **Status:** **Implemented** (`github.com/xhd2015/doctest/assert`). This document is the canonical DSL reference.
 >
 > **Package:** `github.com/xhd2015/doctest/assert`
 >
 > **Goal:** A readable template language for asserting CLI (and similar text) output in doctest `ASSERT.md` leaves, replacing ad-hoc `strings.Contains` / hand-rolled parsing.
+>
+> **Skill:** `doctest skill output-assert show`
+>
+> ## Authoring quick start
+>
+> ```go
+> import "github.com/xhd2015/doctest/assert"
+>
+> func Assert(t *testing.T, req *Request, resp *Response, err error) {
+>     // ...
+>     assert.Output(t, resp.Stdout, `
+> <contains>
+> Usage: mytool
+> <start-with>
+>   build
+> </start-with>
+> </contains>`)
+> }
+> ```
+>
+> - Default: **`assert.Output`** = full-output exact match.
+> - Long logs: **`assert.Match(p, actual, assert.Contains())`** for a contiguous excerpt.
+> - Tag reference: **§3** below.
+> - Optional prose mirror: `## Expected Output` fenced block in ASSERT.md (advertised, not required by vet — §16).
 
 ---
 
@@ -1264,3 +1288,85 @@ On approval, the implementer will:
 | 2026-06-26 | §12 reordered Q1–Q19; split confirmed vs needs confirm |
 | 2026-06-26 | Q16 selective `\<tag>` escape; Q18/Q19 confirmed; §6.3 Q17 concrete examples |
 | 2026-06-26 | Q17 confirmed — `MatchContains()` in MVP |
+| 2026-06-26 | Status → Implemented; §16 doc/skill advocacy plan (awaiting go ahead) |
+| 2026-06-26 | §16 implemented: output-assert skill, design/code/doc specs, review skill |
+
+---
+
+## 16. Doc & skill advocacy plan
+
+> **Status:** **Done** — spec/skill advocacy shipped (§16.2).
+
+### 16.1 Locked decisions (A–E)
+
+| ID | Decision |
+|----|----------|
+| **A** | **Full tag spec** embedded in design spec (§3 content), not link-only |
+| **B** | `## Expected Output` in ASSERT.md — **advertised, not mandatory** (`doctest vet` unchanged) |
+| **C** | New standalone skill: **`doctest skill output-assert show\|install`** |
+| **D** | Review flags legacy `strings.Contains` / hand-rolled parsing as **suggestion** severity, not must-fix |
+| **E** | This file: status **Implemented** + authoring quick start (above) |
+
+### 16.2 Files to edit (on go ahead)
+
+| File | Change |
+|------|--------|
+| `doc/DOCTEST_OUTPUT_ASSERT.md` | **New** — skill-facing copy of §3 + §5–§7 + authoring (from this doc); YAML frontmatter `name: doctest-output-assert` |
+| `doc/doc.go` | `//go:embed DOCTEST_OUTPUT_ASSERT.md`; `Content()` case |
+| `libdoc/spec/spec.go` | `entries["output-assert"]` |
+| `libdoc/cli/cli.go` | List `output-assert` in skill help + usage |
+| `doc/snippets/DOCTEST_DESIGN_SPEC.md` | New **## Output assertions** — full §3 tag registry + when-to-use table + `assert.Output` example; pointer to `doctest skill output-assert show` |
+| `doc/DOC_STYLE_TEST_CODE_SPECIFICATION.md` | Replace `strings.Contains` exemplars; document `import assert`, `Output`, `Match`+`Contains()` |
+| `doc/DOC_STYLE_TEST_SPECIFICATION.md` | ASSERT format: optional `## Expected Output` (recommended prose mirror) |
+| `doc/DOCTEST_REVIEW.md` | Checklist + anti-patterns + report item **Output assertions**; suggestion severity for legacy patterns |
+
+**No changes:** `doctest vet` rules, existing ASSERT.md leaves (unless user asks migration later).
+
+### 16.3 New skill shape (`DOCTEST_OUTPUT_ASSERT.md`)
+
+```yaml
+---
+name: doctest-output-assert
+description: >-
+  Output assert DSL for doctest ASSERT.md — template tags, API, and migration
+  from strings.Contains.
+---
+```
+
+Body sections (condensed from this design doc):
+
+1. When to use assert vs literals
+2. **Full §3 Included Tags** (copy verbatim)
+3. API: `Parse`, `Match`, `Output`, `Contains()` option
+4. ASSERT.md pattern (`## Expected Output` optional + `func Assert`)
+5. Migration table: `strings.Contains` loop → `<contains>`; dots → `<regex>`; platform errors → `<any-of>`; ANSI helpers → `<ansi-color>`
+6. `go test ./assert/...` / `doctest test ./assert/tests/...` for examples
+
+### 16.4 Review skill additions (sketch)
+
+**Checklist (new):**
+
+- [ ] Structured CLI output uses `github.com/xhd2015/doctest/assert`
+- [ ] Non-trivial templates mirrored in `## Expected Output` when present
+- [ ] Legacy `strings.Contains` / `Index`/`Count` on output fields → **suggestion** to migrate
+
+**Anti-patterns (suggestion):**
+
+| Legacy | Prefer |
+|--------|--------|
+| `strings.Contains` loop | `<contains>` + `<start-with>` |
+| Dot/summary parsing | `<regex>^\.+$</regex>` + literals |
+| Dual platform `Contains` | `<any-of>` |
+| `metricIsColored` | `<ansi-color bold gray>` |
+
+**Report section:** add **Output assertions** per root (between scenario quality and mechanical checks).
+
+### 16.5 CLI wiring (on go ahead)
+
+```
+doctest skill --list          # includes output-assert
+doctest skill output-assert show
+doctest skill output-assert install --cursor
+```
+
+Update `tests/skill/list/ASSERT.md` want list if it enumerates skills (mechanical, user said no new tests — **only if list test breaks**).

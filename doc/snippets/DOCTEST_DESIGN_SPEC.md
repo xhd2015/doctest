@@ -148,6 +148,77 @@ Fail via `t.Fatal`/`t.Fatalf`.
 Import target package directly. For unexported functions, use **`TestExported_`** prefix:
 `func TestExported_foo() { foo() }` — then `import "mypkg"; mypkg.TestExported_foo()` in the code block.
 
+## Output assertions
+
+When a leaf asserts **CLI or text output** (`resp.Stdout`, `resp.Stderr`, `resp.Output`, `resp.Summary`, …), prefer the **`github.com/xhd2015/doctest/assert`** template DSL over `strings.Contains` loops and hand-rolled parsing.
+
+```sh
+doctest skill output-assert show    # full tag registry + API
+```
+
+### When to use
+
+| Situation | Approach |
+|-----------|----------|
+| Bounded stdout/stderr | `assert.Output(t, actual, template)` |
+| Excerpt in a long log | `assert.Match(p, actual, assert.Contains())` |
+| Scattered help keywords | `<contains>` + `<start-with>` |
+| Platform-specific errors | `<any-of><expect>…</expect></any-of>` |
+| Variable dot lines | `<regex>^\.+$</regex>` |
+| ANSI-colored segments | `<ansi-color bold gray>…</ansi-color>` |
+
+### Recommended prose mirror (not required by vet)
+
+Optional `## Expected Output` section with a fenced template block before `## Expected` — aids review and readability.
+
+### ASSERT example
+
+```go
+import (
+    "testing"
+    "github.com/xhd2015/doctest/assert"
+)
+
+func Assert(t *testing.T, req *Request, resp *Response, err error) {
+    if err != nil {
+        t.Fatal(err)
+    }
+    assert.Output(t, resp.Stdout, `
+<contains>
+Usage: mytool
+<start-with>
+  build
+</start-with>
+</contains>`)
+}
+```
+
+### Included tags (full registry)
+
+| Tag | Form | Consumes actual? | Matching |
+|-----|------|------------------|----------|
+| `<optional>` | block or inline | block meta: no | absent or full inner match |
+| `<any-of>` | block or inline | block meta: no | one `<expect>` branch |
+| `<expect>` | inside `<any-of>` | block meta: no | branch delimiter |
+| `<regex>` | block or inline | yes | Go regexp full match |
+| `<contains>` | block only | no (meta) | fragments anywhere; default full line |
+| `<start-with>` | inside `<contains>` | no | line prefix |
+| `<end-with>` | inside `<contains>` | no | line suffix |
+| `<hint:label>` | inline | yes | literal match; label for docs |
+| `<ansi-color>` | inline | yes | literal text + strict ANSI |
+
+**Block meta** (standalone lines): `<optional>`, `<any-of>`, `<expect>`, `<contains>`, `<regex>` (+ closers). Meta lines never consume output except `<regex>` inner pattern line.
+
+**Inline:** `<optional>…</optional>`, `<hint:label>…</hint:label>`, `<ansi-color SPEC>…</ansi-color>`, `<any-of>…</any-of>`, `<regex>…</regex>`, `<start-with>` / `<end-with>` inside `<contains>`.
+
+**`<ansi-color>` tokens:** `bold`, `red`, `green`, `gray`, or raw `#SGR` (e.g. `#90`, `#38;5;208`). Combined left-to-right: `<ansi-color bold gray>1 Cached</ansi-color>`.
+
+**Rejected:** bare `<id>`, `<cached>`, `<run>`, user-defined tags, `<>` syntax.
+
+**Escaping:** only tag-shaped text needs `\<tag>` / `\</tag>` in templates; plain `2 < 3` needs no escape.
+
+**Avoid in new tests:** `strings.Contains` loops for structured output; `strings.Index`/`Count` for dots/summary; ad-hoc ANSI helpers when `<ansi-color>` applies.
+
 ## Test Fixture Data
 
 Abstract fixture data into standalone files, not inline code.
@@ -157,4 +228,4 @@ Abstract fixture data into standalone files, not inline code.
 
 Code reads them with directly filename reference as each `ASSERT.md` runs in its own directory.
 
-> Full spec, run: `doctest skill doc-spec show` && `doctest skill code-spec show`
+> Full spec, run: `doctest skill doc-spec show` && `doctest skill code-spec show` && `doctest skill output-assert show`

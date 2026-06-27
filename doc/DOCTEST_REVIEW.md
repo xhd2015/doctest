@@ -40,19 +40,22 @@ A **review report** per reviewed root (each `DOCTEST.md` boundary is one root):
 4. **MECE audit** — for each grouping level: split factor, sibling exclusivity, coverage gaps
 5. **Significance ordering** — whether high-impact factors appear above low-impact ones
 6. **Scenario quality** — do `SETUP.md` `# Scenario` sections use clear DSN snippets?
-7. **Mechanical checks** — `doctest vet` result for the tree
-8. **Run profile / label audit** — inventory of labeled leaves, cost-signal heuristics,
+7. **Output assertions** — do leaves use `assert.Output` / assert DSL for structured CLI output?
+8. **Mechanical checks** — `doctest vet` result for the tree
+9. **Run profile / label audit** — inventory of labeled leaves, cost-signal heuristics,
    missing or misapplied labels, grouping notes
-9. **Recommendations** — prioritized, actionable; distinguish must-fix vs nice-to-have
+10. **Recommendations** — prioritized, actionable; distinguish must-fix vs nice-to-have
 
 Return absolute paths for every tree and node you discuss.
 
 ## Workflow
 
 1. **Load the spec**
-   - Treat `doctest skill doc-spec show`, `doctest skill code-spec show`, and the
-     design spec below as the authority for best practices.
-   - Key design rules: clear DSN, MECE siblings, significance-ordered narrowing.
+   - Treat `doctest skill doc-spec show`, `doctest skill code-spec show`,
+     `doctest skill output-assert show`, and the design spec below as the
+     authority for best practices.
+   - Key design rules: clear DSN, MECE siblings, significance-ordered narrowing,
+     output templates via `github.com/xhd2015/doctest/assert` for CLI/text matching.
 
 2. **Discover trees**
    - Find roots by locating `DOCTEST.md` files under the review scope.
@@ -86,7 +89,14 @@ Return absolute paths for every tree and node you discuss.
    - Leaves must have focused `ASSERT.md` expectations — not vacuous checks.
    - Scenario snippets should annotate pipeline lines (`# comment` above `->` / `<-`).
 
-7. **Audit run profile and labels**
+7. **Review output assertions**
+   - For leaves checking `resp.Stdout`, `resp.Stderr`, `resp.Output`, `resp.Summary`, etc.:
+     - **Prefer** `github.com/xhd2015/doctest/assert` templates (`assert.Output`, `assert.Match`+`assert.Contains()`).
+     - **Suggestion** (not must-fix): flag `strings.Contains` loops, `strings.Index`/`Count` parsing, ad-hoc ANSI color helpers when the assert DSL covers the case.
+     - Non-trivial templates should have a matching `## Expected Output` prose block when present.
+   - Cite `doctest skill output-assert show` for migration guidance.
+
+8. **Audit run profile and labels**
    - Enumerate every leaf `ASSERT.md`; read optional YAML frontmatter (`label`, `explanation`).
    - Scan ancestor `SETUP.md` files and the leaf's own `ASSERT.md` Go block for **cost
      signals** (read-only — do not require `doctest test`):
@@ -114,7 +124,7 @@ Return absolute paths for every tree and node you discuss.
 
      | Leaf path | Labels | Explanation | Signals | Verdict |
 
-8. **Report**
+9. **Report**
    - One section per root. Use severity labels: **critical**, **major**, **minor**, **suggestion**.
    - End with a short prioritized backlog the user can tackle in order.
 
@@ -141,6 +151,11 @@ Return absolute paths for every tree and node you discuss.
 - [ ] `doctest vet` passes
 - [ ] `Request`/`Response`/`Run` defined only in root `DOCTEST.md`
 - [ ] Nested `DOCTEST.md` used only when `Run` contracts genuinely differ
+
+### Output assertions
+- [ ] New or revised CLI/text output checks use `github.com/xhd2015/doctest/assert`
+- [ ] Non-trivial templates documented in `## Expected Output` when authors use that section
+- [ ] Legacy `strings.Contains` / hand-rolled output parsing flagged as **suggestion** to migrate
 
 ### Run profile / labels
 - [ ] Slow, heavy, flaky, manual, or UI leaves have appropriate `label:` in ASSERT frontmatter
@@ -172,6 +187,15 @@ Return absolute paths for every tree and node you discuss.
 - `label: flaky` or `label: manual` without `explanation` — reader cannot judge when to run or how to debug
 - `explanation` describing manual/slow intent but no `label` — leaf still runs in discovery
 - Expensive leaves at the same tree level as fast unit-style leaves without labels or grouping
+
+## Output assertion anti-patterns (suggestion severity)
+
+| Legacy | Prefer |
+|--------|--------|
+| `for _, want := range … { strings.Contains(stdout, want) }` | `<contains>` + `<start-with>` |
+| `strings.Index` + `strings.Count` for progress dots | `<regex>^\.+$</regex>` |
+| Dual `strings.Contains` for platform error strings | `<any-of><expect>…</expect></any-of>` |
+| `metricIsColored` / `stripANSI` for summary segments | `<ansi-color bold gray>…</ansi-color>` |
 
 # SPECS
 
