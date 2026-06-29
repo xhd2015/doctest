@@ -17,9 +17,6 @@ var ErrNoTestsFound = errors.New("no tests")
 var errNoModuleFound = errors.New("no module found")
 
 func IsDotDotDotPattern(arg string) bool {
-	if len(arg) > 0 && arg[0] == '/' {
-		return false
-	}
 	return strings.HasSuffix(arg, "/...")
 }
 
