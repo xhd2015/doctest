@@ -174,6 +174,7 @@ doctest skill output-assert show    # full tag registry + API
 | Situation | Approach |
 |-----------|----------|
 | Bounded stdout/stderr | `assert.Output(t, actual, template)` |
+| Bounded output with scattered required lines | ``assert.Output(t, actual, `<contains>...</contains>`)`` |
 | Excerpt in a long log | `assert.Match(p, actual, assert.Contains())` |
 | Scattered help keywords | `<contains>` + `<start-with>` |
 | Platform-specific errors | `<any-of><expect>…</expect></any-of>` |
@@ -223,6 +224,18 @@ Usage: mytool
 **Block meta** (standalone lines): `<optional>`, `<any-of>`, `<expect>`, `<contains>`, `<regex>` (+ closers). Meta lines never consume output except `<regex>` inner pattern line.
 
 **Inline:** `<optional>…</optional>`, `<hint:label>…</hint:label>`, `<ansi-color SPEC>…</ansi-color>`, `<any-of>…</any-of>`, `<regex>…</regex>`, `<start-with>` / `<end-with>` inside `<contains>`.
+
+Ordinary lines inside `<contains>` may use inline pattern tags such as
+`<any-of>`, `<optional>`, `<regex>`, and `<hint:...>`.
+
+Use `assert.Output(t, actual, template)` for templates whose top-level form is
+`<contains>`. Reserve `assert.Match(p, actual, assert.Contains())` for finding a
+contiguous excerpt in a larger output, and do not combine it with a top-level
+`<contains>` block.
+
+Matcher DSL tags are test syntax only. They must not be required in actual
+product stdout/stderr unless the feature explicitly defines those strings as
+user-facing output.
 
 **`<ansi-color>` tokens:** `bold`, `red`, `green`, `gray`, or raw `#SGR` (e.g. `#90`, `#38;5;208`). Combined left-to-right: `<ansi-color bold gray>1 Cached</ansi-color>`.
 

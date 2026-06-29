@@ -144,7 +144,7 @@ output-assert
 | O1–O9 | `match/optional/*` | Block/inline optional semantics |
 | A1–A5 | `match/any-of/*` | Branch selection and reporting |
 | H1–H4 | `match/hint/*` | Literal hint matching |
-| C1–C6 | `match/contains/*` | Order-free fragments |
+| C1–C7 | `match/contains/*` | Order-free fragments and inline pattern fragments |
 | AC1–AC10 | `match/ansi-color/*` + `parse/errors/empty-ansi-color` | ANSI assertions |
 | R1–R3 | `match/regex/*` | Regex block + optional wrapper |
 | X1–X3 | `match/inline-any-of/*` | Inline any-of scoping |

@@ -117,9 +117,9 @@ func discoverTreeCasesInternal(root string, w io.Writer) ([]TreeCase, error) {
 			} else if doc.GoBlock == nil {
 				rel, _ := filepath.Rel(root, setupPath)
 				verrs = append(verrs, ValidationError{Path: rel, Msg: "must have a Go code block"})
-		} else if doc.GoBlock.Setup == nil {
-			rel, _ := filepath.Rel(root, setupPath)
-			verrs = append(verrs, ValidationError{Path: rel, Msg: "must have func Setup"})
+			} else if doc.GoBlock.Setup == nil {
+				rel, _ := filepath.Rel(root, setupPath)
+				verrs = append(verrs, ValidationError{Path: rel, Msg: "must have func Setup"})
 			}
 			return nil
 		}
@@ -412,7 +412,8 @@ func CopyGeneratedTree(src, dst string) error {
 
 func goModSourceFingerprint(modRoot, modPath string, hasMod bool, withAssertReplace bool, assertCacheDir string) (string, error) {
 	h := sha256.New()
-	if _, err := fmt.Fprintf(h, "hasMod=%t\nmodPath=%s\nmodRoot=%s\nwithAssertReplace=%t\nassertCacheDir=%s\n", hasMod, modPath, modRoot, withAssertReplace, assertCacheDir); err != nil {
+	effectiveAssertReplace := withAssertReplace && assertCacheDir != "" && modPath != "github.com/xhd2015/doctest"
+	if _, err := fmt.Fprintf(h, "gomod-policy=2\nhasMod=%t\nmodPath=%s\nmodRoot=%s\nwithAssertReplace=%t\neffectiveAssertReplace=%t\nassertCacheDir=%s\n", hasMod, modPath, modRoot, withAssertReplace, effectiveAssertReplace, assertCacheDir); err != nil {
 		return "", err
 	}
 	goModPath := filepath.Join(modRoot, "go.mod")
@@ -464,7 +465,7 @@ func WriteGoMod(genDir, modRoot, modPath string, hasMod bool, withAssertReplace 
 			content += extraReplaces
 		}
 	}
-	if withAssertReplace && assertCacheDir != "" {
+	if withAssertReplace && assertCacheDir != "" && modPath != "github.com/xhd2015/doctest" {
 		content += fmt.Sprintf("replace %s => %s\n", AssertImportPath, assertCacheDir)
 	}
 	if err := os.WriteFile(modFile, []byte(content), 0644); err != nil {

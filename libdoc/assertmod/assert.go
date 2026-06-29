@@ -188,8 +188,9 @@ const (
 )
 
 type ContainsFragment struct {
-	Mode ContainsMatchMode
-	Text string
+	Mode     ContainsMatchMode
+	Text     string
+	Segments []Segment
 }
 
 type parseError struct {
@@ -357,6 +358,12 @@ func (st *matchState) checkContainsFragment(frag ContainsFragment) error {
 	for _, line := range st.lines {
 		switch frag.Mode {
 		case ContainsFullLine:
+			if len(frag.Segments) > 0 {
+				if _, err := st.matchSegments(frag.Segments, line, st.lineBase+1); err == nil {
+					return nil
+				}
+				continue
+			}
 			if line == frag.Text || strings.HasPrefix(line, frag.Text) {
 				return nil
 			}
@@ -369,6 +376,9 @@ func (st *matchState) checkContainsFragment(frag ContainsFragment) error {
 				return nil
 			}
 		}
+	}
+	if len(frag.Segments) > 0 {
+		return matchErr("missing contains pattern fragment")
 	}
 	return matchErr("missing contains fragment %q", frag.Text)
 }
@@ -820,7 +830,18 @@ func (p *parser) parseContainsBlock() (Item, error) {
 			p.idx++
 			continue
 		}
-		fragments = append(fragments, ContainsFragment{Mode: ContainsFullLine, Text: line})
+		parsed, err := p.parseLine(line, p.lineOffset(p.idx))
+		if err != nil {
+			return nil, err
+		}
+		switch it := parsed.(type) {
+		case LiteralLine:
+			fragments = append(fragments, ContainsFragment{Mode: ContainsFullLine, Text: it.Text})
+		case PatternLine:
+			fragments = append(fragments, ContainsFragment{Mode: ContainsFullLine, Segments: it.Segments})
+		default:
+			return nil, parseErr(p.lineOffset(p.idx), "unsupported contains fragment")
+		}
 		p.idx++
 	}
 	return nil, parseErr(p.lineOffset(p.idx), "unclosed <contains>")

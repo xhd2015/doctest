@@ -40,7 +40,7 @@ A **review report** per reviewed root (each `DOCTEST.md` boundary is one root):
 4. **MECE audit** — for each grouping level: split factor, sibling exclusivity, coverage gaps
 5. **Significance ordering** — whether high-impact factors appear above low-impact ones
 6. **Scenario quality** — do `SETUP.md` `# Scenario` sections use clear DSN snippets?
-7. **Output assertions** — do leaves use `assert.Output` / assert DSL for structured CLI output?
+7. **Output assertions** — do leaves use `assert.Output` / assert DSL for structured CLI output, and do templates describe acceptable user-facing output rather than matcher syntax the product must print?
 8. **Mechanical checks** — `doctest vet` result for the tree
 9. **Run profile / label audit** — inventory of labeled leaves, cost-signal heuristics,
    missing or misapplied labels, grouping notes
@@ -55,7 +55,9 @@ Return absolute paths for every tree and node you discuss.
      `doctest skill output-assert show`, and the design spec below as the
      authority for best practices.
    - Key design rules: clear DSN, MECE siblings, significance-ordered narrowing,
-     output templates via `github.com/xhd2015/doctest/assert` for CLI/text matching.
+     output templates via `github.com/xhd2015/doctest/assert` for CLI/text matching,
+     and matcher DSL tags are test syntax only unless the product explicitly
+     documents them as user-facing output.
 
 2. **Discover trees**
    - Find roots by locating `DOCTEST.md` files under the review scope.
@@ -91,9 +93,13 @@ Return absolute paths for every tree and node you discuss.
 
 7. **Review output assertions**
    - For leaves checking `resp.Stdout`, `resp.Stderr`, `resp.Output`, `resp.Summary`, etc.:
-     - **Prefer** `github.com/xhd2015/doctest/assert` templates (`assert.Output`, `assert.Match`+`assert.Contains()`).
+     - **Prefer** `github.com/xhd2015/doctest/assert` templates.
+       - Use `assert.Output(t, actual, template)` for bounded stdout/stderr, including templates whose top-level form is `<contains>...</contains>`.
+       - Use `assert.Match(p, actual, assert.Contains())` only for a contiguous excerpt in a larger output; do not combine it with a top-level `<contains>` block.
+     - **Major**: flag tests whose expected output would require the product to print matcher DSL syntax such as `<contains>`, `<any-of>`, `<expect>`, `<regex>`, `<optional>`, `<hint:...>`, or `<ansi-color>` unless those strings are explicitly part of the product API.
+     - **Major**: flag a mismatch between prose expectation and executable assertion, especially when `## Expected Output` reads like test DSL rather than acceptable terminal output.
      - **Suggestion** (not must-fix): flag `strings.Contains` loops, `strings.Index`/`Count` parsing, ad-hoc ANSI color helpers when the assert DSL covers the case.
-     - Non-trivial templates should have a matching `## Expected Output` prose block when present.
+     - Non-trivial templates should have a matching `## Expected Output` prose block when present; the prose mirror should remain readable as user-facing output with annotations, not as a list of internals.
    - Cite `doctest skill output-assert show` for migration guidance.
 
 8. **Audit run profile and labels**
@@ -156,6 +162,9 @@ Return absolute paths for every tree and node you discuss.
 
 ### Output assertions
 - [ ] New or revised CLI/text output checks use `github.com/xhd2015/doctest/assert`
+- [ ] Top-level `<contains>` templates use `assert.Output(t, actual, template)`, not `assert.Match(..., assert.Contains())`
+- [ ] Expected output does not require actual product output to contain matcher DSL tags unless explicitly required by product behavior
+- [ ] `## Expected Output` mirrors acceptable user-facing output with annotations; it is not only a matcher implementation detail
 - [ ] Non-trivial templates documented in `## Expected Output` when authors use that section
 - [ ] Legacy `strings.Contains` / hand-rolled output parsing flagged as **suggestion** to migrate
 
@@ -192,15 +201,20 @@ Return absolute paths for every tree and node you discuss.
 - `explanation` describing manual/slow intent but no `label` — leaf still runs in discovery
 - `label: [slow, ui]` YAML sequence instead of comma-separated scalar — wrong frontmatter shape
 - Expensive leaves at the same tree level as fast unit-style leaves without labels or grouping
+- Product output must include doctest matcher DSL tags to satisfy a test — likely assertion bug, **major**
+- Top-level `<contains>` template passed to `assert.Match(..., assert.Contains())` — use `assert.Output(t, actual, template)` instead, **major**
+- `## Expected Output` is not a plausible terminal transcript or user-facing output sketch — **major**
 
-## Output assertion anti-patterns (suggestion severity)
+## Output assertion anti-patterns
 
-| Legacy | Prefer |
-|--------|--------|
-| `for _, want := range … { strings.Contains(stdout, want) }` | `<contains>` + `<start-with>` |
-| `strings.Index` + `strings.Count` for progress dots | `<regex>^\.+$</regex>` |
-| Dual `strings.Contains` for platform error strings | `<any-of><expect>…</expect></any-of>` |
-| `metricIsColored` / `stripANSI` for summary segments | `<ansi-color bold gray>…</ansi-color>` |
+| Pattern | Severity | Prefer |
+|---------|----------|--------|
+| Product output includes matcher tags like `<any-of>` only to satisfy a test | major | Fix assertion; matcher DSL is test syntax |
+| `<contains>` template + `assert.Match(..., assert.Contains())` | major | `assert.Output(t, actual, template)` where `template` is the `<contains>` block |
+| `for _, want := range … { strings.Contains(stdout, want) }` | suggestion | `<contains>` + `<start-with>` |
+| `strings.Index` + `strings.Count` for progress dots | suggestion | `<regex>^\.+$</regex>` |
+| Dual `strings.Contains` for platform error strings | suggestion | `<any-of><expect>…</expect></any-of>` |
+| `metricIsColored` / `stripANSI` for summary segments | suggestion | `<ansi-color bold gray>…</ansi-color>` |
 
 # SPECS
 

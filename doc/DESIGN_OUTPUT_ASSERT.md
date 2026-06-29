@@ -189,6 +189,8 @@ When counts legitimately differ, use `<any-of>` with separate literal branches (
 ### 2.5 Contains — order-free fragments
 
 Block `<contains>` replaces `strings.Contains` loops. Each inner fragment must appear **somewhere** in actual output; order does not matter. Meta lines do not consume output (§3).
+Ordinary fragment lines may use inline pattern tags such as `<any-of>`,
+`<optional>`, `<regex>`, and `<hint:...>`.
 
 - **Default:** fragment is a **full line** match.
 - **`<start-with>` / `<end-with>`:** prefix or suffix match when a full line is too strict.
@@ -201,6 +203,19 @@ Usage: doctest
 </start-with>
 </contains>
 ```
+
+When the template itself is a top-level `<contains>` block, prefer:
+
+```go
+assert.Output(t, actual, `<contains>
+Usage: mytool
+</contains>`)
+```
+
+Do not combine a top-level `<contains>` block with
+`assert.Match(p, actual, assert.Contains())`; that mixes order-free fragment
+matching with contiguous excerpt matching. Use `assert.Contains()` only when the
+template is a contiguous excerpt from a larger output.
 
 ---
 

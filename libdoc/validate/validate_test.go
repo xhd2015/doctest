@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	minimalDOCTEST = "# Tests\n\n## Version\n0.0.2\n\n## DSN (Domain Specific Notion)\n\n### Participants\n- **system** — under test.\n\n### Behaviors\n- **run** — executes the scenario.\n\n```go\nimport \"testing\"\n\ntype Request struct{}\ntype Response struct{}\n\nfunc Run(t *testing.T, req *Request) (*Response, error) {\n\treturn &Response{}, nil\n}\n```\n"
+	minimalDOCTEST  = "# Tests\n\n## Version\n0.0.2\n\n## DSN (Domain Specific Notion)\n\n### Participants\n- **system** — under test.\n\n### Behaviors\n- **run** — executes the scenario.\n\n```go\nimport \"testing\"\n\ntype Request struct{}\ntype Response struct{}\n\nfunc Run(t *testing.T, req *Request) (*Response, error) {\n\treturn &Response{}, nil\n}\n```\n"
 	minimalScenario = "# Scenario\n\n**Feature**: minimal test setup\n\n```\n# minimal pipeline\nsystem -> run\n```\n\n"
 )
 
@@ -38,7 +38,7 @@ func TestRunValidationCases(t *testing.T) {
 				writeFile(t, dir, "DOCTEST.md", minimalDOCTEST)
 				writeFile(t, dir, "SETUP.md", minimalSETUP("## Setup\nsetup\n"))
 				writeFile(t, dir, "leaf/SETUP.md", minimalSETUP("## Setup\nleaf\n"))
-				writeFile(t, dir, "leaf/ASSERT.md", "assert\n")
+				writeFile(t, dir, "leaf/ASSERT.md", "# Assert\n\n```go\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}\n```\n")
 				return dir
 			},
 		},
@@ -130,7 +130,7 @@ func TestRunValidationCases(t *testing.T) {
 				writeFile(t, dir, "SETUP.md", minimalSETUP("## Setup\nsetup\n"))
 				writeFile(t, dir, "notes.txt", "notes\n")
 				writeFile(t, dir, "leaf/SETUP.md", minimalSETUP("## Setup\nleaf\n"))
-				writeFile(t, dir, "leaf/ASSERT.md", "assert\n")
+				writeFile(t, dir, "leaf/ASSERT.md", "# Assert\n\n```go\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}\n```\n")
 				writeFile(t, dir, "leaf/notes.txt", "notes\n")
 				return dir
 			},
@@ -180,6 +180,29 @@ func TestRunValidationCases(t *testing.T) {
 				dir := t.TempDir()
 				writeFile(t, dir, "DOCTEST.md", "# Tests\n\n## Version\n0.0.2\n\n## DSN (Domain Specific Notion)\n\n### Participants\n- **system** — under test.\n\n### Behaviors\n- **run** — executes.\n\n```go\nimport (\n\t\"os/exec\"\n\t\"testing\"\n)\n\ntype Request struct{ InputDir string }\ntype Response struct{ Stdout string }\n\nfunc Run(t *testing.T, req *Request) (*Response, error) {\n\tcmd := exec.Command(\"doctest\", \"build\", req.InputDir)\n\tout, _ := cmd.CombinedOutput()\n\treturn &Response{Stdout: string(out)}, nil\n}\n```\n")
 				writeFile(t, dir, "SETUP.md", minimalSETUP("## Setup\nsetup\n"))
+				return dir
+			},
+		},
+		{
+			name: "double contains output assert rejected",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				writeFile(t, dir, "DOCTEST.md", minimalDOCTEST)
+				writeFile(t, dir, "SETUP.md", minimalSETUP("## Setup\nsetup\n"))
+				writeFile(t, dir, "leaf/SETUP.md", minimalSETUP("# Setup\n\n```go\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }\n```\n"))
+				writeFile(t, dir, "leaf/ASSERT.md", "# Assert\n\n```go\nimport (\n\t\"testing\"\n\n\tdtassert \"github.com/xhd2015/doctest/assert\"\n)\n\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {\n\tp := dtassert.MustParse(`<contains>\nok\n</contains>`)\n\tif matchErr := dtassert.Match(p, \"ok\", dtassert.Contains()); matchErr != nil {\n\t\tt.Fatal(matchErr)\n\t}\n}\n```\n")
+				return dir
+			},
+			wantErr: "prefer assert.Output",
+		},
+		{
+			name: "contains template with assert output accepted",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				writeFile(t, dir, "DOCTEST.md", minimalDOCTEST)
+				writeFile(t, dir, "SETUP.md", minimalSETUP("## Setup\nsetup\n"))
+				writeFile(t, dir, "leaf/SETUP.md", minimalSETUP("# Setup\n\n```go\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }\n```\n"))
+				writeFile(t, dir, "leaf/ASSERT.md", "# Assert\n\n```go\nimport (\n\t\"testing\"\n\n\tdtassert \"github.com/xhd2015/doctest/assert\"\n)\n\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {\n\tdtassert.Output(t, \"ok\", `<contains>\nok\n</contains>`)\n}\n```\n")
 				return dir
 			},
 		},

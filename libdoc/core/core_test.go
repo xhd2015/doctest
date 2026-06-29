@@ -275,6 +275,24 @@ func TestWriteGoModRegeneratesWhenSourceChanges(t *testing.T) {
 	}
 }
 
+func TestWriteGoModSkipsAssertSubmoduleReplaceForDoctestModule(t *testing.T) {
+	modRoot := t.TempDir()
+	genDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(modRoot, "go.mod"), []byte("module github.com/xhd2015/doctest\n\ngo 1.21\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteGoMod(genDir, modRoot, "github.com/xhd2015/doctest", true, true, "/tmp/assert-cache"); err != nil {
+		t.Fatalf("WriteGoMod: %v", err)
+	}
+	goMod := readFileString(t, filepath.Join(genDir, "go.mod"))
+	if !strings.Contains(goMod, "replace github.com/xhd2015/doctest => "+modRoot) {
+		t.Fatalf("expected parent module replace, got:\n%s", goMod)
+	}
+	if strings.Contains(goMod, "replace github.com/xhd2015/doctest/assert =>") {
+		t.Fatalf("expected no assert submodule replace for doctest self-tests, got:\n%s", goMod)
+	}
+}
+
 func readFileString(t *testing.T, path string) string {
 	t.Helper()
 	data, err := os.ReadFile(path)

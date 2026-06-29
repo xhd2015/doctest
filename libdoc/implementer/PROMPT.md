@@ -22,6 +22,12 @@ Write implementation files to make all tests pass. Follow these rules:
 
 - **Never modify test files** — they are sealed (staged in git). If a test
   assertion seems wrong, ask for clarification rather than editing it.
+- **Never satisfy a doctest by emitting doctest/assertion DSL syntax from
+  product code** unless the requirement explicitly says those strings are part
+  of the user-facing API. If passing a test seems to require printing markers
+  such as `<contains>`, `<any-of>`, `<expect>`, `<regex>`, `<optional>`,
+  `<hint:...>`, or `<ansi-color>`, stop and ask for clarification; this is
+  usually a test/assertion bug.
 - Place implementation code in appropriate Go source files (not `_test.go`).
 - Use the types and function signatures expected by the test harness (defined
   in the root `DOCTEST.md` Go block). Current spec version: `__DOCTEST_VERSION__`.

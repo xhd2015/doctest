@@ -108,6 +108,7 @@ const (
 )
 
 type ContainsFragment struct {
-	Mode ContainsMatchMode
-	Text string
+	Mode     ContainsMatchMode
+	Text     string
+	Segments []Segment
 }

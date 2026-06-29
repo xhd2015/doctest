@@ -18,6 +18,7 @@ Full design history: `doc/DESIGN_OUTPUT_ASSERT.md` in the doctest repo.
 | Situation | Approach |
 |-----------|----------|
 | Bounded stdout/stderr (typical leaf) | `assert.Output(t, actual, template)` — full exact match |
+| Bounded output with scattered required lines | ``assert.Output(t, actual, `<contains>...</contains>`)`` |
 | Excerpt inside a long log | `assert.Match(p, actual, assert.Contains())` — contiguous subregion |
 | Help keywords, scattered lines | `<contains>` + `<start-with>` / `<end-with>` |
 | Platform-specific error text | `<any-of><expect>…</expect></any-of>` |
@@ -123,6 +124,9 @@ Tags alone on their line (whitespace only besides). Never appear in CLI output; 
 | `<start-with>…</start-with>` | inside `<contains>` | Line prefix match |
 | `<end-with>…</end-with>` | inside `<contains>` | Line suffix match |
 
+Ordinary lines inside `<contains>` may also use inline pattern tags such as
+`<any-of>`, `<optional>`, `<regex>`, and `<hint:...>`.
+
 ### Reserved names and invalid forms
 
 | Valid | Invalid (rejected at parse) |
@@ -205,6 +209,12 @@ On failure, report **all branches** with want/got per branch.
 |-----------|-------|-----------|
 | `<contains>` tag | Order-free between fragments | Fragments anywhere in actual |
 | `assert.Contains()` option | Order preserved | Entire template as one contiguous slice |
+
+Prefer ``assert.Output(t, actual, `<contains>...</contains>`)`` when the template
+itself is a `<contains>` block. Avoid combining a top-level `<contains>` block
+with `assert.Match(..., assert.Contains())`: that mixes order-free fragment
+matching with contiguous excerpt matching and usually indicates the assertion is
+over-specified or unclear.
 
 ### Escaping in templates
 

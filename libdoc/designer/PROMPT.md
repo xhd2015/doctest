@@ -94,6 +94,23 @@ Coverage checklist — ensure every leaf covers:
 - Parameter interactions
 - Prefer more leaves over fewer
 
+Output assertion checklist — for every leaf that checks stdout, stderr, logs,
+or other text output:
+- The `## Expected Output` fenced block must read like acceptable user-facing
+  output with test-only annotations, not like text the product is required to
+  print.
+- Matcher DSL tags are test syntax only. Do not design tests that require the
+  implementation to print `<contains>`, `<any-of>`, `<expect>`, `<regex>`,
+  `<optional>`, `<hint:...>`, or `<ansi-color>` unless the feature requirement
+  explicitly defines those strings as product output.
+- Prefer `assert.Output(t, actual, template)` for bounded stdout/stderr,
+  including templates that contain a top-level `<contains>` block.
+- Use `assert.Match(p, actual, assert.Contains())` only for a contiguous
+  excerpt from a larger output. Do not wrap that excerpt in a top-level
+  `<contains>` block.
+- If a template uses a DSL composition you have not seen in existing tests,
+  add coverage for that composition or choose a simpler assertion form.
+
 Include in `DOCTEST.md` an ASCII-art decision tree diagram, a test-leaf index,
 and a `## How to Run` section with exact commands.
 
