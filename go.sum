@@ -40,8 +40,8 @@ github.com/xhd2015/less-flags v1.0.0 h1:ay8YG0WSXn59CAwBYUcAsq7l+mUwDEMUqaW/Fy0Z
 github.com/xhd2015/less-flags v1.0.0/go.mod h1:HGGM7JrrfZm/RvmxBQT96jF916m9UQE8vELpejQaoIo=
 github.com/xhd2015/less-gen v0.0.19 h1:JllrPhx3HzN+f2AB6cTvW9aRCpvuODJFx7affpa0zQY=
 github.com/xhd2015/less-gen v0.0.19/go.mod h1:Ym5HW/yfVnf2mgSo48QsuHAKnMTPv/u7oqty+raTnTQ=
-github.com/xhd2015/skills v0.0.10 h1:RFjRQiXowQe+j/3UIAkOK/HnuHGRmnrlfM35IIgqgTo=
-github.com/xhd2015/skills v0.0.10/go.mod h1:sQO/anTeiydpHF7yRvVbqbdbgmg+QyxpaiaVWnkOPdc=
+github.com/xhd2015/skills v0.0.12 h1:yMXLytmU96tPW91vIUjwqS5PB4wljx1P3mV2Qbiizoo=
+github.com/xhd2015/skills v0.0.12/go.mod h1:sQO/anTeiydpHF7yRvVbqbdbgmg+QyxpaiaVWnkOPdc=
 github.com/xhd2015/xgo v1.0.40/go.mod h1:LJxlcYSaXo/9YpsnB3yHh9NHe7BRettYCytaNGWY2BE=
 github.com/xhd2015/xgo v1.1.14 h1:FZ8nYSOGb3SQD6S9gP5dIFbW/9OuoGzr5hXVJC+McQc=
 github.com/xhd2015/xgo v1.1.14/go.mod h1:LJxlcYSaXo/9YpsnB3yHh9NHe7BRettYCytaNGWY2BE=

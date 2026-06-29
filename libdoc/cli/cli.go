@@ -36,6 +36,7 @@ Agents:
   agent with --agent-runner=RUNNER [--model=MODEL] <prog> [args...]
 
 Skills:
+  skills update [--global] [--cursor] [--codex] [--dry-run]
   skill --list
   skill doc-spec show|install
   skill code-spec show|install
@@ -58,6 +59,18 @@ Options:
   -d, --dir <target-dir>       Directory to write
   --agent-runner RUNNER        opencode, codex, or fake-codex
   -h, --help                   Show help
+`
+
+const skillsUsage = `Usage: doctest skills update [OPTIONS] [<dir>]
+       doctest skills --help
+
+Update already-installed doctest skills (SKILL.md must exist at target paths).
+
+Commands:
+  update    Refresh installed skills from the doctest skill registry
+
+Options for update match doctest skill install locations:
+  --global, --cursor, --codex, --opencode, --general-agents, --dry-run
 `
 
 const skillUsage = `Usage: doctest skill --list
@@ -229,6 +242,8 @@ func Run(args []string) error {
 		return runEdit(args[1:])
 	case "skill":
 		return runSkill(args[1:])
+	case "skills":
+		return runSkills(args[1:])
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
 	}
@@ -448,6 +463,19 @@ func runRunner(args []string, usage string, fn func([]string) error) error {
 		return nil
 	}
 	return err
+}
+
+func runSkills(args []string) error {
+	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
+		fmt.Print(skillsUsage)
+		return nil
+	}
+	switch args[0] {
+	case "update":
+		return spec.Update(args[1:])
+	default:
+		return fmt.Errorf("unknown skills command: %s", args[0])
+	}
 }
 
 func runSkill(args []string) error {

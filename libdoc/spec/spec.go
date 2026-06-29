@@ -2,6 +2,7 @@ package spec
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/xhd2015/doctest/doc"
 	"github.com/xhd2015/doctest/libdoc/designer"
@@ -52,4 +53,40 @@ func Install(name string, args []string) error {
 		SkillContent: content,
 		Usage:        "doctest skill " + name + " install",
 	}, args)
+}
+
+// AllUpdateSkills returns every registry skill for batch update.
+func AllUpdateSkills() ([]install.UpdateSkill, error) {
+	names := make([]string, 0, len(entries))
+	for name := range entries {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	skills := make([]install.UpdateSkill, 0, len(names))
+	for _, name := range names {
+		ent := entries[name]
+		content, err := Content(name)
+		if err != nil {
+			return nil, err
+		}
+		skills = append(skills, install.UpdateSkill{
+			InstallOptions: install.InstallOptions{
+				SkillDirName: ent.SkillName,
+				SkillContent: content,
+				Usage:        "doctest skills update",
+			},
+			Name: name,
+		})
+	}
+	return skills, nil
+}
+
+// Update runs batch update for all registry skills.
+func Update(args []string) error {
+	skills, err := AllUpdateSkills()
+	if err != nil {
+		return err
+	}
+	return install.HandleUpdateMany(skills, args)
 }
