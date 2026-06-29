@@ -212,7 +212,32 @@ func parseBuildOptions(args []string) (core.Options, []string, error) {
 	return opts, remainArgs, nil
 }
 
+func extractLabelFlags(args []string) (labelExprs []string, remain []string, err error) {
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--label" {
+			if i+1 >= len(args) {
+				return nil, nil, fmt.Errorf("--label requires an expression argument")
+			}
+			labelExprs = append(labelExprs, args[i+1])
+			i++
+			continue
+		}
+		remain = append(remain, args[i])
+	}
+	return labelExprs, remain, nil
+}
+
 func parseTestOptions(args []string) (core.Options, []string, error) {
+	labelExprs, args, err := extractLabelFlags(args)
+	if err != nil {
+		return core.Options{}, nil, err
+	}
+	for _, expr := range labelExprs {
+		if err := core.ParseLabelExpr(expr); err != nil {
+			return core.Options{}, nil, err
+		}
+	}
+
 	var sawColor, sawNoColor bool
 	for _, arg := range args {
 		if arg == "--color" {
@@ -246,6 +271,7 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 	if noColorFlag {
 		opts.Color = core.ColorNever
 	}
+	opts.LabelExprs = labelExprs
 	return opts, remainArgs, nil
 }
 

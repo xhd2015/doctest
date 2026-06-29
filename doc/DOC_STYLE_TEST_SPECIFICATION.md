@@ -209,8 +209,32 @@ runnable test case.
 
 ## ASSERT.md Format
 
-ASSERT.md describes the expected outcomes for a **single** leaf. It has structured
-sections; use only those relevant to the specific scenario:
+ASSERT.md describes the expected outcomes for a **single** leaf.
+
+### Optional YAML frontmatter (run profile labels)
+
+Expensive, flaky, manual, or UI leaves may prefix the file with frontmatter:
+
+```yaml
+---
+label: slow, ui-automation
+explanation: needs display server; ~30s per run
+---
+```
+
+- **`label`** is a **scalar YAML string**, not a YAML array. Multiple tags on one leaf
+  use a **comma-separated** list (`slow, ui-automation`). Any non-empty `label` skips the
+  leaf in discovery mode (`doctest test` on tree root, grouping dir, or `./...`).
+- **`explanation`** is optional prose; it does **not** skip by itself.
+- Canonical run-profile labels: `slow`, `heavy`, `flaky`, `manual`, `ui-automation`.
+
+To run labeled leaves selectively, use `doctest test --label EXPR` (`&&`, `||`,
+parentheses; repeatable `--label` flags are OR'd). Without `--label`, discovery runs
+only unlabeled leaves; point at a concrete leaf path to run one labeled test.
+
+### Assertion sections
+
+It has structured sections; use only those relevant to the specific scenario:
 
 ```markdown
 ## Expected Output
@@ -255,9 +279,18 @@ include a header section that tells readers how to execute all tests:
 ```markdown
 ## How to Run
 
+Document default discovery and how to run labeled leaves when the tree has any
+`label:` frontmatter:
+
 ```sh
 doctest test ./
-```
+
+# Run only slow-labeled leaves (unlabeled leaves skipped)
+doctest test ./ --label slow
+
+# Boolean expressions and multiple flags
+doctest test ./ --label 'slow && ui-automation'
+doctest test ./ --label slow --label heavy
 ```
 
 ## Verification

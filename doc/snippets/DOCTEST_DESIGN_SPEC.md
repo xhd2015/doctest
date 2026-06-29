@@ -137,6 +137,19 @@ A `DOCTEST.md` file creates an **inheritance firewall**. No code, types, helpers
 
 ## ASSERT.md
 
+### Run profile labels (optional YAML frontmatter)
+
+Runnable leaves may prefix `ASSERT.md` with YAML frontmatter:
+
+```yaml
+---
+label: ui-automation, slow
+explanation: AX tree poll; compile and link ~25s
+---
+```
+
+### Assert function
+
 Every `ASSERT.md` must have a `func Assert`. Signature must match exactly:
 
 ```

@@ -138,6 +138,10 @@ implementer reports all tests passing.
 git diff ./tests/<feature>            # must be clean
 doctest vet ./tests/<feature>         # structure still valid
 doctest test ./tests/<feature>/...    # must be GREEN
+
+doctest test --label "ui-automation" ./tests/<feature>/... # if the ASSERT.md contains label header
+doctest test --label 'slow && ui-automation' ./tests/<feature>/... # --label accepts simple expr lie expr&&, || , ()
+
 doctest test ./...                    # no regressions
 ```
 

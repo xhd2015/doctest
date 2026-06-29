@@ -119,7 +119,7 @@ Examples:
   doctest edit ./tests/feature/ui-leaf/ASSERT.md --add-label manual
 `
 
-const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [--timeout DURATION] [--color] [--no-color] [--changed] <dir>
+const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [--timeout DURATION] [--color] [--no-color] [--changed] [--label EXPR]... <dir>
 
 Run executable Go snippets from a doc-style test directory, allow ./... patterns like go test.
 
@@ -134,12 +134,18 @@ Options:
   --color           Force ANSI color in non-verbose progress output
   --no-color        Disable ANSI color in non-verbose progress output
   --changed         Only run doctest leaves affected by git working-tree changes
+  --label EXPR      Run only leaves whose ASSERT.md labels match EXPR (repeatable;
+                    multiple flags are OR'd). Supports &&, ||, and parentheses.
+                    Unlabeled leaves are skipped when this flag is set.
   -h, --help        Show help
 
 Examples:
   doctest test -v ./
   doctest test -v ./...
   doctest test -v ./sub-module/...
+  doctest test ./mod --label slow
+  doctest test ./mod --label 'slow && ui-automation'
+  doctest test ./mod --label slow --label heavy
 `
 
 const agentImplementUsage = `Usage: doctest agent implement [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--timeout DURATION] [--trace] [--status] [--list-sessions] <prompt>

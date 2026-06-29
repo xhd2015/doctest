@@ -143,9 +143,14 @@ func PrintSkippedSummary(skipped []core.SkippedCase) {
 	fmt.Printf("SKIPPED %d TESTS\n", len(skipped))
 	for _, s := range skipped {
 		fmt.Printf("  %s\n", s.DisplayPath)
-		fmt.Printf("    label: %s\n", strings.Join(s.Labels, ", "))
+		if len(s.Labels) > 0 {
+			fmt.Printf("    label: %s\n", strings.Join(s.Labels, ", "))
+		}
 		if s.Explanation != "" {
 			fmt.Printf("    explanation: %s\n", s.Explanation)
+		}
+		if s.Reason != "" {
+			fmt.Printf("    reason: %s\n", s.Reason)
 		}
 	}
 	fmt.Println()

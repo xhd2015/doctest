@@ -51,6 +51,9 @@ When all tests pass (GREEN), report the results. The main agent will verify:
 ```sh
 git diff ./<test-dir>   # must show no changes to test files
 doctest test ./<test-dir>  # must show all GREEN
+
+doctest test --label "ui-automation" ./tests/<feature>/... # if the ASSERT.md contains label header
+doctest test --label 'slow && ui-automation' ./tests/<feature>/... # --label accepts simple expr lie expr&&, || , ()
 ```
 
 ## Reporting Progress

@@ -19,6 +19,8 @@ Prose is primary, code supplementary.
 - `SETUP.md` accumulates root→leaf: `## Steps` concatenated, `## Preconditions`/`## Context` merged.
   Sections: `## Preconditions`, `## Steps`, `## Context`
 - `ASSERT.md` is **case-private** (never inherited).
+  Optional YAML frontmatter (`label`, `explanation`) for run-profile skip; see design spec
+  and **Running tests (`doctest test`)** in TDD skills for `--label` usage.
   Sections: `## Expected`, `## Side Effects`, `## Errors`, `## Exit Code`
 
 ## Vet

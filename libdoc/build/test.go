@@ -58,8 +58,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		}
 	}
 
-	skipLabeled := !opts.ExplicitLeaf
-	cases, skipped := core.PartitionLabeledCases(cases, skipLabeled)
+	cases, skipped := core.FilterCasesByLabel(cases, opts)
 	for i := range skipped {
 		skipped[i].DisplayPath = SkippedDisplayPath(dir, skipped[i].Path)
 	}

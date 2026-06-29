@@ -83,7 +83,8 @@ add or update tests.
 Materialize under `<pkg>/tests/<feature>/`:
 
 - Root `DOCTEST.md`: DSN, `## Version` (`__DOCTEST_VERSION__`), ASCII decision
-  tree diagram, test-leaf index, `## How to Run`, and the Go block defining
+  tree diagram, test-leaf index, `## How to Run` (include `--label` when the tree
+  has labeled leaves — see **Running tests** below), and the Go block defining
   `Request`, `Response`, and `Run`
 - Grouping nodes: `SETUP.md` only (no `ASSERT.md`)
 - Leaves: `SETUP.md` + `ASSERT.md`
@@ -156,6 +157,10 @@ doctest test ./...
 git diff ./tests/<feature>            # must be clean
 doctest vet ./tests/<feature>         # structure still valid
 doctest test ./tests/<feature>/...    # must be GREEN
+
+doctest test --label "ui-automation" ./tests/<feature>/... # if the ASSERT.md contains label header
+doctest test --label 'slow && ui-automation' ./tests/<feature>/... # --label accepts simple expr lie expr&&, || , ()
+
 doctest test ./...                    # no regressions
 ```
 

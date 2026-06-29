@@ -60,6 +60,7 @@ type SkippedCase struct {
 	Labels      []string
 	Explanation string
 	DisplayPath string
+	Reason      string
 }
 
 type ColorMode int
@@ -83,6 +84,7 @@ type Options struct {
 	SuppressResultSummary bool
 	ChangedOnly           bool
 	ExplicitLeaf          bool
+	LabelExprs            []string
 }
 
 type ValidationError struct {

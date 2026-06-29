@@ -125,3 +125,31 @@ func PartitionLabeledCases(cases []TreeCase, skipLabeled bool) (run []TreeCase, 
 	}
 	return run, skipped
 }
+
+// FilterCasesByLabel applies discovery skip or --label filtering.
+// When len(opts.LabelExprs)==0, behavior matches PartitionLabeledCases with skipLabeled=!opts.ExplicitLeaf.
+// When label expressions are set, only matching labeled leaves run; others are skipped with Reason "label filter".
+func FilterCasesByLabel(cases []TreeCase, opts Options) (run []TreeCase, skipped []SkippedCase) {
+	if len(opts.LabelExprs) == 0 {
+		return PartitionLabeledCases(cases, !opts.ExplicitLeaf)
+	}
+	for _, tc := range cases {
+		match, err := MatchLabelExprs(opts.LabelExprs, tc.Labels)
+		if err != nil {
+			// Caller should validate expressions before discovery; treat as non-match if called anyway.
+			match = false
+		}
+		if match {
+			run = append(run, tc)
+			continue
+		}
+		skipped = append(skipped, SkippedCase{
+			Name:        tc.Name,
+			Path:        tc.Path,
+			Labels:      append([]string(nil), tc.Labels...),
+			Explanation: tc.Explanation,
+			Reason:      "label filter",
+		})
+	}
+	return run, skipped
+}

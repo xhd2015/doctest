@@ -98,6 +98,7 @@ Return absolute paths for every tree and node you discuss.
 
 8. **Audit run profile and labels**
    - Enumerate every leaf `ASSERT.md`; read optional YAML frontmatter (`label`, `explanation`).
+   - **`label` format:** scalar YAML string — **comma-separated** for multiple labels use comma separated string, e.g. `label: slow, ui-automation`
    - Scan ancestor `SETUP.md` files and the leaf's own `ASSERT.md` Go block for **cost
      signals** (read-only — do not require `doctest test`):
      - **Slow**: `time.Sleep`, long `req.Timeout` / `context.WithTimeout`, prose mentioning
@@ -119,7 +120,8 @@ Return absolute paths for every tree and node you discuss.
      - Expensive unlabeled leaf beside fast siblings at same level → **major**
      - Every leaf labeled when only a few are expensive → **suggestion**
    - Check root `DOCTEST.md` **How to Run** documents discovery skip and how to run labeled
-     leaves explicitly when the tree has skip-worthy cases.
+     leaves when the tree has skip-worthy cases: explicit leaf path or `doctest test --label EXPR`
+     (`&&`, `||`, parentheses; repeatable `--label` flags OR'd).
    - Emit a table per root:
 
      | Leaf path | Labels | Explanation | Signals | Verdict |
@@ -159,10 +161,12 @@ Return absolute paths for every tree and node you discuss.
 
 ### Run profile / labels
 - [ ] Slow, heavy, flaky, manual, or UI leaves have appropriate `label:` in ASSERT frontmatter
+- [ ] Multiple labels on one leaf use comma-separated scalar (`label: slow, ui-automation`), not YAML arrays
 - [ ] `flaky` and `manual` labels include a non-empty `explanation`
 - [ ] Skip-worthy leaves are not relying on `explanation` alone (that does not skip)
+- [ ] Slowness/cost documented in `label` (e.g. `slow`, `ui-automation`), not only in `explanation`
 - [ ] Expensive leaves grouped under `e2e/`, `slow/`, `integration/`, or similar — not mixed unlabeled among fast siblings
-- [ ] Root **How to Run** documents skip policy when labeled leaves exist
+- [ ] Root **How to Run** documents discovery skip and `--label` / explicit-leaf run commands when labeled leaves exist
 
 ## Guidelines
 
@@ -186,6 +190,7 @@ Return absolute paths for every tree and node you discuss.
 - Leaf with `time.Sleep`, subprocess, or external-service setup but no `label` — slows CI discovery runs
 - `label: flaky` or `label: manual` without `explanation` — reader cannot judge when to run or how to debug
 - `explanation` describing manual/slow intent but no `label` — leaf still runs in discovery
+- `label: [slow, ui]` YAML sequence instead of comma-separated scalar — wrong frontmatter shape
 - Expensive leaves at the same tree level as fast unit-style leaves without labels or grouping
 
 ## Output assertion anti-patterns (suggestion severity)
