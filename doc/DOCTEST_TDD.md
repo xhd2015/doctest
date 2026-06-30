@@ -53,12 +53,21 @@ Use the **first** option that applies:
 
 | Priority | When | How |
 |----------|------|-----|
-| **1 — Native subagent/task** | Your runner exposes a subagent or task tool (e.g. Task, runner-native subagent API) | Spawn/resume subagents with the designer or implementer role prompt and the requirement as the task. See **Role prompts** below. |
+| **1 — Native subagent/task** | Your runner exposes a subagent or task tool (e.g. Task, runner-native subagent API) | Spawn/resume subagents with requirement as the task. The sub-agent loads its own role prompt — see **Role prompts** below. |
 | **2 — CLI fallback** | No native subagent mechanism, or you need doctest session hooks (`yield-pending-questions`, `--status`, progress reporting) | `doctest agent design` / `doctest agent implement` |
 
-**Role prompts** — load once per role, then pass as the subagent system/role context:
+**Role prompts** — the **orchestrator does not** run `doctest skill designer show` or
+`doctest skill implementer show`. Pass only a brief, distilled requirement (or
+the requirement file path) when spawning the sub-agent.
 
-Run via `bash` to load the role setup: **`doctest skill designer show`** and **`doctest skill implementer show`**.
+Tell each sub-agent **must** run its role command as its **first** step (via `bash`):
+
+- **Designer**: `doctest skill designer show` — read the output and follow it as
+  the role/system instructions for the rest of the session.
+- **Implementer**: `doctest skill implementer show` — same pattern.
+
+Do not inline or pre-distill the role prompt in the orchestrator's spawn message;
+the sub-agent loads the canonical prompt itself.
 
 **Session continuity** — designer and implementer each have their own session.
 Within a role, resume the same session for follow-up questions (native: runner
@@ -93,10 +102,8 @@ Write `REQUIREMENT-DESIGN-<context-summary-and-feature-slug>.md` from Phase 1.
 
 ### Preferred — native subagent/task
 
-Spawn a subagent with:
-
-- **Role/system**: designer role prompt (see **Role prompts** above)
-- **Task**: contents of `REQUIREMENT-DESIGN-<slug>.md` (or the file path plus a short summary)
+Spawn a subagent with requirement (short description of file path, e.g. `REQUIREMENT-DESIGN-<slug>.md`) plus an optional short summary. the designer sub-agent run `doctest skill designer show` it as its
+first command (see **Role prompts** above).
 
 Wait until the designer reports the doctest tree is written under
 `./tests/<feature>/`.
@@ -165,10 +172,8 @@ and the verify command.
 
 ### Preferred — native subagent/task
 
-Spawn a subagent with:
-
-- **Role/system**: implementer role prompt (see **Role prompts** above)
-- **Task**: contents of `REQUIREMENT-IMPLEMENT-<slug>.md`
+Spawn a subagent with requirement (short description of file path, e.g. `REQUIREMENT-IMPLEMENT-<slug>.md`) plus an optional short summary. the implementer sub-agent runs ``doctest skill implementer show` as its
+first command (see **Role prompts** above).
 
 Wait until the implementer reports all tests passing.
 
@@ -222,7 +227,8 @@ Report: test count, modifications accepted (with rationale).
 - Design: `REQUIREMENT-DESIGN-<slug>.md`
 - Implement: `REQUIREMENT-IMPLEMENT-<slug>.md`
 
-Pass the short prompt or long requirement file path (plus optional summary) to native subagents. For the CLI
+For native subagents, pass only a brief prompt or requirement file path (plus
+optional summary) — not the role prompt. For the CLI
 fallback, use `--requirement` for long prompts or prompts with shell-special
 characters (`$`, `#`, `!`), or a heredoc for adhoc followup.
 
