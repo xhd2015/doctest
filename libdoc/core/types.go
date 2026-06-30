@@ -30,7 +30,9 @@ type FuncSnippet struct {
 	Name    string
 	Params  string
 	Results string
-	Body    string
+	// ResultTypes holds return types only (no names), for valid func-literal signatures.
+	ResultTypes string
+	Body        string
 }
 
 type SetupDocument struct {

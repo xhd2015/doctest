@@ -2,10 +2,15 @@ package core
 
 import (
 	"bytes"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"golang.org/x/tools/imports"
 )
 
 func TestRootSetupRequiresRequestAndResponseTypes(t *testing.T) {
@@ -300,4 +305,118 @@ func readFileString(t *testing.T, path string) string {
 		t.Fatalf("read %s: %v", path, err)
 	}
 	return string(data)
+}
+
+func TestParseHelperSharedTypeNamedResultsSetsResultTypes(t *testing.T) {
+	block := GoBlock{SourcePath: "DOCTEST.md", Code: `
+import "testing"
+func pickTwoPorts(base int) (port, alt int) { return base, base + 1 }
+`}
+	if err := parseGoBlock(&block); err != nil {
+		t.Fatalf("parseGoBlock: %v", err)
+	}
+	if len(block.Helpers) != 1 {
+		t.Fatalf("expected 1 helper, got %d", len(block.Helpers))
+	}
+	h := block.Helpers[0]
+	if h.Results != "port int, alt int" {
+		t.Fatalf("Results = %q", h.Results)
+	}
+	if h.ResultTypes != "(int, int)" {
+		t.Fatalf("ResultTypes = %q, want (int, int)", h.ResultTypes)
+	}
+}
+
+func TestResultTypesStringStripsNamedReturns(t *testing.T) {
+	code := `package p
+func startTestServer(t *testing.T) (base string, cleanup func()) { return "", nil }
+func pickFreePort(base int) (int, error) { return 0, nil }
+func pickTwoPorts(base int) (port, alt int) { return 0, 0 }`
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "helpers.go", code, 0)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	var gotStart, gotPort, gotTwo string
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok {
+			continue
+		}
+		switch fn.Name.Name {
+		case "startTestServer":
+			gotStart = resultTypesString(fset, fn.Type.Results)
+		case "pickFreePort":
+			gotPort = resultTypesString(fset, fn.Type.Results)
+		case "pickTwoPorts":
+			gotTwo = resultTypesString(fset, fn.Type.Results)
+		}
+	}
+	if gotStart != "(string, func())" {
+		t.Fatalf("startTestServer result types = %q, want (string, func())", gotStart)
+	}
+	if gotPort != "(int, error)" {
+		t.Fatalf("pickFreePort result types = %q, want (int, error)", gotPort)
+	}
+	if gotTwo != "(int, int)" {
+		t.Fatalf("pickTwoPorts result types = %q, want (int, int)", gotTwo)
+	}
+}
+
+func TestAssembleFuncClosureSharedTypeNamedResultsParses(t *testing.T) {
+	root := t.TempDir()
+	tc := TreeCase{
+		Name: "leaf",
+		Path: "leaf",
+		SetupFiles: []SetupDocument{{
+			Path: "",
+			GoBlock: &GoBlock{
+				Run: &FuncSnippet{
+					Name:        "Run",
+					Params:      "t *testing.T, req *Request",
+					Results:     "(*Response, error)",
+					ResultTypes: "(*Response, error)",
+					Body:        "{ return &Response{}, nil }",
+				},
+				Helpers: []FuncSnippet{{
+					Name:        "pickTwoPorts",
+					Params:      "base int",
+					Results:     "port int, alt int",
+					ResultTypes: "(int, int)",
+					Body:        "{ return base, base + 1 }",
+				}},
+				Types: map[string]bool{"Request": true, "Response": true},
+				TypeDecls: []string{
+					"type Request struct{}",
+					"type Response struct{}",
+				},
+			},
+		}},
+		AssertFile: AssertDocument{
+			GoBlock: GoBlock{
+				Assert: &FuncSnippet{
+					Name:   "Assert",
+					Params: "t *testing.T, req *Request, resp *Response, err error",
+					Body:   "{}",
+				},
+			},
+		},
+	}
+
+	src, err := AssembleTestSource(tc, false, "leaf_tc", root)
+	if err != nil {
+		t.Fatalf("assemble: %v", err)
+	}
+	if strings.Contains(src, "port int, alt int") {
+		t.Fatalf("expected named shared-type results stripped in closure, got:\n%s", src)
+	}
+	if !strings.Contains(src, "pickTwoPorts := func(base int) (int, int)") {
+		t.Fatalf("expected type-only closure signature, got:\n%s", src)
+	}
+	if _, err := parser.ParseFile(token.NewFileSet(), "generated_test.go", src, 0); err != nil {
+		t.Fatalf("generated source should parse: %v\n%s", err, src)
+	}
+	if _, err := imports.Process("generated_test.go", []byte(src), nil); err != nil {
+		t.Fatalf("imports.Process should succeed: %v\n%s", err, src)
+	}
 }

@@ -298,9 +298,12 @@ func writeSetupCalls(buf *strings.Builder, setupFiles []SetupDocument) {
 }
 
 func writeFuncClosure(buf *strings.Builder, name string, fn FuncSnippet) {
-	results := ""
-	if strings.TrimSpace(fn.Results) != "" {
-		results = " " + fn.Results
+	results := fn.ResultTypes
+	if strings.TrimSpace(results) == "" {
+		results = fn.Results
+	}
+	if strings.TrimSpace(results) != "" {
+		results = " " + results
 	}
 	buf.WriteString(fmt.Sprintf("\t%s := func(%s)%s %s\n", name, fn.Params, results, fn.Body))
 }

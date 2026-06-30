@@ -211,14 +211,17 @@ func funcSnippet(fset *token.FileSet, d *ast.FuncDecl) FuncSnippet {
 		params = fieldsString(fset, d.Type.Params)
 	}
 	results := ""
+	resultTypes := ""
 	if d.Type.Results != nil {
 		results = resultsString(fset, d.Type.Results)
+		resultTypes = resultTypesString(fset, d.Type.Results)
 	}
 	return FuncSnippet{
-		Name:    d.Name.Name,
-		Params:  params,
-		Results: results,
-		Body:    nodeString(fset, d.Body),
+		Name:        d.Name.Name,
+		Params:      params,
+		Results:     results,
+		ResultTypes: resultTypes,
+		Body:        nodeString(fset, d.Body),
 	}
 }
 
@@ -246,6 +249,31 @@ func resultsString(fset *token.FileSet, fields *ast.FieldList) string {
 	}
 	s := fieldsString(fset, fields)
 	if len(fields.List) > 1 {
+		return "(" + s + ")"
+	}
+	return s
+}
+
+// resultTypesString renders result parameters with type names only (no identifiers).
+// Multiple named results sharing one type, e.g. (port, alt int), must be parenthesized
+// in func literals: (int, int) not port int, alt int.
+func resultTypesString(fset *token.FileSet, fields *ast.FieldList) string {
+	if fields == nil || len(fields.List) == 0 {
+		return ""
+	}
+	var parts []string
+	for _, field := range fields.List {
+		typ := nodeString(fset, field.Type)
+		n := len(field.Names)
+		if n == 0 {
+			n = 1
+		}
+		for i := 0; i < n; i++ {
+			parts = append(parts, typ)
+		}
+	}
+	s := strings.Join(parts, ", ")
+	if len(parts) > 1 {
 		return "(" + s + ")"
 	}
 	return s
