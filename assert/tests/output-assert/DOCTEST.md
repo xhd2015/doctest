@@ -79,13 +79,14 @@ output-assert
 │   │   ├── standalone-fail         H2
 │   │   ├── with-literal-pass       H3
 │   │   └── path-mismatch           H4 — error mentions hint:path
-│   ├── contains/                   C1–C6
+│   ├── contains/                   C1–C6, C8
 │   │   ├── order-free-pass         C1
 │   │   ├── missing-fragment        C2
-│   │   ├── full-line-required      C3
+│   │   ├── substring-mid-line      C3 — <contains> matches mid-line substring
 │   │   ├── start-with-prefix       C4
 │   │   ├── end-with-suffix         C5
-│   │   └── meta-lines-ignored      C6
+│   │   ├── meta-lines-ignored      C6
+│   │   └── contains-only-no-trailing-newline C8 — contains-only ignores trailing newline policy
 │   ├── ansi-color/                 AC1–AC6, AC8–AC10 (AC7 is parse error)
 │   │   ├── named-gray-pass         AC1
 │   │   ├── plain-text-fails        AC2
@@ -144,7 +145,7 @@ output-assert
 | O1–O9 | `match/optional/*` | Block/inline optional semantics |
 | A1–A5 | `match/any-of/*` | Branch selection and reporting |
 | H1–H4 | `match/hint/*` | Literal hint matching |
-| C1–C7 | `match/contains/*` | Order-free fragments and inline pattern fragments |
+| C1–C6, C8 | `match/contains/*` | Order-free fragments and inline pattern fragments |
 | AC1–AC10 | `match/ansi-color/*` + `parse/errors/empty-ansi-color` | ANSI assertions |
 | R1–R3 | `match/regex/*` | Regex block + optional wrapper |
 | X1–X3 | `match/inline-any-of/*` | Inline any-of scoping |

@@ -1,6 +1,6 @@
 # Scenario
 
-**Feature**: C3 — default full-line match
+**Feature**: C3 — <contains> matches a mid-line substring
 
 ```
 # parsed pattern compared to actual output
@@ -10,7 +10,7 @@ Matcher -> pass or line-numbered diff
 ```
 
 ## Steps
-1. Set template/actual fields for C3 — default full-line match.
+1. Set template/actual fields for C3 — <contains> matches a mid-line substring.
 
 ```go
 func Setup(t *testing.T, req *Request) error {

@@ -102,7 +102,7 @@ func (ContainsBlock) isItem() {}
 type ContainsMatchMode int
 
 const (
-	ContainsFullLine ContainsMatchMode = iota
+	ContainsSubstring ContainsMatchMode = iota
 	ContainsStartWith
 	ContainsEndWith
 )

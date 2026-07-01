@@ -33,10 +33,28 @@ func matchContainsMode(p Pattern, actual string) error {
 
 func matchExactMode(p Pattern, actual string) error {
 	allowGaps := patternHasContains(p.items)
-	if err := checkTrailingNewline(p.trailingNewline, actual); err != nil {
-		return err
+	if !patternContainsOnly(p.items) {
+		if err := checkTrailingNewline(p.trailingNewline, actual); err != nil {
+			return err
+		}
 	}
 	return matchExactAt(p, actual, 0, allowGaps, true)
+}
+
+// patternContainsOnly reports whether the pattern's top-level items are all
+// ContainsBlocks (at least one) with no LiteralLine/PatternLine/RegexLine.
+// Substring-only assertions should not care how the output terminates.
+func patternContainsOnly(items []Item) bool {
+	hasContains := false
+	for _, item := range items {
+		switch item.(type) {
+		case ContainsBlock:
+			hasContains = true
+		case LiteralLine, PatternLine, RegexLine:
+			return false
+		}
+	}
+	return hasContains
 }
 
 func matchPrefixAt(p Pattern, actual string, lineBase int, allowGaps bool) error {
@@ -142,14 +160,14 @@ func collectContainsFragments(items []Item) []ContainsFragment {
 func (st *matchState) checkContainsFragment(frag ContainsFragment) error {
 	for _, line := range st.lines {
 		switch frag.Mode {
-		case ContainsFullLine:
+		case ContainsSubstring:
 			if len(frag.Segments) > 0 {
 				if _, err := st.matchSegments(frag.Segments, line, st.lineBase+1); err == nil {
 					return nil
 				}
 				continue
 			}
-			if line == frag.Text || strings.HasPrefix(line, frag.Text) {
+			if line == frag.Text || strings.Contains(line, frag.Text) {
 				return nil
 			}
 		case ContainsStartWith:

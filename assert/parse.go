@@ -197,9 +197,9 @@ func (p *parser) parseContainsBlock() (Item, error) {
 		}
 		switch it := parsed.(type) {
 		case LiteralLine:
-			fragments = append(fragments, ContainsFragment{Mode: ContainsFullLine, Text: it.Text})
+			fragments = append(fragments, ContainsFragment{Mode: ContainsSubstring, Text: it.Text})
 		case PatternLine:
-			fragments = append(fragments, ContainsFragment{Mode: ContainsFullLine, Segments: it.Segments})
+			fragments = append(fragments, ContainsFragment{Mode: ContainsSubstring, Segments: it.Segments})
 		default:
 			return nil, parseErr(p.lineOffset(p.idx), "unsupported contains fragment")
 		}
