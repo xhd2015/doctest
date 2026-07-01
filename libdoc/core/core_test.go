@@ -379,11 +379,12 @@ func TestAssembleFuncClosureSharedTypeNamedResultsParses(t *testing.T) {
 					Body:        "{ return &Response{}, nil }",
 				},
 				Helpers: []FuncSnippet{{
-					Name:        "pickTwoPorts",
-					Params:      "base int",
-					Results:     "port int, alt int",
-					ResultTypes: "(int, int)",
-					Body:        "{ return base, base + 1 }",
+					Name:           "pickTwoPorts",
+					Params:         "base int",
+					Results:        "port int, alt int",
+					ResultTypes:    "(int, int)",
+					ClosureResults: "(port int, alt int)",
+					Body:           "{ return base, base + 1 }",
 				}},
 				Types: map[string]bool{"Request": true, "Response": true},
 				TypeDecls: []string{
@@ -407,11 +408,115 @@ func TestAssembleFuncClosureSharedTypeNamedResultsParses(t *testing.T) {
 	if err != nil {
 		t.Fatalf("assemble: %v", err)
 	}
-	if strings.Contains(src, "port int, alt int") {
-		t.Fatalf("expected named shared-type results stripped in closure, got:\n%s", src)
+	// Named results are preserved (parenthesized) so bodies that assign to
+	// named returns compile; they are no longer stripped to type-only.
+	if !strings.Contains(src, "pickTwoPorts := func(base int) (port int, alt int)") {
+		t.Fatalf("expected named results preserved in closure, got:\n%s", src)
 	}
-	if !strings.Contains(src, "pickTwoPorts := func(base int) (int, int)") {
-		t.Fatalf("expected type-only closure signature, got:\n%s", src)
+	if _, err := parser.ParseFile(token.NewFileSet(), "generated_test.go", src, 0); err != nil {
+		t.Fatalf("generated source should parse: %v\n%s", err, src)
+	}
+	if _, err := imports.Process("generated_test.go", []byte(src), nil); err != nil {
+		t.Fatalf("imports.Process should succeed: %v\n%s", err, src)
+	}
+}
+
+func parseHelpersBlock(t *testing.T, code string) *GoBlock {
+	t.Helper()
+	block := GoBlock{SourcePath: "SETUP.md", Code: code}
+	if err := parseGoBlock(&block); err != nil {
+		t.Fatalf("parseGoBlock: %v", err)
+	}
+	return &block
+}
+
+// TestAssembleFuncClosurePreservesNamedResults reproduces a helper whose body
+// assigns to named result variables (like wrk's setupWrkWorktreeFromMain).
+// Stripping names to type-only signatures leaves those assignments referencing
+// undeclared identifiers and breaks compilation. The closure signature must
+// keep the names, parenthesized.
+func TestAssembleFuncClosurePreservesNamedResults(t *testing.T) {
+	root := t.TempDir()
+	block := parseHelpersBlock(t, `
+type Request struct{}
+type Response struct{}
+func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func splitNames(req *Request) (mainRepo, wtDir, branch string) {
+	mainRepo = "a"
+	wtDir = "b"
+	branch = "c"
+	return
+}
+`)
+	tc := TreeCase{
+		Name: "leaf",
+		Path: "leaf",
+		SetupFiles: []SetupDocument{{Path: "", GoBlock: block}},
+		AssertFile: AssertDocument{GoBlock: GoBlock{
+			Assert: &FuncSnippet{
+				Name:   "Assert",
+				Params: "t *testing.T, req *Request, resp *Response, err error",
+				Body:   "{}",
+			},
+		}},
+	}
+
+	src, err := AssembleTestSource(tc, false, "leaf_tc", root)
+	if err != nil {
+		t.Fatalf("assemble: %v", err)
+	}
+	// Named results must be preserved (parenthesized) so the body's
+	// assignments to mainRepo/wtDir/branch reference declared return vars.
+	if !strings.Contains(src, "splitNames := func(req *Request) (mainRepo string, wtDir string, branch string)") {
+		t.Fatalf("expected named results preserved in closure, got:\n%s", src)
+	}
+	if strings.Contains(src, "splitNames := func(req *Request) (string, string, string)") {
+		t.Fatalf("named results should not be stripped to type-only, got:\n%s", src)
+	}
+	if _, err := parser.ParseFile(token.NewFileSet(), "generated_test.go", src, 0); err != nil {
+		t.Fatalf("generated source should parse: %v\n%s", err, src)
+	}
+	if _, err := imports.Process("generated_test.go", []byte(src), nil); err != nil {
+		t.Fatalf("imports.Process should succeed: %v\n%s", err, src)
+	}
+}
+
+// TestAssembleHelpersTopoSortedForwardRef reproduces two helpers where the
+// caller is defined before the callee (legal for top-level funcs, illegal for
+// closures). The codegen must emit the callee before the caller.
+func TestAssembleHelpersTopoSortedForwardRef(t *testing.T) {
+	root := t.TempDir()
+	block := parseHelpersBlock(t, `
+type Request struct{}
+type Response struct{}
+func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func caller(x int) string { return callee(x) }
+func callee(x int) string { return "x" }
+`)
+	tc := TreeCase{
+		Name: "leaf",
+		Path: "leaf",
+		SetupFiles: []SetupDocument{{Path: "", GoBlock: block}},
+		AssertFile: AssertDocument{GoBlock: GoBlock{
+			Assert: &FuncSnippet{
+				Name:   "Assert",
+				Params: "t *testing.T, req *Request, resp *Response, err error",
+				Body:   "{}",
+			},
+		}},
+	}
+
+	src, err := AssembleTestSource(tc, false, "leaf_tc", root)
+	if err != nil {
+		t.Fatalf("assemble: %v", err)
+	}
+	calleeIdx := strings.Index(src, "callee := func")
+	callerIdx := strings.Index(src, "caller := func")
+	if calleeIdx < 0 || callerIdx < 0 {
+		t.Fatalf("expected both helper closures in source, got:\n%s", src)
+	}
+	if calleeIdx >= callerIdx {
+		t.Fatalf("expected callee declared before caller (calleeIdx=%d callerIdx=%d), got:\n%s", calleeIdx, callerIdx, src)
 	}
 	if _, err := parser.ParseFile(token.NewFileSet(), "generated_test.go", src, 0); err != nil {
 		t.Fatalf("generated source should parse: %v\n%s", err, src)

@@ -32,7 +32,13 @@ type FuncSnippet struct {
 	Results string
 	// ResultTypes holds return types only (no names), for valid func-literal signatures.
 	ResultTypes string
-	Body        string
+	// ClosureResults holds the result signature rendered for a func literal:
+	// names preserved (so bodies that assign to named returns compile) and
+	// parenthesized whenever there is more than one result or any named result,
+	// because bare multi-name results like "port, alt int" are invalid syntax
+	// outside parentheses.
+	ClosureResults string
+	Body           string
 }
 
 type SetupDocument struct {

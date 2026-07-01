@@ -66,8 +66,7 @@ func AssembleTestSource(tc TreeCase, compileOnly bool, pkgName string, docTestRo
 	writeTypeConstVarDecls(&buf, tc.SetupFiles)
 	writeTypeConstVarDeclsForBlock(&buf, tc.AssertFile.GoBlock)
 
-	writeHelperDecls(&buf, tc.SetupFiles)
-	writeHelperDeclsForBlock(&buf, tc.AssertFile.GoBlock)
+	writeAllHelpers(&buf, tc.SetupFiles, tc.AssertFile.GoBlock)
 
 	var run *FuncSnippet
 	if len(tc.SetupFiles) > 0 && tc.SetupFiles[0].GoBlock != nil && tc.SetupFiles[0].GoBlock.Run != nil {
@@ -187,21 +186,86 @@ func writeTypeConstVarDeclsForBlock(buf *strings.Builder, block GoBlock) {
 	}
 }
 
-func writeHelperDecls(buf *strings.Builder, setupFiles []SetupDocument) {
+func writeAllHelpers(buf *strings.Builder, setupFiles []SetupDocument, assertBlock GoBlock) {
+	var helpers []FuncSnippet
 	for _, doc := range setupFiles {
 		if doc.GoBlock == nil {
 			continue
 		}
-		for _, helper := range doc.GoBlock.Helpers {
-			writeFuncClosure(buf, helper.Name, helper)
-		}
+		helpers = append(helpers, doc.GoBlock.Helpers...)
+	}
+	helpers = append(helpers, assertBlock.Helpers...)
+	for _, helper := range sortHelpers(helpers) {
+		writeFuncClosure(buf, helper.Name, helper)
 	}
 }
 
-func writeHelperDeclsForBlock(buf *strings.Builder, block GoBlock) {
-	for _, helper := range block.Helpers {
-		writeFuncClosure(buf, helper.Name, helper)
+// sortHelpers topologically orders helpers so that a closure referencing
+// another helper is emitted after its callee. Top-level funcs allow forward
+// references; func literals (closures) do not, so without reordering a helper
+// defined before one it calls fails to compile. On a cycle (mutual recursion)
+// it falls back to source order.
+func sortHelpers(helpers []FuncSnippet) []FuncSnippet {
+	type depInfo struct {
+		helper FuncSnippet
+		deps   []int // indices of helpers this one calls
 	}
+	nameIdx := make(map[string]int)
+	infos := make([]depInfo, len(helpers))
+	for i, h := range helpers {
+		infos[i].helper = h
+		nameIdx[h.Name] = i
+	}
+	for i, h := range helpers {
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, "", "package p; func _() "+h.Body, 0)
+		if err != nil {
+			continue
+		}
+		seen := make(map[int]bool)
+		ast.Inspect(file, func(n ast.Node) bool {
+			id, ok := n.(*ast.Ident)
+			if !ok {
+				return true
+			}
+			if j, ok := nameIdx[id.Name]; ok && j != i && !seen[j] {
+				infos[i].deps = append(infos[i].deps, j)
+				seen[j] = true
+			}
+			return true
+		})
+	}
+	inDegree := make(map[int]int)
+	adj := make(map[int][]int)
+	for i, info := range infos {
+		for _, j := range info.deps {
+			adj[j] = append(adj[j], i)
+			inDegree[i]++
+		}
+	}
+	var sorted []FuncSnippet
+	var queue []int
+	for i := range infos {
+		if inDegree[i] == 0 {
+			queue = append(queue, i)
+		}
+	}
+	for len(queue) > 0 {
+		sort.Ints(queue) // prefer source order among ready nodes
+		i := queue[0]
+		queue = queue[1:]
+		sorted = append(sorted, infos[i].helper)
+		for _, j := range adj[i] {
+			inDegree[j]--
+			if inDegree[j] == 0 {
+				queue = append(queue, j)
+			}
+		}
+	}
+	if len(sorted) == len(helpers) {
+		return sorted
+	}
+	return helpers
 }
 
 func sortTypeDecls(decls []string, types map[string]bool) []string {
@@ -298,7 +362,13 @@ func writeSetupCalls(buf *strings.Builder, setupFiles []SetupDocument) {
 }
 
 func writeFuncClosure(buf *strings.Builder, name string, fn FuncSnippet) {
-	results := fn.ResultTypes
+	// Prefer the closure-rendered results (names preserved, correctly
+	// parenthesized). Fall back to ResultTypes for manually-built snippets
+	// that only set type-only results, then to Results.
+	results := fn.ClosureResults
+	if strings.TrimSpace(results) == "" {
+		results = fn.ResultTypes
+	}
 	if strings.TrimSpace(results) == "" {
 		results = fn.Results
 	}

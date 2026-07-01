@@ -212,16 +212,19 @@ func funcSnippet(fset *token.FileSet, d *ast.FuncDecl) FuncSnippet {
 	}
 	results := ""
 	resultTypes := ""
+	closureResults := ""
 	if d.Type.Results != nil {
 		results = resultsString(fset, d.Type.Results)
 		resultTypes = resultTypesString(fset, d.Type.Results)
+		closureResults = closureResultsString(fset, d.Type.Results)
 	}
 	return FuncSnippet{
-		Name:        d.Name.Name,
-		Params:      params,
-		Results:     results,
-		ResultTypes: resultTypes,
-		Body:        nodeString(fset, d.Body),
+		Name:           d.Name.Name,
+		Params:         params,
+		Results:        results,
+		ResultTypes:    resultTypes,
+		ClosureResults: closureResults,
+		Body:           nodeString(fset, d.Body),
 	}
 }
 
@@ -274,6 +277,32 @@ func resultTypesString(fset *token.FileSet, fields *ast.FieldList) string {
 	}
 	s := strings.Join(parts, ", ")
 	if len(parts) > 1 {
+		return "(" + s + ")"
+	}
+	return s
+}
+
+// closureResultsString renders result parameters for a func literal: it keeps
+// parameter names (so bodies that assign to named returns compile) and
+// parenthesizes whenever there is more than one result or any named result,
+// because bare multi-name results like "port, alt int" are invalid syntax
+// outside parentheses. A single unnamed result (e.g. "int") stays bare.
+func closureResultsString(fset *token.FileSet, fields *ast.FieldList) string {
+	if fields == nil || len(fields.List) == 0 {
+		return ""
+	}
+	s := fieldsString(fset, fields)
+	total := 0
+	anyNamed := false
+	for _, f := range fields.List {
+		if len(f.Names) == 0 {
+			total++
+		} else {
+			total += len(f.Names)
+			anyNamed = true
+		}
+	}
+	if total > 1 || anyNamed {
 		return "(" + s + ")"
 	}
 	return s
