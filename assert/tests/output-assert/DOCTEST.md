@@ -57,7 +57,9 @@ output-assert
 │   │   ├── exact-pass              M1
 │   │   ├── strict-trailing-fail    M2 — template without \n, actual with \n
 │   │   ├── strict-trailing-pass    M2b — both agree on trailing newline
-│   │   └── line-mismatch           M3 — line 2 differs
+│   │   ├── line-mismatch           M3 — line 2 differs
+│   │   ├── interior-blank-preserved L1 — interior empty line stays meaningful
+│   │   └── leading-newline-pure-literal-strict L2 — leading \n stripped, strict trailing still applies
 │   ├── optional/                   O1–O9
 │   │   ├── block-absent            O1
 │   │   ├── block-present           O2
@@ -79,14 +81,16 @@ output-assert
 │   │   ├── standalone-fail         H2
 │   │   ├── with-literal-pass       H3
 │   │   └── path-mismatch           H4 — error mentions hint:path
-│   ├── contains/                   C1–C6, C8
+│   ├── contains/                   C1–C6, C8–C10
 │   │   ├── order-free-pass         C1
 │   │   ├── missing-fragment        C2
 │   │   ├── substring-mid-line      C3 — <contains> matches mid-line substring
 │   │   ├── start-with-prefix       C4
 │   │   ├── end-with-suffix         C5
 │   │   ├── meta-lines-ignored      C6
-│   │   └── contains-only-no-trailing-newline C8 — contains-only ignores trailing newline policy
+│   │   ├── contains-only-no-trailing-newline C8 — contains-only ignores trailing newline policy
+│   │   ├── leading-newline-stripped C9 — leading blank line stripped, contains-only applies
+│   │   └── trailing-blank-stripped  C10 — trailing blank line after </contains> stripped
 │   ├── ansi-color/                 AC1–AC6, AC8–AC10 (AC7 is parse error)
 │   │   ├── named-gray-pass         AC1
 │   │   ├── plain-text-fails        AC2
@@ -142,10 +146,12 @@ output-assert
 | M2 | `match/literal/strict-trailing-fail` | Strict trailing newline fail |
 | M2b | `match/literal/strict-trailing-pass` | Trailing newline agreement |
 | M3 | `match/literal/line-mismatch` | Line-level mismatch |
+| L1 | `match/literal/interior-blank-preserved` | Interior empty line stays meaningful |
+| L2 | `match/literal/leading-newline-pure-literal-strict` | Leading `\n` stripped, strict trailing policy still applies |
 | O1–O9 | `match/optional/*` | Block/inline optional semantics |
 | A1–A5 | `match/any-of/*` | Branch selection and reporting |
 | H1–H4 | `match/hint/*` | Literal hint matching |
-| C1–C6, C8 | `match/contains/*` | Order-free fragments and inline pattern fragments |
+| C1–C6, C8–C10 | `match/contains/*` | Order-free fragments and inline pattern fragments |
 | AC1–AC10 | `match/ansi-color/*` + `parse/errors/empty-ansi-color` | ANSI assertions |
 | R1–R3 | `match/regex/*` | Regex block + optional wrapper |
 | X1–X3 | `match/inline-any-of/*` | Inline any-of scoping |
