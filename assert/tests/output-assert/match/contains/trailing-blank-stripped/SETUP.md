@@ -1,24 +1,24 @@
 # Scenario
 
-**Feature**: C10 — trailing blank line after </contains> is stripped
+**Feature**: C10 — explicit contains template has no trailing literal blank line
 
 ```
-# author writes a contains template followed by a trailing empty line
-Author -> Parser: template "<contains>\nfoo\n</contains>\n\n"
-# P4 strips the trailing empty line, pattern becomes contains-only
-Parser -> Matcher: ContainsBlock only (no trailing literal "")
-# P3 skips trailing-newline policy; P1 substring matches
+# author writes a contains template without an extra blank line after </contains>
+Author -> Parser: template "<contains>\nfoo\n</contains>"
+# strict parsing preserves all template lines, so no implicit trimming occurs
+Parser -> Matcher: ContainsBlock only
+# contains-only matching skips trailing-newline policy; substring matches
 Matcher <- actual "bar\nfoo\n"
 Matcher -> pass
 ```
 
 ## Steps
-1. Set template to `"<contains>\nfoo\n</contains>\n\n"` (a trailing empty line after `</contains>`).
+1. Set template to `"<contains>\nfoo\n</contains>"` (no trailing empty line after `</contains>`).
 2. Set actual to `"bar\nfoo\n"` (the fragment present, ending with `\n`).
 
 ```go
 func Setup(t *testing.T, req *Request) error {
-	req.Template = "<contains>\nfoo\n</contains>\n\n"
+	req.Template = "<contains>\nfoo\n</contains>"
 	req.Actual = "bar\nfoo\n"
 	return nil
 }

@@ -8,7 +8,7 @@ require (
 	github.com/xhd2015/dot-pkgs/go-pkgs v0.0.16
 	github.com/xhd2015/gitops v0.0.18
 	github.com/xhd2015/less-flags v1.0.0
-	github.com/xhd2015/skills v0.0.12
+	github.com/xhd2015/skills v0.0.13
 	golang.org/x/tools v0.45.0
 	gopkg.in/yaml.v3 v3.0.1
 )

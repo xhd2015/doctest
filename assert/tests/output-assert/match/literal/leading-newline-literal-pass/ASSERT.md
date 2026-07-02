@@ -1,6 +1,6 @@
 ## Expected
-- Match succeeds. Strict parsing preserves the interior empty line between
-  `a` and `b`, and it matches the actual.
+- Match succeeds because the template and actual output both start with the
+  same leading newline.
 
 ```go
 import "testing"

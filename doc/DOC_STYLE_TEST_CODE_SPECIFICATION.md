@@ -144,7 +144,8 @@ parsing. Full tag registry: `doctest skill output-assert show`.
 import "github.com/xhd2015/doctest/assert"
 
 // Full bounded output (default):
-assert.Output(t, resp.Stdout, `literal line
+assert.Output(t, resp.Stdout, `` +
+`literal line
 <optional>
 optional noise
 </optional>
@@ -462,7 +463,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if resp.Passed {
         t.Fatal("expected compile to fail")
     }
-    assert.Output(t, resp.Output, `<any-of>
+    assert.Output(t, resp.Output, `` +
+`<any-of>
 <expect>
 <expected error text>
 </expect>

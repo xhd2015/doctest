@@ -174,7 +174,7 @@ doctest skill output-assert show    # full tag registry + API
 | Situation | Approach |
 |-----------|----------|
 | Bounded stdout/stderr | `assert.Output(t, actual, template)` |
-| Bounded output with scattered required lines | ``assert.Output(t, actual, `<contains>...</contains>`)`` |
+| Bounded output with scattered required lines | assert.Output(t, actual, `` + `<contains>...</contains>`) |
 | Excerpt in a long log | `assert.Match(p, actual, assert.Contains())` |
 | Scattered help keywords | `<contains>` + `<start-with>` |
 | Platform-specific errors | `<any-of><expect>…</expect></any-of>` |
@@ -197,8 +197,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if err != nil {
         t.Fatal(err)
     }
-    assert.Output(t, resp.Stdout, `
-<contains>
+    assert.Output(t, resp.Stdout, `` +
+`<contains>
 Usage: mytool
 <start-with>
   build

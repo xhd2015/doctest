@@ -5,7 +5,7 @@
 ```
 # author writes literal lines with an interior empty line
 Author -> Parser: template "a\n\nb"
-# P4 strips only leading/trailing empties; the interior empty line stays
+# strict parsing preserves the interior empty line
 Parser -> Matcher: LiteralLine "a", LiteralLine "", LiteralLine "b"
 Matcher <- actual "a\n\nb"
 Matcher -> pass

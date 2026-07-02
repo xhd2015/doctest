@@ -48,8 +48,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		assertNotInstalledLines(t, resp.Stdout, name)
 	}
 	assertNoScopeHint(t, resp.Stdout)
-	assert.Output(t, resp.Stdout, `
-<contains>
+	assert.Output(t, resp.Stdout, `` +
+`<contains>
 Skill is up to date
 doctest-tdd
 skill not installed: code-spec

@@ -40,7 +40,7 @@ func checkFileAntiPatterns(path string, content string) []error {
 			}
 			if isDoubleContainsOutputAssert(node, containsTemplateVars) {
 				violations = append(violations, fmt.Errorf(
-					"%s: anti-pattern: do not combine a <contains> template with assert.Contains(); prefer assert.Output(t, actual, `<contains>...</contains>`)",
+					"%s: anti-pattern: do not combine a <contains> template with assert.Contains(); prefer assert.Output(t, actual, `` + `<contains>...</contains>`)",
 					path,
 				))
 			}

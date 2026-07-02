@@ -202,7 +202,7 @@ func TestRunValidationCases(t *testing.T) {
 				writeFile(t, dir, "DOCTEST.md", minimalDOCTEST)
 				writeFile(t, dir, "SETUP.md", minimalSETUP("## Setup\nsetup\n"))
 				writeFile(t, dir, "leaf/SETUP.md", minimalSETUP("# Setup\n\n```go\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }\n```\n"))
-				writeFile(t, dir, "leaf/ASSERT.md", "# Assert\n\n```go\nimport (\n\t\"testing\"\n\n\tdtassert \"github.com/xhd2015/doctest/assert\"\n)\n\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {\n\tdtassert.Output(t, \"ok\", `<contains>\nok\n</contains>`)\n}\n```\n")
+				writeFile(t, dir, "leaf/ASSERT.md", "# Assert\n\n```go\nimport (\n\t\"testing\"\n\n\tdtassert \"github.com/xhd2015/doctest/assert\"\n)\n\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {\n\tdtassert.Output(t, \"ok\", `` + `<contains>\nok\n</contains>`)\n}\n```\n")
 				return dir
 			},
 		},

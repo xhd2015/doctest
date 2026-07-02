@@ -1,7 +1,6 @@
 ## Expected
-- Match fails. After P4 strips the leading empty line, the pattern is a pure
-  single literal `foo` with no trailing newline; the actual ends with `\n`,
-  so the strict trailing-newline policy is violated.
+- Match fails because the template's leading newline is part of the literal
+  contract and the actual output starts directly with `foo`.
 
 ```go
 import "testing"
@@ -10,6 +9,6 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	requireMatchError(t, resp, "trailing newline")
+	requireMatchError(t, resp)
 }
 ```

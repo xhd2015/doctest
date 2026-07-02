@@ -1,6 +1,6 @@
 ## Expected
-- Match succeeds. Strict parsing preserves the interior empty line between
-  `a` and `b`, and it matches the actual.
+- Match fails because the template requires a trailing blank line that actual
+  output does not contain.
 
 ```go
 import "testing"
@@ -9,6 +9,6 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	requireMatchOK(t, resp)
+	requireMatchError(t, resp)
 }
 ```

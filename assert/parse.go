@@ -52,25 +52,10 @@ func splitTemplateLines(s string) ([]string, bool) {
 		return nil, trailing
 	}
 	body := strings.TrimSuffix(s, "\n")
-	if body == "" {
-		return nil, trailing
+	if body == "" && trailing {
+		return []string{""}, trailing
 	}
-	lines := strings.Split(body, "\n")
-	// P4: drop leading and trailing empty-only ("") lines so the natural Go
-	// raw-string form (a leading "\n" after the backtick) does not produce a
-	// spurious literal. Whitespace-only lines ("  ") are NOT stripped. The
-	// trailing return value is unaffected — it reflects the original template's
-	// trailing "\n" for the strict trailing-newline policy.
-	for len(lines) > 0 && lines[0] == "" {
-		lines = lines[1:]
-	}
-	for len(lines) > 0 && lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
-	}
-	if len(lines) == 0 {
-		return nil, trailing
-	}
-	return lines, trailing
+	return strings.Split(body, "\n"), trailing
 }
 
 func (p *parser) lineOffset(lineIdx int) int {

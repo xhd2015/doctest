@@ -15,8 +15,8 @@
 >
 > func Assert(t *testing.T, req *Request, resp *Response, err error) {
 >     // ...
->     assert.Output(t, resp.Stdout, `
-> <contains>
+>     assert.Output(t, resp.Stdout, `` +
+> `<contains>
 > Usage: mytool
 > <start-with>
 >   build
@@ -207,7 +207,8 @@ Usage: doctest
 When the template itself is a top-level `<contains>` block, prefer:
 
 ```go
-assert.Output(t, actual, `<contains>
+assert.Output(t, actual, `` +
+`<contains>
 Usage: mytool
 </contains>`)
 ```
@@ -1035,8 +1036,8 @@ type matchState struct {
 
 ```go
 func Assert(t *testing.T, req *Request, resp *Response, err error) {
-    assert.Output(t, resp.Output, `
-..
+    assert.Output(t, resp.Output, `` +
+`..
   (2 Run, 2 Pass, 1 Cached, 0 Fail)
 `)
 }

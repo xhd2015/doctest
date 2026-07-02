@@ -1,6 +1,6 @@
 ## Expected
-- Match succeeds. The trailing empty template line is stripped before
-  matching, so the pattern is contains-only and the fragment is found.
+- Match succeeds. The template is written without a trailing empty line, so
+  strict parsing produces a contains-only pattern and the fragment is found.
 
 ```go
 import "testing"

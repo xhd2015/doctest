@@ -114,8 +114,8 @@ func splitActualLines(actual string) []string {
 		return nil
 	}
 	body := strings.TrimSuffix(actual, "\n")
-	if body == "" {
-		return nil
+	if body == "" && strings.HasSuffix(actual, "\n") {
+		return []string{""}
 	}
 	return strings.Split(body, "\n")
 }

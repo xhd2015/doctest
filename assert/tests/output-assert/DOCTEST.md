@@ -59,7 +59,10 @@ output-assert
 │   │   ├── strict-trailing-pass    M2b — both agree on trailing newline
 │   │   ├── line-mismatch           M3 — line 2 differs
 │   │   ├── interior-blank-preserved L1 — interior empty line stays meaningful
-│   │   └── leading-newline-pure-literal-strict L2 — leading \n stripped, strict trailing still applies
+│   │   ├── leading-newline-pure-literal-strict L2 — template leading \n is required
+│   │   ├── leading-newline-literal-pass L3 — both template and actual start with \n
+│   │   ├── trailing-blank-line-strict-fail L4 — template trailing blank line is required
+│   │   └── trailing-blank-line-strict-pass L5 — both template and actual end with blank line
 │   ├── optional/                   O1–O9
 │   │   ├── block-absent            O1
 │   │   ├── block-present           O2
@@ -89,8 +92,8 @@ output-assert
 │   │   ├── end-with-suffix         C5
 │   │   ├── meta-lines-ignored      C6
 │   │   ├── contains-only-no-trailing-newline C8 — contains-only ignores trailing newline policy
-│   │   ├── leading-newline-stripped C9 — leading blank line stripped, contains-only applies
-│   │   └── trailing-blank-stripped  C10 — trailing blank line after </contains> stripped
+│   │   ├── leading-newline-stripped C9 — explicit contains template has no leading literal blank line
+│   │   └── trailing-blank-stripped  C10 — explicit contains template has no trailing literal blank line
 │   ├── ansi-color/                 AC1–AC6, AC8–AC10 (AC7 is parse error)
 │   │   ├── named-gray-pass         AC1
 │   │   ├── plain-text-fails        AC2
@@ -147,7 +150,10 @@ output-assert
 | M2b | `match/literal/strict-trailing-pass` | Trailing newline agreement |
 | M3 | `match/literal/line-mismatch` | Line-level mismatch |
 | L1 | `match/literal/interior-blank-preserved` | Interior empty line stays meaningful |
-| L2 | `match/literal/leading-newline-pure-literal-strict` | Leading `\n` stripped, strict trailing policy still applies |
+| L2 | `match/literal/leading-newline-pure-literal-strict` | Leading `\n` is significant and missing in actual output |
+| L3 | `match/literal/leading-newline-literal-pass` | Leading `\n` matches when actual output includes it |
+| L4 | `match/literal/trailing-blank-line-strict-fail` | Trailing blank line is significant and missing in actual output |
+| L5 | `match/literal/trailing-blank-line-strict-pass` | Trailing blank line matches when actual output includes it |
 | O1–O9 | `match/optional/*` | Block/inline optional semantics |
 | A1–A5 | `match/any-of/*` | Branch selection and reporting |
 | H1–H4 | `match/hint/*` | Literal hint matching |
