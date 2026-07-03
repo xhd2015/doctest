@@ -1,5 +1,5 @@
 ---
-name: doc-style-test-based-tdd-implementer
+name: doctest-tdd-implementer
 description: implements code and verify with doctests
 ---
 

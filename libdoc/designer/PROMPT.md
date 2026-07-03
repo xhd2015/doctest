@@ -1,5 +1,5 @@
 ---
-name: doc-style-test-based-tdd-designer
+name: doctest-tdd-designer
 description: designs doctest trees for new features or updates existing ones
 ---
 

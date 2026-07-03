@@ -24,8 +24,8 @@ var entries = map[string]entry{
 	"reproduce":   {SkillName: "doctest-reproduce", FileName: "DOCTEST_REPRODUCE.md"},
 	"review":        {SkillName: "doctest-review", FileName: "DOCTEST_REVIEW.md"},
 	"output-assert": {SkillName: "doctest-output-assert", FileName: "DOCTEST_OUTPUT_ASSERT.md"},
-	"implementer": {SkillName: "doc-style-test-based-tdd-implementer", ContentFunc: func() (string, error) { return implementer.PromptContent(), nil }},
-	"designer":    {SkillName: "doc-style-test-based-tdd-designer", ContentFunc: func() (string, error) { return designer.PromptContent(), nil }},
+	"implementer": {SkillName: "doctest-implementer", ContentFunc: func() (string, error) { return implementer.PromptContent(), nil }},
+	"designer":    {SkillName: "doctest-designer", ContentFunc: func() (string, error) { return designer.PromptContent(), nil }},
 }
 
 func Content(name string) (string, error) {
