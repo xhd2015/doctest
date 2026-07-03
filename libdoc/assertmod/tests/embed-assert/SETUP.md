@@ -30,7 +30,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/xhd2015/doctest/libdoc/assertmod"
 )
 
 var runKind string
@@ -76,5 +79,42 @@ func runEmbedScript(t *testing.T, req *Request) (*Response, error) {
 		resp.SecondRunMD5 = fmt.Sprintf("%x", sum2)
 	}
 	return resp, nil
+}
+func runEmbedCacheKey(t *testing.T, req *Request) (*Response, error) {
+	t.Helper()
+	tmp := t.TempDir()
+	outPath := filepath.Join(tmp, "assert.go")
+	keyPath := filepath.Join(tmp, "cache_key.go")
+	scriptPkg := filepath.Join(req.ModuleRoot, "script", "generate", "embed-assert")
+	cmd := exec.Command("go", "run", scriptPkg, "-o", outPath, "-cache-key", keyPath, req.AssertDir)
+	cmd.Dir = req.ModuleRoot
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return &Response{Err: fmt.Errorf("embed cache key: %w\n%s", err, string(out))}, err
+	}
+	data, err := os.ReadFile(keyPath)
+	if err != nil {
+		return &Response{Err: err}, err
+	}
+	scriptKey, err := parseRawSourceCacheKey(string(data))
+	if err != nil {
+		return &Response{Err: err}, err
+	}
+	return &Response{
+		ScriptCacheKey:	scriptKey,
+		PackageCacheKey: assertmod.RawSourceCacheKeyMD5(),
+	}, nil
+}
+func parseRawSourceCacheKey(src string) (string, error) {
+	const prefix = `const rawSourceCacheKeyMD5 = "`
+	i := strings.Index(src, prefix)
+	if i < 0 {
+		return "", fmt.Errorf("cache key constant not found")
+	}
+	rest := src[i+len(prefix):]
+	j := strings.Index(rest, `"`)
+	if j < 0 {
+		return "", fmt.Errorf("cache key string not terminated")
+	}
+	return rest[:j], nil
 }
 ```

@@ -93,12 +93,12 @@ Return absolute paths for every tree and node you discuss.
 
 7. **Review output assertions**
    - For leaves checking `resp.Stdout`, `resp.Stderr`, `resp.Output`, `resp.Summary`, etc.:
-     - **Prefer** `github.com/xhd2015/doctest/assert` templates.
-       - Use `assert.Output(t, actual, template)` for bounded stdout/stderr, including templates whose top-level form is `<contains>...</contains>`.
-       - Use `assert.Match(p, actual, assert.Contains())` only for a contiguous excerpt in a larger output; do not combine it with a top-level `<contains>` block.
-     - **Major**: flag tests whose expected output would require the product to print matcher DSL syntax such as `<contains>`, `<any-of>`, `<expect>`, `<regex>`, `<optional>`, `<hint:...>`, or `<ansi-color>` unless those strings are explicitly part of the product API.
+     - **Prefer** `github.com/xhd2015/doctest/assert` v2 templates (`version: 2` YAML header, placeholders, strict line-by-line match).
+       - Use `assert.Output(t, actual, template)` for bounded stdout/stderr.
+       - Use `__PLACEHOLDER__` for variable regions; `...N lines omitted...` for skippable middle sections; regex lines for flexible single lines.
+     - **Major**: flag tests whose expected output would require the product to print matcher DSL syntax such as `<ansi-color>`, `__PLACEHOLDER__`, or `...N lines omitted...` unless those strings are explicitly part of the product API.
      - **Major**: flag a mismatch between prose expectation and executable assertion, especially when `## Expected Output` reads like test DSL rather than acceptable terminal output.
-     - **Suggestion** (not must-fix): flag `strings.Contains` loops, `strings.Index`/`Count` parsing, ad-hoc ANSI color helpers when the assert DSL covers the case.
+     - **Suggestion** (not must-fix): flag `strings.Contains` loops, `strings.Index`/`Count` parsing, ad-hoc ANSI color helpers when the assert DSL covers the case; flag new v1 tag templates when v2 would be clearer.
      - Non-trivial templates should have a matching `## Expected Output` prose block when present; the prose mirror should remain readable as user-facing output with annotations, not as a list of internals.
    - Cite `doctest skill output-assert show` for migration guidance.
 
@@ -161,9 +161,9 @@ Return absolute paths for every tree and node you discuss.
 - [ ] Nested `DOCTEST.md` used only when `Run` contracts genuinely differ
 
 ### Output assertions
-- [ ] New or revised CLI/text output checks use `github.com/xhd2015/doctest/assert`
-- [ ] Top-level `<contains>` templates use `assert.Output(t, actual, template)`, not `assert.Match(..., assert.Contains())`
-- [ ] Expected output does not require actual product output to contain matcher DSL tags unless explicitly required by product behavior
+- [ ] New or revised CLI/text output checks use `github.com/xhd2015/doctest/assert` v2 (`version: 2` header)
+- [ ] Variable regions use YAML-header placeholders
+- [ ] Expected output does not require actual product output to contain matcher DSL syntax (`<ansi-color>`, `__NAME__`, omit markers) unless explicitly required by product behavior
 - [ ] `## Expected Output` mirrors acceptable user-facing output with annotations; it is not only a matcher implementation detail
 - [ ] Non-trivial templates documented in `## Expected Output` when authors use that section
 - [ ] Legacy `strings.Contains` / hand-rolled output parsing flagged as **suggestion** to migrate
@@ -201,19 +201,18 @@ Return absolute paths for every tree and node you discuss.
 - `explanation` describing manual/slow intent but no `label` — leaf still runs in discovery
 - `label: [slow, ui]` YAML sequence instead of comma-separated scalar — wrong frontmatter shape
 - Expensive leaves at the same tree level as fast unit-style leaves without labels or grouping
-- Product output must include doctest matcher DSL tags to satisfy a test — likely assertion bug, **major**
-- Top-level `<contains>` template passed to `assert.Match(..., assert.Contains())` — use `assert.Output(t, actual, template)` instead, **major**
+- Product output must include doctest matcher DSL syntax to satisfy a test — likely assertion bug, **major**
 - `## Expected Output` is not a plausible terminal transcript or user-facing output sketch — **major**
 
 ## Output assertion anti-patterns
 
 | Pattern | Severity | Prefer |
 |---------|----------|--------|
-| Product output includes matcher tags like `<any-of>` only to satisfy a test | major | Fix assertion; matcher DSL is test syntax |
-| `<contains>` template + `assert.Match(..., assert.Contains())` | major | `assert.Output(t, actual, template)` where `template` is the `<contains>` block |
-| `for _, want := range … { strings.Contains(stdout, want) }` | suggestion | `<contains>` + `<start-with>` |
-| `strings.Index` + `strings.Count` for progress dots | suggestion | `<regex>^\.+$</regex>` |
-| Dual `strings.Contains` for platform error strings | suggestion | `<any-of><expect>…</expect></any-of>` |
+| Product output includes matcher syntax like `<ansi-color>` or `__PORT__` only to satisfy a test | major | Fix assertion; matcher DSL is test syntax |
+| New v1 tag templates (`<contains>`, `<any-of>`, …) when v2 would work | suggestion | v2 YAML header + placeholders / omit / regex |
+| `for _, want := range … { strings.Contains(stdout, want) }` | suggestion | strict v2 template |
+| `strings.Index` + `strings.Count` for progress dots | suggestion | `^\.+$` regex line |
+| Dual `strings.Contains` for platform error strings | suggestion | regex alternation `(linux\|darwin)` |
 | `metricIsColored` / `stripANSI` for summary segments | suggestion | `<ansi-color bold gray>…</ansi-color>` |
 
 # SPECS

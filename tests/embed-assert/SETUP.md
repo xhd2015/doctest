@@ -31,8 +31,8 @@ internal + assert -> temp -modfile (parent go.mod + assert replace) -> go test -
 - Package-level vars `moduleRoot`, `testDir`, `genDir`, and `outsideGenDir` are
   set by shared helpers for nested-module scenarios.
 - `internalModuleRoot` is set for internal-compile fixture copies.
-- Helpers `assertModPath`, `computeAssertSourceMD5`, and cache scanners mirror
-  the embed script and `MaterializeAssertModule` contract.
+- Helpers use `assertmod.RawSourceCacheKeyMD5()` for the cache path that
+  `MaterializeAssertModule` writes (same contract whether cache is warm or cold).
 
 ```go
 import (
@@ -44,9 +44,11 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 	libdocbuild "github.com/xhd2015/doctest/libdoc/build"
+	"github.com/xhd2015/doctest/libdoc/assertmod"
 	"github.com/xhd2015/doctest/libdoc/testtree"
 )
 
@@ -59,6 +61,22 @@ var (
 	testDir		string
 	bt		= string([]byte{96, 96, 96})
 )
+func lockCacheTests(t *testing.T) {
+	t.Helper()
+	lockPath := filepath.Join(os.TempDir(), "doctest-embed-assert-cache-tests.lock")
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		t.Fatalf("open cache test lock: %v", err)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		f.Close()
+		t.Fatalf("acquire cache test lock: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = f.Close()
+	})
+}
 func Setup(t *testing.T, req *Request) error {
 	req.Timeout = 120 * time.Second
 
@@ -303,43 +321,13 @@ func assertNoAssertReplaceInGoMod(t *testing.T, goModPath string) {
 		t.Fatalf("expected no assert replace in go.mod, got:\n%s", string(data))
 	}
 }
-func computeAssertSourceMD5(t *testing.T) string {
-	t.Helper()
-	assertDir := filepath.Join(DOCTEST_ROOT, "..", "..", "assert")
-	entries, err := os.ReadDir(assertDir)
-	if err != nil {
-		t.Fatalf("read assert dir: %v", err)
-	}
-	var names []string
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		if strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go") {
-			names = append(names, name)
-		}
-	}
-	sort.Strings(names)
-	h := md5.New()
-	for _, name := range names {
-		data, readErr := os.ReadFile(filepath.Join(assertDir, name))
-		if readErr != nil {
-			t.Fatalf("read %s: %v", name, readErr)
-		}
-		if _, err := h.Write(data); err != nil {
-			t.Fatalf("hash %s: %v", name, err)
-		}
-	}
-	return fmt.Sprintf("%x", h.Sum(nil))
-}
 func expectedAssertCacheDir(t *testing.T) string {
 	t.Helper()
 	root, err := assertModCacheRoot()
 	if err != nil {
 		t.Fatalf("cache root: %v", err)
 	}
-	return filepath.Join(root, computeAssertSourceMD5(t))
+	return filepath.Join(root, assertmod.RawSourceCacheKeyMD5())
 }
 func listAssertModCacheEntries(t *testing.T) []string {
 	t.Helper()
@@ -387,6 +375,24 @@ func assertCacheLayout(t *testing.T, cacheDir string) {
 	}
 	if strings.Contains(string(cachedAssert), "_test.go") {
 		t.Fatalf("cached assert.go must not include test file markers")
+	}
+	legacyNames, err := assertmod.LegacyV1Filenames()
+	if err != nil {
+		t.Fatalf("legacy_v1 filenames: %v", err)
+	}
+	if len(legacyNames) == 0 {
+		t.Fatal("expected embedded legacy_v1 sources")
+	}
+	for _, name := range legacyNames {
+		legacyPath := filepath.Join(cacheDir, "legacy_v1", name)
+		assertFileExists(t, legacyPath)
+		data, readErr := os.ReadFile(legacyPath)
+		if readErr != nil {
+			t.Fatalf("read cached legacy_v1/%s: %v", name, readErr)
+		}
+		if !strings.Contains(string(data), "package legacy_v1") {
+			t.Fatalf("cached legacy_v1/%s missing package legacy_v1", name)
+		}
 	}
 }
 func snapshotFileState(t *testing.T, path string) (int64, [16]byte) {

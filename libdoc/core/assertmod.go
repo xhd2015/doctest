@@ -36,10 +36,8 @@ func MaterializeAssertModule() (string, error) {
 		return "", err
 	}
 	cacheRoot := filepath.Join(cacheDir, "doctest", "assert-mod", md5hex)
-	assertGo := filepath.Join(cacheRoot, "assert.go")
-	goMod := filepath.Join(cacheRoot, "go.mod")
 
-	if fileExists(assertGo) && fileExists(goMod) {
+	if assertCacheLayoutComplete(cacheRoot) {
 		return cacheRoot, nil
 	}
 
@@ -47,12 +45,36 @@ func MaterializeAssertModule() (string, error) {
 		return "", err
 	}
 
+	assertGo := filepath.Join(cacheRoot, "assert.go")
 	if !fileExists(assertGo) {
 		if err := os.WriteFile(assertGo, content, 0644); err != nil {
 			return "", err
 		}
 	}
 
+	legacyNames, err := assertmod.LegacyV1Filenames()
+	if err != nil {
+		return "", err
+	}
+	legacyRoot := filepath.Join(cacheRoot, "legacy_v1")
+	if err := os.MkdirAll(legacyRoot, 0755); err != nil {
+		return "", err
+	}
+	for _, name := range legacyNames {
+		legacyPath := filepath.Join(legacyRoot, name)
+		if fileExists(legacyPath) {
+			continue
+		}
+		data, err := assertmod.LegacyV1File(name)
+		if err != nil {
+			return "", err
+		}
+		if err := os.WriteFile(legacyPath, data, 0644); err != nil {
+			return "", err
+		}
+	}
+
+	goMod := filepath.Join(cacheRoot, "go.mod")
 	goModContent := fmt.Sprintf("module %s\n\ngo 1.18\n", AssertImportPath)
 	if !fileExists(goMod) {
 		if err := os.WriteFile(goMod, []byte(goModContent), 0644); err != nil {
@@ -61,6 +83,22 @@ func MaterializeAssertModule() (string, error) {
 	}
 
 	return cacheRoot, nil
+}
+
+func assertCacheLayoutComplete(cacheRoot string) bool {
+	if !fileExists(filepath.Join(cacheRoot, "assert.go")) || !fileExists(filepath.Join(cacheRoot, "go.mod")) {
+		return false
+	}
+	legacyNames, err := assertmod.LegacyV1Filenames()
+	if err != nil {
+		return false
+	}
+	for _, name := range legacyNames {
+		if !fileExists(filepath.Join(cacheRoot, "legacy_v1", name)) {
+			return false
+		}
+	}
+	return true
 }
 
 func assertModuleSourceForCache() []byte {

@@ -173,13 +173,14 @@ doctest skill output-assert show    # full tag registry + API
 
 | Situation | Approach |
 |-----------|----------|
-| Bounded stdout/stderr | `assert.Output(t, actual, template)` |
-| Bounded output with scattered required lines | assert.Output(t, actual, `` + `<contains>...</contains>`) |
-| Excerpt in a long log | `assert.Match(p, actual, assert.Contains())` |
-| Scattered help keywords | `<contains>` + `<start-with>` |
-| Platform-specific errors | `<any-of><expect>…</expect></any-of>` |
-| Variable dot lines | `<regex>^\.+$</regex>` |
+| Bounded stdout/stderr | `assert.Output(t, actual, template)` — strict full match |
+| Variable port, path, user | `__PLACEHOLDER__` in YAML header |
+| Skippable middle section | `...N lines omitted...` |
+| Flexible single line | regex line (e.g. `^\.+$`) |
+| Platform-specific one-liner | regex alternation `(linux\|darwin)` |
 | ANSI-colored segments | `<ansi-color bold gray>…</ansi-color>` |
+
+v2 templates start with `version: 2` YAML header. Strict line-by-line match only — no `<contains>` or `assert.Contains()`.
 
 ### Recommended prose mirror (not required by vet)
 
@@ -197,51 +198,30 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if err != nil {
         t.Fatal(err)
     }
-    assert.Output(t, resp.Stdout, `` +
-`<contains>
+    assert.Output(t, resp.Stdout, `---
+version: 2
+---
 Usage: mytool
-<start-with>
   build
-</start-with>
-</contains>`)
+  test`)
 }
 ```
 
-### Included tags (full registry)
+### v2 template constructs
 
-| Tag | Form | Consumes actual? | Matching |
-|-----|------|------------------|----------|
-| `<optional>` | block or inline | block meta: no | absent or full inner match |
-| `<any-of>` | block or inline | block meta: no | one `<expect>` branch |
-| `<expect>` | inside `<any-of>` | block meta: no | branch delimiter |
-| `<regex>` | block or inline | yes | Go regexp full match |
-| `<contains>` | block only | no (meta) | fragments anywhere; default full line |
-| `<start-with>` | inside `<contains>` | no | line prefix |
-| `<end-with>` | inside `<contains>` | no | line suffix |
-| `<hint:label>` | inline | yes | literal match; label for docs |
-| `<ansi-color>` | inline | yes | literal text + strict ANSI |
+| Construct | Form | Matching |
+|-----------|------|----------|
+| Placeholder | `__NAME__` in header + body | `type=string` or `type=number` |
+| Omit marker | `...N lines omitted...` | skip exactly N actual lines |
+| Regex line | line with regex-intent signals | Go regexp full line match |
+| Pattern line | default literal line | literal + placeholders + color |
+| `<ansi-color>` | inline only | strict ANSI wrap (same tokens as v1) |
 
-**Block meta** (standalone lines): `<optional>`, `<any-of>`, `<expect>`, `<contains>`, `<regex>` (+ closers). Meta lines never consume output except `<regex>` inner pattern line.
-
-**Inline:** `<optional>…</optional>`, `<hint:label>…</hint:label>`, `<ansi-color SPEC>…</ansi-color>`, `<any-of>…</any-of>`, `<regex>…</regex>`, `<start-with>` / `<end-with>` inside `<contains>`.
-
-Ordinary lines inside `<contains>` may use inline pattern tags such as
-`<any-of>`, `<optional>`, `<regex>`, and `<hint:...>`.
-
-Use `assert.Output(t, actual, template)` for templates whose top-level form is
-`<contains>`. Reserve `assert.Match(p, actual, assert.Contains())` for finding a
-contiguous excerpt in a larger output, and do not combine it with a top-level
-`<contains>` block.
-
-Matcher DSL tags are test syntax only. They must not be required in actual
-product stdout/stderr unless the feature explicitly defines those strings as
-user-facing output.
+Placeholder header: `__PORT__: type=number, example=8901, a port` — `k=v` metadata, trailing text is human explanation.
 
 **`<ansi-color>` tokens:** `bold`, `red`, `green`, `gray`, or raw `#SGR` (e.g. `#90`, `#38;5;208`). Combined left-to-right: `<ansi-color bold gray>1 Cached</ansi-color>`.
 
-**Rejected:** bare `<id>`, `<cached>`, `<run>`, user-defined tags, `<>` syntax.
-
-**Escaping:** only tag-shaped text needs `\<tag>` / `\</tag>` in templates; plain `2 < 3` needs no escape.
+v1 tag templates (`<contains>`, `<any-of>`, …) still parse via `legacy_v1` when no `version: 2` header. Prefer v2 for new tests.
 
 **Avoid in new tests:** `strings.Contains` loops for structured output; `strings.Index`/`Count` for dots/summary; ad-hoc ANSI helpers when `<ansi-color>` applies.
 

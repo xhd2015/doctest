@@ -14,17 +14,22 @@ doctest test -> assert-mod cache entry count unchanged
 
 ## Steps
 
-1. Record existing cache entry names under `$CACHE/doctest/assert-mod/`.
+1. Record whether the current `RawSourceCacheKeyMD5` cache dir exists.
 2. Create public module without assert import.
 3. Run `doctest test <tests> -v`.
 
 ```go
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
-var cacheEntriesBefore []string
+var cacheDirExistedBefore bool
 
 func Setup(t *testing.T, req *Request) error {
-	cacheEntriesBefore = listAssertModCacheEntries(t)
+	cacheDir := expectedAssertCacheDir(t)
+	_, err := os.Stat(cacheDir)
+	cacheDirExistedBefore = err == nil
 	createPublicModuleProject(t, "", defaultPublicAssertGo())
 	setupModuleEnv(t, req)
 	req.Args = []string{"test", testDir, "-v"}

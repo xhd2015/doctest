@@ -244,12 +244,12 @@ passed to `assert.Output` — not required by `doctest vet`. See
 `doctest skill output-assert show`.
 
 ```
-<contains>
+---
+version: 2
+---
 Usage: mytool
-<start-with>
   build
-</start-with>
-</contains>
+  test
 ```
 
 ## Expected

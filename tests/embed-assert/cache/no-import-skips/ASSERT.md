@@ -1,14 +1,18 @@
 ## Expected
 
 - `doctest test` exits 0.
-- Assert-mod cache entry list is identical before and after run.
+- The current `RawSourceCacheKeyMD5` cache dir is not newly created by this run.
 
 ## Exit Code
 
 - Exit code 0.
 
 ```go
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if err != nil {
@@ -17,14 +21,12 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if resp.ExitCode != 0 {
 		t.Fatalf("expected no-import cache skip test to pass, got exit %d\nstdout:\n%s\nstderr:\n%s", resp.ExitCode, resp.Stdout, resp.Stderr)
 	}
-	after := listAssertModCacheEntries(t)
-	if len(after) != len(cacheEntriesBefore) {
-		t.Fatalf("assert-mod cache entry count changed: before=%v after=%v", cacheEntriesBefore, after)
-	}
-	for i := range cacheEntriesBefore {
-		if after[i] != cacheEntriesBefore[i] {
-			t.Fatalf("assert-mod cache entries changed: before=%v after=%v", cacheEntriesBefore, after)
-		}
+	assertNoAssertReplaceInGoMod(t, filepath.Join(moduleRoot, "go.mod"))
+	cacheDir := expectedAssertCacheDir(t)
+	_, statErr := os.Stat(cacheDir)
+	existsAfter := statErr == nil
+	if !cacheDirExistedBefore && existsAfter {
+		t.Fatalf("assert-mod cache created without assert import: %s", cacheDir)
 	}
 }
 ```

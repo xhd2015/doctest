@@ -33,6 +33,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/xhd2015/doctest/libdoc/assertmod"
 	"github.com/xhd2015/doctest/libdoc/core"
 )
 
@@ -108,6 +109,16 @@ func assertCacheLayoutCore(t *testing.T, cacheDir string) {
 	src := readFileString(t, assertGo)
 	if !strings.Contains(src, "package assert") {
 		t.Fatalf("cached assert.go missing package assert")
+	}
+	legacyNames, err := assertmod.LegacyV1Filenames()
+	if err != nil {
+		t.Fatalf("legacy_v1 filenames: %v", err)
+	}
+	for _, name := range legacyNames {
+		legacyPath := filepath.Join(cacheDir, "legacy_v1", name)
+		if _, err := os.Stat(legacyPath); err != nil {
+			t.Fatalf("missing cached legacy_v1/%s: %v", name, err)
+		}
 	}
 }
 ```

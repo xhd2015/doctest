@@ -18,6 +18,7 @@ func main() {
 		"go", "run", "./script/generate/embed-assert",
 		"-o", "libdoc/assertmod/assert.go",
 		"-cache-key", "libdoc/assertmod/cache_key.go",
+		"-legacy-out", "libdoc/assertmod/legacy_v1",
 		"assert",
 	)
 	cmd.Dir = modRoot

@@ -1,34 +1,37 @@
 # Output Assert DSL — Design Document
 
-> **Status:** **Implemented** (`github.com/xhd2015/doctest/assert`). This document is the canonical DSL reference.
+> **Status:** **v2 implemented** (`github.com/xhd2015/doctest/assert`). **Canonical reference:** `doc/DOCTEST_OUTPUT_ASSERT.md` and `doctest skill output-assert show`.
 >
-> **Package:** `github.com/xhd2015/doctest/assert`
+> **Package:** `github.com/xhd2015/doctest/assert` (v2); v1 in `assert/legacy_v1/`
 >
 > **Goal:** A readable template language for asserting CLI (and similar text) output in doctest `ASSERT.md` leaves, replacing ad-hoc `strings.Contains` / hand-rolled parsing.
 >
 > **Skill:** `doctest skill output-assert show`
 >
-> ## Authoring quick start
+> ## v2 authoring quick start (current)
 >
 > ```go
 > import "github.com/xhd2015/doctest/assert"
 >
 > func Assert(t *testing.T, req *Request, resp *Response, err error) {
 >     // ...
->     assert.Output(t, resp.Stdout, `` +
-> `<contains>
-> Usage: mytool
-> <start-with>
->   build
-> </start-with>
-> </contains>`)
+>     assert.Output(t, resp.Stdout, `---
+> version: 2
+> __PORT__: type=number, example=8901, a port
+> ---
+> Server listen on: __PORT__
+> ...3 lines omitted...
+> <ansi-color bold gray>ready</ansi-color>`)
 > }
 > ```
 >
-> - Default: **`assert.Output`** = full-output exact match.
-> - Long logs: **`assert.Match(p, actual, assert.Contains())`** for a contiguous excerpt.
-> - Tag reference: **§3** below.
+> - **`assert.Output`** = strict full line-by-line match (v2 default).
+> - **YAML header** — `version: 2`, placeholder defs (`__NAME__: type=…, example=…, explanation`).
+> - **Body** — pattern lines, regex lines (intent detection), `...N lines omitted...`, `<ansi-color>` spans.
+> - **No** `<contains>` or `assert.Contains()` in v2.
 > - Optional prose mirror: `## Expected Output` fenced block in ASSERT.md (advertised, not required by vet — §16).
+>
+> Sections below document **v1 tag DSL** (legacy). Existing v1 templates still work; prefer v2 for new tests.
 
 ---
 

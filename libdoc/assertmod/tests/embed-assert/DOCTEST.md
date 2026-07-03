@@ -25,8 +25,9 @@ embed-assert/
 ├── generator/                      [embed script output shape]
 │   ├── single-concatenated-file/   A1: one file, package assert, no test sources
 │   └── deterministic-bytes/        A2: two runs produce identical output
-└── embed-package/                  [libdoc/assertmod accessors]
-    └── md5-matches-assert-go/      A3: ContentMD5 matches assert.go hash
+└── embed-package/                          [libdoc/assertmod accessors]
+    ├── md5-matches-assert-go/              A3: ContentMD5 matches assert.go hash
+    └── cache-key-matches-raw-sources/      A4: RawSourceCacheKeyMD5 matches embed script
 ```
 
 ## Test Index
@@ -36,6 +37,7 @@ embed-assert/
 | `generator/single-concatenated-file` | A1 — single `assert.go`; no `*_test.go` content |
 | `generator/deterministic-bytes` | A2 — two script runs produce identical bytes |
 | `embed-package/md5-matches-assert-go` | A3 — `ContentMD5()` matches embedded file MD5 |
+| `embed-package/cache-key-matches-raw-sources` | A4 — `RawSourceCacheKeyMD5()` matches embed script `-cache-key` |
 
 ## How to Run
 
@@ -67,12 +69,16 @@ type Response struct {
 	SecondRunMD5	string
 	ContentMD5	string
 	FileMD5		string
+	ScriptCacheKey	string
+	PackageCacheKey	string
 	Err		error
 }
 func Run(t *testing.T, req *Request) (*Response, error) {
 	switch runKind {
 	case "embed-script":
 		return runEmbedScript(t, req)
+	case "embed-cache-key":
+		return runEmbedCacheKey(t, req)
 	case "assertmod-md5":
 		assertGo := filepath.Join(req.ModuleRoot, "libdoc", "assertmod", "assert.go")
 		data, err := os.ReadFile(assertGo)

@@ -138,36 +138,34 @@ func Assert(t *testing.T, req *Request, resp *Response, err error)
 
 When validating **CLI or text output**, use the output assert template DSL instead
 of `strings.Contains` loops or hand-rolled `strings.Index` / `strings.Count`
-parsing. Full tag registry: `doctest skill output-assert show`.
+parsing. Full reference: `doctest skill output-assert show`.
 
 ```go
 import "github.com/xhd2015/doctest/assert"
 
-// Full bounded output (default):
-assert.Output(t, resp.Stdout, `` +
-`literal line
-<optional>
-optional noise
-</optional>
-trailer`)
-
-// Contiguous excerpt inside a longer log:
-p := assert.MustParse(template)
-if err := assert.Match(p, resp.Output, assert.Contains()); err != nil {
-    t.Fatal(err)
-}
+// v2 — strict full match (preferred for new tests):
+assert.Output(t, resp.Stdout, `---
+version: 2
+__PORT__: type=number, example=8901, a port
+---
+Server listen on: __PORT__
+...2 lines omitted...
+<ansi-color bold gray>ready</ansi-color>`)
 ```
+
+v2 is strict line-by-line full match. Use `...N lines omitted...` for variable
+middle sections and regex lines (e.g. `^\.+$`) for flexible single lines.
 
 Optionally document the same template in a `## Expected Output` fenced block
 (recommended for readability; not required by vet).
 
 **Prefer DSL constructs over:**
 
-| Legacy | DSL |
-|--------|-----|
-| `strings.Contains` loop | `<contains>` + `<start-with>` |
-| Dot/summary parsing | `<regex>^\.+$</regex>` + literals |
-| Dual platform `Contains` | `<any-of><expect>…</expect></any-of>` |
+| Legacy | v2 DSL |
+|--------|--------|
+| `strings.Contains` loop | strict template + `...N lines omitted...` |
+| Dot/summary parsing | `^\.+$` regex line + literals |
+| Dual platform `Contains` | `(linux-msg\|darwin-msg)` regex alternation |
 | `metricIsColored` helpers | `<ansi-color bold gray>…</ansi-color>` |
 
 ## Validation Rules
@@ -439,11 +437,10 @@ Asserts the expected compile outcome using `func Assert`:
 ## Expected Output
 
 ```
-<any-of>
-<expect>
-<expected error text>
-</expect>
-</any-of>
+---
+version: 2
+---
+(expected compile error text)
 ```
 
 ## Expected
@@ -464,11 +461,10 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatal("expected compile to fail")
     }
     assert.Output(t, resp.Output, `` +
-`<any-of>
-<expect>
-<expected error text>
-</expect>
-</any-of>`)
+`---
+version: 2
+---
+(expected compile error text)`)
 }
 ```
 ````

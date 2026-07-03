@@ -13,7 +13,8 @@ skip materialization entirely
 ## Preconditions
 
 - Cache root is `$CACHE/doctest/assert-mod/`.
-- MD5 matches concatenated `assert/*.go` source (sorted, no `*_test.go`).
+- MD5 matches concatenated `assert/*.go` and `assert/legacy_v1/*.go` sources (sorted, no `*_test.go`).
+- Cache leaves run under `lockCacheTests` to avoid cross-test races on `$CACHE`.
 
 ## Steps
 
@@ -23,6 +24,7 @@ skip materialization entirely
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
+	lockCacheTests(t)
 	req.Env = append(req.Env, "GOWORK=off")
 	req.Args = append([]string{"test"}, req.Args...)
 	return nil

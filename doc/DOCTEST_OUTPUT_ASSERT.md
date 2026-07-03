@@ -1,8 +1,9 @@
 ---
 name: doctest-output-assert
 description: >-
-  Output assert DSL for doctest ASSERT.md — template tags, API, and migration
-  from strings.Contains. Use when asserting CLI or text output in doc-style tests.
+  Output assert DSL v2 for doctest ASSERT.md — YAML header, placeholders, strict
+  line match, and migration from strings.Contains. Use when asserting CLI or text
+  output in doc-style tests.
 ---
 
 # Output Assert DSL
@@ -11,20 +12,20 @@ Package: `github.com/xhd2015/doctest/assert`
 
 Readable **template-shaped expected output** for doctest `ASSERT.md` leaves. Replaces ad-hoc `strings.Contains`, `strings.Index`, and hand-rolled parsing.
 
-Full design history: `doc/DESIGN_OUTPUT_ASSERT.md` in the doctest repo.
+Design history: `doc/DESIGN_OUTPUT_ASSERT.md`. v1 tag syntax lives in `assert/legacy_v1/`.
 
 ## When to use
 
 | Situation | Approach |
 |-----------|----------|
-| Bounded stdout/stderr (typical leaf) | `assert.Output(t, actual, template)` — full exact match |
-| Bounded output with scattered required lines | ``assert.Output(t, actual, `` + `<contains>...</contains>`)`` |
-| Excerpt inside a long log | `assert.Match(p, actual, assert.Contains())` — contiguous subregion |
-| Help keywords, scattered lines | `<contains>` + `<start-with>` / `<end-with>` |
-| Platform-specific error text | `<any-of><expect>…</expect></any-of>` |
-| Variable progress dots | `<regex>^\.+$</regex>` |
+| Bounded stdout/stderr (typical leaf) | `assert.Output(t, actual, template)` — strict full match |
+| Variable port, path, user, count | `__PLACEHOLDER__` in YAML header + template body |
+| Middle section may differ (stack trace, progress) | `...N lines omitted...` |
+| Flexible single line (dots, prefixes) | regex line (e.g. `^\.+$`) |
 | ANSI-colored segments | `<ansi-color bold gray>…</ansi-color>` |
-| Annotate literal path/id for readers | `<hint:path>~/proj</hint:path>` (still literal match) |
+| Document example values for readers | `example=…` in placeholder header (metadata only) |
+
+**v2 is strict line-by-line full match.** There is no `<contains>` or `assert.Contains()` in v2 templates.
 
 ## API
 
@@ -32,113 +33,95 @@ Full design history: `doc/DESIGN_OUTPUT_ASSERT.md` in the doctest repo.
 import "github.com/xhd2015/doctest/assert"
 
 p, err := assert.Parse(template)
-err = assert.Match(p, actual)                      // MatchExact (default)
-err = assert.Match(p, actual, assert.Contains())   // contiguous subregion
-assert.Output(t, actual, template)                 // Parse + Match + t.Fatal
+err = assert.Match(p, actual)       // strict full match (default)
+assert.Output(t, actual, template)  // Parse + Match + t.Fatal
 ```
 
+- Templates with `version: 2` in the YAML header use the v2 parser.
+- Templates without `version: 2` fall back to v1 (`assert/legacy_v1/`).
 - `\r\n` → `\n` normalization is always on.
 - Trailing newlines are **strict** (template and actual must agree).
 - Matching is **case-sensitive**.
 
-## ASSERT.md pattern
+## Template shape (v2)
 
-**Recommended** (not required by `doctest vet`): mirror the template in prose:
-
-````markdown
-## Expected Output
-
-```
-<contains>
-Usage: mytool
-<start-with>
-  build
-</start-with>
-</contains>
+```DSL
+---
+version: 2
+__PORT__: type=number, example=8901, a port
+__USER__: type=string, example=alice, logged-in user
+---
+Server listen on: __PORT__
+...3 lines omitted...
+Hello __USER__
+<ansi-color bold gray>1 Cached</ansi-color>
 ```
 
-## Expected
-- stdout lists build subcommand
+| Part | Role |
+|------|------|
+| `---` … `---` | YAML header; `version: 2` selects v2 |
+| `__NAME__:` | Placeholder definition (compact `k=v` metadata + human explanation) |
+| Body lines | Strict sequential match against actual output |
 
-```go
-import (
-    "testing"
-    "github.com/xhd2015/doctest/assert"
-)
+In Go `ASSERT.md` blocks, pass the template as one raw string starting with `---` — no `` + `` concatenation needed. Leading blank lines before the opening `---` are trimmed; trailing blank lines in the body are preserved.
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
-    if err != nil {
-        t.Fatal(err)
-    }
-    assert.Output(t, resp.Stdout, `` +
-`<contains>
-Usage: mytool
-<start-with>
-  build
-</start-with>
-</contains>`)
-}
+### Placeholder definitions
+
+Compact form (preferred):
+
+```yaml
+__PORT__: type=number, example=8901, a port
 ```
-````
 
-## Included tags
+- `k=v` pairs before the first bare word — machine metadata
+- Trailing text after metadata — human explanation only (ignored by matcher)
 
-Authoritative registry. **No other tag forms are supported.**
+| Field | Required | Values |
+|-------|----------|--------|
+| `type` | yes | `string`, `number` |
+| `example` | no | documentation for readers |
 
-### Summary table
+| type | Matches on one line |
+|------|---------------------|
+| `string` | any non-newline text |
+| `number` | integer or float (`-?\d+(\.\d+)?`) |
 
-| Tag | Form | Consumes actual output? | Matching |
-|-----|------|-------------------------|----------|
-| `<optional>` | block **or** inline | block meta: **no**; inline inner: optional | Block: inner lines absent or present; inline: wrapped span absent or present |
-| `<any-of>` | block **or** inline | block meta: **no**; inline: **yes** (chosen branch) | Exactly one `<expect>` branch must match |
-| `<expect>` | block or inline (inside `<any-of>`) | block meta: **no** | Delimits one branch; body matched literally |
-| `<regex>` | block **or** inline | **yes** — matched line/span | Go regexp full match |
-| `<contains>` | block only | **no** (meta) | Every inner fragment found in actual (any order); default **full line** |
-| `<start-with>` | inline or block (inside `<contains>`) | **no** (modifier) | Fragment must match line prefix |
-| `<end-with>` | inline or block (inside `<contains>`) | **no** (modifier) | Fragment must match line suffix |
-| `<hint:label>` | inline only | **yes** — inner text | Inner text must match literally; label is documentation |
-| `<ansi-color>` | inline only | **yes** — inner text | Inner text literal; strict ANSI wrapper |
+Every `__NAME__` used in the body must be defined in the header.
 
-### Block meta tags (standalone lines)
+### Body line kinds
 
-Tags alone on their line (whitespace only besides). Never appear in CLI output; never consume an actual output line (except `<regex>` inner pattern line).
+1. **Pattern line** (default) — literal text with optional `__PLACEHOLDER__` and `<ansi-color>` spans. Full line must match.
 
-| Open | Close | Purpose |
-|------|-------|---------|
-| `<optional>` | `</optional>` | Optional multiline region |
-| `<any-of>` | `</any-of>` | Alternative branches |
-| `<expect>` | `</expect>` | One branch inside `<any-of>` |
-| `<contains>` | `</contains>` | Order-free fragments |
-| `<regex>` | `</regex>` | One-line pattern region (block form) |
+2. **Regex line** — detected by regex-intent scan (see below). Entire line is a Go regexp (full line match). Placeholders expand to typed subpatterns; `<ansi-color>` spans expand to literal ANSI envelope.
 
-### Inline tags (same line as content)
+3. **Omit marker** — `...N lines omitted...` (whitespace allowed around parts). Skips exactly **N** actual lines (any content). `N` must be a non-negative integer.
 
-| Tag | Example | Purpose |
-|-----|---------|---------|
-| `<optional>…</optional>` | `Result: <optional>warn: </optional>OK` | Only wrapped span is optional |
-| `<hint:label>…</hint:label>` | `id=<hint:id>abc-123</hint:id>` | Annotate literal span |
-| `<ansi-color SPEC>…</ansi-color>` | `<ansi-color bold gray>1 Cached</ansi-color>` | Assert ANSI style (strict) |
-| `<any-of>…</any-of>` | `status: <any-of><expect>ok</expect><expect>done</expect></any-of>` | Inline alternatives |
-| `<expect>…</expect>` | inside inline `<any-of>` | One inline branch |
-| `<regex>…</regex>` | `<regex>^\.+$</regex>` | Regexp on line or span |
-| `<start-with>…</start-with>` | inside `<contains>` | Line prefix match |
-| `<end-with>…</end-with>` | inside `<contains>` | Line suffix match |
+### Regex line detection
 
-Ordinary lines inside `<contains>` may also use inline pattern tags such as
-`<any-of>`, `<optional>`, `<regex>`, and `<hint:...>`.
+Before scanning, mask protected regions (`__PLACEHOLDER__`, `<ansi-color>…</ansi-color>`). A line is a **regex line** when the remaining text has a **strong regex-intent signal**:
 
-### Reserved names and invalid forms
+| Signal | Examples |
+|--------|----------|
+| Dot-quantifier | `.*`, `.+`, `.?` |
+| Anchors | `^` at start; `$` at end only |
+| Escape atoms | `\d`, `\w`, `\s`, `\b`, … |
+| Char class | `[a-z]+` |
+| Alternation | `(ok\|fail)`, `foo\|bar` |
+| Braced quantifier | `a{2,3}` |
 
-| Valid | Invalid (rejected at parse) |
-|-------|----------------------------|
-| `<hint:id>…</hint:id>` | `<id>…</id>` — bare name, no `hint:` prefix |
-| `<hint:path>…</hint:path>` | `<cached>…</cached>` — not a registered tag |
-| `<optional>…</optional>` | `<>` / `</>` — removed syntax |
-| `<ansi-color #90>…</ansi-color>` | `<ansi-color orange>…` — unknown name without `#` |
+**Stays literal** without a strong signal: `version 1.0`, `file.go:42`, `cost: $5.00`, `(1 Cached)`.
 
-**Registered top-level names:** `optional`, `any-of`, `expect`, `contains`, `regex`, `start-with`, `end-with`, `ansi-color`, and `hint` (always with `:label` suffix).
+Examples:
 
-### `<ansi-color>` style specifier
+```DSL
+^\.+$                          # regex — progress dots line
+.*Some middle content.*suffix  # regex — flexible middle
+version 1.0                    # pattern — version dot is literal
+```
+
+### Color spans (only inline tag in v2)
+
+`<ansi-color SPEC>inner text</ansi-color>` — same tag and token set as v1.
 
 Space-separated tokens; **strict** open SGR + `\x1b[0m` reset immediately after inner text.
 
@@ -150,94 +133,215 @@ Space-separated tokens; **strict** open SGR + `\x1b[0m` reset immediately after 
 | `gray` | `\x1b[90m` | `<ansi-color gray>1 Cached</ansi-color>` |
 | `#` + params | `\x1b[<params>m` | `<ansi-color #38;5;208>warn</ansi-color>` |
 
-Combined — emitted left to right: `<ansi-color bold gray>1 Cached</ansi-color>` → `\x1b[1m\x1b[90m` + text + reset.
+Combined — emitted left to right: `<ansi-color bold gray>1 Cached</ansi-color>`.
 
-### What is NOT a tag
+## ASSERT.md pattern
 
-| Construct | Status |
-|-----------|--------|
-| `<run>`, `<pass>`, `<cached>`, `<cwd>` | **Rejected** |
-| `<dots>…</dots>` | **Rejected** — use `<regex>^\.+$</regex>` |
-| User-defined `<foo>…</foo>` | **Rejected** |
-| Free regex in literals | **Rejected** — use `<regex>` tag |
+**Recommended** (not required by `doctest vet`): mirror the template in prose:
 
-### Quick reference
+````markdown
+## Expected Output
 
 ```
-<optional>              ← block meta
-  optional lines
-</optional>
-
-<any-of>                ← block meta
-<expect>
-branch A
-</expect>
-<expect>
-branch B
-</expect>
-</any-of>
-
-<regex>
-^\.+$
-</regex>
-
-<contains>
-Usage: mytool
-<start-with>
-  build
-</start-with>
-</contains>
-
-  (<ansi-color gray>1 Cached</ansi-color>, 0 Fail)
-Result: <optional>warn: </optional>OK
-$ cd <hint:path>~/proj</hint:path>
+---
+version: 2
+__PORT__: type=number, example=8901, a port
+---
+Server listen on: __PORT__
 ```
+
+## Expected
+- stdout reports listening port
+
+```go
+import (
+    "testing"
+    "github.com/xhd2015/doctest/assert"
+)
+
+func Assert(t *testing.T, req *Request, resp *Response, err error) {
+    if err != nil {
+        t.Fatal(err)
+    }
+    assert.Output(t, resp.Stdout, `---
+version: 2
+__PORT__: type=number, example=8901, a port
+---
+Server listen on: __PORT__
+`)
+}
+```
+````
 
 ## Key semantics
 
-### Optional (none or full match)
+### Strict sequential match
 
-Block `<optional>` is **absent** (zero lines) or inner body **fully** matches. Adjacent block optionals are **separate, never merged**.
+Template line 1 matches actual line 1, then line 2, etc. Omit markers consume N lines before the next template line. No extra or missing lines at the end.
 
-### Any-of failure
+### Omit markers
 
-On failure, report **all branches** with want/got per branch.
+```DSL
+Hello __USER__
+...3 lines omitted...
+Nice to meet you
+```
 
-### Contains vs `assert.Contains()` option
+The three middle actual lines may be anything (including blanks). The line count must be exact.
 
-| Mechanism | Order | Adjacency |
-|-----------|-------|-----------|
-| `<contains>` tag | Order-free between fragments | Fragments anywhere in actual |
-| `assert.Contains()` option | Order preserved | Entire template as one contiguous slice |
+### Regex vs pattern
 
-Prefer ``assert.Output(t, actual, `` + `<contains>...</contains>`)`` when the
-template itself is a multi-line `<contains>` block. Avoid combining a top-level
-`<contains>` block with `assert.Match(..., assert.Contains())`: that mixes
-order-free fragment matching with contiguous excerpt matching and usually
-indicates the assertion is over-specified or unclear.
-
-### Escaping in templates
-
-Most `<` `>` in output need no escape. Use `\<tag>` / `\</tag>` only when text would parse as a registered tag. Backslash is template-only (not in actual).
-
-### Hints
-
-`<hint:label>…</hint:label>` — inner text matches **literally**; label is for readers and errors only.
+Regex applies to **one line only** — never crosses newlines. Use `...N lines omitted...` to skip variable middle sections instead of multiline regex.
 
 ## Migration from legacy asserts
 
-| Legacy pattern | Prefer |
-|----------------|--------|
-| `strings.Contains` loop over stdout lines | `<contains>` + `<start-with>` |
-| `strings.Index` + `strings.Count` for dots | `<regex>^\.+$</regex>` |
-| Dual `Contains` for platform errors | `<any-of><expect>…</expect></any-of>` |
+| Legacy pattern | v2 prefer |
+|----------------|-----------|
+| `strings.Contains` loop | strict template with `...N lines omitted...` or regex line |
+| `strings.Index` + `strings.Count` for dots | `^\.+$` regex line |
+| Dual `Contains` for platform errors | `(linux-msg\|darwin-msg)` regex alternation |
 | `metricIsColored` / `stripANSI` helpers | `<ansi-color bold gray>…</ansi-color>` |
+| v1 `<hint:path>…</hint:path>` | `example=~/proj` in YAML header + literal or `__PATH__` |
+| v1 `<any-of>` | regex alternation on one line |
+| v1 `<optional>` | `...0 lines omitted...` or separate templates |
 
-Existing trees may keep legacy asserts; doctest review flags them as **suggestions** to migrate.
+Existing v1 templates continue to work (no `version: 2` header). Prefer v2 for new tests.
+
+## Real-world CLI cookbook
+
+**188** doctest leaves under `assert/tests/output-assert-v2/integration/real-world/`
+(17 categories). All use **simulated** bytes — no subprocess. Regenerate via
+`go run ./script/generate/real-world-assert-cases/main.go`.
+
+Categories: `unix-text`, `go-toolchain`, `rust-toolchain`, `node-js`, `python`,
+`git`, `http-clients`, `containers`, `build-systems`, `databases`, `jvm-kotlin`,
+`c-cpp`, `shell`, `package-managers`, `cloud-infra`, `languages-other`,
+`misc-devtools`.
+
+**YAML tip:** quote placeholder defs when `example=` contains colons:
+`__LINE__: 'type=string, example=go: creating module foo'`.
+
+Samples below; every leaf in the tree is a copy-pasteable template.
+
+### cat — literal file dump
+
+```DSL
+---
+version: 2
+---
+# My Project
+Version 1.0
+```
+
+### grep -n — line number + match
+
+```DSL
+---
+version: 2
+__LINE__: type=number, example=3, 1-based line number
+---
+__LINE__:func main() {
+```
+
+### rg — path:line:column (no heading)
+
+Use one placeholder for the variable prefix when literals follow on the same line
+(string placeholders are line-greedy).
+
+```DSL
+---
+version: 2
+__HIT__: type=string, example=src/main.go:42:5, ripgrep hit prefix
+---
+__HIT__
+```
+
+### go build — compile error with omitted notes
+
+```DSL
+---
+version: 2
+__PACKAGE__: type=string, example=example.com/foo, module import path
+---
+# __PACKAGE__
+./main.go:10:2: undefined: Bar
+...2 lines omitted...
+FAIL
+```
+
+### go test — pass summary with colored PASS
+
+Keep stable substrings literal; parameterize only the trailing timing field.
+
+```DSL
+---
+version: 2
+__SECONDS__: type=number, example=0.123, elapsed seconds
+---
+=== RUN   TestFoo
+--- PASS: TestFoo (0.00s)
+<ansi-color green>PASS</ansi-color>
+ok  	example.com/foo	__SECONDS__s
+```
+
+### go mod init
+
+```DSL
+---
+version: 2
+__MODULE__: type=string, example=example.com/myproject, new module path
+---
+go: creating new go.mod: module __MODULE__
+```
+
+### npm run build — script banner + omitted log + timing
+
+Combine name@version into one placeholder when followed by more text on the line.
+
+```DSL
+---
+version: 2
+__BANNER__: type=string, example=myapp@1.0.0 build, lifecycle banner
+__SECONDS__: type=number, example=1.2, build duration
+---
+> __BANNER__
+> tsc
+...4 lines omitted...
+Done in __SECONDS__s.
+```
+
+### npm init — path + omitted JSON body
+
+Placeholders absorb to end-of-line — put trailing punctuation on the next line or omit it.
+
+```DSL
+---
+version: 2
+__PATH__: type=string, example=/tmp/proj/package.json, output path
+---
+Wrote to __PATH__
+...4 lines omitted...
+}
+```
+
+### curl -i — HTTP headers + omitted body
+
+```DSL
+---
+version: 2
+__CODE__: type=number, example=200, HTTP status code
+---
+HTTP/1.1 __CODE__ OK
+Content-Type: application/json
+...3 lines omitted...
+{"status":"ok"}
+```
 
 ## Examples in repo
 
 ```sh
+doctest test ./assert/tests/output-assert-v2/integration/real-world/...  # 188 CLI leaves
+doctest test ./assert/tests/output-assert-v2/...   # 216 total v2
+doctest test ./assert/tests/output-assert/...        # v1 legacy
 go test ./assert/...
-doctest test -v ./assert/tests/...
 ```
