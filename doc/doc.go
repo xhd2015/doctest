@@ -18,6 +18,9 @@ var docStyleTestCodeSpecification string
 //go:embed DOCTEST_TDD.md
 var doctestTDD string
 
+//go:embed DOCTEST_TDD_CLI_AGENT.md
+var doctestTDDCLIAgent string
+
 //go:embed DOCTEST_TDD_LITE.md
 var doctestTDDLITE string
 
@@ -39,6 +42,8 @@ func Content(fileName string) (string, error) {
 		content = docStyleTestCodeSpecification
 	case "DOCTEST_TDD.md":
 		content = doctestTDD
+	case "DOCTEST_TDD_CLI_AGENT.md":
+		content = doctestTDDCLIAgent
 	case "DOCTEST_TDD_LITE.md":
 		content = doctestTDDLITE
 	case "DOCTEST_REPRODUCE.md":

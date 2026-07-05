@@ -33,6 +33,7 @@ func registryCLINames() []string {
 		"doc-spec",
 		"implementer",
 		"output-assert",
+		"tdd-cli-agent",
 		"reproduce",
 		"review",
 		"tdd",

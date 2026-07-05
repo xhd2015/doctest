@@ -1,9 +1,9 @@
 ---
-name: doctest-tdd
+name: tdd-cli-agent
 description: adversarial multi-agent TDD with doctests (orchestrator + tests designer + implementer)
 ---
 
---begin of skill doctest-tdd--
+--begin of skill tdd-cli-agent--
 
 # Gate
 
@@ -40,22 +40,27 @@ directly:
 - **Designer** — writes doctest trees
 - **Implementer** — writes implementation code
 
-Delegate to those roles via your runner's native subagent or task tool (see
-**Delegating to roles** below). The roles and the
-`designer → RED → seal → implementer` flow are fixed.
+How you delegate to those roles depends on what your agent runner provides (see
+**Choosing a delegation channel** below). The roles and the
+`designer → RED → seal → implementer` flow are fixed; only the transport
+changes.
 
 If you've already reproduced a bug with written doctests, and confirm they're RED, then you can skip the design → RED stages, start directly from seal step.
 
-# Delegating to roles
+# Choosing a delegation channel
 
-Use your runner's native subagent or task tool (e.g. Task, `spawn_subagent`) to
-spawn and resume role subagents. Pass only a brief, distilled requirement (or
-the requirement file path) when spawning — not the role prompt.
+Use the **first** option that applies:
+
+| Priority | When | How |
+|----------|------|-----|
+| **1 — Native subagent/task** | Your runner exposes a subagent or task tool (e.g. Task, runner-native subagent API) | Spawn/resume subagents with requirement as the task. The sub-agent loads its own role prompt — see **Role prompts** below. |
+| **2 — CLI fallback** | No native subagent mechanism, or you need doctest session hooks (`yield-pending-questions`, `--status`, progress reporting) | `doctest agent design` / `doctest agent implement` |
 
 **Role prompts** — the **orchestrator does not** run `doctest skill designer show` or
-`doctest skill implementer show`.
+`doctest skill implementer show`. Pass only a brief, distilled requirement (or
+the requirement file path) when spawning the sub-agent.
 
-Tell each sub-agent it **must** run its role command as its **first** step (via `bash`):
+Tell each sub-agent **must** run its role command as its **first** step (via `bash`):
 
 - **Designer**: `doctest skill designer show` — read the output and follow it as
   the role/system instructions for the rest of the session.
@@ -64,12 +69,9 @@ Tell each sub-agent it **must** run its role command as its **first** step (via 
 Do not inline or pre-distill the role prompt in the orchestrator's spawn message;
 the sub-agent loads the canonical prompt itself.
 
-Prefix the subagent description with a role tag when your runner supports it
-(e.g. `[designer]`, `[implementer]`) so parallel sessions are easy to track.
-
 **Session continuity** — designer and implementer each have their own session.
-Within a role, resume the same session for follow-up questions (runner
-resume/session ID).
+Within a role, resume the same session for follow-up questions (native: runner
+resume/session ID; CLI: `--session-id`).
 
 Wait patiently for subagents to finish. Do not set a short timeout; use ≥1h if
 the runner requires one. Sub-agents report progress periodically.
@@ -88,8 +90,9 @@ Explicitly tell user:
 2. What scenarios you will test, and expected output;
 3. How you gonna test that, prefer rerunable tests(doc-style tests or unit tests);
 
-For bugs: reproduce is critical. Use an explore/analysis sub-agent to narrow
-scope first, then delegate to the **designer** role to write failing doctests.
+For bugs: reproduce is critical. Use an explore/analysis sub-agent (native
+task/subagent when available) to narrow scope first, then delegate to the
+**designer** role to write failing doctests.
 
 If there is anything needs clarification, list them and ask for user confirmation until no gap understanding user's intent.
 
@@ -97,21 +100,43 @@ If there is anything needs clarification, list them and ask for user confirmatio
 
 Write `REQUIREMENT-DESIGN-<context-summary-and-feature-slug>.md` from Phase 1.
 
-Spawn a designer subagent with the requirement file path (e.g.
-`REQUIREMENT-DESIGN-<slug>.md`) plus an optional short summary. The designer
-sub-agent runs `doctest skill designer show` as its first command (see **Role
-prompts** above).
+### Preferred — native subagent/task
+
+Spawn a subagent with requirement (short description of file path, e.g. `REQUIREMENT-DESIGN-<slug>.md`) plus an optional short summary. the designer sub-agent run `doctest skill designer show` it as its
+first command (see **Role prompts** above).
 
 Wait until the designer reports the doctest tree is written under
 `./tests/<feature>/`.
+
+### Fallback — `doctest agent design`
+
+```sh
+# please wait enough for any sub-agent, if timeout required, set to 1h
+doctest agent design --timeout 1h --requirement REQUIREMENT-DESIGN-<context-summary-and-feature-slug>.md
+
+# or for short requirement or followup
+doctest agent design --timeout 1h <<EOF
+<design doc from Phase 1>
+EOF
+```
 
 ## Phase 3 — Designer Questions (optional)
 
 If the designer yields questions, answer them and **resume the same designer
 session** — do not start a fresh designer.
 
+### Preferred — native subagent/task
+
 Resume the designer subagent with the answers (and escalate domain-specific
 questions to the user first).
+
+### Fallback — `doctest agent design`
+
+```sh
+doctest agent design --timeout 1h <<EOF
+<answers to questions>
+EOF
+```
 
 Repeat until the designer completes.
 
@@ -145,19 +170,38 @@ Write `REQUIREMENT-IMPLEMENT-<slug>.md`. It must include: summarized context,
 feature summary, test tree structure, **"tests are sealed — do not modify"**,
 and the verify command.
 
-Spawn an implementer subagent with the requirement file path (e.g.
-`REQUIREMENT-IMPLEMENT-<slug>.md`) plus an optional short summary. The
-implementer sub-agent runs `doctest skill implementer show` as its first
-command (see **Role prompts** above).
+### Preferred — native subagent/task
+
+Spawn a subagent with requirement (short description of file path, e.g. `REQUIREMENT-IMPLEMENT-<slug>.md`) plus an optional short summary. the implementer sub-agent runs ``doctest skill implementer show` as its
+first command (see **Role prompts** above).
 
 Wait until the implementer reports all tests passing.
+
+### Fallback — `doctest agent implement`
+
+```sh
+# please wait enough for any sub-agent, if timeout required, set to 1h
+doctest agent implement --timeout 1h --requirement REQUIREMENT-IMPLEMENT-<slug>.md
+```
+
+To check status (CLI only):
+
+```
+doctest agent implement --session-id <ID> --status
+```
 
 ## Phase 7 — Implementer Questions (optional)
 
 Same pattern as Phase 3: resume the **same implementer session** with answers
 until all tests pass.
 
+### Preferred — native subagent/task
+
 Resume the implementer subagent with answers or failure output from Phase 8.
+
+### Fallback — `doctest agent implement`
+
+Re-invoke with follow-up prompt or heredoc (same `--session-id` for continuity).
 
 ## Phase 8 — Verify
 
@@ -172,9 +216,9 @@ doctest test --label 'slow && ui-automation' ./tests/<feature>/... # --label acc
 doctest test ./...                    # no regressions
 ```
 
-If RED, feed failures back to the implementer (resume the same subagent
-session). If test files were modified, accept only with explicit justification
-(the test expected wrong behavior per spec).
+If RED, feed failures back to the implementer (resume native subagent if allowed, or
+re-invoke CLI). If test files were modified, accept only with explicit
+justification (the test expected wrong behavior per spec).
 
 Report: test count, modifications accepted (with rationale).
 
@@ -183,8 +227,10 @@ Report: test count, modifications accepted (with rationale).
 - Design: `REQUIREMENT-DESIGN-<slug>.md`
 - Implement: `REQUIREMENT-IMPLEMENT-<slug>.md`
 
-Pass only a brief prompt or requirement file path (plus optional summary) — not
-the role prompt.
+For native subagents, pass only a brief prompt or requirement file path (plus
+optional summary) — not the role prompt. For the CLI
+fallback, use `--requirement` for long prompts or prompts with shell-special
+characters (`$`, `#`, `!`), or a heredoc for adhoc followup.
 
 # Followup Requests
 
@@ -194,8 +240,8 @@ session IDs within each role.
 
 Designer and implementer sessions are always separate (different tasks). Once
 you establish a session for a role, keep that same session ID for all
-follow-ups within that role (runner resume).
+follow-ups within that role (native resume or CLI `--session-id`).
 
 __DOCTEST_SPEC__
 
---end of skill doctest-tdd--
+--end of skill tdd-cli-agent--
