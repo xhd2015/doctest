@@ -184,6 +184,25 @@ func TestRunValidationCases(t *testing.T) {
 			},
 		},
 		{
+			name: "doctest session id os getenv rejected",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				writeFile(t, dir, "DOCTEST.md", minimalDOCTEST)
+				writeFile(t, dir, "SETUP.md", minimalSETUP("# Setup\n\n```go\nimport \"os\"\n\nfunc Setup(t *testing.T, req *Request) error {\n\t_ = os.Getenv(\"DOCTEST_SESSION_ID\")\n\treturn nil\n}\n```\n"))
+				return dir
+			},
+			wantErr: "anti-pattern: read DOCTEST_SESSION_ID via os.Getenv",
+		},
+		{
+			name: "doctest session id direct use accepted",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				writeFile(t, dir, "DOCTEST.md", minimalDOCTEST)
+				writeFile(t, dir, "SETUP.md", minimalSETUP("# Setup\n\n```go\nimport (\n\t\"os\"\n\t\"path/filepath\"\n)\n\nfunc sessionCacheDir() string {\n\treturn filepath.Join(os.TempDir(), \"harness-\"+DOCTEST_SESSION_ID)\n}\n\nfunc Setup(t *testing.T, req *Request) error {\n\t_ = sessionCacheDir()\n\treturn nil\n}\n```\n"))
+				return dir
+			},
+		},
+		{
 			name: "double contains output assert rejected",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()

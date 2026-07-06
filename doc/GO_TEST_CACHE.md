@@ -90,10 +90,12 @@ instead of inside the package directory prevents the directory mtime from
 changing. The temp file is then renamed into the leaf directory only when the
 content actually differs.
 
-## Session ID and environment variables
+## Session ID: injected variable, not harness env read
 
-`doctest test` sets `DOCTEST_SESSION_ID` to a new UUID for each invocation and
-injects it into generated tests as:
+`doctest test` assigns a new UUID per invocation and exports it to child
+`go test` processes as the environment variable `DOCTEST_SESSION_ID`. Generated
+test boilerplate reads it once with `syscall.Getenv` and defines a **package-level
+variable** also named `DOCTEST_SESSION_ID`:
 
 ```go
 DOCTEST_SESSION_ID, ok := syscall.Getenv("DOCTEST_SESSION_ID")
@@ -102,9 +104,22 @@ if !ok || DOCTEST_SESSION_ID == "" {
 }
 ```
 
-Using `syscall.Getenv` (not `os.Getenv`) keeps the session value out of Go's
-test-result cache key while still giving every package in the run the same
-session id. See `tests/test/go-test-cache/env-getenv/` for proof tests.
+**In harness code (`SETUP.md` / `ASSERT.md` Go blocks), treat `DOCTEST_SESSION_ID`
+as that injected variable — not an environment variable you re-read.** Use it
+directly:
+
+```go
+cacheDir := filepath.Join(os.TempDir(), "my-feature-"+DOCTEST_SESSION_ID)
+```
+
+Do **not** call `os.Getenv("DOCTEST_SESSION_ID")` or `os.LookupEnv("DOCTEST_SESSION_ID")`.
+`doctest vet` flags those calls. Using `syscall.Getenv` in harness code is also
+redundant — the variable is already in scope.
+
+Why: `os.Getenv` is recorded in Go's test-result cache key. A stray read pins the
+cache to one session value or forces misses on every rerun. Generated boilerplate
+uses `syscall.Getenv` so the session id is available without polluting the cache
+key. See `tests/test/go-test-cache/env-getenv/` for proof tests.
 
 The same rule applies inside doctest itself. `build.Test` calls
 `core.DoctestSessionIDForRun()` before spawning `go test`; that helper must

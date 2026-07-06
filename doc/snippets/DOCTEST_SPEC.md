@@ -36,7 +36,8 @@ Run `doctest vet <dir>` to validate tree structure before `doctest test` or
   whitespace allowed)
 - `ASSERT.md` directories also have `SETUP.md`
 - Anti-patterns in `SETUP.md` / `ASSERT.md` code blocks (embedded Go programs,
-  `go test` shell-outs)
+  `go test` shell-outs, reading `DOCTEST_SESSION_ID` via `os.Getenv` /
+  `os.LookupEnv` / `syscall.Getenv` instead of the injected variable)
 
 See `doctest skill doc-spec show` and `doctest skill code-spec show` for the
 full prose and code rules; see the design spec (`doctest skill designer show`)

@@ -89,8 +89,13 @@ Materialize under `<pkg>/tests/<feature>/`:
 - Grouping nodes: `SETUP.md` only (no `ASSERT.md`)
 - Leaves: `SETUP.md` + `ASSERT.md`
 
-Generated tests expose `DOCTEST_ROOT` and `DOCTEST_SESSION_ID`. Use
-`DOCTEST_SESSION_ID` for session-scoped shared directories or locks.
+Generated tests expose `DOCTEST_ROOT` and `DOCTEST_SESSION_ID`. **`DOCTEST_SESSION_ID`
+is an injected variable** (not an env var you read in harness code). Reference it
+directly; do not call `os.Getenv("DOCTEST_SESSION_ID")` — `doctest vet` rejects it.
+
+When many leaves repeat expensive setup, use **file lock + cache + `DOCTEST_SESSION_ID`**
+to amortize shared work once per `doctest test` run (build binaries once, seed
+default archives once). See **Session-scoped shared setup** in the design spec.
 
 Coverage checklist — every leaf should cover:
 
@@ -136,8 +141,8 @@ Write implementation code to make all sealed tests pass. Follow these rules:
 - Place implementation in appropriate source files (not `_test.go` for doctest
   harness logic)
 - Use types and signatures expected by the root `DOCTEST.md` Go block
-- Use `DOCTEST_SESSION_ID` for per-run session-scoped cache paths or
-  coordination
+- Use the injected `DOCTEST_SESSION_ID` variable for per-run session-scoped cache
+  paths or file-lock coordination (not `os.Getenv`)
 
 Run tests until GREEN:
 

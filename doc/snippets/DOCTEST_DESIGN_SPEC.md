@@ -31,7 +31,7 @@ A nested root must be entirely self-sufficient:
 - Any external binaries (e.g., the doctest binary for `req.Bin`) must be built or resolved within that root's own `Setup`
 - The parent root's `Setup` is never executed for leaves under a nested DOCTEST.md
 - Paths like `DOCTEST_ROOT/..` shift — from a deeper root, use `DOCTEST_ROOT/../..` to reach the module root
-- `DOCTEST_SESSION_ID` is shared within one `doctest test` run
+- `DOCTEST_SESSION_ID` (injected variable) is shared within one `doctest test` run
 
 ### When to Create a Nested DOCTEST.md
 
@@ -130,6 +130,62 @@ If two test scenarios need a different `Run`, they require separate test trees, 
   - **Root `SETUP.md`** — helpers shared by every test in the tree (e.g. build binary, write fixtures).
   - **Grouping `SETUP.md`** — helpers shared only by that node's descendants.
 - Helpers in ancestor `SETUP.md` files are inherited by descendants. A child **must not** redefine a helper with the same name.
+
+## Session-scoped shared setup (`DOCTEST_SESSION_ID`)
+
+`doctest test` runs leaf packages in parallel. When many leaves repeat the same
+expensive setup (building binaries, creating seed archives, downloading fixtures),
+amortize it **once per `doctest test` invocation** with a file-based cache keyed
+by `DOCTEST_SESSION_ID`.
+
+### Rules
+
+1. **`DOCTEST_SESSION_ID` is an injected variable** — doctest defines it in every
+   generated test. Reference it directly in harness helpers; do **not** call
+   `os.Getenv("DOCTEST_SESSION_ID")`. `doctest vet` rejects env reads.
+2. **One cache dir per run** — e.g. `$TMPDIR/my-feature-doctest-<DOCTEST_SESSION_ID>/`.
+   All leaves in the invocation share the same session id.
+3. **File lock for first-time population** — use `syscall.Flock` on a lock file
+   inside the cache dir so parallel packages serialize the first build/seed; later
+   packages wait, then reuse artifacts.
+4. **Ready markers** — after populating, write a sentinel (e.g. `binaries.ready`)
+   so waiters skip rebuild when artifacts exist.
+5. **Per-leaf isolation unchanged** — share only artifacts safe across leaves
+   (compiled binaries, generic seed archives). Keep per-leaf temp dirs for
+   mutated state (server home, agent home, custom excludes/includes).
+
+### Pattern (root `SETUP.md` helpers)
+
+```go
+func sessionCacheDir() string {
+    return filepath.Join(os.TempDir(), "my-feature-doctest-"+DOCTEST_SESSION_ID)
+}
+
+func withFileLock(t *testing.T, lockPath string, fn func() error) error {
+    // open lockPath, syscall.Flock(LOCK_EX), defer LOCK_UN, run fn
+}
+
+func buildOnce(t *testing.T, cacheDir string) string {
+    lock := filepath.Join(cacheDir, "build.lock")
+    ready := filepath.Join(cacheDir, "binaries.ready")
+    bin := filepath.Join(cacheDir, "my-tool")
+    withFileLock(t, lock, func() error {
+        if fileExists(ready) && fileExists(bin) {
+            return nil
+        }
+        // go build -o bin ...
+        return os.WriteFile(ready, []byte("ok"), 0644)
+    })
+    return bin
+}
+```
+
+Call `buildOnce` (or `ensureSessionDefaultArchive`) from root `Run` or shared
+helpers. Leaves that need a custom seed still build their own archive; leaves
+that only need the default seed reuse the session archive path.
+
+Document the cache layout in root `SETUP.md` **Preconditions** so reviewers see
+what is shared vs per-leaf.
 
 ## DOCTEST.md Boundary
 

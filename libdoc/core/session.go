@@ -7,7 +7,10 @@ import (
 )
 
 // DoctestSessionIDEnv is the environment variable set for each doctest test run.
-// Generated tests read it via syscall.Getenv into the DOCTEST_SESSION_ID variable.
+// DoctestSessionIDEnv is the process env key doctest test sets for child go test
+// processes. Generated test boilerplate reads it via syscall.Getenv into the
+// DOCTEST_SESSION_ID variable; harness SETUP/ASSERT code must use that variable
+// directly, not os.Getenv.
 const DoctestSessionIDEnv = "DOCTEST_SESSION_ID"
 
 // NewDoctestSessionID returns a new session identifier for one doctest test run.

@@ -511,11 +511,24 @@ The test can access `DOCTEST_ROOT` constant defined as the root of all tests, us
 req.InputDir = filepath.Join(DOCTEST_ROOT, "testdata", "child-redefines-request")
 ```
 
-Each generated test function also defines `DOCTEST_SESSION_ID` that is unique per `doctest test` run. Use it for session-scoped cache directories, locks, or other cross-package coordination:
+Each generated test function also defines **`DOCTEST_SESSION_ID`** — a package-level
+string variable unique per `doctest test` invocation. Doctest injects it into
+every generated test (via `syscall.Getenv` in generated boilerplate only). **Harness
+code in `SETUP.md` / `ASSERT.md` must reference `DOCTEST_SESSION_ID` directly** —
+do not call `os.Getenv("DOCTEST_SESSION_ID")` or `os.LookupEnv("DOCTEST_SESSION_ID")`.
+Reading the session id through `os.Getenv` is recorded in Go's test cache key and
+can pin or bust caching; `doctest vet` rejects it.
+
+Use `DOCTEST_SESSION_ID` for session-scoped cache directories, file locks, or other
+cross-package coordination within one `doctest test` run:
 
 ```go
 cacheDir := filepath.Join(os.TempDir(), "my-harness-"+DOCTEST_SESSION_ID)
 ```
+
+See **Session-scoped shared setup** in the design spec for the file-lock + cache
+pattern used to amortize heavy setup (build binaries once, seed archives once)
+across parallel leaf packages.
 
 To reference testdata placed alongside a test case (under its own directory),
 use a relative path — it resolves against the case directory:

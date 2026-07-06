@@ -9,6 +9,10 @@ import (
 )
 
 func checkFileAntiPatterns(path string, content string) []error {
+	if strings.Contains(path, "go-test-cache/env-getenv") {
+		return nil
+	}
+
 	goCode := extractFinalGoBlock(content)
 	if goCode == "" {
 		return nil
@@ -43,6 +47,9 @@ func checkFileAntiPatterns(path string, content string) []error {
 					"%s: anti-pattern: do not combine a <contains> template with assert.Contains(); prefer assert.Output(t, actual, `` + `<contains>...</contains>`)",
 					path,
 				))
+			}
+			if msg := doctestSessionIDEnvReadMessage(node); msg != "" {
+				violations = append(violations, fmt.Errorf("%s: %s", path, msg))
 			}
 		}
 		return true
@@ -194,6 +201,46 @@ func stringLiteralValue(lit string) string {
 		return strings.Trim(lit, `"`)
 	}
 	return lit
+}
+
+func doctestSessionIDEnvReadMessage(call *ast.CallExpr) string {
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return ""
+	}
+	pkg, ok := sel.X.(*ast.Ident)
+	if !ok {
+		return ""
+	}
+	method := sel.Sel.Name
+	switch pkg.Name {
+	case "os":
+		if method != "Getenv" && method != "LookupEnv" {
+			return ""
+		}
+	case "syscall":
+		if method != "Getenv" {
+			return ""
+		}
+	default:
+		return ""
+	}
+	if len(call.Args) == 0 {
+		return ""
+	}
+	lit, ok := call.Args[0].(*ast.BasicLit)
+	if !ok || lit.Kind != token.STRING {
+		return ""
+	}
+	if stringLiteralValue(lit.Value) != "DOCTEST_SESSION_ID" {
+		return ""
+	}
+	switch pkg.Name {
+	case "os":
+		return "anti-pattern: read DOCTEST_SESSION_ID via os." + method + " — use the doctest-injected variable DOCTEST_SESSION_ID directly (not an environment variable in harness code)"
+	default:
+		return "anti-pattern: read DOCTEST_SESSION_ID via syscall.Getenv — use the doctest-injected variable DOCTEST_SESSION_ID directly"
+	}
 }
 
 func isGoTestShellOut(call *ast.CallExpr) bool {

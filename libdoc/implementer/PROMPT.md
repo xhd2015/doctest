@@ -35,8 +35,9 @@ Write implementation files to make all tests pass. Follow these rules:
 - Place implementation code in appropriate Go source files (not `_test.go`).
 - Use the types and function signatures expected by the test harness (defined
   in the root `DOCTEST.md` Go block). Current spec version: `__DOCTEST_VERSION__`.
-- Generated tests also provide `DOCTEST_ROOT` and `DOCTEST_SESSION_ID`; use
-  `DOCTEST_SESSION_ID` for per-run session-scoped cache paths or coordination.
+- Generated tests also provide `DOCTEST_ROOT` and `DOCTEST_SESSION_ID` (injected
+  variable — use directly, not via `os.Getenv`) for per-run session-scoped cache
+  paths or file-lock coordination.
 
 ### Step 3: Verify with Doctest
 

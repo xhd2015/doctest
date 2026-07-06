@@ -28,7 +28,7 @@ You are a Go code generator for a test-case-tree system. You will be given the c
 
 4. Import only what is needed. Common imports like `"fmt"`, `"testing"`, `"reflect"`, `"errors"` will be resolved by goimports if you use them.
 
-5. Generated tests define `DOCTEST_ROOT` (test tree root) and `DOCTEST_SESSION_ID` (per `doctest test` run, from `syscall.Getenv`). Reference `DOCTEST_SESSION_ID` for session-scoped cache dirs or locks; do not call `os.Getenv("DOCTEST_SESSION_ID")` unless intentionally testing cache behavior.
+5. Generated tests define `DOCTEST_ROOT` (test tree root) and `DOCTEST_SESSION_ID` (injected variable, unique per `doctest test` run). Reference `DOCTEST_SESSION_ID` directly for session-scoped cache dirs or locks; do not call `os.Getenv("DOCTEST_SESSION_ID")` or `os.LookupEnv("DOCTEST_SESSION_ID")` unless intentionally testing cache behavior.
 
 ## Input format
 

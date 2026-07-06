@@ -7,7 +7,7 @@
 doctest vet <dir> -> walk tree -> report anti-patterns
 
 # anti-patterns detected
-embedded go block | go test shellout | assert without setup | skipped testdata
+embedded go block | go test shellout | DOCTEST_SESSION_ID env read | assert without setup | skipped testdata
 ```
 
 ## Preconditions
