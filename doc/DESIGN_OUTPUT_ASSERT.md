@@ -735,6 +735,7 @@ Rules:
 |--------|----------|
 | Normalize `\r\n` → `\n` | **Always on** (§12 Q18) |
 | Trailing newline | **Strict** — template and actual must agree; no automatic ignore (§12 Q9) |
+| CLI stdout default | **Trailing `\n` required** — user-facing CLI output and matching v2 templates both end with `\n`; see `doc/DOCTEST_OUTPUT_ASSERT.md` (CLI stdout trailing newline) |
 
 ### 5.12 ANSI color — `<ansi-color>` tag (preferred over `StripANSI`)
 

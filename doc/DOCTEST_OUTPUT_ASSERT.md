@@ -43,6 +43,35 @@ assert.Output(t, actual, template)  // Parse + Match + t.Fatal
 - Trailing newlines are **strict** (template and actual must agree).
 - Matching is **case-sensitive**.
 
+### CLI stdout trailing newline (required)
+
+User-facing CLI stdout **must** end with a final `\n` (POSIX convention — keeps
+the shell prompt on its own line). v2 templates for CLI output **must** include
+that trailing newline too, so template and actual agree **and** the product
+behaves correctly in a real terminal.
+
+**Go authoring pattern** — put the closing backtick on the line **after** the
+last content line (not on the same line, and not separated by an extra blank
+line):
+
+````go
+assert.Output(t, resp.Stdout, `---
+version: 2
+---
+Hello world
+`)
+````
+
+The newline before `` ` `` makes the raw string end with `\n` without adding an
+extra blank output line. A **blank line** between the last content line and the
+backtick adds an empty line to the template body — do not do that unless the
+product output truly ends with a blank line.
+
+**Trap to avoid:** `` `...last line` `` on one line omits trailing `\n` from the
+template. That forces the implementation to also omit `\n`, which glues the
+shell prompt to the last line. Implementers must not strip `\n` from product code
+to pass such tests — fix the template instead.
+
 ## Template shape (v2)
 
 ```DSL
@@ -208,6 +237,11 @@ Regex applies to **one line only** — never crosses newlines. Use `...N lines o
 Existing v1 templates continue to work (no `version: 2` header). Prefer v2 for new tests.
 
 ## Real-world CLI cookbook
+
+CLI templates in this section should end with a trailing `\n` in both the
+template and the simulated actual bytes. When authoring `ASSERT.md` Go blocks,
+use the closing-backtick-on-next-line pattern from **CLI stdout trailing newline**
+above.
 
 **188** doctest leaves under `assert/tests/output-assert-v2/integration/real-world/`
 (17 categories). All use **simulated** bytes — no subprocess. Regenerate via

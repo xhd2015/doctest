@@ -98,6 +98,7 @@ Return absolute paths for every tree and node you discuss.
        - Use `__PLACEHOLDER__` for variable regions; `...N lines omitted...` for skippable middle sections; regex lines for flexible single lines.
      - **Major**: flag tests whose expected output would require the product to print matcher DSL syntax such as `<ansi-color>`, `__PLACEHOLDER__`, or `...N lines omitted...` unless those strings are explicitly part of the product API.
      - **Major**: flag a mismatch between prose expectation and executable assertion, especially when `## Expected Output` reads like test DSL rather than acceptable terminal output.
+     - **Major**: flag CLI stdout v2 templates that omit trailing `\n` (closing backtick on the same line as the last content line). This pattern forces implementations to omit the final newline and breaks real terminals.
      - **Suggestion** (not must-fix): flag `strings.Contains` loops, `strings.Index`/`Count` parsing, ad-hoc ANSI color helpers when the assert DSL covers the case; flag new v1 tag templates when v2 would be clearer.
      - Non-trivial templates should have a matching `## Expected Output` prose block when present; the prose mirror should remain readable as user-facing output with annotations, not as a list of internals.
    - Cite `doctest skill output-assert show` for migration guidance.
@@ -165,6 +166,7 @@ Return absolute paths for every tree and node you discuss.
 - [ ] Variable regions use YAML-header placeholders
 - [ ] Expected output does not require actual product output to contain matcher DSL syntax (`<ansi-color>`, `__NAME__`, omit markers) unless explicitly required by product behavior
 - [ ] `## Expected Output` mirrors acceptable user-facing output with annotations; it is not only a matcher implementation detail
+- [ ] CLI stdout v2 templates end with trailing `\n` (closing backtick on the line after last content)
 - [ ] Non-trivial templates documented in `## Expected Output` when authors use that section
 - [ ] Legacy `strings.Contains` / hand-rolled output parsing flagged as **suggestion** to migrate
 

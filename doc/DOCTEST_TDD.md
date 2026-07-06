@@ -88,6 +88,8 @@ Explicitly tell user:
 2. What scenarios you will test, and expected output;
 3. How you gonna test that, prefer rerunable tests(doc-style tests or unit tests);
 
+For CLI features, state in the requirement file that user-facing stdout ends with an empty newline `\n` after the last content line. When using doctest's assert template, add a newline before the raw string's clsoing backtick.
+
 For bugs: reproduce is critical. Use an explore/analysis sub-agent to narrow
 scope first, then delegate to the **designer** role to write failing doctests.
 

@@ -28,6 +28,10 @@ Write implementation files to make all tests pass. Follow these rules:
   such as `<contains>`, `<any-of>`, `<expect>`, `<regex>`, `<optional>`,
   `<hint:...>`, or `<ansi-color>`, stop and ask for clarification; this is
   usually a test/assertion bug.
+- CLI stdout follows POSIX convention: the last line must end with `\n` (use
+  `fmt.Fprintln` or an explicit `\n`). If sealed tests omit trailing newline
+  but the requirement describes CLI output, use `yield-pending-questions` — do
+  not strip `\n` from product code to pass tests.
 - Place implementation code in appropriate Go source files (not `_test.go`).
 - Use the types and function signatures expected by the test harness (defined
   in the root `DOCTEST.md` Go block). Current spec version: `__DOCTEST_VERSION__`.
