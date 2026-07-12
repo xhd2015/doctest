@@ -754,7 +754,7 @@ func buildRegexPattern(line string, placeholders map[string]v2Placeholder) (stri
 			litEnd = i + nextColor
 		}
 		if litEnd > i {
-			b.WriteString(line[i:litEnd])
+			b.WriteString(regexp.QuoteMeta(line[i:litEnd]))
 			i = litEnd
 			continue
 		}
@@ -1027,7 +1027,7 @@ func isQuantifierBrace(s string, start int) bool {
 func placeholderSubpattern(typ string) (string, error) {
 	switch typ {
 	case "string":
-		return `[^\n]*`, nil
+		return `[^\n]*?`, nil
 	case "number":
 		return `-?\d+(?:\.\d+)?`, nil
 	default:

@@ -155,7 +155,7 @@ func isQuantifierBrace(s string, start int) bool {
 func placeholderSubpattern(typ string) (string, error) {
 	switch typ {
 	case "string":
-		return `[^\n]*`, nil
+		return `[^\n]*?`, nil
 	case "number":
 		return `-?\d+(?:\.\d+)?`, nil
 	default:

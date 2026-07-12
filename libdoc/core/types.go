@@ -19,15 +19,22 @@ type GoBlock struct {
 	VarDecls  []string
 	Consts    []string
 	Helpers   []FuncSnippet
-	Setup     *FuncSnippet
-	Run       *FuncSnippet
-	Assert    *FuncSnippet
+	// Methods are package-level methods (have receivers). Emitted outside the test
+	// function so they can implement interfaces and reference local-named types.
+	Methods []FuncSnippet
+	Setup   *FuncSnippet
+	Run     *FuncSnippet
+	Assert  *FuncSnippet
 
 	Types map[string]bool
 }
 
 type FuncSnippet struct {
 	Name    string
+	// Recv is the receiver field list string (e.g. "f *fakeRunner"). Empty for
+	// plain functions. When set, the snippet is a method and must be emitted at
+	// package level (not as a func literal).
+	Recv    string
 	Params  string
 	Results string
 	// ResultTypes holds return types only (no names), for valid func-literal signatures.

@@ -38,17 +38,33 @@ func AssembleTestSource(tc TreeCase, compileOnly bool, pkgName string, docTestRo
 		buf.WriteString(")\n\n")
 	}
 
+	// Types, methods, consts/vars, and helpers at package level so methods can
+	// implement interfaces and package helpers can reference shared vars
+	// (e.g. uuidShape used by assertUUID). Go forbids methods on function-local types.
+	// DOCTEST_ROOT / DOCTEST_SESSION_ID are package-level vars so package helpers
+	// (e.g. sessionCacheDir) can read them; the test assigns them on entry.
+	buf.WriteString("var (\n")
+	buf.WriteString("\tDOCTEST_ROOT       string\n")
+	buf.WriteString("\tDOCTEST_SESSION_ID string\n")
+	buf.WriteString(")\n\n")
+	writePackageLevelTypesAndMethods(&buf, tc.SetupFiles, tc.AssertFile.GoBlock)
+	writePackageLevelConstVars(&buf, tc.SetupFiles, tc.AssertFile.GoBlock)
+	writePackageLevelHelpers(&buf, tc.SetupFiles, tc.AssertFile.GoBlock)
+
 	buf.WriteString("func ")
 	buf.WriteString(TestFuncName(tc))
 	buf.WriteString("(t *testing.T) {\n")
 
 	escapedRoot := strings.ReplaceAll(docTestRoot, "`", "`+\"`\"+`")
-	buf.WriteString("\tconst DOCTEST_ROOT = `")
+	buf.WriteString("\tDOCTEST_ROOT = `")
 	buf.WriteString(escapedRoot)
 	buf.WriteString("`\n")
-	buf.WriteString("\tDOCTEST_SESSION_ID, __sessionOk := syscall.Getenv(\"DOCTEST_SESSION_ID\")\n")
-	buf.WriteString("\tif !__sessionOk || DOCTEST_SESSION_ID == \"\" {\n")
-	buf.WriteString("\t\tt.Fatalf(\"DOCTEST_SESSION_ID not set\")\n")
+	buf.WriteString("\t{\n")
+	buf.WriteString("\t\tsid, ok := syscall.Getenv(\"DOCTEST_SESSION_ID\")\n")
+	buf.WriteString("\t\tif !ok || sid == \"\" {\n")
+	buf.WriteString("\t\t\tt.Fatalf(\"DOCTEST_SESSION_ID not set\")\n")
+	buf.WriteString("\t\t}\n")
+	buf.WriteString("\t\tDOCTEST_SESSION_ID = sid\n")
 	buf.WriteString("\t}\n")
 	buf.WriteString("\t__origWd, __wdErr := os.Getwd()\n")
 	buf.WriteString("\tif __wdErr != nil {\n")
@@ -62,11 +78,6 @@ func AssembleTestSource(tc TreeCase, compileOnly bool, pkgName string, docTestRo
 	}
 	buf.WriteString("\t\tt.Fatal(err)\n")
 	buf.WriteString("\t}\n\n")
-
-	writeTypeConstVarDecls(&buf, tc.SetupFiles)
-	writeTypeConstVarDeclsForBlock(&buf, tc.AssertFile.GoBlock)
-
-	writeAllHelpers(&buf, tc.SetupFiles, tc.AssertFile.GoBlock)
 
 	var run *FuncSnippet
 	if len(tc.SetupFiles) > 0 && tc.SetupFiles[0].GoBlock != nil && tc.SetupFiles[0].GoBlock.Run != nil {
@@ -165,6 +176,119 @@ func collectHelperNames(setupFiles []SetupDocument, assertBlock GoBlock) []strin
 	return names
 }
 
+func writePackageLevelTypesAndMethods(buf *strings.Builder, setupFiles []SetupDocument, assertBlock GoBlock) {
+	// Deduplicate type decls by content (same harness types appear on every setup hop).
+	seenTypes := make(map[string]bool)
+	var typeDecls []string
+	typeNames := make(map[string]bool)
+	var methods []FuncSnippet
+	seenMethod := make(map[string]bool)
+
+	collect := func(block *GoBlock) {
+		if block == nil {
+			return
+		}
+		for name := range block.Types {
+			typeNames[name] = true
+		}
+		for _, decl := range block.TypeDecls {
+			if !seenTypes[decl] {
+				seenTypes[decl] = true
+				typeDecls = append(typeDecls, decl)
+			}
+		}
+		for _, m := range block.Methods {
+			key := m.Recv + " " + m.Name
+			if !seenMethod[key] {
+				seenMethod[key] = true
+				methods = append(methods, m)
+			}
+		}
+	}
+	for _, doc := range setupFiles {
+		collect(doc.GoBlock)
+	}
+	collect(&assertBlock)
+
+	for _, decl := range sortTypeDecls(typeDecls, typeNames) {
+		buf.WriteString(strings.TrimSpace(decl))
+		buf.WriteString("\n")
+	}
+	if len(typeDecls) > 0 {
+		buf.WriteString("\n")
+	}
+	for _, m := range methods {
+		writeMethodDecl(buf, m)
+	}
+	if len(methods) > 0 {
+		buf.WriteString("\n")
+	}
+}
+
+func writeMethodDecl(buf *strings.Builder, fn FuncSnippet) {
+	// Prefer ClosureResults: correctly parenthesizes multi-named results that
+	// share one type (e.g. "(open []T, send []T)" not "open []T, send []T").
+	results := fn.ClosureResults
+	if strings.TrimSpace(results) == "" {
+		results = fn.Results
+	}
+	if strings.TrimSpace(results) == "" {
+		results = fn.ResultTypes
+	}
+	if strings.TrimSpace(results) != "" {
+		results = " " + results
+	}
+	buf.WriteString(fmt.Sprintf("func (%s) %s(%s)%s %s\n", fn.Recv, fn.Name, fn.Params, results, fn.Body))
+}
+
+// writePackageLevelConstVars emits const/var decls at package scope so package
+// helpers and methods can reference them (e.g. uuidShape, defaultAllowEmail).
+func writePackageLevelConstVars(buf *strings.Builder, setupFiles []SetupDocument, assertBlock GoBlock) {
+	seen := make(map[string]bool)
+	emit := func(decls []string) {
+		for _, decl := range decls {
+			key := strings.TrimSpace(decl)
+			if key == "" || seen[key] {
+				continue
+			}
+			seen[key] = true
+			buf.WriteString(key)
+			buf.WriteString("\n")
+		}
+	}
+	for _, doc := range setupFiles {
+		if doc.GoBlock == nil {
+			continue
+		}
+		emit(doc.GoBlock.Consts)
+		emit(doc.GoBlock.VarDecls)
+	}
+	emit(assertBlock.Consts)
+	emit(assertBlock.VarDecls)
+	if len(seen) > 0 {
+		buf.WriteString("\n")
+	}
+}
+
+func writeConstVarDecls(buf *strings.Builder, setupFiles []SetupDocument) {
+	for _, doc := range setupFiles {
+		if doc.GoBlock == nil {
+			continue
+		}
+		writeConstVarDeclsForBlock(buf, *doc.GoBlock)
+	}
+}
+
+func writeConstVarDeclsForBlock(buf *strings.Builder, block GoBlock) {
+	for _, decl := range block.Consts {
+		writeIndented(buf, decl)
+	}
+	for _, decl := range block.VarDecls {
+		writeIndented(buf, decl)
+	}
+}
+
+// writeTypeConstVarDecls kept for any callers/tests that expect the old combined emit.
 func writeTypeConstVarDecls(buf *strings.Builder, setupFiles []SetupDocument) {
 	for _, doc := range setupFiles {
 		if doc.GoBlock == nil {
@@ -187,6 +311,7 @@ func writeTypeConstVarDeclsForBlock(buf *strings.Builder, block GoBlock) {
 }
 
 func writeAllHelpers(buf *strings.Builder, setupFiles []SetupDocument, assertBlock GoBlock) {
+	// Legacy: emit helpers as closures inside the test function.
 	var helpers []FuncSnippet
 	for _, doc := range setupFiles {
 		if doc.GoBlock == nil {
@@ -198,6 +323,51 @@ func writeAllHelpers(buf *strings.Builder, setupFiles []SetupDocument, assertBlo
 	for _, helper := range sortHelpers(helpers) {
 		writeFuncClosure(buf, helper.Name, helper)
 	}
+}
+
+// writePackageLevelHelpers emits non-method helpers as real package functions
+// so package-level methods can call them (e.g. containsArg from fakeRunner.Exec).
+func writePackageLevelHelpers(buf *strings.Builder, setupFiles []SetupDocument, assertBlock GoBlock) {
+	seen := make(map[string]bool)
+	var helpers []FuncSnippet
+	for _, doc := range setupFiles {
+		if doc.GoBlock == nil {
+			continue
+		}
+		for _, h := range doc.GoBlock.Helpers {
+			if !seen[h.Name] {
+				seen[h.Name] = true
+				helpers = append(helpers, h)
+			}
+		}
+	}
+	for _, h := range assertBlock.Helpers {
+		if !seen[h.Name] {
+			seen[h.Name] = true
+			helpers = append(helpers, h)
+		}
+	}
+	for _, helper := range sortHelpers(helpers) {
+		writePackageFunc(buf, helper)
+	}
+	if len(helpers) > 0 {
+		buf.WriteString("\n")
+	}
+}
+
+func writePackageFunc(buf *strings.Builder, fn FuncSnippet) {
+	// Prefer ClosureResults so multi-named shared-type results are parenthesized.
+	results := fn.ClosureResults
+	if strings.TrimSpace(results) == "" {
+		results = fn.Results
+	}
+	if strings.TrimSpace(results) == "" {
+		results = fn.ResultTypes
+	}
+	if strings.TrimSpace(results) != "" {
+		results = " " + results
+	}
+	buf.WriteString(fmt.Sprintf("func %s(%s)%s %s\n", fn.Name, fn.Params, results, fn.Body))
 }
 
 // sortHelpers topologically orders helpers so that a closure referencing

@@ -184,6 +184,11 @@ func parseGoBlock(block *GoBlock) error {
 			}
 		case *ast.FuncDecl:
 			fn := funcSnippet(fset, d)
+			// Methods must stay package-level (Go forbids methods on function-local types).
+			if d.Recv != nil {
+				block.Methods = append(block.Methods, fn)
+				break
+			}
 			switch d.Name.Name {
 			case "Setup":
 				block.Setup = &fn
@@ -210,6 +215,10 @@ func funcSnippet(fset *token.FileSet, d *ast.FuncDecl) FuncSnippet {
 	if d.Type.Params != nil {
 		params = fieldsString(fset, d.Type.Params)
 	}
+	recv := ""
+	if d.Recv != nil {
+		recv = fieldsString(fset, d.Recv)
+	}
 	results := ""
 	resultTypes := ""
 	closureResults := ""
@@ -220,6 +229,7 @@ func funcSnippet(fset *token.FileSet, d *ast.FuncDecl) FuncSnippet {
 	}
 	return FuncSnippet{
 		Name:           d.Name.Name,
+		Recv:           recv,
 		Params:         params,
 		Results:        results,
 		ResultTypes:    resultTypes,

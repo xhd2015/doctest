@@ -288,7 +288,7 @@ func buildRegexPattern(line string, placeholders map[string]v2Placeholder) (stri
 			litEnd = i + nextColor
 		}
 		if litEnd > i {
-			b.WriteString(line[i:litEnd])
+			b.WriteString(regexp.QuoteMeta(line[i:litEnd]))
 			i = litEnd
 			continue
 		}

@@ -33,6 +33,47 @@ doctest skill --list
 doctest skill tdd install --codex --opencode
 ```
 
+# Ignore TDD requirement files (git)
+
+The adversarial TDD flow writes **workspace-local requirement files** for the
+designer and implementer roles (not product source):
+
+```text
+REQUIREMENT-DESIGN-<slug>.md
+REQUIREMENT-IMPLEMENT-<slug>.md
+```
+
+These are ephemeral agent artifacts and should not be committed. Prefer a
+**global** git excludes file so every repo picks them up:
+
+```sh
+# once: point git at a global ignore file (if not already set)
+git config --global core.excludesfile ~/.gitignore
+
+# append the two patterns (any directory, any repo)
+cat >> ~/.gitignore <<'EOF'
+REQUIREMENT-DESIGN-*.md
+REQUIREMENT-IMPLEMENT-*.md
+EOF
+```
+
+Verify:
+
+```sh
+git check-ignore -v REQUIREMENT-DESIGN-example.md
+# → ~/.gitignore:N:REQUIREMENT-DESIGN-*.md	REQUIREMENT-DESIGN-example.md
+```
+
+Alternatively, add the same two lines to a **repo** `.gitignore` if you only
+want them ignored in one project.
+
+Notes:
+
+- Global ignores only affect **untracked** files. Already-tracked requirement
+  files stay tracked until you `git rm --cached` them.
+- Do **not** ignore sealed doctest trees under `tests/` — only the
+  `REQUIREMENT-*.md` orchestrator files.
+
 ## Commands
 
 ```
