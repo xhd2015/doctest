@@ -9,128 +9,121 @@ description: adversarial multi-agent TDD with doctests (orchestrator + tests des
 
 TDD mode is mandatory **unless** one of these applies:
 
-1. **`no tdd:` prefix** — The user's message starts with `no tdd:`. Strip the
-   prefix and handle directly.
-2. **Doc-only change** — The change touches only documentation files (`.md`,
-   `README`, etc.) and modifies no source code. No TDD flow needed.
-3. **One-liner fix** — Before starting the expensive TDD loop, ask the user to
-   confirm: warn that TDD is slow and ask whether they want to proceed
-   with TDD or use `no tdd:` instead. Do not start TDD without confirmation.
+1. **`no tdd:` prefix** — Strip the prefix and handle directly.
+2. **Doc-only change** — Only documentation (`.md`, `README`, etc.); no source code.
+3. **One-liner fix** — Warn that TDD is slow; ask whether to proceed with TDD or use
+   `no tdd:`. Do not start TDD without confirmation.
 
-Otherwise TDD mode is mandatory. Everything below is non-negotiable.
+Otherwise TDD mode is mandatory.
 
-# TDD Gate — The One Rule
+# One Rule
 
-You are the **orchestrator**. Every code change — features, bug fixes, trivial
-one-liners, variable renames, logging changes, config tweaks — MUST flow
-through:
+You are the **orchestrator**. Every code change MUST flow through doctest TDD:
 
 ```
-designer → RED → seal → implementer
+Classic TDD:       designer → RED → seal → implementer → GREEN
+Coverage backfill: designer → (GREEN OK / mixed OK) → seal → implementer only if RED remains → GREEN
 ```
 
-**You NEVER touch source files.** You do not use Edit, Write, or any
-file-modification tool on `.go`, `.ts`, `.py`, `.rs`, configuration files, or
-any file in the repository. No exceptions for triviality. No direct fixes, no
-hand-edits, no "this is too small for TDD."
-
-All code changes happen exclusively through two **roles** — never by you
-directly:
+**You NEVER touch source files.** No Edit/Write on source or config. All code
+changes go through:
 
 - **Designer** — writes doctest trees
 - **Implementer** — writes implementation code
 
-Delegate to those roles via your runner's native subagent or task tool (see
-**Delegating to roles** below). The roles and the
-`designer → RED → seal → implementer` flow are fixed.
+# Modes
 
-If you've already reproduced a bug with written doctests, and confirm they're RED, then you can skip the design → RED stages, start directly from seal step.
+Infer mode from user wording and codebase during Phase 1. Do not force classic
+RED when the implementation is already present.
+
+**Classic TDD** when: greenfield / no real implementation; user wants failing
+tests first; paths under change are stubbed or unimplemented.
+
+**Coverage backfill** when: user asks to **backfill** coverage or says the
+fix/feature is already applied and only doctests are missing; source already
+implements the intended behavior; task is missing coverage for working code.
+
+If ambiguous, ask once in Phase 1 — default toward backfill when evidence is strong.
+
+**Still brainstorm in both modes** (Phase 1 is mandatory for backfill too).
+
+### Shortcuts
+
+- Already-reproduced bug with RED doctests → skip design/RED; start at seal.
+- Backfill: RED not required for leaves documenting correct behavior; GREEN
+  expected. Skip implementer when all sealed tests are already GREEN.
 
 # Delegating to roles
 
-Use your runner's native subagent or task tool (e.g. Task, `spawn_subagent`) to
-spawn and resume role subagents. Pass only a brief, distilled requirement (or
-the requirement file path) when spawning — not the role prompt.
+Spawn/resume role subagents via the runner's task tool. Pass a short requirement
+(or file path) — not the role prompt.
 
-**Role prompts** — the **orchestrator does not** run `doctest skill designer show` or
-`doctest skill implementer show`.
+Each sub-agent **must** run as its first step:
 
-Tell each sub-agent it **must** run its role command as its **first** step (via `bash`):
+- Designer: `doctest skill designer show`
+- Implementer: `doctest skill implementer show`
 
-- **Designer**: `doctest skill designer show` — read the output and follow it as
-  the role/system instructions for the rest of the session.
-- **Implementer**: `doctest skill implementer show` — same pattern.
-
-Do not inline or pre-distill the role prompt in the orchestrator's spawn message;
-the sub-agent loads the canonical prompt itself.
-
-Prefix the subagent description with a role tag when your runner supports it
-(e.g. `[designer]`, `[implementer]`) so parallel sessions are easy to track.
-
-**Session continuity** — designer and implementer each have their own session.
-Within a role, resume the same session for follow-up questions (runner
-resume/session ID).
-
-Wait patiently for subagents to finish. Do not set a short timeout; use ≥1h if
-the runner requires one. Sub-agents report progress periodically.
+Prefix descriptions with `[designer]` / `[implementer]` when supported. Resume
+the **same** session per role for follow-ups. Wait patiently (use ≥1h timeout
+if the runner requires one).
 
 # Workflow (8 Phases)
 
-Every feature request, bug fix, or followup follows this loop.
-
 ## Phase 1 — Requirements
 
-Brainstorm with user. Produce a requirement file. Get explicit user approval
-before continuing. 
+Brainstorm (both modes). Produce a requirement file; get explicit approval.
 
-Explicitly tell user:
-1. What the underlying data models and storage layout(if any) are;
-2. What scenarios you will test, and expected output;
-3. How you gonna test that, prefer rerunable tests(doc-style tests or unit tests);
+Auto-detect mode (see **Modes**). State it in the requirement file.
 
-For CLI features, state in the requirement file that user-facing stdout ends with an empty newline `\n` after the last content line. When using doctest's assert template, add a newline before the raw string's clsoing backtick.
+Tell the user:
 
-For bugs: reproduce is critical. Use an explore/analysis sub-agent to narrow
-scope first, then delegate to the **designer** role to write failing doctests.
+1. Data models and storage layout (if any)
+2. Scenarios and expected output
+3. How you will test (prefer doctests)
+4. **Classic TDD** or **coverage backfill**, and why
 
-If there is anything needs clarification, list them and ask for user confirmation until no gap understanding user's intent.
+CLI: user-facing stdout ends with `\n` after the last content line; when using
+doctest assert templates, newline before the raw string's closing backtick.
+
+Bugs: explore/narrow scope first, then designer. Classic → failing doctests;
+backfill (fix applied) → doctests of fixed behavior (GREEN OK).
+
+Clarify until intent is clear.
 
 ## Phase 2 — Delegate Test Design
 
-Write `REQUIREMENT-DESIGN-<context-summary-and-feature-slug>.md` from Phase 1.
+Write `REQUIREMENT-DESIGN-<slug>.md`. Spawn designer with that path (+ optional
+summary). Designer runs `doctest skill designer show` first.
 
-Spawn a designer subagent with the requirement file path (e.g.
-`REQUIREMENT-DESIGN-<slug>.md`) plus an optional short summary. The designer
-sub-agent runs `doctest skill designer show` as its first command (see **Role
-prompts** above).
+**Backfill — MUST tell the designer** (spawn message and/or requirement):
 
-Wait until the designer reports the doctest tree is written under
-`./tests/<feature>/`.
+- Mode: coverage backfill (implementation present)
+- Intent: **backfill** missing doctests for existing correct behavior
+- RED not required; GREEN expected for covered paths
+- Mixed GREEN/RED OK when some behaviors still missing
+- Do not invent must-fail assertions only for classic TDD theater
+
+Wait until the tree is under `./tests/<feature>/`.
 
 ## Phase 3 — Designer Questions (optional)
 
-If the designer yields questions, answer them and **resume the same designer
-session** — do not start a fresh designer.
+Answer questions by **resuming the same designer session**. Escalate
+domain questions to the user first. Repeat until designer completes.
 
-Resume the designer subagent with the answers (and escalate domain-specific
-questions to the user first).
-
-Repeat until the designer completes.
-
-## Phase 4 — Vet then RED
+## Phase 4 — Vet then run
 
 ```sh
 doctest vet ./tests/<feature>
 doctest test ./tests/<feature>
 ```
 
-`doctest vet` must pass — the tree is well-formed (including `## Version` and
-DSN in root `DOCTEST.md`, Request/Response/Run in the `DOCTEST.md` Go block,
-and `# Scenario` as the first section in every `SETUP.md`). Current spec
-version: `__DOCTEST_VERSION__`.
+`doctest vet` must pass (tree well-formed; version `__DOCTEST_VERSION__` — see
+SPEC below). Interpret `doctest test` per **Modes**:
 
-`doctest test` should fail (RED) since no implementation exists yet. If any
-test passes, re-examine the test design.
+- **Classic:** must be RED; any GREEN → re-examine design.
+- **Backfill:** GREEN expected for covered behavior; re-examine only vacuous
+  or wrong asserts.
+- **Mixed:** valid; seal the whole tree as-is.
 
 ## Phase 5 — Seal (once)
 
@@ -138,65 +131,54 @@ test passes, re-examine the test design.
 git add ./tests/<feature>
 ```
 
-Never seal more than once. Only tests get sealed, never code. If outside a git
-repo, ask the user before proceeding unsealed.
+Seal tests only, once. Outside a git repo, ask before proceeding unsealed.
+**Mixed suites seal as-is** (GREEN + RED together).
 
 ## Phase 6 — Implement
 
-Write `REQUIREMENT-IMPLEMENT-<slug>.md`. It must include: summarized context,
-feature summary, test tree structure, **"tests are sealed — do not modify"**,
-and the verify command.
+If backfill and all sealed tests are GREEN → **skip** (no implementer); go to
+Phase 8.
 
-Spawn an implementer subagent with the requirement file path (e.g.
-`REQUIREMENT-IMPLEMENT-<slug>.md`) plus an optional short summary. The
-implementer sub-agent runs `doctest skill implementer show` as its first
-command (see **Role prompts** above).
+Else write `REQUIREMENT-IMPLEMENT-<slug>.md`: context, summary, tree structure,
+**"tests are sealed — do not modify"**, verify command, which leaves were
+already GREEN vs still RED.
 
-Wait until the implementer reports all tests passing.
+Spawn implementer with that path. Implementer runs `doctest skill implementer
+show` first. Wait until all tests pass. Do not weaken already-GREEN sealed
+asserts.
 
 ## Phase 7 — Implementer Questions (optional)
 
-Same pattern as Phase 3: resume the **same implementer session** with answers
-until all tests pass.
-
-Resume the implementer subagent with answers or failure output from Phase 8.
+Resume the **same implementer session** with answers or Phase 8 failures until
+all pass.
 
 ## Phase 8 — Verify
 
 ```sh
 git diff ./tests/<feature>            # must be clean
-doctest vet ./tests/<feature>         # structure still valid
+doctest vet ./tests/<feature>
 doctest test ./tests/<feature>/...    # must be GREEN
 
-doctest test --label "ui-automation" ./tests/<feature>/... # if the ASSERT.md contains label header
-doctest test --label 'slow && ui-automation' ./tests/<feature>/... # --label accepts simple expr lie expr&&, || , ()
+doctest test --label "ui-automation" ./tests/<feature>/... # if ASSERT has label header
+doctest test --label 'slow && ui-automation' ./tests/<feature>/... # expr: &&, ||, ()
 
 doctest test ./...                    # no regressions
 ```
 
-If RED, feed failures back to the implementer (resume the same subagent
-session). If test files were modified, accept only with explicit justification
-(the test expected wrong behavior per spec).
-
-Report: test count, modifications accepted (with rationale).
+If RED → resume implementer. Accept test-file changes only with explicit
+justification (wrong expected per spec). Report test count and any accepted
+modifications.
 
 # Requirement File Naming
 
-- Design: `REQUIREMENT-DESIGN-<slug>.md`
+- Design: `REQUIREMENT-DESIGN-<slug>.md` — must state mode; backfill includes
+  Phase 2 handoff bullets
 - Implement: `REQUIREMENT-IMPLEMENT-<slug>.md`
-
-Pass only a brief prompt or requirement file path (plus optional summary) — not
-the role prompt.
 
 # Followup Requests
 
-Every followup (new feature, fix, amendment) restarts this workflow from
-Phase 1. Design and implement sessions are isolated — use their respective
-session IDs within each role.
-
-Designer and implementer sessions are always separate (different tasks). Once
-you establish a session for a role, keep that same session ID for all
-follow-ups within that role (runner resume).
+Every followup restarts at Phase 1. Keep designer and implementer sessions
+separate; reuse each role's session ID within that role.
 
 __DOCTEST_SPEC__
 

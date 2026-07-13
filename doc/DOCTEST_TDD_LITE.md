@@ -9,119 +9,93 @@ description: single-agent doctest TDD (design + implement inline, no sub-agent d
 
 TDD mode is mandatory **unless** one of these applies:
 
-1. **`no tdd:` prefix** — The user's message starts with `no tdd:`. Strip the
-   prefix and handle directly.
-2. **Doc-only change** — The change touches only documentation files (`.md`,
-   `README`, etc.) and modifies no source code. No TDD flow needed.
-3. **One-liner fix** — Before starting the expensive TDD loop, ask the user to
-   confirm: warn that TDD is slow and ask whether they want to proceed
-   with TDD or use `no tdd:` instead. Do not start TDD without confirmation.
+1. **`no tdd:` prefix** — Strip the prefix and handle directly.
+2. **Doc-only change** — Only documentation (`.md`, `README`, etc.); no source code.
+3. **One-liner fix** — Warn that TDD is slow; ask whether to proceed with TDD or use
+   `no tdd:`. Do not start TDD without confirmation.
 
-Otherwise TDD mode is mandatory. Everything below is non-negotiable.
+Otherwise TDD mode is mandatory.
 
-# TDD_LITE Gate — The One Rule
+# One Rule
 
-You are a **single agent** running doctest TDD. Every code change — features,
-bug fixes, trivial one-liners, variable renames, logging changes, config tweaks
-— MUST flow through:
+You are a **single agent** running doctest TDD. You write the doctest tree
+**and** the implementation. Every code change MUST flow through:
 
 ```
-design tests → RED → seal → implement → GREEN
+Classic TDD:       design tests → RED → seal → implement → GREEN
+Coverage backfill: design tests → (GREEN OK / mixed OK) → seal → implement only if RED remains → GREEN
 ```
 
-You write the doctest tree **and** the implementation yourself.
+You may use a sub-agent only for explore/analysis. All file edits (tests and
+source) are yours.
 
-If you've already reproduced a bug with written doctests, and confirm they're RED, then you can jump start from seal step. 
+# Modes
 
-You may use sub-agent to explore/analysis to narrow bug scope before writing
-tests. All file edits (tests and source) are yours.
+Infer mode from user wording and codebase during Phase 1. Do not force classic
+RED when the implementation is already present.
+
+**Classic TDD** when: greenfield / no real implementation; user wants failing
+tests first; paths under change are stubbed or unimplemented.
+
+**Coverage backfill** when: user asks to **backfill** coverage or says the
+fix/feature is already applied and only doctests are missing; source already
+implements the intended behavior; task is missing coverage for working code.
+
+If ambiguous, ask once in Phase 1 — default toward backfill when evidence is strong.
+
+**Still brainstorm in both modes** (Phase 1 is mandatory for backfill too).
+
+### Shortcuts
+
+- Already-reproduced bug with RED doctests → jump to seal.
+- Backfill: RED not required for leaves documenting correct behavior; GREEN
+  expected. Skip implement when all sealed tests are already GREEN.
 
 # Workflow (6 Phases)
 
-Every feature request, bug fix, or followup follows this loop.
-
 ## Phase 1 — Requirements
 
-Brainstorm with user. Produce a requirement file. Get explicit user approval
-before continuing.
+Brainstorm (both modes). Produce a requirement file; get explicit approval.
 
-Explicitly tell user:
+Auto-detect mode (see **Modes**). State it in the requirement file.
 
-1. What the underlying data models and storage layout (if any) are;
-2. What scenarios you will test, and expected output;
-3. How you gonna test that, prefer rerunable tests (doc-style tests or unit tests);
+Tell the user:
 
-For bugs: reproduce is critical. Use read-only explore/analysis if needed to
-narrow scope, then write failing doctests that capture the bug.
+1. Data models and storage layout (if any)
+2. Scenarios and expected output
+3. How you will test (prefer doctests)
+4. **Classic TDD** or **coverage backfill**, and why
 
-If there is anything needs clarification, list them and ask for user
-confirmation until no gap understanding user's intent.
+Bugs: explore if needed, then write doctests. Classic → failing doctests;
+backfill (fix applied) → **backfill** doctests of fixed behavior (GREEN OK).
+
+Clarify until intent is clear.
 
 ## Phase 2 — Design & Write Tests
 
-Design and materialize the doctest tree yourself. Follow the doc-style test
-specification(see below DOCTEST_SPEC and DOCTEST_DESIGN_SPEC)
+Design and materialize the doctest tree yourself under
+`<pkg>/tests/<feature>/`. Follow **DOCTEST_SPEC** and **DOCTEST_DESIGN_SPEC**
+below (MECE tree, Setup/Assert, DSN, session setup, output asserts).
 
-### Understand the requirement
+- If a tree already exists, find coverage gaps and **backfill** or update tests.
+- **Backfill mode:** assert existing correct behavior; GREEN expected; mixed
+  GREEN/RED OK when some behaviors still missing; do not invent must-fail
+  asserts only for classic TDD theater.
 
-Identify inputs, outputs, side effects, every flag/option/mode, happy paths,
-error paths, and edge cases.
-
-### Design the decision tree
-
-- Split on the **most significant** parameter at the root (e.g. operation mode)
-- Each grouping level narrows on exactly one parameter with **mutually
-  exclusive** branches
-- Recurse until concrete runnable leaves
-- Cover every valid path and every error path
-
-If a relevant doctest tree already exists, inspect it, find coverage gaps, and
-add or update tests.
-
-### Write the tree
-
-Materialize under `<pkg>/tests/<feature>/`:
-
-- Root `DOCTEST.md`: DSN, `## Version` (`__DOCTEST_VERSION__`), ASCII decision
-  tree diagram, test-leaf index, `## How to Run` (include `--label` when the tree
-  has labeled leaves — see **Running tests** below), and the Go block defining
-  `Request`, `Response`, and `Run`
-- Grouping nodes: `SETUP.md` only (no `ASSERT.md`)
-- Leaves: `SETUP.md` + `ASSERT.md`
-
-Generated tests expose `DOCTEST_ROOT` and `DOCTEST_SESSION_ID`. **`DOCTEST_SESSION_ID`
-is an injected variable** (not an env var you read in harness code). Reference it
-directly; do not call `os.Getenv("DOCTEST_SESSION_ID")` — `doctest vet` rejects it.
-
-When many leaves repeat expensive setup, use **file lock + cache + `DOCTEST_SESSION_ID`**
-to amortize shared work once per `doctest test` run (build binaries once, seed
-default archives once). See **Session-scoped shared setup** in the design spec.
-
-Coverage checklist — every leaf should cover:
-
-- Happy paths for valid input combinations
-- Error paths for invalid input
-- Edge cases (empty, zero, boundary, extremes)
-- Parameter interactions
-- Prefer more leaves over fewer
-
-If the feature is already correctly implemented and tests pass before any code
-change, report that to the user instead of unnecessary implementation.
-
-## Phase 3 — Vet then RED
+## Phase 3 — Vet then run
 
 ```sh
 doctest vet ./tests/<feature>
 doctest test ./tests/<feature>
 ```
 
-`doctest vet` must pass — the tree is well-formed (including `## Version` and
-DSN in root `DOCTEST.md`, Request/Response/Run in the `DOCTEST.md` Go block,
-and `# Scenario` as the first section in every `SETUP.md`). Current spec
-version: `__DOCTEST_VERSION__`.
+`doctest vet` must pass (tree well-formed; version `__DOCTEST_VERSION__` — see
+SPEC below). Interpret `doctest test` per **Modes**:
 
-`doctest test` should fail (RED) since no implementation exists yet. If any
-test passes, re-examine the test design.
+- **Classic:** must be RED; any GREEN → re-examine design.
+- **Backfill:** GREEN expected for covered behavior; re-examine only vacuous
+  or wrong asserts.
+- **Mixed:** valid; seal the whole tree as-is.
 
 ## Phase 4 — Seal (once)
 
@@ -129,30 +103,24 @@ test passes, re-examine the test design.
 git add ./tests/<feature>
 ```
 
-Never seal more than once. Only tests get sealed, never code. If outside a git
-repo, ask the user before proceeding unsealed.
+Seal tests only, once. Outside a git repo, ask before proceeding unsealed.
+**Mixed suites seal as-is** (GREEN + RED together).
 
 ## Phase 5 — Implement
 
-Write implementation code to make all sealed tests pass. Follow these rules:
+If backfill and all sealed tests are GREEN → **skip**; go to Phase 6. Report
+that production code was unchanged and doctests were backfilled only.
 
-- **Never modify sealed test files** — if an assertion seems wrong, ask the
-  user for clarification rather than editing tests
-- Place implementation in appropriate source files (not `_test.go` for doctest
-  harness logic)
-- Use types and signatures expected by the root `DOCTEST.md` Go block
-- Use the injected `DOCTEST_SESSION_ID` variable for per-run session-scoped cache
-  paths or file-lock coordination (not `os.Getenv`)
+Otherwise implement until sealed tests pass:
 
-Run tests until GREEN:
+- **Never modify sealed test files** — if an assert seems wrong, ask the user
+- Do not weaken already-GREEN sealed asserts
+- Put implementation in source (not `_test.go` for harness logic)
+- Match `Request` / `Response` / `Run` from root `DOCTEST.md`
+- Use injected `DOCTEST_SESSION_ID` (not `os.Getenv`)
 
 ```sh
 doctest test ./tests/<feature>
-```
-
-If any test fails, fix implementation and re-run. Also run full regression:
-
-```sh
 doctest test ./...
 ```
 
@@ -160,46 +128,30 @@ doctest test ./...
 
 ```sh
 git diff ./tests/<feature>            # must be clean
-doctest vet ./tests/<feature>         # structure still valid
+doctest vet ./tests/<feature>
 doctest test ./tests/<feature>/...    # must be GREEN
 
-doctest test --label "ui-automation" ./tests/<feature>/... # if the ASSERT.md contains label header
-doctest test --label 'slow && ui-automation' ./tests/<feature>/... # --label accepts simple expr lie expr&&, || , ()
+doctest test --label "ui-automation" ./tests/<feature>/... # if ASSERT has label header
+doctest test --label 'slow && ui-automation' ./tests/<feature>/... # expr: &&, ||, ()
 
 doctest test ./...                    # no regressions
 ```
 
-If RED, fix implementation and repeat Phase 5. If test files were modified,
-accept only with explicit user justification (the test expected wrong behavior
-per spec).
-
-Report: test count, modifications accepted (with rationale).
+If RED → fix implementation (Phase 5). Accept test-file changes only with
+explicit user justification. Report test count and any accepted modifications.
 
 # Requirement File Naming
 
-Use a single file per feature:
+Single file: `REQUIREMENT-<slug>.md`
 
-- `REQUIREMENT-<slug>.md`
-
-Include:
-
-- Summarized context and feature summary
-- Data models and storage layout (if any)
-- Test scenarios and expected outputs
-- Planned test tree structure
-- After sealing: **"tests are sealed — do not modify"** and the verify command
-
-Use `--requirement` when invoking tools that accept it, or keep the file in the
-workspace for your own reference during the loop.
+Include: context/summary, mode (classic or backfill + why), data models,
+scenarios, planned tree. After seal: **"tests are sealed — do not modify"**
+and the verify command.
 
 # Followup Requests
 
-Every followup (new feature, fix, amendment) restarts this workflow from
-Phase 1.
-
-Ask the user directly when you need clarification. Do not use
-`yield-pending-questions` or sub-agent session IDs — there is no parent
-orchestrator.
+Every followup restarts at Phase 1. Ask the user directly for clarification
+(no parent orchestrator / yield-pending-questions).
 
 # SPECS
 
