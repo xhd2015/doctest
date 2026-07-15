@@ -51,8 +51,8 @@ Return absolute paths for every tree and node you discuss.
 ## Workflow
 
 1. **Load the spec**
-   - Treat `doctest skill doc-spec show`, `doctest skill code-spec show`,
-     `doctest skill output-assert show`, and the design spec below as the
+   - Treat `doctest skill doc-spec --show`, `doctest skill code-spec --show`,
+     `doctest skill output-assert --show`, and the design spec below as the
      authority for best practices.
    - Key design rules: clear DSN, MECE siblings, significance-ordered narrowing,
      output templates via `github.com/xhd2015/doctest/assert` for CLI/text matching,
@@ -101,7 +101,7 @@ Return absolute paths for every tree and node you discuss.
      - **Major**: flag CLI stdout v2 templates that omit trailing `\n` (closing backtick on the same line as the last content line). This pattern forces implementations to omit the final newline and breaks real terminals.
      - **Suggestion** (not must-fix): flag `strings.Contains` loops, `strings.Index`/`Count` parsing, ad-hoc ANSI color helpers when the assert DSL covers the case; flag new v1 tag templates when v2 would be clearer.
      - Non-trivial templates should have a matching `## Expected Output` prose block when present; the prose mirror should remain readable as user-facing output with annotations, not as a list of internals.
-   - Cite `doctest skill output-assert show` for migration guidance.
+   - Cite `doctest skill output-assert --show` for migration guidance.
 
 8. **Audit run profile and labels**
    - Enumerate every leaf `ASSERT.md`; read optional YAML frontmatter (`label`, `explanation`).

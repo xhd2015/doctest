@@ -222,7 +222,7 @@ Import target package directly. For unexported functions, use **`TestExported_`*
 When a leaf asserts **CLI or text output** (`resp.Stdout`, `resp.Stderr`, `resp.Output`, `resp.Summary`, …), prefer the **`github.com/xhd2015/doctest/assert`** template DSL over `strings.Contains` loops and hand-rolled parsing.
 
 ```sh
-doctest skill output-assert show    # full tag registry + API
+doctest skill output-assert --show    # full tag registry + API
 ```
 
 ### When to use
@@ -290,4 +290,4 @@ Abstract fixture data into standalone files, not inline code.
 
 Code reads them with directly filename reference as each `ASSERT.md` runs in its own directory.
 
-> Full spec, run: `doctest skill doc-spec show` && `doctest skill code-spec show` && `doctest skill output-assert show`
+> Full spec, run: `doctest skill doc-spec --show` && `doctest skill code-spec --show` && `doctest skill output-assert --show`

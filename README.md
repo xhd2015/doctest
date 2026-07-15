@@ -15,7 +15,7 @@ go install github.com/xhd2015/doctest/cmd/doctest@latest
 Paste the following prompt into your agent(claude code, codex, opencode etc.):
 
 ```md
-Follow the guideline of `doctest skill doc-spec show` and `doctest skill code-spec show`, write tests first, run doctest test to ensure them RED(TDD), then seal them(`git add <tests>`); then implement the feature and run doctest until all GREEN.
+Follow the guideline of `doctest skill doc-spec --show` and `doctest skill code-spec --show`, write tests first, run doctest test to ensure them RED(TDD), then seal them(`git add <tests>`); then implement the feature and run doctest until all GREEN.
 
 <your feature here>
 ```
@@ -30,7 +30,7 @@ doctest test -v ./...
 doctest skill --list
 
 # the primary tdd-flow skill you need
-doctest skill tdd install --codex --opencode
+doctest skill tdd --install --codex --opencode
 ```
 
 # Ignore TDD requirement files (git)
@@ -39,8 +39,9 @@ The adversarial TDD flow writes **workspace-local requirement files** for the
 designer and implementer roles (not product source):
 
 ```text
-REQUIREMENT-DESIGN-<slug>.md
-REQUIREMENT-IMPLEMENT-<slug>.md
+REQUIREMENT_DESIGN_PHASE_<n>.md
+REQUIREMENT_IMPLEMENT_PHASE_<n>.md
+REQUIREMENT_PHASE_<n>.md          # tdd-lite (single file per plan phase)
 ```
 
 These are ephemeral agent artifacts and should not be committed. Prefer a
@@ -50,21 +51,26 @@ These are ephemeral agent artifacts and should not be committed. Prefer a
 # once: point git at a global ignore file (if not already set)
 git config --global core.excludesfile ~/.gitignore
 
-# append the two patterns (any directory, any repo)
+# append the patterns (any directory, any repo)
 cat >> ~/.gitignore <<'EOF'
+REQUIREMENT_DESIGN_PHASE_*.md
+REQUIREMENT_IMPLEMENT_PHASE_*.md
+REQUIREMENT_PHASE_*.md
+# legacy hyphenated names (older skill revisions)
 REQUIREMENT-DESIGN-*.md
 REQUIREMENT-IMPLEMENT-*.md
+REQUIREMENT-*.md
 EOF
 ```
 
 Verify:
 
 ```sh
-git check-ignore -v REQUIREMENT-DESIGN-example.md
-# → ~/.gitignore:N:REQUIREMENT-DESIGN-*.md	REQUIREMENT-DESIGN-example.md
+git check-ignore -v REQUIREMENT_DESIGN_PHASE_1.md
+# → ~/.gitignore:N:REQUIREMENT_DESIGN_PHASE_*.md	REQUIREMENT_DESIGN_PHASE_1.md
 ```
 
-Alternatively, add the same two lines to a **repo** `.gitignore` if you only
+Alternatively, add the same lines to a **repo** `.gitignore` if you only
 want them ignored in one project.
 
 Notes:
@@ -72,7 +78,7 @@ Notes:
 - Global ignores only affect **untracked** files. Already-tracked requirement
   files stay tracked until you `git rm --cached` them.
 - Do **not** ignore sealed doctest trees under `tests/` — only the
-  `REQUIREMENT-*.md` orchestrator files.
+  `REQUIREMENT_*.md` / `REQUIREMENT-*.md` orchestrator files.
 
 ## Commands
 
@@ -87,8 +93,10 @@ Commands:
   build <dir>
   test <dir>
   skill --list
-  skill doc-spec show|install
-  skill code-spec show|install
+  skill --show <name>
+  skill <name> --show
+  skill --install <name> [OPTIONS]
+  skill <name> --install [OPTIONS]
 ```
 
 ### validate
@@ -177,8 +185,10 @@ Show or install specification documents as IDE skills.
 
 ```sh
 doctest skill --list
-doctest skill doc-spec show|install
-doctest skill code-spec show|install
+doctest skill --show doc-spec
+doctest skill doc-spec --show
+doctest skill --install tdd --codex --opencode
+doctest skill tdd --install --global
 ```
 
 ## Architecture
@@ -241,7 +251,7 @@ A doc-style test is a directory tree where:
 - `ASSERT.md` embeds `func Assert` to verify outcomes.
 - `DOCTEST.md` at the root provides an overview and run instructions.
 
-Run `doctest skill doc-spec show` for the full specification.
+Run `doctest skill doc-spec --show` for the full specification.
 
 ## Development
 

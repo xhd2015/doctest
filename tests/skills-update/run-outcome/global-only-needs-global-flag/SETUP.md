@@ -4,7 +4,7 @@
 
 ```
 # skill installed under $HOME/.agents/skills only
-doctest skill tdd install --global -> ~/.agents/skills/doctest-tdd/SKILL.md
+doctest skill tdd --install --global -> ~/.agents/skills/doctest-tdd/SKILL.md
 
 # default-scope update sees no local installs for any registry skill
 doctest skills update -> skill not installed line per registry name
@@ -25,7 +25,7 @@ func Setup(t *testing.T, req *Request) error {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	req.PreInstalls = []PreInstallCLI{{
-		Args: []string{"skill", "tdd", "install", "--global"},
+		Args: []string{"skill", "tdd", "--install", "--global"},
 	}}
 	req.Args = []string{"skills", "update"}
 	return nil

@@ -21,8 +21,10 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     for _, want := range []string{
         "doctest-tdd-lite",
         "single-agent doctest TDD",
-        "Phase 1 — Requirements",
-        "Phase 6 — Verify",
+        "TDD step 1 — Requirements",
+        "TDD step 6 — Verify",
+        "Plan phases (outer loop)",
+        "REQUIREMENT_PHASE_",
         "design tests → RED → seal → implement → GREEN",
         "<DOCTEST_DESIGN_SPEC>",
         "DSN (Domain Specific Notion)",

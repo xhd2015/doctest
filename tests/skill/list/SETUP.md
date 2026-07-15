@@ -4,10 +4,10 @@
 
 ```
 # expose embedded spec documents
-doctest skill <name> show -> embedded .md doc -> stdout
+doctest skill <name> --show -> embedded .md doc -> stdout
 
 # list available skills
-doctest skill list -> skill names -> stdout
+doctest skill --list -> skill names -> stdout
 ```
 
 ## Preconditions

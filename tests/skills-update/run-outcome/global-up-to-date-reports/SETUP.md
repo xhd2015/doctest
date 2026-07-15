@@ -3,7 +3,7 @@
 **Feature**: `--global` batch update reports installed global skills
 
 ```
-doctest skill tdd install --global -> ~/.agents/skills/doctest-tdd/SKILL.md
+doctest skill tdd --install --global -> ~/.agents/skills/doctest-tdd/SKILL.md
 doctest skills update --global -> Skill is up to date for global target
 ```
 
@@ -22,7 +22,7 @@ func Setup(t *testing.T, req *Request) error {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	req.PreInstalls = []PreInstallCLI{{
-		Args: []string{"skill", "tdd", "install", "--global"},
+		Args: []string{"skill", "tdd", "--install", "--global"},
 	}}
 	req.Args = []string{"skills", "update", "--global"}
 	return nil

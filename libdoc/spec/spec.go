@@ -52,7 +52,7 @@ func Install(name string, args []string) error {
 	return install.HandleInstall(install.InstallOptions{
 		SkillDirName: ent.SkillName,
 		SkillContent: content,
-		Usage:        "doctest skill " + name + " install",
+		Usage:        "doctest skill --install " + name,
 	}, args)
 }
 

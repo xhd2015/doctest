@@ -103,7 +103,7 @@ Translate the proven prototype into doctest leaves — do not re-guess inputs.
    - When the bug is about CLI stdout/stderr, formatted text, or trace output,
      assert on the **entire expected output** as one contract.
    - Prefer `assert.Output(t, actual, template)` with a full template (see
-     output-assert spec: `doctest skill output-assert show`).
+     output-assert spec: `doctest skill output-assert --show`).
    - Use `__PLACEHOLDER__` for variable ports/paths/timestamps;
      `...N lines omitted...` only when a middle section is genuinely
      non-deterministic.

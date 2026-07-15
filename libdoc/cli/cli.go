@@ -11,13 +11,14 @@ import (
 
 	lessflags "github.com/xhd2015/less-flags"
 
+	"github.com/xhd2015/agent-pro/agent/subagent"
 	"github.com/xhd2015/doctest/libdoc/agent"
 	"github.com/xhd2015/doctest/libdoc/designer"
 	"github.com/xhd2015/doctest/libdoc/edit"
 	"github.com/xhd2015/doctest/libdoc/implementer"
 	"github.com/xhd2015/doctest/libdoc/runner"
 	"github.com/xhd2015/doctest/libdoc/spec"
-	"github.com/xhd2015/agent-pro/agent/subagent"
+	"github.com/xhd2015/skills/skill_file"
 )
 
 const usage = `Usage: doctest <command> [options]
@@ -38,14 +39,13 @@ Agents:
 Skills:
   skills update [--global] [--cursor] [--codex] [--dry-run]
   skill --list
-  skill doc-spec show|install
-  skill code-spec show|install
-  skill tdd show|install
-  skill output-assert show|install
-  skill implementer show|install
-  skill designer show|install
+  skill --show <name>
+  skill <name> --show
+  skill --install <name> [OPTIONS]
+  skill <name> --install [OPTIONS]
 
 Run doctest <command> --help for command-specific options.
+Run doctest skill --help and doctest skill --install <name> --help for skill flags.
 
 Examples:
   doc test -v ./...
@@ -69,21 +69,38 @@ Update already-installed doctest skills (SKILL.md must exist at target paths).
 Commands:
   update    Refresh installed skills from the doctest skill registry
 
-Options for update match doctest skill install locations:
+Options for update match doctest skill --install locations:
   --global, --cursor, --codex, --opencode, --general-agents, --dry-run
+
+Run doctest skills update --help for update flags.
 `
 
 const skillUsage = `Usage: doctest skill --list
-       doctest skill doc-spec show|install
-       doctest skill code-spec show|install
-       doctest skill tdd show|install
-       doctest skill tdd-cli-agent show|install
-       doctest skill tdd-lite show|install
-       doctest skill reproduce show|install
-       doctest skill review show|install
-       doctest skill output-assert show|install
-       doctest skill implementer show|install
-       doctest skill designer show|install
+       doctest skill --show <name> [--header]
+       doctest skill <name> --show [--header]
+       doctest skill --install <name> [OPTIONS] [<dir>]
+       doctest skill <name> --install [OPTIONS] [<dir>]
+
+List, print, or install a registered doctest skill.
+
+Registered skills:
+  doc-spec, code-spec, tdd, tdd-cli-agent, tdd-lite,
+  reproduce, review, output-assert, implementer, designer
+
+Both flag orders are valid (--show/--install before or after <name>).
+
+Options:
+  --list, -l     List registered skill names
+  --show         Print skill content to stdout
+  --header       With --show: print YAML frontmatter only
+  --install      Install skill SKILL.md (see --install --help for targets)
+  -h, --help     Show this help
+
+Install example:
+  doctest skill --install tdd --codex --opencode
+  doctest skill tdd --install --global
+
+Run doctest skill --install <name> --help for install target flags.
 `
 
 const vetUsage = `Usage: doctest vet [-v|--verbose] [--changed] <dir...>
@@ -479,52 +496,162 @@ func runSkills(args []string) error {
 	}
 }
 
+// skill action flags (Shape 2 multi-skill host): --show / --install / --list only.
+// Both orders are valid: skill --show <name> and skill <name> --show.
+type skillAction string
+
+const (
+	skillActionShow    skillAction = "show"
+	skillActionInstall skillAction = "install"
+	skillActionList    skillAction = "list"
+	skillActionHelp    skillAction = "help"
+)
+
+type parsedSkillArgs struct {
+	Action skillAction
+	Header bool
+	Rest   []string
+}
+
+func parseSkillArgs(args []string) (parsedSkillArgs, error) {
+	var (
+		show    bool
+		install bool
+		list    bool
+		header  bool
+		help    bool
+		rest    []string
+	)
+	for _, a := range args {
+		switch a {
+		case "--show":
+			show = true
+		case "--install":
+			install = true
+		case "--list", "-l":
+			list = true
+		case "--header":
+			header = true
+		case "-h", "--help":
+			help = true
+		default:
+			rest = append(rest, a)
+		}
+	}
+
+	// Install owns its own --help (targets, --global, etc.).
+	if help && install && !show && !list {
+		rest = append(rest, "--help")
+		return parsedSkillArgs{Action: skillActionInstall, Rest: rest}, nil
+	}
+	// Skill-level help: bare --help, or --help with --show/--list.
+	if help {
+		return parsedSkillArgs{Action: skillActionHelp, Rest: rest}, nil
+	}
+
+	n := 0
+	var action skillAction
+	if show {
+		n++
+		action = skillActionShow
+	}
+	if install {
+		n++
+		action = skillActionInstall
+	}
+	if list {
+		n++
+		action = skillActionList
+	}
+	if n == 0 {
+		return parsedSkillArgs{}, fmt.Errorf("expected one of --show, --install, or --list (try --help)")
+	}
+	if n > 1 {
+		if show && install {
+			return parsedSkillArgs{}, fmt.Errorf("cannot combine --show and --install")
+		}
+		return parsedSkillArgs{}, fmt.Errorf("expected exactly one of --show, --install, or --list (try --help)")
+	}
+	if header && action != skillActionShow {
+		return parsedSkillArgs{}, fmt.Errorf("--header is only valid with --show")
+	}
+	return parsedSkillArgs{Action: action, Header: header, Rest: rest}, nil
+}
+
 func runSkill(args []string) error {
-	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
+	if len(args) == 0 {
 		fmt.Print(skillUsage)
 		return nil
 	}
-	var listFlag bool
-	remainArgs, err := lessflags.Bool("--list", &listFlag).
-		Help("-h,--help", skillUsage).
-		HelpNoExit().
-		StopOnFirstArg().
-		Parse(args)
+	parsed, err := parseSkillArgs(args)
 	if err != nil {
-		if errors.Is(err, lessflags.ErrHelp) {
-			return nil
-		}
 		return err
 	}
-	if listFlag {
-		fmt.Println("doc-spec")
-		fmt.Println("code-spec")
-		fmt.Println("tdd")
-		fmt.Println("tdd-cli-agent")
-		fmt.Println("tdd-lite")
-		fmt.Println("reproduce")
-		fmt.Println("review")
-		fmt.Println("output-assert")
-		fmt.Println("implementer")
-		fmt.Println("designer")
+	switch parsed.Action {
+	case skillActionHelp:
+		fmt.Print(skillUsage)
 		return nil
-	}
-	if len(remainArgs) < 2 {
-		return fmt.Errorf("skill requires doc-spec, code-spec, tdd, tdd-cli-agent, tdd-lite, reproduce, review, output-assert, implementer, or designer plus show or install")
-	}
-	switch remainArgs[1] {
-	case "show":
-		content, err := spec.Content(remainArgs[0])
+	case skillActionList:
+		for _, name := range []string{
+			"doc-spec",
+			"code-spec",
+			"tdd",
+			"tdd-cli-agent",
+			"tdd-lite",
+			"reproduce",
+			"review",
+			"output-assert",
+			"implementer",
+			"designer",
+		} {
+			fmt.Println(name)
+		}
+		return nil
+	case skillActionShow:
+		if len(parsed.Rest) == 0 {
+			return fmt.Errorf("expected skill name for --show (try --help)")
+		}
+		if len(parsed.Rest) > 1 {
+			return fmt.Errorf("unexpected arguments: %v", parsed.Rest[1:])
+		}
+		content, err := spec.Content(parsed.Rest[0])
 		if err != nil {
 			return err
 		}
+		if parsed.Header {
+			out, err := skill_file.FormatHeaderWithDelimiters(content)
+			if err != nil {
+				return err
+			}
+			fmt.Print(out)
+			return nil
+		}
 		fmt.Print(content)
 		return nil
-	case "install":
-		return spec.Install(remainArgs[0], remainArgs[2:])
+	case skillActionInstall:
+		name, installArgs, err := splitSkillName(parsed.Rest)
+		if err != nil {
+			return fmt.Errorf("expected skill name for --install (try --help)")
+		}
+		return spec.Install(name, installArgs)
 	default:
-		return fmt.Errorf("unknown skill action: %s", remainArgs[1])
+		return fmt.Errorf("unknown skill action: %s", parsed.Action)
 	}
+}
+
+// splitSkillName takes the first non-flag token as the skill name; remaining
+// tokens (including flags that appeared before the name) are install args.
+func splitSkillName(rest []string) (name string, installArgs []string, err error) {
+	for i, a := range rest {
+		if strings.HasPrefix(a, "-") {
+			continue
+		}
+		name = a
+		installArgs = append(installArgs, rest[:i]...)
+		installArgs = append(installArgs, rest[i+1:]...)
+		return name, installArgs, nil
+	}
+	return "", nil, fmt.Errorf("missing skill name")
 }
 
 func runEdit(args []string) error {

@@ -39,6 +39,6 @@ Run `doctest vet <dir>` to validate tree structure before `doctest test` or
   `go test` shell-outs, reading `DOCTEST_SESSION_ID` via `os.Getenv` /
   `os.LookupEnv` / `syscall.Getenv` instead of the injected variable)
 
-See `doctest skill doc-spec show` and `doctest skill code-spec show` for the
-full prose and code rules; see the design spec (`doctest skill designer show`)
+See `doctest skill doc-spec --show` and `doctest skill code-spec --show` for the
+full prose and code rules; see the design spec (`doctest skill designer --show`)
 for DSN and Scenario semantics.

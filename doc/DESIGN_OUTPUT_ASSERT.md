@@ -1,12 +1,12 @@
 # Output Assert DSL — Design Document
 
-> **Status:** **v2 implemented** (`github.com/xhd2015/doctest/assert`). **Canonical reference:** `doc/DOCTEST_OUTPUT_ASSERT.md` and `doctest skill output-assert show`.
+> **Status:** **v2 implemented** (`github.com/xhd2015/doctest/assert`). **Canonical reference:** `doc/DOCTEST_OUTPUT_ASSERT.md` and `doctest skill output-assert --show`.
 >
 > **Package:** `github.com/xhd2015/doctest/assert` (v2); v1 in `assert/legacy_v1/`
 >
 > **Goal:** A readable template language for asserting CLI (and similar text) output in doctest `ASSERT.md` leaves, replacing ad-hoc `strings.Contains` / hand-rolled parsing.
 >
-> **Skill:** `doctest skill output-assert show`
+> **Skill:** `doctest skill output-assert --show`
 >
 > ## v2 authoring quick start (current)
 >
@@ -1323,7 +1323,7 @@ On approval, the implementer will:
 |----|----------|
 | **A** | **Full tag spec** embedded in design spec (§3 content), not link-only |
 | **B** | `## Expected Output` in ASSERT.md — **advertised, not mandatory** (`doctest vet` unchanged) |
-| **C** | New standalone skill: **`doctest skill output-assert show\|install`** |
+| **C** | New standalone skill: **`doctest skill output-assert --show` / `--install`** |
 | **D** | Review flags legacy `strings.Contains` / hand-rolled parsing as **suggestion** severity, not must-fix |
 | **E** | This file: status **Implemented** + authoring quick start (above) |
 
@@ -1335,7 +1335,7 @@ On approval, the implementer will:
 | `doc/doc.go` | `//go:embed DOCTEST_OUTPUT_ASSERT.md`; `Content()` case |
 | `libdoc/spec/spec.go` | `entries["output-assert"]` |
 | `libdoc/cli/cli.go` | List `output-assert` in skill help + usage |
-| `doc/snippets/DOCTEST_DESIGN_SPEC.md` | New **## Output assertions** — full §3 tag registry + when-to-use table + `assert.Output` example; pointer to `doctest skill output-assert show` |
+| `doc/snippets/DOCTEST_DESIGN_SPEC.md` | New **## Output assertions** — full §3 tag registry + when-to-use table + `assert.Output` example; pointer to `doctest skill output-assert --show` |
 | `doc/DOC_STYLE_TEST_CODE_SPECIFICATION.md` | Replace `strings.Contains` exemplars; document `import assert`, `Output`, `Match`+`Contains()` |
 | `doc/DOC_STYLE_TEST_SPECIFICATION.md` | ASSERT format: optional `## Expected Output` (recommended prose mirror) |
 | `doc/DOCTEST_REVIEW.md` | Checklist + anti-patterns + report item **Output assertions**; suggestion severity for legacy patterns |
@@ -1385,8 +1385,8 @@ Body sections (condensed from this design doc):
 
 ```
 doctest skill --list          # includes output-assert
-doctest skill output-assert show
-doctest skill output-assert install --cursor
+doctest skill output-assert --show
+doctest skill output-assert --install --cursor
 ```
 
 Update `tests/skill/list/ASSERT.md` want list if it enumerates skills (mechanical, user said no new tests — **only if list test breaks**).

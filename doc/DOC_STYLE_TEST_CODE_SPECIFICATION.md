@@ -3,7 +3,7 @@ name: doc-style-test-code-specification
 description: when user mentions doc-style test, with code written inside the docs
 ---
 
-This specification builds on top of `doctest skill doc-spec show`.
+This specification builds on top of `doctest skill doc-spec --show`.
 It adds executable Go code to doc-style test documents, turning prose test cases
 into runnable, verifiable tests.
 
@@ -138,7 +138,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error)
 
 When validating **CLI or text output**, use the output assert template DSL instead
 of `strings.Contains` loops or hand-rolled `strings.Index` / `strings.Count`
-parsing. Full reference: `doctest skill output-assert show`.
+parsing. Full reference: `doctest skill output-assert --show`.
 
 ```go
 import "github.com/xhd2015/doctest/assert"

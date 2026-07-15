@@ -8,20 +8,20 @@ wiring through `libdoc/spec` into `install.HandleUpdateMany`.
 Participants:
 
 - **doctest CLI** — built from `cmd/doctest`; exposes `skills` with `update` and
-  per-skill `install` via the existing `skill` command shape.
+  per-skill `--install` via the existing `skill` command shape.
 - **Skill registry** — `libdoc/spec` maps short names (`tdd`, `designer`, …) to
   on-disk `SkillDirName` values and embedded markdown content.
 - **Install/update library** — `github.com/xhd2015/skills/install` performs
   filesystem work; update only touches dirs that already contain `SKILL.md`.
 - **Ephemeral project directory** — subprocess cwd for CLI invocations; may
-  receive pre-install via `doctest skill <name> install`.
+  receive pre-install via `doctest skill <name> --install`.
 
 Behaviors:
 
 - **`doctest skills update`** — walks every registry skill in stable CLI-name
   order; updates installed targets via `InstallTo`; prints `skill not installed:
   <name>` when no target has `SKILL.md` at the resolved scope.
-- **`doctest skill tdd install`** — seeds one skill before batch update tests.
+- **`doctest skill tdd --install`** — seeds one skill before batch update tests.
 - **`doctest skills --help`** — documents the `update` subcommand.
 
 ## Decision Tree
@@ -72,7 +72,7 @@ import (
 )
 
 type PreInstallCLI struct {
-	Args []string // e.g. []string{"skill", "tdd", "install"}
+	Args []string // e.g. []string{"skill", "tdd", "--install"}
 }
 
 type Request struct {

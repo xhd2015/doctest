@@ -395,7 +395,7 @@ go test ./libdoc/agent/ -run TestImplement -v
 2. **`implement.go`** — `yield-pending-questions` binary handler
 3. **`cli.go`** — add `implement` sub-command + dispatch hook
 4. **`implement_test.go`** — doctests (using fake-opencode)
-5. **`doc.go`** — embed the spec doc (optional, for `skill show`)
+5. **`doc.go`** — embed the spec doc (optional, for `skill --show`)
 
 ---
 

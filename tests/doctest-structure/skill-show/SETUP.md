@@ -13,11 +13,11 @@ resolved output must not contain __DOCTEST_VERSION__
 ## Preconditions
 
 - `cmd/doctest/VERSION.txt` is the single source of truth (currently `0.0.2`).
-- `doctest skill tdd|tdd-lite|designer|implementer show` resolves the placeholder at runtime.
+- `doctest skill tdd|tdd-lite|designer|implementer --show` resolves the placeholder at runtime.
 
 ## Steps
 
-1. Run the leaf's `doctest skill <name> show` command.
+1. Run the leaf's `doctest skill <name> --show` command.
 2. Assert stdout contains the canonical version and no placeholder.
 
 ```go

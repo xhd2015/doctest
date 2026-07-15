@@ -56,15 +56,15 @@ Use the **first** option that applies:
 | **1 — Native subagent/task** | Your runner exposes a subagent or task tool (e.g. Task, runner-native subagent API) | Spawn/resume subagents with requirement as the task. The sub-agent loads its own role prompt — see **Role prompts** below. |
 | **2 — CLI fallback** | No native subagent mechanism, or you need doctest session hooks (`yield-pending-questions`, `--status`, progress reporting) | `doctest agent design` / `doctest agent implement` |
 
-**Role prompts** — the **orchestrator does not** run `doctest skill designer show` or
-`doctest skill implementer show`. Pass only a brief, distilled requirement (or
+**Role prompts** — the **orchestrator does not** run `doctest skill designer --show` or
+`doctest skill implementer --show`. Pass only a brief, distilled requirement (or
 the requirement file path) when spawning the sub-agent.
 
 Tell each sub-agent **must** run its role command as its **first** step (via `bash`):
 
-- **Designer**: `doctest skill designer show` — read the output and follow it as
+- **Designer**: `doctest skill designer --show` — read the output and follow it as
   the role/system instructions for the rest of the session.
-- **Implementer**: `doctest skill implementer show` — same pattern.
+- **Implementer**: `doctest skill implementer --show` — same pattern.
 
 Do not inline or pre-distill the role prompt in the orchestrator's spawn message;
 the sub-agent loads the canonical prompt itself.
@@ -102,7 +102,7 @@ Write `REQUIREMENT-DESIGN-<context-summary-and-feature-slug>.md` from Phase 1.
 
 ### Preferred — native subagent/task
 
-Spawn a subagent with requirement (short description of file path, e.g. `REQUIREMENT-DESIGN-<slug>.md`) plus an optional short summary. the designer sub-agent run `doctest skill designer show` it as its
+Spawn a subagent with requirement (short description of file path, e.g. `REQUIREMENT-DESIGN-<slug>.md`) plus an optional short summary. the designer sub-agent run `doctest skill designer --show` it as its
 first command (see **Role prompts** above).
 
 Wait until the designer reports the doctest tree is written under
@@ -172,7 +172,7 @@ and the verify command.
 
 ### Preferred — native subagent/task
 
-Spawn a subagent with requirement (short description of file path, e.g. `REQUIREMENT-IMPLEMENT-<slug>.md`) plus an optional short summary. the implementer sub-agent runs ``doctest skill implementer show` as its
+Spawn a subagent with requirement (short description of file path, e.g. `REQUIREMENT-IMPLEMENT-<slug>.md`) plus an optional short summary. the implementer sub-agent runs ``doctest skill implementer --show` as its
 first command (see **Role prompts** above).
 
 Wait until the implementer reports all tests passing.

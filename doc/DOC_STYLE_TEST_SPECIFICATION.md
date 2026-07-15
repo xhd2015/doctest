@@ -241,7 +241,7 @@ It has structured sections; use only those relevant to the specific scenario:
 Optional but **recommended** when asserting CLI or text output with the
 `github.com/xhd2015/doctest/assert` DSL. Fenced block mirrors the template
 passed to `assert.Output` — not required by `doctest vet`. See
-`doctest skill output-assert show`.
+`doctest skill output-assert --show`.
 
 ```
 ---

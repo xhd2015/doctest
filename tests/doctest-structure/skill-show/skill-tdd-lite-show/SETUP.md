@@ -1,10 +1,10 @@
 # Scenario
 
-**Feature**: `doctest skill tdd-lite show` includes the resolved spec version
+**Feature**: `doctest skill tdd-lite --show` includes the resolved spec version
 
 ```
 # TDD lite skill document served to stdout
-doctest skill tdd-lite show -> DOCTEST_TDD_LITE.md with version 0.0.2
+doctest skill tdd-lite --show -> DOCTEST_TDD_LITE.md with version 0.0.2
 ```
 
 ## Preconditions
@@ -13,13 +13,13 @@ doctest skill tdd-lite show -> DOCTEST_TDD_LITE.md with version 0.0.2
 
 ## Steps
 
-1. Run `doctest skill tdd-lite show`.
+1. Run `doctest skill tdd-lite --show`.
 
 ```go
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-	req.Args = []string{"skill", "tdd-lite", "show"}
+	req.Args = []string{"skill", "tdd-lite", "--show"}
 	return nil
 }
 ```
