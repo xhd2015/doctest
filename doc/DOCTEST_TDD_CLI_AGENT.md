@@ -98,11 +98,14 @@ If there is anything needs clarification, list them and ask for user confirmatio
 
 ## Phase 2 — Delegate Test Design
 
-Write `REQUIREMENT-DESIGN-<context-summary-and-feature-slug>.md` from Phase 1.
+Write `/tmp/REQUIREMENT-DESIGN-<slug>.md` from Phase 1 (or
+`/tmp/REQUIREMENT-DESIGN-PHASE-{N}-<slug>.md` when a plan phase is active).
 
 ### Preferred — native subagent/task
 
-Spawn a subagent with requirement (short description of file path, e.g. `REQUIREMENT-DESIGN-<slug>.md`) plus an optional short summary. the designer sub-agent run `doctest skill designer --show` it as its
+Spawn a subagent with requirement (short description of file path, e.g.
+`/tmp/REQUIREMENT-DESIGN-<slug>.md`) plus an optional short summary. the
+designer sub-agent run `doctest skill designer --show` it as its
 first command (see **Role prompts** above).
 
 Wait until the designer reports the doctest tree is written under
@@ -112,7 +115,7 @@ Wait until the designer reports the doctest tree is written under
 
 ```sh
 # please wait enough for any sub-agent, if timeout required, set to 1h
-doctest agent design --timeout 1h --requirement REQUIREMENT-DESIGN-<context-summary-and-feature-slug>.md
+doctest agent design --timeout 1h --requirement /tmp/REQUIREMENT-DESIGN-<slug>.md
 
 # or for short requirement or followup
 doctest agent design --timeout 1h <<EOF
@@ -166,13 +169,16 @@ repo, ask the user before proceeding unsealed.
 
 ## Phase 6 — Implement
 
-Write `REQUIREMENT-IMPLEMENT-<slug>.md`. It must include: summarized context,
-feature summary, test tree structure, **"tests are sealed — do not modify"**,
-and the verify command.
+Write `/tmp/REQUIREMENT-IMPLEMENT-<slug>.md` (or
+`/tmp/REQUIREMENT-IMPLEMENT-PHASE-{N}-<slug>.md` when a plan phase is active).
+It must include: summarized context, feature summary, test tree structure,
+**"tests are sealed — do not modify"**, and the verify command.
 
 ### Preferred — native subagent/task
 
-Spawn a subagent with requirement (short description of file path, e.g. `REQUIREMENT-IMPLEMENT-<slug>.md`) plus an optional short summary. the implementer sub-agent runs ``doctest skill implementer --show` as its
+Spawn a subagent with requirement (short description of file path, e.g.
+`/tmp/REQUIREMENT-IMPLEMENT-<slug>.md`) plus an optional short summary. the
+implementer sub-agent runs ``doctest skill implementer --show` as its
 first command (see **Role prompts** above).
 
 Wait until the implementer reports all tests passing.
@@ -181,7 +187,7 @@ Wait until the implementer reports all tests passing.
 
 ```sh
 # please wait enough for any sub-agent, if timeout required, set to 1h
-doctest agent implement --timeout 1h --requirement REQUIREMENT-IMPLEMENT-<slug>.md
+doctest agent implement --timeout 1h --requirement /tmp/REQUIREMENT-IMPLEMENT-<slug>.md
 ```
 
 To check status (CLI only):
@@ -224,8 +230,17 @@ Report: test count, modifications accepted (with rationale).
 
 # Requirement File Naming
 
-- Design: `REQUIREMENT-DESIGN-<slug>.md`
-- Implement: `REQUIREMENT-IMPLEMENT-<slug>.md`
+Write ephemeral requirement files under `/tmp/` (not the repo root):
+
+- Design:
+  - single-cycle: `/tmp/REQUIREMENT-DESIGN-<slug>.md`
+  - plan phase N: `/tmp/REQUIREMENT-DESIGN-PHASE-{N}-<slug>.md`
+- Implement:
+  - single-cycle: `/tmp/REQUIREMENT-IMPLEMENT-<slug>.md`
+  - plan phase N: `/tmp/REQUIREMENT-IMPLEMENT-PHASE-{N}-<slug>.md`
+
+`<slug>` is a short feature/context slug. Include `PHASE-{N}` only when plan
+phases are active — never invent `PHASE-1` for a single-cycle run.
 
 For native subagents, pass only a brief prompt or requirement file path (plus
 optional summary) — not the role prompt. For the CLI

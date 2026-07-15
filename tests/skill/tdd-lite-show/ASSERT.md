@@ -24,7 +24,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         "TDD step 1 — Requirements",
         "TDD step 6 — Verify",
         "Plan phases (outer loop)",
-        "REQUIREMENT_PHASE_",
+        "/tmp/REQUIREMENT-",
         "design tests → RED → seal → implement → GREEN",
         "<DOCTEST_DESIGN_SPEC>",
         "DSN (Domain Specific Notion)",

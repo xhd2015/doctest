@@ -72,7 +72,7 @@ confuse the two.
 - User asks to implement phase-by-phase / by plan phase
 
 **If no plan phases in context:** run a single inner TDD cycle as today
-(requirement files still use `_PHASE_1`).
+(requirement files omit `PHASE` — see naming below).
 
 **If plan phases are present:**
 
@@ -92,8 +92,8 @@ for each plan phase Pn in dependency order
 2. **Scope to that phase’s exit criteria** — do not pull later plan-phase work
    forward (stubs/seams OK only if the phase plan allows).
 3. **Mode per plan phase** — classic vs backfill may differ by phase.
-4. **Requirement files** use `REQUIREMENT_DESIGN_PHASE_n` /
-   `REQUIREMENT_IMPLEMENT_PHASE_n` (see naming below).
+4. **Requirement files** live under `/tmp/` as `REQUIREMENT-DESIGN-…` /
+   `REQUIREMENT-IMPLEMENT-…` (see naming below).
 5. **Doctest tree paths stay normal** (`./tests/<feature>/`) — no required
    phase subdirs; later plan phases may add leaves under the same tree.
 6. **Seal once per TDD cycle** (i.e. per plan phase when multi-phase) — seal
@@ -145,8 +145,10 @@ Clarify until intent is clear.
 
 ## TDD step 2 — Delegate Test Design
 
-Write `REQUIREMENT_DESIGN_PHASE_<n>.md`. Spawn designer with that path (+ optional
-summary). Designer runs `doctest skill designer --show` first.
+Write `/tmp/REQUIREMENT-DESIGN-<slug>.md` (or
+`/tmp/REQUIREMENT-DESIGN-PHASE-{N}-<slug>.md` when a plan phase is active).
+Spawn designer with that path (+ optional summary). Designer runs
+`doctest skill designer --show` first.
 
 **Backfill — MUST tell the designer** (spawn message and/or requirement):
 
@@ -192,12 +194,14 @@ unsealed. **Mixed suites seal as-is** (GREEN + RED together).
 If backfill and all sealed tests are GREEN → **skip** (no implementer); go to
 TDD step 8.
 
-Else write `REQUIREMENT_IMPLEMENT_PHASE_<n>.md`: context, summary, tree structure,
-**"tests are sealed — do not modify"**, verify command, which leaves were
-already GREEN vs still RED. Include active plan phase when multi-phase.
+Else write `/tmp/REQUIREMENT-IMPLEMENT-<slug>.md` (or
+`/tmp/REQUIREMENT-IMPLEMENT-PHASE-{N}-<slug>.md` when a plan phase is active):
+context, summary, tree structure, **"tests are sealed — do not modify"**,
+verify command, which leaves were already GREEN vs still RED. Include active
+plan phase when multi-phase.
 
 Spawn implementer with that path. Implementer runs `doctest skill implementer
-show` first. Wait until all tests pass. Do not weaken already-GREEN sealed
+--show` first. Wait until all tests pass. Do not weaken already-GREEN sealed
 asserts.
 
 ## TDD step 7 — Implementer Questions (optional)
@@ -228,12 +232,20 @@ done: report a short multi-phase summary.
 
 # Requirement File Naming
 
-- Design: `REQUIREMENT_DESIGN_PHASE_<n>.md` — must state mode; backfill includes
-  TDD step 2 handoff bullets; multi-phase runs state plan phase `Pn` scope
-- Implement: `REQUIREMENT_IMPLEMENT_PHASE_<n>.md`
+Write ephemeral requirement files under `/tmp/` (not the repo root):
 
-Use `n` = plan phase number when multi-phase; use `1` for a single-cycle run
-with no plan split.
+- Design:
+  - single-cycle: `/tmp/REQUIREMENT-DESIGN-<slug>.md`
+  - plan phase N: `/tmp/REQUIREMENT-DESIGN-PHASE-{N}-<slug>.md`
+- Implement:
+  - single-cycle: `/tmp/REQUIREMENT-IMPLEMENT-<slug>.md`
+  - plan phase N: `/tmp/REQUIREMENT-IMPLEMENT-PHASE-{N}-<slug>.md`
+
+`<slug>` is a short feature/context slug. Include `PHASE-{N}` only when plan
+phases are active — never invent `PHASE-1` for a single-cycle run.
+
+Design file must state mode; backfill includes TDD step 2 handoff bullets;
+multi-phase runs state plan phase `Pn` scope.
 
 # Followup Requests
 

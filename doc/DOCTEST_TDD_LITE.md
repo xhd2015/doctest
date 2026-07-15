@@ -70,7 +70,7 @@ confuse the two.
 - User asks to implement phase-by-phase / by plan phase
 
 **If no plan phases in context:** run a single inner TDD cycle as today
-(requirement file still uses `_PHASE_1`).
+(requirement file omits `PHASE` — see naming below).
 
 **If plan phases are present:**
 
@@ -90,7 +90,8 @@ for each plan phase Pn in dependency order
 2. **Scope to that phase’s exit criteria** — do not pull later plan-phase work
    forward (stubs/seams OK only if the phase plan allows).
 3. **Mode per plan phase** — classic vs backfill may differ by phase.
-4. **Requirement files** use `REQUIREMENT_PHASE_n` (see naming below).
+4. **Requirement files** live under `/tmp/` as `REQUIREMENT-…` (see naming
+   below).
 5. **Doctest tree paths stay normal** (`./tests/<feature>/` or
    `<pkg>/tests/<feature>/`) — no required phase subdirs; later plan phases
    may add leaves under the same tree.
@@ -200,10 +201,13 @@ done: report a short multi-phase summary.
 
 # Requirement File Naming
 
-Single file: `REQUIREMENT_PHASE_<n>.md`
+Write an ephemeral requirement file under `/tmp/` (not the repo root):
 
-Use `n` = plan phase number when multi-phase; use `1` for a single-cycle run
-with no plan split.
+- single-cycle: `/tmp/REQUIREMENT-<slug>.md`
+- plan phase N: `/tmp/REQUIREMENT-PHASE-{N}-<slug>.md`
+
+`<slug>` is a short feature/context slug. Include `PHASE-{N}` only when plan
+phases are active — never invent `PHASE-1` for a single-cycle run.
 
 Include: context/summary, mode (classic or backfill + why), data models,
 scenarios, planned tree; when multi-phase, plan phase `Pn` goal/exit

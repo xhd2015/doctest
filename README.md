@@ -33,52 +33,29 @@ doctest skill --list
 doctest skill tdd --install --codex --opencode
 ```
 
-# Ignore TDD requirement files (git)
+# TDD requirement files
 
-The adversarial TDD flow writes **workspace-local requirement files** for the
-designer and implementer roles (not product source):
+The adversarial TDD flow writes **ephemeral requirement files under `/tmp/`**
+for the designer and implementer roles (not product source, not in the repo):
 
 ```text
-REQUIREMENT_DESIGN_PHASE_<n>.md
-REQUIREMENT_IMPLEMENT_PHASE_<n>.md
-REQUIREMENT_PHASE_<n>.md          # tdd-lite (single file per plan phase)
+# single-cycle
+/tmp/REQUIREMENT-DESIGN-<slug>.md
+/tmp/REQUIREMENT-IMPLEMENT-<slug>.md
+/tmp/REQUIREMENT-<slug>.md                 # tdd-lite
+
+# multi-phase (plan phase N only)
+/tmp/REQUIREMENT-DESIGN-PHASE-{N}-<slug>.md
+/tmp/REQUIREMENT-IMPLEMENT-PHASE-{N}-<slug>.md
+/tmp/REQUIREMENT-PHASE-{N}-<slug>.md       # tdd-lite
 ```
 
-These are ephemeral agent artifacts and should not be committed. Prefer a
-**global** git excludes file so every repo picks them up:
+Because these live outside the workspace, they do not need `.gitignore`.
 
-```sh
-# once: point git at a global ignore file (if not already set)
-git config --global core.excludesfile ~/.gitignore
-
-# append the patterns (any directory, any repo)
-cat >> ~/.gitignore <<'EOF'
-REQUIREMENT_DESIGN_PHASE_*.md
-REQUIREMENT_IMPLEMENT_PHASE_*.md
-REQUIREMENT_PHASE_*.md
-# legacy hyphenated names (older skill revisions)
-REQUIREMENT-DESIGN-*.md
-REQUIREMENT-IMPLEMENT-*.md
-REQUIREMENT-*.md
-EOF
-```
-
-Verify:
-
-```sh
-git check-ignore -v REQUIREMENT_DESIGN_PHASE_1.md
-# → ~/.gitignore:N:REQUIREMENT_DESIGN_PHASE_*.md	REQUIREMENT_DESIGN_PHASE_1.md
-```
-
-Alternatively, add the same lines to a **repo** `.gitignore` if you only
-want them ignored in one project.
-
-Notes:
-
-- Global ignores only affect **untracked** files. Already-tracked requirement
-  files stay tracked until you `git rm --cached` them.
-- Do **not** ignore sealed doctest trees under `tests/` — only the
-  `REQUIREMENT_*.md` / `REQUIREMENT-*.md` orchestrator files.
+**Legacy:** older skill revisions wrote `REQUIREMENT-*.md` /
+`REQUIREMENT_*.md` at the repo root. If you still have those, you may ignore
+them globally or remove them; do **not** ignore sealed doctest trees under
+`tests/`.
 
 ## Commands
 
