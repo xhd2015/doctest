@@ -711,7 +711,10 @@ func WriteGeneratedCase(leafDir string, tc TreeCase, compileOnly bool, pkgName s
 	testFile := TestFileName(tc)
 	testPath := filepath.Join(leafDir, testFile)
 
-	tmpFile, err := os.CreateTemp("", ".doctest-gen-*")
+	// Create the temp file in the same directory as the destination so
+	// os.Rename is same-filesystem (avoids "invalid cross-device link" when
+	// /tmp and the cache dir live on different mounts, e.g. GitHub Actions).
+	tmpFile, err := os.CreateTemp(leafDir, ".doctest-gen-*")
 	if err != nil {
 		return "", err
 	}
@@ -750,8 +753,12 @@ func WriteGeneratedCase(leafDir string, tc TreeCase, compileOnly bool, pkgName s
 	}
 
 	if err := os.Rename(tmpPath, testPath); err != nil {
+		// Fallback for residual cross-device cases: copy then remove.
+		if writeErr := os.WriteFile(testPath, res, 0644); writeErr != nil {
+			os.Remove(tmpPath)
+			return "", err
+		}
 		os.Remove(tmpPath)
-		return "", err
 	}
 	return testPath, nil
 }

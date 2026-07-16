@@ -322,10 +322,10 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 	code := string(leafTestData)
 
 	absRoot, _ := filepath.Abs(root)
-	if !strings.Contains(code, "const DOCTEST_ROOT = `"+absRoot+"`") {
-		t.Fatalf("expected DOCTEST_ROOT const with path %q, got:\n%s", absRoot, code)
+	if !strings.Contains(code, "DOCTEST_ROOT = `"+absRoot+"`") {
+		t.Fatalf("expected DOCTEST_ROOT assignment with path %q, got:\n%s", absRoot, code)
 	}
-	if !strings.Contains(code, "DOCTEST_SESSION_ID, __sessionOk := syscall.Getenv(\"DOCTEST_SESSION_ID\")") {
+	if !strings.Contains(code, "syscall.Getenv(\"DOCTEST_SESSION_ID\")") {
 		t.Fatalf("expected DOCTEST_SESSION_ID from syscall.Getenv, got:\n%s", code)
 	}
 	if !strings.Contains(code, "t.Fatalf(\"DOCTEST_SESSION_ID not set\")") {
@@ -369,10 +369,10 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 	code := string(rootTestData)
 
 	absRoot, _ := filepath.Abs(root)
-	if !strings.Contains(code, "const DOCTEST_ROOT = `"+absRoot+"`") {
-		t.Fatalf("expected DOCTEST_ROOT const with path %q, got:\n%s", absRoot, code)
+	if !strings.Contains(code, "DOCTEST_ROOT = `"+absRoot+"`") {
+		t.Fatalf("expected DOCTEST_ROOT assignment with path %q, got:\n%s", absRoot, code)
 	}
-	if !strings.Contains(code, "DOCTEST_SESSION_ID, __sessionOk := syscall.Getenv(\"DOCTEST_SESSION_ID\")") {
+	if !strings.Contains(code, "syscall.Getenv(\"DOCTEST_SESSION_ID\")") {
 		t.Fatalf("expected DOCTEST_SESSION_ID from syscall.Getenv, got:\n%s", code)
 	}
 	if !strings.Contains(code, "t.Fatalf(\"DOCTEST_SESSION_ID not set\")") {

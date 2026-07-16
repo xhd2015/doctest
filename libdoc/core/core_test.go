@@ -210,11 +210,14 @@ func TestAssembleTestSourceIncludesDoctestSessionID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("assemble: %v", err)
 	}
-	if !strings.Contains(src, "DOCTEST_SESSION_ID, __sessionOk := syscall.Getenv(\"DOCTEST_SESSION_ID\")") {
+	if !strings.Contains(src, "syscall.Getenv(\"DOCTEST_SESSION_ID\")") {
 		t.Fatalf("expected DOCTEST_SESSION_ID assignment, got:\n%s", src)
 	}
 	if !strings.Contains(src, "t.Fatalf(\"DOCTEST_SESSION_ID not set\")") {
 		t.Fatalf("expected DOCTEST_SESSION_ID missing fatal, got:\n%s", src)
+	}
+	if !strings.Contains(src, "DOCTEST_SESSION_ID = sid") {
+		t.Fatalf("expected DOCTEST_SESSION_ID = sid assignment, got:\n%s", src)
 	}
 	if !strings.Contains(src, "\"syscall\"") {
 		t.Fatalf("expected syscall import, got:\n%s", src)
@@ -408,10 +411,10 @@ func TestAssembleFuncClosureSharedTypeNamedResultsParses(t *testing.T) {
 	if err != nil {
 		t.Fatalf("assemble: %v", err)
 	}
-	// Named results are preserved (parenthesized) so bodies that assign to
-	// named returns compile; they are no longer stripped to type-only.
-	if !strings.Contains(src, "pickTwoPorts := func(base int) (port int, alt int)") {
-		t.Fatalf("expected named results preserved in closure, got:\n%s", src)
+	// Named results are preserved so bodies that assign to named returns
+	// compile; helpers are top-level funcs (not closures).
+	if !strings.Contains(src, "func pickTwoPorts(base int) (port int, alt int)") {
+		t.Fatalf("expected named results preserved on helper func, got:\n%s", src)
 	}
 	if _, err := parser.ParseFile(token.NewFileSet(), "generated_test.go", src, 0); err != nil {
 		t.Fatalf("generated source should parse: %v\n%s", err, src)
@@ -465,12 +468,13 @@ func splitNames(req *Request) (mainRepo, wtDir, branch string) {
 	if err != nil {
 		t.Fatalf("assemble: %v", err)
 	}
-	// Named results must be preserved (parenthesized) so the body's
-	// assignments to mainRepo/wtDir/branch reference declared return vars.
-	if !strings.Contains(src, "splitNames := func(req *Request) (mainRepo string, wtDir string, branch string)") {
-		t.Fatalf("expected named results preserved in closure, got:\n%s", src)
+	// Named results must be preserved so the body's assignments to
+	// mainRepo/wtDir/branch reference declared return vars. Helpers are
+	// emitted as top-level funcs (not closures).
+	if !strings.Contains(src, "func splitNames(req *Request) (mainRepo string, wtDir string, branch string)") {
+		t.Fatalf("expected named results preserved on helper func, got:\n%s", src)
 	}
-	if strings.Contains(src, "splitNames := func(req *Request) (string, string, string)") {
+	if strings.Contains(src, "func splitNames(req *Request) (string, string, string)") {
 		t.Fatalf("named results should not be stripped to type-only, got:\n%s", src)
 	}
 	if _, err := parser.ParseFile(token.NewFileSet(), "generated_test.go", src, 0); err != nil {
@@ -510,10 +514,11 @@ func callee(x int) string { return "x" }
 	if err != nil {
 		t.Fatalf("assemble: %v", err)
 	}
-	calleeIdx := strings.Index(src, "callee := func")
-	callerIdx := strings.Index(src, "caller := func")
+	// Helpers are top-level funcs; topo sort still places callee before caller.
+	calleeIdx := strings.Index(src, "func callee(")
+	callerIdx := strings.Index(src, "func caller(")
 	if calleeIdx < 0 || callerIdx < 0 {
-		t.Fatalf("expected both helper closures in source, got:\n%s", src)
+		t.Fatalf("expected both helper funcs in source, got:\n%s", src)
 	}
 	if calleeIdx >= callerIdx {
 		t.Fatalf("expected callee declared before caller (calleeIdx=%d callerIdx=%d), got:\n%s", calleeIdx, callerIdx, src)
