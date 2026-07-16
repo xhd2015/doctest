@@ -713,45 +713,41 @@ func WriteGeneratedCase(leafDir string, tc TreeCase, compileOnly bool, pkgName s
 	testFile := TestFileName(tc)
 	testPath := filepath.Join(leafDir, testFile)
 
-	// Create the temp file in the same directory as the destination so
-	// os.Rename is same-filesystem (avoids "invalid cross-device link" when
-	// /tmp and the cache dir live on different mounts, e.g. GitHub Actions).
+	// Format in memory. Pass the final path so goimports resolves package
+	// context correctly. Do NOT stage a temp file inside leafDir first:
+	// CreateTemp+Remove there updates the package directory mtime even when
+	// content is unchanged, which busts go test's result cache (testlog
+	// hashes chdir/stat mtime of dirs under the module root).
+	//
+	// Use golang.org/x/tools/imports.Process instead of the goimports binary
+	// (gofmt alone is insufficient — Process also adds/removes imports).
+	res, err := imports.Process(testPath, []byte(src), nil)
+	if err != nil {
+		return "", fmt.Errorf("format imports failed: %w", err)
+	}
+
+	existing, _ := os.ReadFile(testPath)
+	if string(existing) == string(res) {
+		// Unchanged: leave leafDir completely untouched so GOCACHE can hit.
+		return testPath, nil
+	}
+
+	// Content differs — write atomically via same-dir temp + rename so we
+	// avoid EXDEV when /tmp and the gen cache are on different mounts
+	// (e.g. GitHub Actions). Fall back to WriteFile only on EXDEV.
 	tmpFile, err := os.CreateTemp(leafDir, ".doctest-gen-*")
 	if err != nil {
 		return "", err
 	}
 	tmpPath := tmpFile.Name()
-	if _, err := tmpFile.WriteString(src); err != nil {
+	if _, err := tmpFile.Write(res); err != nil {
 		tmpFile.Close()
 		os.Remove(tmpPath)
 		return "", err
 	}
-	tmpFile.Close()
-
-	// Use golang.org/x/tools/imports.Process instead of the goimports binary
-	// to avoid external binary dependency.
-	// gofmt is not used because imports.Process handles both formatting
-	// (via go/format internally, same as gofmt) and import cleanup
-	// (adds missing imports, removes unused ones) in a single pass.
-	srcBytes, err := os.ReadFile(tmpPath)
-	if err != nil {
+	if err := tmpFile.Close(); err != nil {
 		os.Remove(tmpPath)
 		return "", err
-	}
-	res, err := imports.Process(tmpPath, srcBytes, nil)
-	if err != nil {
-		os.Remove(tmpPath)
-		return "", fmt.Errorf("format imports failed: %w", err)
-	}
-	if err := os.WriteFile(tmpPath, res, 0644); err != nil {
-		os.Remove(tmpPath)
-		return "", err
-	}
-
-	existing, _ := os.ReadFile(testPath)
-	if string(existing) == string(res) {
-		os.Remove(tmpPath)
-		return testPath, nil
 	}
 
 	if err := os.Rename(tmpPath, testPath); err != nil {
