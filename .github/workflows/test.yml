@@ -14,10 +14,9 @@ jobs:
       - name: Go test
         run: go test -v ./...
 
-      - name: Install doctest
-        run: |
-          if ! command -v doctest >/dev/null 2>&1; then
-            go install github.com/xhd2015/doctest/cmd/doctest@latest
-          fi
+      - name: Install doctest (this checkout)
+        # Use the tree under test so CI proves the cross-device rename fix; @latest may lag.
+        # -buildvcs=false: shallow Actions checkout often cannot stamp VCS metadata.
+        run: go install -buildvcs=false ./cmd/doctest
       - name: Doctest
         run: doctest test -v ./...

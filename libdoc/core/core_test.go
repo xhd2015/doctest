@@ -210,15 +210,7 @@ func TestAssembleTestSourceIncludesDoctestSessionID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("assemble: %v", err)
 	}
-	if !strings.Contains(src, "DOCTEST_SESSION_ID, __sessionOk := syscall.Getenv(\"DOCTEST_SESSION_ID\")") {
-		t.Fatalf("expected DOCTEST_SESSION_ID assignment, got:\n%s", src)
-	}
-	if !strings.Contains(src, "t.Fatalf(\"DOCTEST_SESSION_ID not set\")") {
-		t.Fatalf("expected DOCTEST_SESSION_ID missing fatal, got:\n%s", src)
-	}
-	if !strings.Contains(src, "\"syscall\"") {
-		t.Fatalf("expected syscall import, got:\n%s", src)
-	}
+	assertAssembledMatchesFixture(t, src, root, "assemble_session_id.go.fixture")
 }
 
 func TestWriteGoModSkipsWhenSourceUnchanged(t *testing.T) {
@@ -408,11 +400,8 @@ func TestAssembleFuncClosureSharedTypeNamedResultsParses(t *testing.T) {
 	if err != nil {
 		t.Fatalf("assemble: %v", err)
 	}
-	// Named results are preserved (parenthesized) so bodies that assign to
-	// named returns compile; they are no longer stripped to type-only.
-	if !strings.Contains(src, "pickTwoPorts := func(base int) (port int, alt int)") {
-		t.Fatalf("expected named results preserved in closure, got:\n%s", src)
-	}
+	// Full assembled source is the reviewable contract (top-level helpers + named results).
+	assertAssembledMatchesFixture(t, src, root, "assemble_named_results_pick_two_ports.go.fixture")
 	if _, err := parser.ParseFile(token.NewFileSet(), "generated_test.go", src, 0); err != nil {
 		t.Fatalf("generated source should parse: %v\n%s", err, src)
 	}
@@ -465,12 +454,9 @@ func splitNames(req *Request) (mainRepo, wtDir, branch string) {
 	if err != nil {
 		t.Fatalf("assemble: %v", err)
 	}
-	// Named results must be preserved (parenthesized) so the body's
-	// assignments to mainRepo/wtDir/branch reference declared return vars.
-	if !strings.Contains(src, "splitNames := func(req *Request) (mainRepo string, wtDir string, branch string)") {
-		t.Fatalf("expected named results preserved in closure, got:\n%s", src)
-	}
-	if strings.Contains(src, "splitNames := func(req *Request) (string, string, string)") {
+	// Named results kept on top-level helper (not type-only strip). Fixture is the review surface.
+	assertAssembledMatchesFixture(t, src, root, "assemble_named_results_split_names.go.fixture")
+	if strings.Contains(src, "func splitNames(req *Request) (string, string, string)") {
 		t.Fatalf("named results should not be stripped to type-only, got:\n%s", src)
 	}
 	if _, err := parser.ParseFile(token.NewFileSet(), "generated_test.go", src, 0); err != nil {
@@ -510,10 +496,12 @@ func callee(x int) string { return "x" }
 	if err != nil {
 		t.Fatalf("assemble: %v", err)
 	}
-	calleeIdx := strings.Index(src, "callee := func")
-	callerIdx := strings.Index(src, "caller := func")
+	// Fixture shows callee before caller (topo order) as top-level funcs.
+	assertAssembledMatchesFixture(t, src, root, "assemble_helpers_topo_sorted.go.fixture")
+	calleeIdx := strings.Index(src, "func callee(")
+	callerIdx := strings.Index(src, "func caller(")
 	if calleeIdx < 0 || callerIdx < 0 {
-		t.Fatalf("expected both helper closures in source, got:\n%s", src)
+		t.Fatalf("expected both helper funcs in source, got:\n%s", src)
 	}
 	if calleeIdx >= callerIdx {
 		t.Fatalf("expected callee declared before caller (calleeIdx=%d callerIdx=%d), got:\n%s", calleeIdx, callerIdx, src)
@@ -523,5 +511,41 @@ func callee(x int) string { return "x" }
 	}
 	if _, err := imports.Process("generated_test.go", []byte(src), nil); err != nil {
 		t.Fatalf("imports.Process should succeed: %v\n%s", err, src)
+	}
+}
+
+// assertAssembledMatchesFixture compares AssembleTestSource output to a golden
+// fixture under testdata/. Absolute roots are rewritten to {{DOCTEST_ROOT}}.
+// Set UPDATE_FIXTURES=1 to regenerate fixtures for review.
+func assertAssembledMatchesFixture(t *testing.T, got, root, fixtureName string) {
+	t.Helper()
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		t.Fatalf("abs root: %v", err)
+	}
+	normalized := strings.ReplaceAll(got, absRoot, "{{DOCTEST_ROOT}}")
+	normalized = strings.ReplaceAll(normalized, root, "{{DOCTEST_ROOT}}")
+	if !strings.HasSuffix(normalized, "\n") {
+		normalized += "\n"
+	}
+
+	fixturePath := filepath.Join("testdata", fixtureName)
+	if os.Getenv("UPDATE_FIXTURES") == "1" {
+		if err := os.MkdirAll(filepath.Dir(fixturePath), 0o755); err != nil {
+			t.Fatalf("mkdir testdata: %v", err)
+		}
+		if err := os.WriteFile(fixturePath, []byte(normalized), 0o644); err != nil {
+			t.Fatalf("write fixture %s: %v", fixturePath, err)
+		}
+		t.Logf("updated fixture %s", fixturePath)
+		return
+	}
+
+	wantBytes, err := os.ReadFile(fixturePath)
+	if err != nil {
+		t.Fatalf("read fixture %s: %v (run with UPDATE_FIXTURES=1 to create)", fixturePath, err)
+	}
+	if normalized != string(wantBytes) {
+		t.Fatalf("assembled source does not match fixture %s\n--- got ---\n%s\n--- want ---\n%s", fixtureName, normalized, string(wantBytes))
 	}
 }

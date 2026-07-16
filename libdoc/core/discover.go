@@ -3,6 +3,7 @@ package core
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 
 	"github.com/xhd2015/doctest/libdoc/rules"
 	"golang.org/x/tools/imports"
@@ -711,7 +713,10 @@ func WriteGeneratedCase(leafDir string, tc TreeCase, compileOnly bool, pkgName s
 	testFile := TestFileName(tc)
 	testPath := filepath.Join(leafDir, testFile)
 
-	tmpFile, err := os.CreateTemp("", ".doctest-gen-*")
+	// Create the temp file in the same directory as the destination so
+	// os.Rename is same-filesystem (avoids "invalid cross-device link" when
+	// /tmp and the cache dir live on different mounts, e.g. GitHub Actions).
+	tmpFile, err := os.CreateTemp(leafDir, ".doctest-gen-*")
 	if err != nil {
 		return "", err
 	}
@@ -750,10 +755,29 @@ func WriteGeneratedCase(leafDir string, tc TreeCase, compileOnly bool, pkgName s
 	}
 
 	if err := os.Rename(tmpPath, testPath); err != nil {
+		// Only fall back to write+remove for EXDEV (cross-device). Other rename
+		// failures (permission, missing path, etc.) should surface as-is.
+		if !isCrossDeviceRename(err) {
+			os.Remove(tmpPath)
+			return "", err
+		}
+		if writeErr := os.WriteFile(testPath, res, 0644); writeErr != nil {
+			os.Remove(tmpPath)
+			return "", fmt.Errorf("rename (cross-device): %w; write fallback: %v", err, writeErr)
+		}
 		os.Remove(tmpPath)
-		return "", err
 	}
 	return testPath, nil
+}
+
+// isCrossDeviceRename reports whether err is an EXDEV from os.Rename
+// ("invalid cross-device link").
+func isCrossDeviceRename(err error) bool {
+	var linkErr *os.LinkError
+	if errors.As(err, &linkErr) {
+		return linkErr.Err == syscall.EXDEV
+	}
+	return errors.Is(err, syscall.EXDEV)
 }
 
 func CacheMappingGenRoot(absDoctestDir string) (string, string, error) {
