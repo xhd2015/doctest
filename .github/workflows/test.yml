@@ -16,6 +16,7 @@ jobs:
 
       - name: Install doctest (this checkout)
         # Use the tree under test so CI proves the cross-device rename fix; @latest may lag.
-        run: go install ./cmd/doctest
+        # -buildvcs=false: shallow Actions checkout often cannot stamp VCS metadata.
+        run: go install -buildvcs=false ./cmd/doctest
       - name: Doctest
         run: doctest test -v ./...
