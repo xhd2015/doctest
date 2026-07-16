@@ -52,26 +52,11 @@ func MaterializeAssertModule() (string, error) {
 		}
 	}
 
-	legacyNames, err := assertmod.LegacyV1Filenames()
-	if err != nil {
+	if err := materializeNestedPackage(cacheRoot, "legacy_v1", assertmod.LegacyV1Filenames, assertmod.LegacyV1File); err != nil {
 		return "", err
 	}
-	legacyRoot := filepath.Join(cacheRoot, "legacy_v1")
-	if err := os.MkdirAll(legacyRoot, 0755); err != nil {
+	if err := materializeNestedPackage(cacheRoot, "legacy_v2", assertmod.LegacyV2Filenames, assertmod.LegacyV2File); err != nil {
 		return "", err
-	}
-	for _, name := range legacyNames {
-		legacyPath := filepath.Join(legacyRoot, name)
-		if fileExists(legacyPath) {
-			continue
-		}
-		data, err := assertmod.LegacyV1File(name)
-		if err != nil {
-			return "", err
-		}
-		if err := os.WriteFile(legacyPath, data, 0644); err != nil {
-			return "", err
-		}
 	}
 
 	goMod := filepath.Join(cacheRoot, "go.mod")
@@ -85,16 +70,51 @@ func MaterializeAssertModule() (string, error) {
 	return cacheRoot, nil
 }
 
+func materializeNestedPackage(cacheRoot, pkg string, namesFn func() ([]string, error), fileFn func(string) ([]byte, error)) error {
+	names, err := namesFn()
+	if err != nil {
+		return err
+	}
+	root := filepath.Join(cacheRoot, pkg)
+	if err := os.MkdirAll(root, 0755); err != nil {
+		return err
+	}
+	for _, name := range names {
+		path := filepath.Join(root, name)
+		if fileExists(path) {
+			continue
+		}
+		data, err := fileFn(name)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(path, data, 0644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func assertCacheLayoutComplete(cacheRoot string) bool {
 	if !fileExists(filepath.Join(cacheRoot, "assert.go")) || !fileExists(filepath.Join(cacheRoot, "go.mod")) {
 		return false
 	}
-	legacyNames, err := assertmod.LegacyV1Filenames()
+	if !nestedPackageComplete(cacheRoot, "legacy_v1", assertmod.LegacyV1Filenames) {
+		return false
+	}
+	if !nestedPackageComplete(cacheRoot, "legacy_v2", assertmod.LegacyV2Filenames) {
+		return false
+	}
+	return true
+}
+
+func nestedPackageComplete(cacheRoot, pkg string, namesFn func() ([]string, error)) bool {
+	names, err := namesFn()
 	if err != nil {
 		return false
 	}
-	for _, name := range legacyNames {
-		if !fileExists(filepath.Join(cacheRoot, "legacy_v1", name)) {
+	for _, name := range names {
+		if !fileExists(filepath.Join(cacheRoot, pkg, name)) {
 			return false
 		}
 	}

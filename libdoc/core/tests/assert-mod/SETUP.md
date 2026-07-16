@@ -120,5 +120,15 @@ func assertCacheLayoutCore(t *testing.T, cacheDir string) {
 			t.Fatalf("missing cached legacy_v1/%s: %v", name, err)
 		}
 	}
+	legacyV2Names, err := assertmod.LegacyV2Filenames()
+	if err != nil {
+		t.Fatalf("legacy_v2 filenames: %v", err)
+	}
+	for _, name := range legacyV2Names {
+		legacyPath := filepath.Join(cacheDir, "legacy_v2", name)
+		if _, err := os.Stat(legacyPath); err != nil {
+			t.Fatalf("missing cached legacy_v2/%s: %v", name, err)
+		}
+	}
 }
 ```
