@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -44,7 +45,7 @@ var categoryTitles = map[string]string{
 }
 
 func main() {
-	root := filepath.Join("assert", "tests", "output-assert-v2", "integration", "real-world")
+	root := filepath.Join("assert", "tests", "output-assert-v3-suite", "integration", "real-world")
 	if err := os.RemoveAll(root); err != nil {
 		panic(err)
 	}
@@ -77,8 +78,8 @@ func writeRootSetup(root string) {
 	content := "# Scenario\n\n" +
 		"**Feature**: Real-world CLI output cookbook (simulated transcripts)\n\n" +
 		"```\n" +
-		"# grouped by toolchain; each leaf asserts v2 template vs simulated bytes\n" +
-		"Author -> Facade: version 2 templates\n" +
+		"# grouped by toolchain; each leaf asserts v3 template vs simulated bytes\n" +
+		"Author -> Facade: version 3 templates\n" +
 		"Matcher <- familiar CLI stdout/stderr shapes\n" +
 		"```\n\n" +
 		"## Steps\n" +
@@ -94,7 +95,7 @@ func writeCategory(root, cat string, cases []caseDef) {
 	if title == "" {
 		title = cat
 	}
-	setup := fmt.Sprintf("# Scenario\n\n**Feature**: %s — v2 CLI templates\n\n```\n# %s cookbook leaves\nMatcher <- simulated tool output\n```\n\n## Steps\n1. Leaf Setup supplies Template and Actual for one tool transcript.\n\n```go\nfunc Setup(t *testing.T, req *Request) error {\n\treq.Operation = \"match\"\n\treturn nil\n}\n```\n", title, cat)
+	setup := fmt.Sprintf("# Scenario\n\n**Feature**: %s — v3 CLI templates\n\n```\n# %s cookbook leaves\nMatcher <- simulated tool output\n```\n\n## Steps\n1. Leaf Setup supplies Template and Actual for one tool transcript.\n\n```go\nfunc Setup(t *testing.T, req *Request) error {\n\treq.Operation = \"match\"\n\treturn nil\n}\n```\n", title, cat)
 	mustWrite(filepath.Join(dir, "SETUP.md"), setup)
 
 	sort.Slice(cases, func(i, j int) bool { return cases[i].Slug < cases[j].Slug })
@@ -106,7 +107,7 @@ func writeCategory(root, cat string, cases []caseDef) {
 }
 
 func writeLeaf(dir string, c caseDef) {
-	setup := fmt.Sprintf("# Scenario\n\n**Feature**: %s\n\n```\n%s\n```\n\n## Steps\n1. Build v2 template and simulated actual output.\n\n```go\nfunc Setup(t *testing.T, req *Request) error {\n\treq.Template = v2Template(\n\t\t%q,\n\t\t%q,\n\t)\n\treq.Actual = %q\n\treturn nil\n}\n```\n",
+	setup := fmt.Sprintf("# Scenario\n\n**Feature**: %s\n\n```\n%s\n```\n\n## Steps\n1. Build v3 template and simulated actual output.\n\n```go\nfunc Setup(t *testing.T, req *Request) error {\n\treq.Template = v3Template(\n\t\t%q,\n\t\t%q,\n\t)\n\treq.Actual = %q\n\treturn nil\n}\n```\n",
 		c.Feature, c.Pipeline, c.Header, c.Body, c.Actual)
 
 	assert := "## Expected\n- Match succeeds for simulated CLI transcript.\n\n```go\nimport \"testing\"\n\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\trequireMatchOK(t, resp)\n}\n```\n"
@@ -141,15 +142,23 @@ func finalizeCases(cases []caseDef) []caseDef {
 }
 
 func finalizeOne(cd caseDef) caseDef {
+	cd.Header = normalizeHeader(cd.Header)
+	// v3 content lines are raw Go regex: escape RE metas on non-omit lines.
 	if strings.Contains(cd.Body, "lines omitted") {
-		cd.Header = normalizeHeader(cd.Header)
+		cd.Body = escapeV3Body(cd.Body)
 		mustMatchCase(cd)
 		return cd
 	}
-	cd.Header = normalizeHeader(cd.Header)
-	cd.Body = synthesizeBody(cd.Header, cd.Actual)
-	if matchCase(cd) == nil {
-		return cd
+	// Prefer placeholder substitution then escape literals.
+	try := cd
+	try.Body = escapeV3Body(synthesizeBody(cd.Header, cd.Actual))
+	if matchCase(try) == nil {
+		return try
+	}
+	// Keep header; escape full actual as body (partial examples / trailing text).
+	try.Body = escapeV3Body(cd.Actual)
+	if matchCase(try) == nil {
+		return try
 	}
 	// Whole-line placeholder avoids regex mis-detection on [, ], |, etc.
 	if !strings.Contains(cd.Actual, "\n") {
@@ -159,15 +168,38 @@ func finalizeOne(cd caseDef) caseDef {
 			return cd
 		}
 	}
-	// Multiline: literal line-by-line body (pattern lines).
+	// Multiline: escaped literal line-by-line body.
 	if strings.Contains(cd.Actual, "\n") {
 		cd.Header = ""
-		cd.Body = cd.Actual
+		cd.Body = escapeV3Body(cd.Actual)
 		if matchCase(cd) == nil {
 			return cd
 		}
 	}
 	panic(fmt.Sprintf("%s/%s: could not finalize case\nactual=%q", cd.Category, cd.Slug, cd.Actual))
+}
+
+// escapeV3Body QuoteMeta's each non-omit content line so literals match under v3 raw RE.
+// Omit lines (...N lines omitted...) stay unescaped so the engine recognizes them.
+// Placeholder tokens (__NAME__) contain no RE metachars and survive QuoteMeta.
+func escapeV3Body(body string) string {
+	if body == "" {
+		return body
+	}
+	lines := strings.Split(body, "\n")
+	for i, line := range lines {
+		if isV3OmitLine(line) {
+			continue
+		}
+		lines[i] = regexp.QuoteMeta(line)
+	}
+	return strings.Join(lines, "\n")
+}
+
+var v3OmitLineRE = regexp.MustCompile(`^\.\.\.\s*.+\s+lines\s+omitted\s*\.\.\.$`)
+
+func isV3OmitLine(line string) bool {
+	return v3OmitLineRE.MatchString(strings.TrimSpace(line))
 }
 
 func yamlPlaceholderLine(name, typ, example string) string {
@@ -204,7 +236,7 @@ func normalizeHeader(header string) string {
 }
 
 func matchCase(cd caseDef) error {
-	p, err := assert.Parse("---\nversion: 2\n" + cd.Header + "---\n" + cd.Body)
+	p, err := assert.Parse("---\nversion: 3\n" + cd.Header + "---\n" + cd.Body)
 	if err != nil {
 		return err
 	}

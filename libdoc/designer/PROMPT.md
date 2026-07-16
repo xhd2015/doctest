@@ -123,7 +123,7 @@ or other text output:
   explicitly defines those strings as product output.
 - Prefer `assert.Output(t, actual, template)` for bounded stdout/stderr,
   including templates that contain a top-level `<contains>` block.
-- For CLI/user-facing stdout: the v2 template **must** end with trailing `\n`
+- For CLI/user-facing stdout: the v3 (or output-assert) template **must** end with trailing `\n`
   (put the closing backtick on the line after the last content line — not on the
   same line, and not after an extra blank line). Note in `## Expected Output`
   that output ends with a newline when relevant.

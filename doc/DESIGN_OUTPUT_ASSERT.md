@@ -1,14 +1,14 @@
 # Output Assert DSL — Design Document
 
-> **Status:** **v2 implemented** (`github.com/xhd2015/doctest/assert`). **Canonical reference:** `doc/DOCTEST_OUTPUT_ASSERT.md` and `doctest skill output-assert --show`.
+> **Status:** **v3 implemented (default)** (`github.com/xhd2015/doctest/assert`). **Canonical reference:** `doc/DOCTEST_OUTPUT_ASSERT.md` and `doctest skill output-assert --show`.
 >
-> **Package:** `github.com/xhd2015/doctest/assert` (v2); v1 in `assert/legacy_v1/`
+> **Package:** `github.com/xhd2015/doctest/assert` (v3 default); `assert/legacy_v2` (**deprecated**); `assert/legacy_v1` (tag DSL).
 >
 > **Goal:** A readable template language for asserting CLI (and similar text) output in doctest `ASSERT.md` leaves, replacing ad-hoc `strings.Contains` / hand-rolled parsing.
 >
 > **Skill:** `doctest skill output-assert --show`
 >
-> ## v2 authoring quick start (current)
+> ## v3 authoring quick start (current)
 >
 > ```go
 > import "github.com/xhd2015/doctest/assert"
@@ -16,22 +16,24 @@
 > func Assert(t *testing.T, req *Request, resp *Response, err error) {
 >     // ...
 >     assert.Output(t, resp.Stdout, `---
-> version: 2
+> version: 3
 > __PORT__: type=number, example=8901, a port
 > ---
 > Server listen on: __PORT__
 > ...3 lines omitted...
-> <ansi-color bold gray>ready</ansi-color>`)
+> <ansi-color bold gray>ready</ansi-color>
+> `)
 > }
 > ```
 >
-> - **`assert.Output`** = strict full line-by-line match (v2 default).
-> - **YAML header** — `version: 2`, placeholder defs (`__NAME__: type=…, example=…, explanation`).
-> - **Body** — pattern lines, regex lines (intent detection), `...N lines omitted...`, `<ansi-color>` spans.
-> - **No** `<contains>` or `assert.Contains()` in v2.
+> - **`assert.Output`** = strict full line-by-line match.
+> - **YAML header** — omit version or `version: 3` (default dialect); placeholder defs (`type=` / `regex=` / `example=`).
+> - **Body** — each content line is a **raw Go regexp** (`^…$`); escape literals (`0\.001s`); `...N lines omitted...`; `<ansi-color>` with **QuoteMeta’d inner text**.
+> - **Binding** — repeated `__NAME__` must capture the same value.
+> - **No** `<contains>` or `assert.Contains()` in v3; no regex-intent dual path.
 > - Optional prose mirror: `## Expected Output` fenced block in ASSERT.md (advertised, not required by vet — §16).
 >
-> Sections below document **v1 tag DSL** (legacy). Existing v1 templates still work; prefer v2 for new tests.
+> Sections below document **v1 tag DSL** (legacy). Prefer **v3** for new tests; `version: 2` is deprecated.
 
 ---
 
