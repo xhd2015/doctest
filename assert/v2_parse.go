@@ -288,7 +288,10 @@ func buildRegexPattern(line string, placeholders map[string]v2Placeholder) (stri
 			litEnd = i + nextColor
 		}
 		if litEnd > i {
-			b.WriteString(regexp.QuoteMeta(line[i:litEnd]))
+			// Regex-intent lines: non-placeholder text is raw RE syntax (e.g. .* or (a|b)).
+			// Do not QuoteMeta here — that would turn intentional metacharacters into literals
+			// and break pure-regex cookbook cases (V2-M4, V2-M13).
+			b.WriteString(line[i:litEnd])
 			i = litEnd
 			continue
 		}

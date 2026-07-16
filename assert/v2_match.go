@@ -77,14 +77,59 @@ func matchV2PatternLine(pl v2PatternLine, placeholders map[string]v2Placeholder,
 		return cursor, matchErr("output mismatch at line %d: unexpected end of output", lineBase+cursor+1)
 	}
 	line := lines[cursor]
-	rest, err := matchV2Segments(pl.Segments, placeholders, line, lineBase+cursor+1)
+	// Match the whole line as one regex built from segments. Segment-by-segment
+	// matching of type=string used `^[^\n]*?` alone, which always matches the
+	// empty string (non-greedy with no trailing constraint). Anchoring with $
+	// lets non-greedy string placeholders expand correctly mid-line and at EOL.
+	reBody, err := buildPatternLineRegexFromSegments(pl.Segments, placeholders)
 	if err != nil {
 		return cursor, err
 	}
-	if rest != "" {
-		return cursor, matchErr("output mismatch at line %d:\n  unparsed remainder: %q", lineBase+cursor+1, rest)
+	re, err := regexp.Compile("^" + reBody + "$")
+	if err != nil {
+		return cursor, matchErr("internal error: invalid pattern line regex: %v", err)
+	}
+	if !re.MatchString(line) {
+		// Fall back to sequential diagnostics for a more precise error message.
+		if _, segErr := matchV2Segments(pl.Segments, placeholders, line, lineBase+cursor+1); segErr != nil {
+			return cursor, segErr
+		}
+		return cursor, matchErr("output mismatch at line %d:\n  pattern did not match %q", lineBase+cursor+1, line)
 	}
 	return cursor + 1, nil
+}
+
+// buildPatternLineRegexFromSegments joins segment patterns into a single-line RE.
+// Literals are quoted; placeholders use placeholderSubpattern (string is non-greedy).
+func buildPatternLineRegexFromSegments(segs []v2Segment, placeholders map[string]v2Placeholder) (string, error) {
+	var b strings.Builder
+	for _, seg := range segs {
+		switch s := seg.(type) {
+		case v2Literal:
+			b.WriteString(regexp.QuoteMeta(s.Text))
+		case v2PlaceholderRef:
+			ph, ok := findPlaceholder(placeholders, s.Name)
+			if !ok {
+				return "", matchErr("internal error: undefined placeholder %s", s.Name)
+			}
+			sub, err := placeholderSubpattern(ph.Type)
+			if err != nil {
+				return "", err
+			}
+			b.WriteString("(?:")
+			b.WriteString(sub)
+			b.WriteString(")")
+		case v2Color:
+			open, err := resolveColorOpen(s.Spec)
+			if err != nil {
+				return "", err
+			}
+			b.WriteString(regexp.QuoteMeta(open + s.Text + colorReset))
+		default:
+			return "", matchErr("internal error: unknown v2 segment type")
+		}
+	}
+	return b.String(), nil
 }
 
 func matchV2RegexLine(pattern string, lines []string, cursor, lineBase int) (int, error) {
