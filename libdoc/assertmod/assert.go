@@ -7,85 +7,13 @@ package assert
 import (
 	"fmt"
 	"github.com/xhd2015/doctest/assert/legacy_v1"
+	"github.com/xhd2015/doctest/assert/legacy_v2"
 	"gopkg.in/yaml.v3"
 	"regexp"
 	"sort"
 	"strings"
 	"testing"
 )
-
-var namedColors = map[string]string{
-	"bold":  "1",
-	"red":   "31",
-	"green": "32",
-	"gray":  "90",
-}
-
-const (
-	colorReset          = "\x1b[0m"
-	ansiColorOpenPrefix = "<ansi-color"
-	ansiColorCloseTag   = "</ansi-color>"
-	ansiColorTagName    = "ansi-color"
-)
-
-func resolveColorOpen(spec colorSpec) (string, error) {
-	var b strings.Builder
-	for _, tok := range spec.Tokens {
-		params, err := colorTokenParams(tok)
-		if err != nil {
-			return "", err
-		}
-		b.WriteString("\x1b[")
-		b.WriteString(params)
-		b.WriteString("m")
-	}
-	return b.String(), nil
-}
-
-func colorTokenParams(tok string) (string, error) {
-	if strings.HasPrefix(tok, "#") {
-		return tok[1:], nil
-	}
-	params, ok := namedColors[tok]
-	if !ok {
-		return "", parseErr(-1, "unknown color name %q; use # for raw SGR", tok)
-	}
-	return params, nil
-}
-
-func parseColorSpec(specText string) (colorSpec, error) {
-	specText = strings.TrimSpace(specText)
-	if specText == "" {
-		return colorSpec{}, parseErr(-1, "empty ansi-color specifier")
-	}
-	var tokens []string
-	for specText != "" {
-		specText = strings.TrimLeft(specText, " \t")
-		if specText == "" {
-			break
-		}
-		if specText[0] == '#' {
-			end := 1
-			for end < len(specText) && specText[end] != ' ' && specText[end] != '\t' {
-				end++
-			}
-			tokens = append(tokens, specText[:end])
-			specText = specText[end:]
-			continue
-		}
-		end := 0
-		for end < len(specText) && specText[end] != ' ' && specText[end] != '\t' {
-			end++
-		}
-		name := specText[:end]
-		if _, ok := namedColors[name]; !ok {
-			return colorSpec{}, parseErr(-1, "unknown color name %q", name)
-		}
-		tokens = append(tokens, name)
-		specText = specText[end:]
-	}
-	return colorSpec{Tokens: tokens}, nil
-}
 
 type parseError struct {
 	pos int
@@ -118,16 +46,23 @@ func matchErr(format string, args ...any) error {
 // Match compares actual output against pattern. nil means success.
 func Match(p Pattern, actual string, opts ...Option) error {
 	cfg := applyOptions(opts...)
-	if p.v2 {
+	switch p.kind {
+	case patternV2:
 		if cfg.mode == matchContains {
 			return matchErr("MatchContains is not supported for v2 templates")
 		}
-		return matchV2(p.v2pat, actual, cfg.normalizeNewlines)
+		return legacy_v2.Match(p.v2pat, actual, cfg.normalizeNewlines)
+	case patternV3:
+		if cfg.mode == matchContains {
+			return matchErr("MatchContains is not supported for v3 templates")
+		}
+		return matchV3(p.v3pat, actual, cfg.normalizeNewlines)
+	default:
+		return legacy_v1.Match(p.legacy, actual, legacy_v1.MatchConfig{
+			Contains:          cfg.mode == matchContains,
+			NormalizeNewlines: cfg.normalizeNewlines,
+		})
 	}
-	return legacy_v1.Match(p.legacy, actual, legacy_v1.MatchConfig{
-		Contains:          cfg.mode == matchContains,
-		NormalizeNewlines: cfg.normalizeNewlines,
-	})
 }
 
 type Option interface {
@@ -199,23 +134,35 @@ func Output(t *testing.T, actual, template string, opts ...Option) {
 }
 
 // Parse parses template text into a Pattern.
+// Routing:
+//   - version: 2 → legacy_v2
+//   - version: 3 or YAML dialect without version (placeholder defs) → v3
+//   - unknown version → parse error
+//   - otherwise → legacy_v1
 func Parse(template string) (Pattern, error) {
-	isV2, headerYAML, body, err := detectV2(template)
-	if err != nil {
-		return Pattern{}, err
-	}
-	if isV2 {
-		v2pat, err := parseV2(headerYAML, body)
+	kind, headerYAML, body, versionStr := detectDialect(template)
+	switch kind {
+	case dialectV2:
+		v2pat, err := legacy_v2.Parse(headerYAML, body)
 		if err != nil {
 			return Pattern{}, err
 		}
-		return Pattern{v2: true, v2pat: v2pat}, nil
+		return Pattern{kind: patternV2, v2pat: v2pat}, nil
+	case dialectV3:
+		v3pat, err := parseV3(headerYAML, body)
+		if err != nil {
+			return Pattern{}, err
+		}
+		return Pattern{kind: patternV3, v3pat: v3pat}, nil
+	case dialectUnknownVersion:
+		return Pattern{}, parseErr(0, "unknown assert template version %s", versionStr)
+	default:
+		legacy, err := legacy_v1.Parse(template)
+		if err != nil {
+			return Pattern{}, err
+		}
+		return Pattern{kind: patternV1, legacy: legacy}, nil
 	}
-	legacy, err := legacy_v1.Parse(template)
-	if err != nil {
-		return Pattern{}, err
-	}
-	return Pattern{v2: false, legacy: legacy}, nil
 }
 
 // MustParse parses template text or panics.
@@ -227,99 +174,158 @@ func MustParse(template string) Pattern {
 	return p
 }
 
-// Pattern is an immutable parsed output template (v1 or v2).
+type patternKind int
+
+const (
+	patternV1 patternKind = iota
+	patternV2
+	patternV3
+)
+
+// Pattern is an immutable parsed output template (v1, v2, or v3).
 type Pattern struct {
-	v2     bool
+	kind   patternKind
 	legacy legacy_v1.Pattern
-	v2pat  v2Pattern
+	v2pat  legacy_v2.Pattern
+	v3pat  v3Pattern
 }
 
 // PatternSummary returns a stable summary string for test introspection.
 func PatternSummary(p Pattern) string {
-	if p.v2 {
-		return summaryV2(p.v2pat)
+	switch p.kind {
+	case patternV2:
+		return legacy_v2.PatternSummary(p.v2pat)
+	case patternV3:
+		return v3PatternSummary(p.v3pat)
+	default:
+		return legacy_v1.PatternSummary(p.legacy)
 	}
-	return legacy_v1.PatternSummary(p.legacy)
 }
 
-type v2Pattern struct {
-	placeholders    map[string]v2Placeholder
-	items           []v2Item
+// v3Pattern is an immutable parsed v3 output template.
+// Content lines are raw Go regex full-line matches; omit markers are special.
+type v3Pattern struct {
+	placeholders    map[string]v3Placeholder
+	items           []v3Item
 	trailingNewline bool
 }
 
-type v2Placeholder struct {
+type v3Placeholder struct {
 	Name     string
-	Type     string
+	Type     string // "string", "number", or "regex"
+	Regex    string // custom fragment when Type == "regex"
 	Metadata map[string]string
 }
 
-type v2Item interface {
-	isV2Item()
+type v3Item interface {
+	isV3Item()
 }
 
-type v2LiteralLine struct {
-	Text string
-}
-
-func (v2LiteralLine) isV2Item() {}
-
-type v2PatternLine struct {
-	Segments []v2Segment
-}
-
-func (v2PatternLine) isV2Item() {}
-
-type v2RegexLine struct {
+type v3RegexLine struct {
+	// Pattern is a full-line RE including ^ and $ anchors, with named groups for placeholders.
 	Pattern string
 }
 
-func (v2RegexLine) isV2Item() {}
+func (v3RegexLine) isV3Item() {}
 
-type v2OmitLine struct {
+type v3OmitLine struct {
 	Count int
 }
 
-func (v2OmitLine) isV2Item() {}
+func (v3OmitLine) isV3Item() {}
 
-type v2Segment interface {
-	isV2Segment()
+var v3NamedColors = map[string]string{
+	"bold":  "1",
+	"red":   "31",
+	"green": "32",
+	"gray":  "90",
 }
 
-type v2Literal struct {
-	Text string
-}
+const (
+	v3ColorReset          = "\x1b[0m"
+	v3AnsiColorOpenPrefix = "<ansi-color"
+	v3AnsiColorCloseTag   = "</ansi-color>"
+	v3AnsiColorTagName    = "ansi-color"
+)
 
-func (v2Literal) isV2Segment() {}
-
-type v2PlaceholderRef struct {
-	Name string
-}
-
-func (v2PlaceholderRef) isV2Segment() {}
-
-type v2Color struct {
-	Spec colorSpec
-	Text string
-}
-
-func (v2Color) isV2Segment() {}
-
-type colorSpec struct {
+type v3ColorSpec struct {
 	Tokens []string
 }
 
-func matchV2(p v2Pattern, actual string, normalizeNewlines bool) error {
+func v3ResolveColorOpen(spec v3ColorSpec) (string, error) {
+	var b strings.Builder
+	for _, tok := range spec.Tokens {
+		params, err := v3ColorTokenParams(tok)
+		if err != nil {
+			return "", err
+		}
+		b.WriteString("\x1b[")
+		b.WriteString(params)
+		b.WriteString("m")
+	}
+	return b.String(), nil
+}
+
+func v3ColorTokenParams(tok string) (string, error) {
+	if strings.HasPrefix(tok, "#") {
+		return tok[1:], nil
+	}
+	params, ok := v3NamedColors[tok]
+	if !ok {
+		return "", parseErr(-1, "unknown color name %q; use # for raw SGR", tok)
+	}
+	return params, nil
+}
+
+func v3ParseColorSpec(specText string) (v3ColorSpec, error) {
+	specText = strings.TrimSpace(specText)
+	if specText == "" {
+		return v3ColorSpec{}, parseErr(-1, "empty ansi-color specifier")
+	}
+	var tokens []string
+	for specText != "" {
+		specText = strings.TrimLeft(specText, " \t")
+		if specText == "" {
+			break
+		}
+		if specText[0] == '#' {
+			end := 1
+			for end < len(specText) && specText[end] != ' ' && specText[end] != '\t' {
+				end++
+			}
+			tokens = append(tokens, specText[:end])
+			specText = specText[end:]
+			continue
+		}
+		end := 0
+		for end < len(specText) && specText[end] != ' ' && specText[end] != '\t' {
+			end++
+		}
+		name := specText[:end]
+		if _, ok := v3NamedColors[name]; !ok {
+			return v3ColorSpec{}, parseErr(-1, "unknown color name %q", name)
+		}
+		tokens = append(tokens, name)
+		specText = specText[end:]
+	}
+	return v3ColorSpec{Tokens: tokens}, nil
+}
+
+// matchV3 compares actual output against a v3 pattern. nil means success.
+// When normalizeNewlines is true, \r\n is rewritten to \n before matching.
+// Same-name placeholder bindings must capture equal values across the template.
+func matchV3(p v3Pattern, actual string, normalizeNewlines bool) error {
 	if normalizeNewlines {
 		actual = strings.ReplaceAll(actual, "\r\n", "\n")
 	}
-	if err := checkTrailingNewlineV2(p.trailingNewline, actual); err != nil {
+	if err := v3CheckTrailingNewline(p.trailingNewline, actual); err != nil {
 		return err
 	}
-	lines := splitActualLinesV2(actual)
+	lines := v3SplitActualLines(actual)
+	bindings := make(map[string]string)
 	cursor := 0
-	for _, item := range p.items {
-		n, err := matchV2Item(item, p.placeholders, lines, cursor, 0)
+	for _, it := range p.items {
+		n, err := v3MatchItem(it, lines, cursor, 0, bindings)
 		if err != nil {
 			return err
 		}
@@ -331,7 +337,7 @@ func matchV2(p v2Pattern, actual string, normalizeNewlines bool) error {
 	return nil
 }
 
-func checkTrailingNewlineV2(templateTrailing bool, actual string) error {
+func v3CheckTrailingNewline(templateTrailing bool, actual string) error {
 	actualTrailing := len(actual) > 0 && actual[len(actual)-1] == '\n'
 	if templateTrailing != actualTrailing {
 		return matchErr("output mismatch: trailing newline policy violated")
@@ -339,7 +345,7 @@ func checkTrailingNewlineV2(templateTrailing bool, actual string) error {
 	return nil
 }
 
-func splitActualLinesV2(actual string) []string {
+func v3SplitActualLines(actual string) []string {
 	if actual == "" {
 		return nil
 	}
@@ -350,193 +356,202 @@ func splitActualLinesV2(actual string) []string {
 	return strings.Split(body, "\n")
 }
 
-func matchV2Item(item v2Item, placeholders map[string]v2Placeholder, lines []string, cursor, lineBase int) (int, error) {
-	switch it := item.(type) {
-	case v2LiteralLine:
-		return matchV2LiteralLine(it.Text, lines, cursor, lineBase)
-	case v2PatternLine:
-		return matchV2PatternLine(it, placeholders, lines, cursor, lineBase)
-	case v2RegexLine:
-		return matchV2RegexLine(it.Pattern, lines, cursor, lineBase)
-	case v2OmitLine:
-		return matchV2OmitLine(it.Count, lines, cursor, lineBase)
+func v3MatchItem(it v3Item, lines []string, cursor, lineBase int, bindings map[string]string) (int, error) {
+	switch x := it.(type) {
+	case v3RegexLine:
+		return v3MatchRegexLine(x.Pattern, lines, cursor, lineBase, bindings)
+	case v3OmitLine:
+		return v3MatchOmitLine(x.Count, lines, cursor, lineBase)
 	default:
-		return cursor, matchErr("internal error: unknown v2 item type")
+		return cursor, matchErr("internal error: unknown v3 item type")
 	}
 }
 
-func matchV2LiteralLine(want string, lines []string, cursor, lineBase int) (int, error) {
-	if cursor >= len(lines) {
-		return cursor, matchErr("output mismatch at line %d:\n  want: %q\n  got:  (end of output)", lineBase+cursor+1, want)
-	}
-	got := lines[cursor]
-	if got != want {
-		return cursor, matchErr("output mismatch at line %d:\n  want: %q\n  got:  %q", lineBase+cursor+1, want, got)
-	}
-	return cursor + 1, nil
-}
-
-func matchV2PatternLine(pl v2PatternLine, placeholders map[string]v2Placeholder, lines []string, cursor, lineBase int) (int, error) {
-	if cursor >= len(lines) {
-		return cursor, matchErr("output mismatch at line %d: unexpected end of output", lineBase+cursor+1)
-	}
-	line := lines[cursor]
-	rest, err := matchV2Segments(pl.Segments, placeholders, line, lineBase+cursor+1)
-	if err != nil {
-		return cursor, err
-	}
-	if rest != "" {
-		return cursor, matchErr("output mismatch at line %d:\n  unparsed remainder: %q", lineBase+cursor+1, rest)
-	}
-	return cursor + 1, nil
-}
-
-func matchV2RegexLine(pattern string, lines []string, cursor, lineBase int) (int, error) {
+func v3MatchRegexLine(pattern string, lines []string, cursor, lineBase int, bindings map[string]string) (int, error) {
 	if cursor >= len(lines) {
 		return cursor, matchErr("output mismatch at line %d: regex expected a line", lineBase+cursor+1)
 	}
-	re := regexp.MustCompile(pattern)
-	if !re.MatchString(lines[cursor]) {
-		return cursor, matchErr("output mismatch at line %d:\n  regex %q did not match %q", lineBase+cursor+1, pattern, lines[cursor])
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return cursor, matchErr("internal error: invalid regex: %v", err)
+	}
+	line := lines[cursor]
+	m := re.FindStringSubmatch(line)
+	if m == nil {
+		return cursor, matchErr("output mismatch at line %d:\n  regex %q did not match %q", lineBase+cursor+1, pattern, line)
+	}
+	names := re.SubexpNames()
+	for i, name := range names {
+		if name == "" || i >= len(m) {
+			continue
+		}
+		val := m[i]
+		if prev, ok := bindings[name]; ok && prev != val {
+			return cursor, matchErr("placeholder %s binding mismatch: previously %q, now %q", name, prev, val)
+		}
+		bindings[name] = val
 	}
 	return cursor + 1, nil
 }
 
-func matchV2OmitLine(count int, lines []string, cursor, lineBase int) (int, error) {
+func v3MatchOmitLine(count int, lines []string, cursor, lineBase int) (int, error) {
 	if cursor+count > len(lines) {
 		return cursor, matchErr("output mismatch at line %d: omit expected %d lines, got %d", lineBase+cursor+1, count, len(lines)-cursor)
 	}
 	return cursor + count, nil
 }
 
-func matchV2Segments(segs []v2Segment, placeholders map[string]v2Placeholder, line string, lineNo int) (string, error) {
-	rest := line
-	for _, seg := range segs {
-		var err error
-		rest, err = matchV2Segment(seg, placeholders, rest, lineNo)
-		if err != nil {
-			return rest, err
-		}
-	}
-	return rest, nil
-}
+var (
+	v3PlaceholderNameRE = regexp.MustCompile(`__[A-Z][A-Z0-9_]*__`)
+	v3OmitLineRE        = regexp.MustCompile(`^\.\.\.\s*(\d+)\s*lines\s+omitted\s*\.\.\.$`)
+	v3OmitIntentRE      = regexp.MustCompile(`^\.\.\.\s*.+\s+lines\s+omitted\s*\.\.\.$`)
+)
 
-func matchV2Segment(seg v2Segment, placeholders map[string]v2Placeholder, line string, lineNo int) (string, error) {
-	switch s := seg.(type) {
-	case v2Literal:
-		if !strings.HasPrefix(line, s.Text) {
-			return line, matchErr("output mismatch at line %d:\n  want prefix: %q\n  got:         %q", lineNo, s.Text, line)
-		}
-		return line[len(s.Text):], nil
-	case v2PlaceholderRef:
-		ph, ok := findPlaceholder(placeholders, s.Name)
-		if !ok {
-			return line, matchErr("internal error: undefined placeholder %s", s.Name)
-		}
-		sub, err := placeholderSubpattern(ph.Type)
-		if err != nil {
-			return line, err
-		}
-		re := regexp.MustCompile("^" + sub)
-		loc := re.FindStringIndex(line)
-		if loc == nil || loc[0] != 0 {
-			return line, matchErr("output mismatch at line %d:\n  placeholder __%s__ (%s) did not match %q", lineNo, s.Name, ph.Type, line)
-		}
-		return line[loc[1]:], nil
-	case v2Color:
-		return matchV2Color(s, line, lineNo)
-	default:
-		return line, matchErr("internal error: unknown v2 segment type")
-	}
-}
+// dialectKind classifies a template for facade routing.
+type dialectKind int
 
-func findPlaceholder(placeholders map[string]v2Placeholder, shortName string) (v2Placeholder, bool) {
-	for key, ph := range placeholders {
-		if ph.Name == shortName || key == "__"+shortName+"__" {
-			return ph, true
-		}
-	}
-	return v2Placeholder{}, false
-}
+const (
+	dialectNone dialectKind = iota // no YAML assert dialect → legacy_v1
+	dialectV2
+	dialectV3
+	dialectUnknownVersion
+)
 
-func matchV2Color(c v2Color, line string, lineNo int) (string, error) {
-	open, err := resolveColorOpen(c.Spec)
-	if err != nil {
-		return line, err
+// detectDialect classifies template routing:
+//   - version: 2 → dialectV2
+//   - version: 3 → dialectV3
+//   - unknown version → dialectUnknownVersion (caller errors)
+//   - YAML header with placeholder keys, no version → dialectV3 (default)
+//   - otherwise → dialectNone (legacy_v1), including non-dialect --- frontmatter
+func detectDialect(template string) (kind dialectKind, headerYAML, body string, versionStr string) {
+	template = v3TrimLeadingBlankLinesBeforeHeader(template)
+	if !strings.HasPrefix(template, "---") {
+		return dialectNone, "", template, ""
 	}
-	want := open + c.Text + colorReset
-	if !strings.HasPrefix(line, want) {
-		if strings.HasPrefix(line, c.Text) {
-			return line, matchErr("output mismatch at line %d:\n  ansi-color expected styled %q, got plain text", lineNo, c.Text)
-		}
-		return line, matchErr("output mismatch at line %d:\n  ansi-color expected %q prefix, got %q", lineNo, want, line)
+	rest := template[3:]
+	if strings.HasPrefix(rest, "\r\n") {
+		rest = rest[2:]
+	} else if strings.HasPrefix(rest, "\n") {
+		rest = rest[1:]
+	} else {
+		return dialectNone, "", template, ""
 	}
-	return line[len(want):], nil
-}
+	closeIdx := strings.Index(rest, "\n---")
+	if closeIdx < 0 {
+		return dialectNone, "", template, ""
+	}
+	headerYAML = rest[:closeIdx]
+	body = rest[closeIdx+4:]
+	if strings.HasPrefix(body, "\r\n") {
+		body = body[2:]
+	} else if strings.HasPrefix(body, "\n") {
+		body = body[1:]
+	}
 
-func parseV2(headerYAML, body string) (v2Pattern, error) {
 	var raw map[string]any
 	if err := yaml.Unmarshal([]byte(headerYAML), &raw); err != nil {
-		return v2Pattern{}, parseErr(0, "invalid YAML header: %v", err)
+		return dialectNone, "", template, ""
 	}
 
-	placeholders := make(map[string]v2Placeholder)
+	version, hasVersion := raw["version"]
+	if hasVersion {
+		versionStr = fmt.Sprint(version)
+		// Normalize float-ish YAML ints (e.g. 2.0).
+		switch v := version.(type) {
+		case int:
+			versionStr = fmt.Sprintf("%d", v)
+		case int64:
+			versionStr = fmt.Sprintf("%d", v)
+		case float64:
+			if v == float64(int(v)) {
+				versionStr = fmt.Sprintf("%d", int(v))
+			}
+		}
+		switch versionStr {
+		case "2":
+			return dialectV2, headerYAML, body, versionStr
+		case "3":
+			return dialectV3, headerYAML, body, versionStr
+		default:
+			return dialectUnknownVersion, headerYAML, body, versionStr
+		}
+	}
+
+	// No version key: default to v3 only for YAML dialect with placeholder defs.
+	// Plain frontmatter without placeholders stays on legacy_v1 (v2 missing-version leaf).
+	for key := range raw {
+		if v3PlaceholderNameRE.MatchString(key) {
+			return dialectV3, headerYAML, body, ""
+		}
+	}
+	return dialectNone, "", template, ""
+}
+
+// parseV3 parses a v3 YAML header and template body into a v3Pattern.
+func parseV3(headerYAML, body string) (v3Pattern, error) {
+	var raw map[string]any
+	if err := yaml.Unmarshal([]byte(headerYAML), &raw); err != nil {
+		return v3Pattern{}, parseErr(0, "invalid YAML header: %v", err)
+	}
+
+	placeholders := make(map[string]v3Placeholder)
 	for key, val := range raw {
 		if key == "version" {
 			continue
 		}
-		if !placeholderNameRE.MatchString(key) {
+		if !v3PlaceholderNameRE.MatchString(key) {
 			continue
 		}
 		text, ok := val.(string)
 		if !ok {
-			return v2Pattern{}, parseErr(0, "invalid placeholder definition for %s", key)
+			return v3Pattern{}, parseErr(0, "invalid placeholder definition for %s", key)
 		}
-		ph, err := parsePlaceholderDef(key, text)
+		ph, err := v3ParsePlaceholderDef(key, text)
 		if err != nil {
-			return v2Pattern{}, err
+			return v3Pattern{}, err
 		}
 		placeholders[key] = ph
 	}
 
-	lines, trailing := splitTemplateLines(body)
-	var items []v2Item
+	lines, trailing := v3SplitTemplateLines(body)
+	var items []v3Item
 	for i, line := range lines {
-		pos := lineOffset(lines, i)
-		if omitIntentRE.MatchString(strings.TrimSpace(line)) {
-			count, ok := isOmitLine(line)
+		pos := v3LineOffset(lines, i)
+		if v3OmitIntentRE.MatchString(strings.TrimSpace(line)) {
+			count, ok := v3IsOmitLine(line)
 			if !ok {
-				return v2Pattern{}, parseErr(pos, "invalid omit marker syntax")
+				return v3Pattern{}, parseErr(pos, "invalid omit marker syntax")
 			}
-			items = append(items, v2OmitLine{Count: count})
+			items = append(items, v3OmitLine{Count: count})
 			continue
 		}
-		item, err := parseV2Line(line, pos, placeholders, hasRegexIntent(line))
+		it, err := v3ParseContentLine(line, pos, placeholders)
 		if err != nil {
-			return v2Pattern{}, err
+			return v3Pattern{}, err
 		}
-		items = append(items, item)
+		items = append(items, it)
 	}
 
-	if err := validatePlaceholdersUsed(body, placeholders); err != nil {
-		return v2Pattern{}, err
+	if err := v3ValidatePlaceholdersUsed(body, placeholders); err != nil {
+		return v3Pattern{}, err
 	}
 
-	return v2Pattern{
+	return v3Pattern{
 		placeholders:    placeholders,
 		items:           items,
 		trailingNewline: trailing,
 	}, nil
 }
 
-func parsePlaceholderDef(name, raw string) (v2Placeholder, error) {
-	parts := splitCompactParts(raw)
+func v3ParsePlaceholderDef(name, raw string) (v3Placeholder, error) {
+	parts := v3SplitCompactParts(raw)
 	if len(parts) == 0 {
-		return v2Placeholder{}, parseErr(0, "empty placeholder definition for %s", name)
+		return v3Placeholder{}, parseErr(0, "empty placeholder definition for %s", name)
 	}
 
 	meta := make(map[string]string)
 	var typ string
+	var customRE string
 	for _, part := range parts {
 		eq := strings.Index(part, "=")
 		if eq <= 0 {
@@ -547,25 +562,39 @@ func parsePlaceholderDef(name, raw string) (v2Placeholder, error) {
 		if key == "" || val == "" {
 			break
 		}
-		if key == "type" {
+		switch key {
+		case "type":
 			typ = val
-		} else {
+		case "regex":
+			customRE = val
+		default:
 			meta[key] = val
 		}
 	}
 
-	if typ == "" {
-		return v2Placeholder{}, parseErr(0, "placeholder %s missing type", name)
+	if typ != "" && customRE != "" {
+		return v3Placeholder{}, parseErr(0, "placeholder %s cannot set both type= and regex=", name)
 	}
-	if typ != "string" && typ != "number" {
-		return v2Placeholder{}, parseErr(0, "unknown placeholder type %q for %s", typ, name)
+	if typ == "" && customRE == "" {
+		return v3Placeholder{}, parseErr(0, "placeholder %s missing type or regex", name)
 	}
 
 	shortName := strings.Trim(name, "_")
-	return v2Placeholder{Name: shortName, Type: typ, Metadata: meta}, nil
+
+	if customRE != "" {
+		if _, err := regexp.Compile(customRE); err != nil {
+			return v3Placeholder{}, parseErr(0, "invalid regex for %s: %v", name, err)
+		}
+		return v3Placeholder{Name: shortName, Type: "regex", Regex: customRE, Metadata: meta}, nil
+	}
+
+	if typ != "string" && typ != "number" {
+		return v3Placeholder{}, parseErr(0, "unknown placeholder type %q for %s", typ, name)
+	}
+	return v3Placeholder{Name: shortName, Type: typ, Metadata: meta}, nil
 }
 
-func splitCompactParts(raw string) []string {
+func v3SplitCompactParts(raw string) []string {
 	var parts []string
 	var cur strings.Builder
 	depth := 0
@@ -596,8 +625,8 @@ func splitCompactParts(raw string) []string {
 	return parts
 }
 
-func validatePlaceholdersUsed(body string, defined map[string]v2Placeholder) error {
-	used := placeholderNameRE.FindAllString(body, -1)
+func v3ValidatePlaceholdersUsed(body string, defined map[string]v3Placeholder) error {
+	used := v3PlaceholderNameRE.FindAllString(body, -1)
 	seen := make(map[string]bool)
 	for _, name := range used {
 		if seen[name] {
@@ -612,140 +641,76 @@ func validatePlaceholdersUsed(body string, defined map[string]v2Placeholder) err
 	return nil
 }
 
-func parseV2Line(line string, pos int, placeholders map[string]v2Placeholder, regexIntent bool) (v2Item, error) {
-	if regexIntent {
-		pattern, err := buildRegexPattern(line, placeholders)
-		if err != nil {
-			return nil, err
-		}
-		if _, err := regexp.Compile(pattern); err != nil {
-			return nil, parseErr(pos, "invalid regex: %v", err)
-		}
-		return v2RegexLine{Pattern: pattern}, nil
+func v3IsOmitLine(line string) (int, bool) {
+	m := v3OmitLineRE.FindStringSubmatch(strings.TrimSpace(line))
+	if m == nil {
+		return 0, false
 	}
-
-	if !strings.Contains(line, "__") && !strings.Contains(line, ansiColorOpenPrefix) {
-		return v2LiteralLine{Text: line}, nil
+	var count int
+	for _, ch := range m[1] {
+		count = count*10 + int(ch-'0')
 	}
+	return count, true
+}
 
-	segments, err := parseV2Segments(line, pos, placeholders)
+// v3ParseContentLine builds a full-line raw RE with named capture groups for placeholders.
+// Color spans keep CSI structure with QuoteMeta on open/inner/reset; outside tags stay raw RE.
+func v3ParseContentLine(line string, pos int, placeholders map[string]v3Placeholder) (v3Item, error) {
+	body, err := v3BuildRegexBody(line, pos, placeholders)
 	if err != nil {
 		return nil, err
 	}
-	if len(segments) == 1 {
-		if lit, ok := segments[0].(v2Literal); ok {
-			return v2LiteralLine{Text: lit.Text}, nil
-		}
+	pattern := "^" + body + "$"
+	if _, err := regexp.Compile(pattern); err != nil {
+		return nil, parseErr(pos, "invalid regex: %v", err)
 	}
-	return v2PatternLine{Segments: segments}, nil
+	return v3RegexLine{Pattern: pattern}, nil
 }
 
-func parseV2Segments(line string, pos int, placeholders map[string]v2Placeholder) ([]v2Segment, error) {
-	var segments []v2Segment
-	i := 0
-	for i < len(line) {
-		if strings.HasPrefix(line[i:], ansiColorOpenPrefix) {
-			seg, n, err := parseColorSegment(line, i, pos+i)
-			if err != nil {
-				return nil, err
-			}
-			segments = append(segments, seg)
-			i += n
-			continue
-		}
-		nextPH := placeholderNameRE.FindStringIndex(line[i:])
-		nextColor := strings.Index(line[i:], ansiColorOpenPrefix)
-		litEnd := len(line)
-		if nextPH != nil {
-			litEnd = i + nextPH[0]
-		}
-		if nextColor >= 0 && i+nextColor < litEnd {
-			litEnd = i + nextColor
-		}
-		if litEnd > i {
-			segments = append(segments, v2Literal{Text: line[i:litEnd]})
-			i = litEnd
-			continue
-		}
-		if nextPH != nil {
-			name := line[i+nextPH[0] : i+nextPH[1]]
-			if _, ok := placeholders[name]; !ok {
-				short := strings.Trim(name, "_")
-				return nil, parseErr(pos+i, "undefined placeholder __%s__", short)
-			}
-			short := strings.Trim(name, "_")
-			segments = append(segments, v2PlaceholderRef{Name: short})
-			i += nextPH[1]
-			continue
-		}
-		if nextColor >= 0 {
-			continue
-		}
-		break
-	}
-	return segments, nil
-}
-
-func parseColorSegment(line string, start, pos int) (v2Segment, int, error) {
-	openEnd := strings.Index(line[start:], ">")
-	if openEnd < 0 {
-		return nil, 0, parseErr(pos, "unclosed <ansi-color>")
-	}
-	openEnd += start
-	openTag := line[start+1 : openEnd]
-	if !strings.HasPrefix(openTag, ansiColorTagName) {
-		return nil, 0, parseErr(pos, "expected <ansi-color>")
-	}
-	specText := strings.TrimSpace(openTag[len(ansiColorTagName):])
-	spec, err := parseColorSpec(specText)
-	if err != nil {
-		return nil, 0, err
-	}
-	closeIdx := strings.Index(line[openEnd+1:], ansiColorCloseTag)
-	if closeIdx < 0 {
-		return nil, 0, parseErr(pos, "unclosed <ansi-color>")
-	}
-	inner := line[openEnd+1 : openEnd+1+closeIdx]
-	if inner == "" {
-		return nil, 0, parseErr(pos, "empty ansi-color inner text")
-	}
-	consumed := openEnd + 1 + closeIdx + len(ansiColorCloseTag) - start
-	return v2Color{Spec: spec, Text: inner}, consumed, nil
-}
-
-func buildRegexPattern(line string, placeholders map[string]v2Placeholder) (string, error) {
+func v3BuildRegexBody(line string, pos int, placeholders map[string]v3Placeholder) (string, error) {
 	var b strings.Builder
+	// Track which placeholder names already introduced a named group on this line
+	// so repeats use backreferences (?P=NAME) — Go forbids duplicate named groups.
+	namedIntroduced := make(map[string]bool)
 	i := 0
 	for i < len(line) {
-		if strings.HasPrefix(line[i:], ansiColorOpenPrefix) {
+		if strings.HasPrefix(line[i:], v3AnsiColorOpenPrefix) {
 			openEnd := strings.Index(line[i:], ">")
 			if openEnd < 0 {
-				return "", parseErr(-1, "unclosed <ansi-color>")
+				return "", parseErr(pos+i, "unclosed <ansi-color>")
 			}
 			openEnd += i
 			openTag := line[i+1 : openEnd]
-			specText := strings.TrimSpace(strings.TrimPrefix(openTag, ansiColorTagName))
-			spec, err := parseColorSpec(specText)
+			if !strings.HasPrefix(openTag, v3AnsiColorTagName) {
+				return "", parseErr(pos+i, "expected <ansi-color>")
+			}
+			specText := strings.TrimSpace(openTag[len(v3AnsiColorTagName):])
+			spec, err := v3ParseColorSpec(specText)
 			if err != nil {
 				return "", err
 			}
-			closeIdx := strings.Index(line[openEnd+1:], ansiColorCloseTag)
+			closeIdx := strings.Index(line[openEnd+1:], v3AnsiColorCloseTag)
 			if closeIdx < 0 {
-				return "", parseErr(-1, "unclosed <ansi-color>")
+				return "", parseErr(pos+i, "unclosed <ansi-color>")
 			}
 			inner := line[openEnd+1 : openEnd+1+closeIdx]
-			open, err := resolveColorOpen(spec)
+			if inner == "" {
+				return "", parseErr(pos+i, "empty ansi-color inner text")
+			}
+			open, err := v3ResolveColorOpen(spec)
 			if err != nil {
 				return "", err
 			}
+			// CSI structure kept; inner text QuoteMeta'd (literal dots etc.).
 			b.WriteString(regexp.QuoteMeta(open))
 			b.WriteString(regexp.QuoteMeta(inner))
-			b.WriteString(regexp.QuoteMeta(colorReset))
-			i = openEnd + 1 + closeIdx + len(ansiColorCloseTag)
+			b.WriteString(regexp.QuoteMeta(v3ColorReset))
+			i = openEnd + 1 + closeIdx + len(v3AnsiColorCloseTag)
 			continue
 		}
-		nextPH := placeholderNameRE.FindStringIndex(line[i:])
-		nextColor := strings.Index(line[i:], ansiColorOpenPrefix)
+
+		nextPH := v3PlaceholderNameRE.FindStringIndex(line[i:])
+		nextColor := strings.Index(line[i:], v3AnsiColorOpenPrefix)
 		litEnd := len(line)
 		if nextPH != nil {
 			litEnd = i + nextPH[0]
@@ -754,22 +719,35 @@ func buildRegexPattern(line string, placeholders map[string]v2Placeholder) (stri
 			litEnd = i + nextColor
 		}
 		if litEnd > i {
-			b.WriteString(regexp.QuoteMeta(line[i:litEnd]))
+			// Raw RE syntax outside placeholders and color tags.
+			b.WriteString(line[i:litEnd])
 			i = litEnd
 			continue
 		}
 		if nextPH != nil {
-			name := line[i+nextPH[0] : i+nextPH[1]]
-			ph, ok := placeholders[name]
+			full := line[i+nextPH[0] : i+nextPH[1]]
+			ph, ok := placeholders[full]
 			if !ok {
-				short := strings.Trim(name, "_")
-				return "", parseErr(-1, "undefined placeholder __%s__", short)
+				short := strings.Trim(full, "_")
+				return "", parseErr(pos+i, "undefined placeholder __%s__", short)
 			}
-			sub, err := placeholderSubpattern(ph.Type)
+			sub, err := v3PlaceholderSubpattern(ph)
 			if err != nil {
 				return "", err
 			}
-			b.WriteString(sub)
+			if namedIntroduced[ph.Name] {
+				// Same-name binding within the line via named backreference.
+				b.WriteString("(?P=")
+				b.WriteString(ph.Name)
+				b.WriteString(")")
+			} else {
+				b.WriteString("(?P<")
+				b.WriteString(ph.Name)
+				b.WriteString(">")
+				b.WriteString(sub)
+				b.WriteString(")")
+				namedIntroduced[ph.Name] = true
+			}
 			i += nextPH[1]
 			continue
 		}
@@ -778,7 +756,23 @@ func buildRegexPattern(line string, placeholders map[string]v2Placeholder) (stri
 	return b.String(), nil
 }
 
-func splitTemplateLines(s string) ([]string, bool) {
+func v3PlaceholderSubpattern(ph v3Placeholder) (string, error) {
+	switch ph.Type {
+	case "string":
+		return `[^\n]*?`, nil
+	case "number":
+		return `-?\d+(?:\.\d+)?`, nil
+	case "regex":
+		if ph.Regex == "" {
+			return "", parseErr(-1, "placeholder %s missing regex fragment", ph.Name)
+		}
+		return ph.Regex, nil
+	default:
+		return "", parseErr(-1, "unknown placeholder type %q", ph.Type)
+	}
+}
+
+func v3SplitTemplateLines(s string) ([]string, bool) {
 	trailing := strings.HasSuffix(s, "\n")
 	if s == "" {
 		return nil, trailing
@@ -790,7 +784,7 @@ func splitTemplateLines(s string) ([]string, bool) {
 	return strings.Split(body, "\n"), trailing
 }
 
-func lineOffset(lines []string, lineIdx int) int {
+func v3LineOffset(lines []string, lineIdx int) int {
 	if lineIdx <= 0 {
 		return 0
 	}
@@ -801,7 +795,7 @@ func lineOffset(lines []string, lineIdx int) int {
 	return offset
 }
 
-func trimLeadingBlankLinesBeforeV2Header(s string) string {
+func v3TrimLeadingBlankLinesBeforeHeader(s string) string {
 	for len(s) > 0 {
 		if strings.HasPrefix(s, "---") {
 			return s
@@ -823,230 +817,19 @@ func trimLeadingBlankLinesBeforeV2Header(s string) string {
 	return s
 }
 
-func detectV2(template string) (bool, string, string, error) {
-	template = trimLeadingBlankLinesBeforeV2Header(template)
-	if !strings.HasPrefix(template, "---") {
-		return false, "", template, nil
-	}
-	rest := template[3:]
-	if strings.HasPrefix(rest, "\r\n") {
-		rest = rest[2:]
-	} else if strings.HasPrefix(rest, "\n") {
-		rest = rest[1:]
-	} else {
-		return false, "", template, nil
-	}
-	closeIdx := strings.Index(rest, "\n---")
-	if closeIdx < 0 {
-		return false, "", template, nil
-	}
-	headerYAML := rest[:closeIdx]
-	body := rest[closeIdx+4:]
-	if strings.HasPrefix(body, "\r\n") {
-		body = body[2:]
-	} else if strings.HasPrefix(body, "\n") {
-		body = body[1:]
-	}
-
-	var raw map[string]any
-	if err := yaml.Unmarshal([]byte(headerYAML), &raw); err != nil {
-		return false, "", template, nil
-	}
-	version, ok := raw["version"]
-	if !ok {
-		return false, "", template, nil
-	}
-	switch v := version.(type) {
-	case int:
-		if v != 2 {
-			return false, "", template, nil
-		}
-	case int64:
-		if v != 2 {
-			return false, "", template, nil
-		}
-	case float64:
-		if int(v) != 2 {
-			return false, "", template, nil
-		}
-	default:
-		if fmt.Sprint(v) != "2" {
-			return false, "", template, nil
-		}
-	}
-	return true, headerYAML, body, nil
-}
-
-var (
-	placeholderNameRE = regexp.MustCompile(`__[A-Z][A-Z0-9_]*__`)
-	omitLineRE        = regexp.MustCompile(`^\.\.\.\s*(\d+)\s*lines\s+omitted\s*\.\.\.$`)
-	omitIntentRE      = regexp.MustCompile(`^\.\.\.\s*.+\s+lines\s+omitted\s*\.\.\.$`)
-)
-
-func isOmitLine(line string) (int, bool) {
-	m := omitLineRE.FindStringSubmatch(strings.TrimSpace(line))
-	if m == nil {
-		return 0, false
-	}
-	var count int
-	for _, ch := range m[1] {
-		count = count*10 + int(ch-'0')
-	}
-	return count, true
-}
-
-func hasRegexIntent(line string) bool {
-	masked := maskProtectedRegions(line)
-	return scanRegexSignals(masked)
-}
-
-func maskProtectedRegions(line string) string {
-	out := line
-	for _, name := range placeholderNameRE.FindAllString(line, -1) {
-		out = strings.ReplaceAll(out, name, strings.Repeat(" ", len(name)))
-	}
-	for {
-		start := strings.Index(out, ansiColorOpenPrefix)
-		if start < 0 {
-			break
-		}
-		openEnd := strings.Index(out[start:], ">")
-		if openEnd < 0 {
-			break
-		}
-		openEnd += start
-		closeStart := strings.Index(out[openEnd+1:], ansiColorCloseTag)
-		if closeStart < 0 {
-			break
-		}
-		closeStart += openEnd + 1
-		span := out[start : closeStart+len(ansiColorCloseTag)]
-		out = strings.Replace(out, span, strings.Repeat(" ", len(span)), 1)
-	}
-	return out
-}
-
-func scanRegexSignals(s string) bool {
-	for i := 0; i < len(s); i++ {
-		switch s[i] {
-		case '.':
-			if i+1 < len(s) {
-				switch s[i+1] {
-				case '*', '+', '?':
-					return true
-				case '.':
-					return true
-				}
-			}
-		case '^':
-			if i == 0 {
-				return true
-			}
-		case '$':
-			if i == len(s)-1 {
-				return true
-			}
-		case '\\':
-			if i+1 < len(s) {
-				switch s[i+1] {
-				case 'd', 'D', 'w', 'W', 's', 'S', 'b', 'B':
-					return true
-				}
-			}
-		case '[':
-			if findBalancedBracket(s, i) {
-				return true
-			}
-		case '|':
-			if isAlternationSignal(s, i) {
-				return true
-			}
-		case '{':
-			if isQuantifierBrace(s, i) {
-				return true
-			}
-		case '*', '+':
-			if i+1 < len(s) && s[i+1] == '?' {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func findBalancedBracket(s string, start int) bool {
-	if start >= len(s) || s[start] != '[' {
-		return false
-	}
-	depth := 0
-	for i := start; i < len(s); i++ {
-		if s[i] == '[' {
-			depth++
-		} else if s[i] == ']' {
-			depth--
-			if depth == 0 {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func isAlternationSignal(s string, pipeIdx int) bool {
-	left := strings.TrimSpace(s[:pipeIdx])
-	right := strings.TrimSpace(s[pipeIdx+1:])
-	return left != "" && right != ""
-}
-
-func isQuantifierBrace(s string, start int) bool {
-	if start >= len(s) || s[start] != '{' {
-		return false
-	}
-	end := strings.Index(s[start:], "}")
-	if end < 0 {
-		return false
-	}
-	inner := s[start+1 : start+end]
-	if inner == "" {
-		return false
-	}
-	for i, ch := range inner {
-		if ch == ',' {
-			continue
-		}
-		if ch < '0' || ch > '9' {
-			if i == 0 {
-				return false
-			}
-			return false
-		}
-	}
-	return true
-}
-
-func placeholderSubpattern(typ string) (string, error) {
-	switch typ {
-	case "string":
-		return `[^\n]*?`, nil
-	case "number":
-		return `-?\d+(?:\.\d+)?`, nil
-	default:
-		return "", parseErr(-1, "unknown placeholder type %q", typ)
-	}
-}
-
-func summaryV2(p v2Pattern) string {
+// v3PatternSummary returns a stable summary string for v3 pattern introspection.
+func v3PatternSummary(p v3Pattern) string {
 	var parts []string
 	if len(p.placeholders) > 0 {
-		parts = append(parts, summarizeV2Placeholders(p.placeholders))
+		parts = append(parts, v3SummarizePlaceholders(p.placeholders))
 	}
-	for _, item := range p.items {
-		parts = append(parts, summarizeV2Item(item))
+	for _, it := range p.items {
+		parts = append(parts, v3SummarizeItem(it))
 	}
-	return combineV2SummaryParts(parts)
+	return v3CombineSummaryParts(parts)
 }
 
-func summarizeV2Placeholders(placeholders map[string]v2Placeholder) string {
+func v3SummarizePlaceholders(placeholders map[string]v3Placeholder) string {
 	names := make([]string, 0, len(placeholders))
 	for _, ph := range placeholders {
 		names = append(names, ph.Name)
@@ -1056,7 +839,7 @@ func summarizeV2Placeholders(placeholders map[string]v2Placeholder) string {
 	for _, name := range names {
 		for _, ph := range placeholders {
 			if ph.Name == name {
-				defs = append(defs, summarizeV2Placeholder(ph))
+				defs = append(defs, v3SummarizePlaceholder(ph))
 				break
 			}
 		}
@@ -1064,7 +847,7 @@ func summarizeV2Placeholders(placeholders map[string]v2Placeholder) string {
 	return "Placeholders:" + strings.Join(defs, ",")
 }
 
-func summarizeV2Placeholder(ph v2Placeholder) string {
+func v3SummarizePlaceholder(ph v3Placeholder) string {
 	s := fmt.Sprintf("%s{%s", ph.Name, ph.Type)
 	keys := make([]string, 0, len(ph.Metadata))
 	for k := range ph.Metadata {
@@ -1074,75 +857,27 @@ func summarizeV2Placeholder(ph v2Placeholder) string {
 	for _, k := range keys {
 		s += "," + k + "=" + ph.Metadata[k]
 	}
+	if ph.Type == "regex" && ph.Regex != "" {
+		s += ",regex=" + ph.Regex
+	}
 	s += "}"
 	return s
 }
 
-func summarizeV2Item(item v2Item) string {
-	switch it := item.(type) {
-	case v2LiteralLine:
-		return "LiteralLine"
-	case v2PatternLine:
-		return "PatternLine segments:" + summarizeV2Segments(it.Segments)
-	case v2RegexLine:
+func v3SummarizeItem(it v3Item) string {
+	switch x := it.(type) {
+	case v3RegexLine:
 		return "RegexLine"
-	case v2OmitLine:
-		return fmt.Sprintf("OmitLine{%d}", it.Count)
+	case v3OmitLine:
+		return fmt.Sprintf("OmitLine{%d}", x.Count)
 	default:
 		return "Unknown"
 	}
 }
 
-func summarizeV2Segments(segs []v2Segment) string {
-	parts := make([]string, 0, len(segs))
-	for _, seg := range segs {
-		parts = append(parts, summarizeV2Segment(seg))
-	}
-	return strings.Join(parts, "+")
-}
-
-func summarizeV2Segment(seg v2Segment) string {
-	switch s := seg.(type) {
-	case v2Literal:
-		return "Literal"
-	case v2PlaceholderRef:
-		return fmt.Sprintf("Placeholder{%s}", s.Name)
-	case v2Color:
-		return "Color " + strings.Join(s.Spec.Tokens, " ")
-	default:
-		return "Unknown"
-	}
-}
-
-func combineV2SummaryParts(parts []string) string {
+func v3CombineSummaryParts(parts []string) string {
 	if len(parts) == 0 {
 		return ""
 	}
-	itemParts := parts
-	if strings.HasPrefix(parts[0], "Placeholders:") {
-		if len(parts) == 1 {
-			return parts[0]
-		}
-		itemParts = parts[1:]
-	}
-	if len(itemParts) >= 2 && itemParts[0] == "LiteralLine" {
-		allLiteral := true
-		for _, p := range itemParts {
-			if p != "LiteralLine" {
-				allLiteral = false
-				break
-			}
-		}
-		if allLiteral {
-			prefix := ""
-			if strings.HasPrefix(parts[0], "Placeholders:") {
-				prefix = parts[0] + "+"
-			}
-			return prefix + fmt.Sprintf("LiteralLine×%d", len(itemParts))
-		}
-	}
-	if strings.HasPrefix(parts[0], "Placeholders:") {
-		return strings.Join(parts, "+")
-	}
-	return strings.Join(itemParts, "+")
+	return strings.Join(parts, "+")
 }

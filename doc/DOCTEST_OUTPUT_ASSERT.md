@@ -1,9 +1,9 @@
 ---
 name: doctest-output-assert
 description: >-
-  Output assert DSL v2 for doctest ASSERT.md — YAML header, placeholders, strict
-  line match, and migration from strings.Contains. Use when asserting CLI or text
-  output in doc-style tests.
+  Output assert DSL v3 for doctest ASSERT.md — YAML header, raw per-line regex,
+  placeholders, same-value binding, and migration from ad-hoc string checks.
+  Use when asserting CLI or text output in doc-style tests.
 ---
 
 # Output Assert DSL
@@ -12,7 +12,13 @@ Package: `github.com/xhd2015/doctest/assert`
 
 Readable **template-shaped expected output** for doctest `ASSERT.md` leaves. Replaces ad-hoc `strings.Contains`, `strings.Index`, and hand-rolled parsing.
 
-Design history: `doc/DESIGN_OUTPUT_ASSERT.md`. v1 tag syntax lives in `assert/legacy_v1/`.
+Design history: `doc/DESIGN_OUTPUT_ASSERT.md`. Older dialects:
+
+| Version | Package / status |
+|---------|------------------|
+| **v3 (default)** | root `assert` — preferred for new tests |
+| **v2** | `assert/legacy_v2` — **deprecated**; only with explicit `version: 2` |
+| **v1** | `assert/legacy_v1` — tag DSL (`<contains>`, …) when not using YAML dialect |
 
 ## When to use
 
@@ -21,11 +27,13 @@ Design history: `doc/DESIGN_OUTPUT_ASSERT.md`. v1 tag syntax lives in `assert/le
 | Bounded stdout/stderr (typical leaf) | `assert.Output(t, actual, template)` — strict full match |
 | Variable port, path, user, count | `__PLACEHOLDER__` in YAML header + template body |
 | Middle section may differ (stack trace, progress) | `...N lines omitted...` |
-| Flexible single line (dots, prefixes) | regex line (e.g. `^\.+$`) |
-| ANSI-colored segments | `<ansi-color bold gray>…</ansi-color>` |
+| Flexible single line (dots, prefixes) | raw regex on the line (e.g. `^\.+$`) |
+| Literal dots / parens in output | Escape: `0\.001s`, `foo\(bar\)` |
+| ANSI-colored segments | `<ansi-color bold gray>…</ansi-color>` (inner text is literal) |
+| Structured variable (SHA, UUID) | `regex=` on the placeholder def |
 | Document example values for readers | `example=…` in placeholder header (metadata only) |
 
-**v2 is strict line-by-line full match.** There is no `<contains>` or `assert.Contains()` in v2 templates.
+**v3 is strict line-by-line full match.** There is no `<contains>` or `assert.Contains()` in v3 templates.
 
 ## API
 
@@ -37,8 +45,16 @@ err = assert.Match(p, actual)       // strict full match (default)
 assert.Output(t, actual, template)  // Parse + Match + t.Fatal
 ```
 
-- Templates with `version: 2` in the YAML header use the v2 parser.
-- Templates without `version: 2` fall back to v1 (`assert/legacy_v1/`).
+### Version routing
+
+| Template | Engine |
+|----------|--------|
+| YAML header with `version: 3` | **v3** |
+| YAML header with placeholders / YAML dialect and **no** version key | **v3** (default) |
+| YAML header with `version: 2` | **legacy_v2** (deprecated) |
+| Unknown `version:` value | **parse error** |
+| v1 tag DSL (no YAML version dialect) | **legacy_v1** |
+
 - `\r\n` → `\n` normalization is always on.
 - Trailing newlines are **strict** (template and actual must agree).
 - Matching is **case-sensitive**.
@@ -46,9 +62,8 @@ assert.Output(t, actual, template)  // Parse + Match + t.Fatal
 ### CLI stdout trailing newline (required)
 
 User-facing CLI stdout **must** end with a final `\n` (POSIX convention — keeps
-the shell prompt on its own line). v2 templates for CLI output **must** include
-that trailing newline too, so template and actual agree **and** the product
-behaves correctly in a real terminal.
+the shell prompt on its own line). v3 templates for CLI output **must** include
+that trailing newline too.
 
 **Go authoring pattern** — put the closing backtick on the line **after** the
 last content line (not on the same line, and not separated by an extra blank
@@ -56,7 +71,7 @@ line):
 
 ````go
 assert.Output(t, resp.Stdout, `---
-version: 2
+version: 3
 ---
 Hello world
 `)
@@ -72,25 +87,27 @@ template. That forces the implementation to also omit `\n`, which glues the
 shell prompt to the last line. Implementers must not strip `\n` from product code
 to pass such tests — fix the template instead.
 
-## Template shape (v2)
+## Template shape (v3)
 
 ```DSL
 ---
-version: 2
+version: 3
 __PORT__: type=number, example=8901, a port
 __USER__: type=string, example=alice, logged-in user
+__SHA__: regex=[0-9a-f]{7,40}, example=abc1234, short git sha
 ---
 Server listen on: __PORT__
 ...3 lines omitted...
 Hello __USER__
+commit __SHA__
 <ansi-color bold gray>1 Cached</ansi-color>
 ```
 
 | Part | Role |
 |------|------|
-| `---` … `---` | YAML header; `version: 2` selects v2 |
-| `__NAME__:` | Placeholder definition (compact `k=v` metadata + human explanation) |
-| Body lines | Strict sequential match against actual output |
+| `---` … `---` | YAML header; omit version or set `version: 3` for v3; `version: 2` is deprecated |
+| `__NAME__:` | Placeholder definition (`type=` and/or `regex=`, plus `example=` / explanation) |
+| Body lines | Each **content** line is a **raw Go regular expression**, full-line match (`^…$`) |
 
 In Go `ASSERT.md` blocks, pass the template as one raw string starting with `---` — no `` + `` concatenation needed. Leading blank lines before the opening `---` are trimmed; trailing blank lines in the body are preserved.
 
@@ -100,6 +117,7 @@ Compact form (preferred):
 
 ```yaml
 __PORT__: type=number, example=8901, a port
+__SHA__: regex=[0-9a-f]{7,40}, example=a1b2c3d, short sha
 ```
 
 - `k=v` pairs before the first bare word — machine metadata
@@ -107,52 +125,53 @@ __PORT__: type=number, example=8901, a port
 
 | Field | Required | Values |
 |-------|----------|--------|
-| `type` | yes | `string`, `number` |
+| `type` | one of `type` or `regex` | `string`, `number` |
+| `regex` | one of `type` or `regex` | Go regexp **fragment** (subpattern) |
 | `example` | no | documentation for readers |
 
-| type | Matches on one line |
+| Spec | Matches on one line |
 |------|---------------------|
-| `string` | any non-newline text |
-| `number` | integer or float (`-?\d+(\.\d+)?`) |
+| `type=string` | any non-newline text (`[^\n]*?`, non-greedy) |
+| `type=number` | integer or float (`-?\d+(?:\.\d+)?`) — **loose** |
+| `regex=…` | custom subpattern; invalid fragment → **parse error** |
+
+**Do not set both `type=` and `regex=`** on the same placeholder — that is a **parse error**.
 
 Every `__NAME__` used in the body must be defined in the header.
 
+Placeholders expand to **named capture groups** (`(?P<NAME>…)`). If the same
+`__NAME__` appears more than once, all captures must be the **same string**
+(same-value binding). Mismatches fail the match with a clear error.
+
 ### Body line kinds
 
-1. **Pattern line** (default) — literal text with optional `__PLACEHOLDER__` and `<ansi-color>` spans. Full line must match.
+1. **Content line (default)** — entire line is a Go regexp matched as a full line.
+   - Metacharacters are active: `.` matches any character, `(` starts a group, etc.
+   - Escape literals with `\`: write `0\.001s` for the text `0.001s`.
+   - `__PLACEHOLDER__` is replaced by the placeholder subpattern (named group).
+   - There is **no** separate “regex intent” scan and **no** automatic QuoteMeta of the whole line.
 
-2. **Regex line** — detected by regex-intent scan (see below). Entire line is a Go regexp (full line match). Placeholders expand to typed subpatterns; `<ansi-color>` spans expand to literal ANSI envelope.
+2. **Omit marker** — `...N lines omitted...` (whitespace allowed around parts).
+   Special (not a content regex). Skips exactly **N** actual lines (any content).
+   `N` must be a non-negative integer.
 
-3. **Omit marker** — `...N lines omitted...` (whitespace allowed around parts). Skips exactly **N** actual lines (any content). `N` must be a non-negative integer.
+### Escaping cheatsheet (content lines)
 
-### Regex line detection
+| Want literal | Write |
+|--------------|--------|
+| `0.001s` | `0\.001s` |
+| `foo(bar)` | `foo\(bar\)` |
+| `a+b` | `a\+b` |
+| `src/main.go` | `src/main\.go` (or a `__PATH__` placeholder) |
+| Progress dots only | `^\.+$` (intentional regex) |
 
-Before scanning, mask protected regions (`__PLACEHOLDER__`, `<ansi-color>…</ansi-color>`). A line is a **regex line** when the remaining text has a **strong regex-intent signal**:
+### Color spans
 
-| Signal | Examples |
-|--------|----------|
-| Dot-quantifier | `.*`, `.+`, `.?` |
-| Anchors | `^` at start; `$` at end only |
-| Escape atoms | `\d`, `\w`, `\s`, `\b`, … |
-| Char class | `[a-z]+` |
-| Alternation | `(ok\|fail)`, `foo\|bar` |
-| Braced quantifier | `a{2,3}` |
+`<ansi-color SPEC>inner text</ansi-color>` — only inline structural tag in v3.
 
-**Stays literal** without a strong signal: `version 1.0`, `file.go:42`, `cost: $5.00`, `(1 Cached)`.
-
-Examples:
-
-```DSL
-^\.+$                          # regex — progress dots line
-.*Some middle content.*suffix  # regex — flexible middle
-version 1.0                    # pattern — version dot is literal
-```
-
-### Color spans (only inline tag in v2)
-
-`<ansi-color SPEC>inner text</ansi-color>` — same tag and token set as v1.
-
-Space-separated tokens; **strict** open SGR + `\x1b[0m` reset immediately after inner text.
+- Open SGR + reset envelope as today.
+- **Inner text is QuoteMeta’d** (literal UI text). You do **not** need `\.` inside the tag for a literal dot.
+- Outside the tag, the rest of the line remains raw regex.
 
 | Token | Open SGR | Example |
 |-------|----------|---------|
@@ -173,7 +192,7 @@ Combined — emitted left to right: `<ansi-color bold gray>1 Cached</ansi-color>
 
 ```
 ---
-version: 2
+version: 3
 __PORT__: type=number, example=8901, a port
 ---
 Server listen on: __PORT__
@@ -193,7 +212,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatal(err)
     }
     assert.Output(t, resp.Stdout, `---
-version: 2
+version: 3
 __PORT__: type=number, example=8901, a port
 ---
 Server listen on: __PORT__
@@ -218,23 +237,44 @@ Nice to meet you
 
 The three middle actual lines may be anything (including blanks). The line count must be exact.
 
-### Regex vs pattern
+### Regex is per line only
 
-Regex applies to **one line only** — never crosses newlines. Use `...N lines omitted...` to skip variable middle sections instead of multiline regex.
+Content regex never crosses newlines. Use `...N lines omitted...` to skip variable middle sections instead of multiline regex.
 
-## Migration from legacy asserts
+### Same-value binding
 
-| Legacy pattern | v2 prefer |
+```DSL
+---
+__ID__: type=string, example=abc
+---
+start __ID__
+end __ID__
+```
+
+Both `__ID__` captures must be identical. Different values → match error.
+
+## Migration notes
+
+### From ad-hoc Go
+
+| Legacy pattern | v3 prefer |
 |----------------|-----------|
-| `strings.Contains` loop | strict template with `...N lines omitted...` or regex line |
-| `strings.Index` + `strings.Count` for dots | `^\.+$` regex line |
-| Dual `Contains` for platform errors | `(linux-msg\|darwin-msg)` regex alternation |
+| `strings.Contains` loop | strict template with `...N lines omitted...` or a flexible regex line |
+| `strings.Index` + `strings.Count` for dots | `^\.+$` |
+| Dual `Contains` for platform errors | `(linux-msg\|darwin-msg)` alternation |
 | `metricIsColored` / `stripANSI` helpers | `<ansi-color bold gray>…</ansi-color>` |
-| v1 `<hint:path>…</hint:path>` | `example=~/proj` in YAML header + literal or `__PATH__` |
-| v1 `<any-of>` | regex alternation on one line |
-| v1 `<optional>` | `...0 lines omitted...` or separate templates |
 
-Existing v1 templates continue to work (no `version: 2` header). Prefer v2 for new tests.
+### From v2
+
+| v2 habit | v3 |
+|----------|-----|
+| Literal dots without escaping (`0.001s`) | Escape: `0\.001s` |
+| Dual “pattern vs regex-intent” lines | Every content line is raw regex |
+| `version: 2` required for YAML dialect | Default is v3; omit version or set `version: 3` |
+| No capture equality | Repeated `__NAME__` must match the same value |
+| Only `type=string` / `type=number` | Plus `regex=` custom fragments |
+
+Existing v1 templates continue to work (no YAML version dialect). Prefer **v3** for new tests. **v2 is deprecated** (`assert/legacy_v2`); do not start new leaves on `version: 2`.
 
 ## Real-world CLI cookbook
 
@@ -243,7 +283,7 @@ template and the simulated actual bytes. When authoring `ASSERT.md` Go blocks,
 use the closing-backtick-on-next-line pattern from **CLI stdout trailing newline**
 above.
 
-**188** doctest leaves under `assert/tests/output-assert-v2/integration/real-world/`
+**188** doctest leaves under `assert/tests/output-assert-v3-suite/integration/real-world/`
 (17 categories). All use **simulated** bytes — no subprocess. Regenerate via
 `go run ./script/generate/real-world-assert-cases/main.go`.
 
@@ -257,24 +297,24 @@ Categories: `unix-text`, `go-toolchain`, `rust-toolchain`, `node-js`, `python`,
 
 Samples below; every leaf in the tree is a copy-pasteable template.
 
-### cat — literal file dump
+### cat — file dump (escape dots)
 
 ```DSL
 ---
-version: 2
+version: 3
 ---
 # My Project
-Version 1.0
+Version 1\.0
 ```
 
 ### grep -n — line number + match
 
 ```DSL
 ---
-version: 2
+version: 3
 __LINE__: type=number, example=3, 1-based line number
 ---
-__LINE__:func main() {
+__LINE__:func main\(\) \{
 ```
 
 ### rg — path:line:column (no heading)
@@ -284,7 +324,7 @@ Use one placeholder for the variable prefix when literals follow on the same lin
 
 ```DSL
 ---
-version: 2
+version: 3
 __HIT__: type=string, example=src/main.go:42:5, ripgrep hit prefix
 ---
 __HIT__
@@ -294,38 +334,38 @@ __HIT__
 
 ```DSL
 ---
-version: 2
+version: 3
 __PACKAGE__: type=string, example=example.com/foo, module import path
 ---
 # __PACKAGE__
-./main.go:10:2: undefined: Bar
+\./main\.go:10:2: undefined: Bar
 ...2 lines omitted...
 FAIL
 ```
 
 ### go test — pass summary with colored PASS
 
-Keep stable substrings literal; parameterize only the trailing timing field.
+Keep stable substrings escaped when needed; parameterize only the trailing timing field.
 
 ```DSL
 ---
-version: 2
+version: 3
 __SECONDS__: type=number, example=0.123, elapsed seconds
 ---
 === RUN   TestFoo
---- PASS: TestFoo (0.00s)
+--- PASS: TestFoo \(0\.00s\)
 <ansi-color green>PASS</ansi-color>
-ok  	example.com/foo	__SECONDS__s
+ok  	example\.com/foo	__SECONDS__s
 ```
 
 ### go mod init
 
 ```DSL
 ---
-version: 2
+version: 3
 __MODULE__: type=string, example=example.com/myproject, new module path
 ---
-go: creating new go.mod: module __MODULE__
+go: creating new go\.mod: module __MODULE__
 ```
 
 ### npm run build — script banner + omitted log + timing
@@ -334,48 +374,46 @@ Combine name@version into one placeholder when followed by more text on the line
 
 ```DSL
 ---
-version: 2
+version: 3
 __BANNER__: type=string, example=myapp@1.0.0 build, lifecycle banner
 __SECONDS__: type=number, example=1.2, build duration
 ---
 > __BANNER__
 > tsc
 ...4 lines omitted...
-Done in __SECONDS__s.
+Done in __SECONDS__s\.
 ```
 
 ### npm init — path + omitted JSON body
 
-Placeholders absorb to end-of-line — put trailing punctuation on the next line or omit it.
-
 ```DSL
 ---
-version: 2
+version: 3
 __PATH__: type=string, example=/tmp/proj/package.json, output path
 ---
 Wrote to __PATH__
 ...4 lines omitted...
-}
+\}
 ```
 
 ### curl -i — HTTP headers + omitted body
 
 ```DSL
 ---
-version: 2
+version: 3
 __CODE__: type=number, example=200, HTTP status code
 ---
-HTTP/1.1 __CODE__ OK
+HTTP/1\.1 __CODE__ OK
 Content-Type: application/json
 ...3 lines omitted...
-{"status":"ok"}
+\{"status":"ok"\}
 ```
 
 ## Examples in repo
 
 ```sh
-doctest test ./assert/tests/output-assert-v2/integration/real-world/...  # 188 CLI leaves
-doctest test ./assert/tests/output-assert-v2/...   # 216 total v2
-doctest test ./assert/tests/output-assert/...        # v1 legacy
+doctest test ./assert/tests/output-assert-v3/...          # focused v3 engine suite
+doctest test ./assert/tests/output-assert-v3-suite/...    # full suite + 188 CLI leaves
+doctest test ./assert/tests/output-assert/...             # v1 legacy
 go test ./assert/...
 ```

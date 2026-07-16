@@ -143,29 +143,31 @@ parsing. Full reference: `doctest skill output-assert --show`.
 ```go
 import "github.com/xhd2015/doctest/assert"
 
-// v2 — strict full match (preferred for new tests):
+// v3 — strict full match (preferred for new tests):
 assert.Output(t, resp.Stdout, `---
-version: 2
+version: 3
 __PORT__: type=number, example=8901, a port
 ---
 Server listen on: __PORT__
 ...2 lines omitted...
-<ansi-color bold gray>ready</ansi-color>`)
+<ansi-color bold gray>ready</ansi-color>
+`)
 ```
 
-v2 is strict line-by-line full match. Use `...N lines omitted...` for variable
-middle sections and regex lines (e.g. `^\.+$`) for flexible single lines.
+v3 is strict line-by-line full match; each content line is a raw Go regexp
+(escape literal dots: `0\.001s`). Use `...N lines omitted...` for variable
+middle sections and patterns like `^\.+$` for flexible single lines.
 
 Optionally document the same template in a `## Expected Output` fenced block
 (recommended for readability; not required by vet).
 
 **Prefer DSL constructs over:**
 
-| Legacy | v2 DSL |
+| Legacy | v3 DSL |
 |--------|--------|
 | `strings.Contains` loop | strict template + `...N lines omitted...` |
-| Dot/summary parsing | `^\.+$` regex line + literals |
-| Dual platform `Contains` | `(linux-msg\|darwin-msg)` regex alternation |
+| Dot/summary parsing | `^\.+$` + escaped literals where needed |
+| Dual platform `Contains` | `(linux-msg\|darwin-msg)` alternation |
 | `metricIsColored` helpers | `<ansi-color bold gray>…</ansi-color>` |
 
 ## Validation Rules
@@ -438,7 +440,7 @@ Asserts the expected compile outcome using `func Assert`:
 
 ```
 ---
-version: 2
+version: 3
 ---
 (expected compile error text)
 ```
@@ -460,11 +462,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if resp.Passed {
         t.Fatal("expected compile to fail")
     }
-    assert.Output(t, resp.Output, `` +
-`---
-version: 2
+    assert.Output(t, resp.Output, `---
+version: 3
 ---
-(expected compile error text)`)
+(expected compile error text)
+`)
 }
 ```
 ````

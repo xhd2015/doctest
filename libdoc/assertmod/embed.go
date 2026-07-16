@@ -17,6 +17,9 @@ var content []byte
 //go:embed legacy_v1
 var legacyV1FS embed.FS
 
+//go:embed legacy_v2
+var legacyV2FS embed.FS
+
 func Content() []byte {
 	return content
 }
@@ -32,7 +35,26 @@ func RawSourceCacheKeyMD5() string {
 
 // LegacyV1Filenames returns embedded legacy_v1 source filenames in stable order.
 func LegacyV1Filenames() ([]string, error) {
-	entries, err := legacyV1FS.ReadDir("legacy_v1")
+	return nestedFilenames(legacyV1FS, "legacy_v1")
+}
+
+// LegacyV1File returns embedded legacy_v1 source bytes for the given filename.
+func LegacyV1File(name string) ([]byte, error) {
+	return fs.ReadFile(legacyV1FS, path.Join("legacy_v1", name))
+}
+
+// LegacyV2Filenames returns embedded legacy_v2 source filenames in stable order.
+func LegacyV2Filenames() ([]string, error) {
+	return nestedFilenames(legacyV2FS, "legacy_v2")
+}
+
+// LegacyV2File returns embedded legacy_v2 source bytes for the given filename.
+func LegacyV2File(name string) ([]byte, error) {
+	return fs.ReadFile(legacyV2FS, path.Join("legacy_v2", name))
+}
+
+func nestedFilenames(efs embed.FS, dir string) ([]string, error) {
+	entries, err := efs.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -45,9 +67,4 @@ func LegacyV1Filenames() ([]string, error) {
 	}
 	sort.Strings(names)
 	return names, nil
-}
-
-// LegacyV1File returns embedded legacy_v1 source bytes for the given filename.
-func LegacyV1File(name string) ([]byte, error) {
-	return fs.ReadFile(legacyV1FS, path.Join("legacy_v1", name))
 }

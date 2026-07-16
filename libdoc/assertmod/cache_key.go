@@ -2,4 +2,4 @@
 
 package assertmod
 
-const rawSourceCacheKeyMD5 = "29cf42025e686da497aa3c3ef9706b68"
+const rawSourceCacheKeyMD5 = "34085a9ac5581a4a4c8528c5c99bf149"

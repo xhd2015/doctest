@@ -236,7 +236,7 @@ doctest skill output-assert --show    # full tag registry + API
 | Platform-specific one-liner | regex alternation `(linux\|darwin)` |
 | ANSI-colored segments | `<ansi-color bold gray>…</ansi-color>` |
 
-v2 templates start with `version: 2` YAML header. Strict line-by-line match only — no `<contains>` or `assert.Contains()`.
+v3 templates use a YAML header (`version: 3` or omit version). Each content line is a **raw Go regexp** (escape literals with `\`, e.g. `0\.001s`). Strict line-by-line match only — no `<contains>` or `assert.Contains()`.
 
 ### Recommended prose mirror (not required by vet)
 
@@ -255,29 +255,29 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatal(err)
     }
     assert.Output(t, resp.Stdout, `---
-version: 2
+version: 3
 ---
 Usage: mytool
   build
-  test`)
+  test
+`)
 }
 ```
 
-### v2 template constructs
+### v3 template constructs
 
 | Construct | Form | Matching |
 |-----------|------|----------|
-| Placeholder | `__NAME__` in header + body | `type=string` or `type=number` |
+| Placeholder | `__NAME__` in header + body | `type=string`, `type=number` (loose), or `regex=` fragment; repeated names bind equal values |
 | Omit marker | `...N lines omitted...` | skip exactly N actual lines |
-| Regex line | line with regex-intent signals | Go regexp full line match |
-| Pattern line | default literal line | literal + placeholders + color |
-| `<ansi-color>` | inline only | strict ANSI wrap (same tokens as v1) |
+| Content line | default | full-line raw Go regexp + placeholders + color |
+| `<ansi-color>` | inline only | CSI envelope; **inner text QuoteMeta'd** |
 
-Placeholder header: `__PORT__: type=number, example=8901, a port` — `k=v` metadata, trailing text is human explanation.
+Placeholder header: `__PORT__: type=number, example=8901, a port` — `k=v` metadata, trailing text is human explanation. Do not set both `type=` and `regex=`.
 
 **`<ansi-color>` tokens:** `bold`, `red`, `green`, `gray`, or raw `#SGR` (e.g. `#90`, `#38;5;208`). Combined left-to-right: `<ansi-color bold gray>1 Cached</ansi-color>`.
 
-v1 tag templates (`<contains>`, `<any-of>`, …) still parse via `legacy_v1` when no `version: 2` header. Prefer v2 for new tests.
+v1 tag templates (`<contains>`, `<any-of>`, …) still parse via `legacy_v1` when not in the YAML dialect. Prefer **v3** for new tests; `version: 2` is deprecated.
 
 **Avoid in new tests:** `strings.Contains` loops for structured output; `strings.Index`/`Count` for dots/summary; ad-hoc ANSI helpers when `<ansi-color>` applies.
 

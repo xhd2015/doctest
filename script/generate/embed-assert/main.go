@@ -16,13 +16,19 @@ import (
 	"strings"
 )
 
+// Nested packages under assert/ that must ship with the embedded module so
+// materialize/cache layout resolves imports (legacy_v1, legacy_v2, …).
+var nestedAssertPkgs = []string{"legacy_v1", "legacy_v2"}
+
 func main() {
 	out := flag.String("o", "", "output file path")
 	cacheKeyOut := flag.String("cache-key", "", "optional Go file declaring raw-source cache key MD5")
-	legacyOut := flag.String("legacy-out", "", "optional directory for legacy_v1 source copies")
+	// Parent directory for nested packages (e.g. libdoc/assertmod), or the
+	// historical path ending in legacy_v1 (parent is then used for all nested pkgs).
+	legacyOut := flag.String("legacy-out", "", "parent dir for nested assert packages (legacy_v1, legacy_v2)")
 	flag.Parse()
 	if *out == "" || flag.NArg() < 1 {
-		fmt.Fprintln(os.Stderr, "usage: embed-assert -o <out> [-cache-key <go>] [-legacy-out <dir>] <assertDir>  (invoked via go run ./script/generate)")
+		fmt.Fprintln(os.Stderr, "usage: embed-assert -o <out> [-cache-key <go>] [-legacy-out <parentDir>] <assertDir>  (invoked via go run ./script/generate)")
 		os.Exit(2)
 	}
 	if err := run(*out, *cacheKeyOut, *legacyOut, flag.Arg(0)); err != nil {
@@ -33,11 +39,6 @@ func main() {
 
 func run(outPath, cacheKeyOut, legacyOutDir, assertDir string) error {
 	names, err := listSourceFiles(assertDir)
-	if err != nil {
-		return err
-	}
-	legacyDir := filepath.Join(assertDir, "legacy_v1")
-	legacyNames, err := listSourceFiles(legacyDir)
 	if err != nil {
 		return err
 	}
@@ -65,14 +66,26 @@ func run(outPath, cacheKeyOut, legacyOutDir, assertDir string) error {
 		}
 		bodies = append(bodies, string(body))
 	}
-	for _, name := range legacyNames {
-		data, err := os.ReadFile(filepath.Join(legacyDir, name))
+
+	nestedSources := make(map[string][]namedFile)
+	for _, pkg := range nestedAssertPkgs {
+		pkgDir := filepath.Join(assertDir, pkg)
+		pkgNames, err := listSourceFiles(pkgDir)
 		if err != nil {
-			return err
+			return fmt.Errorf("%s: %w", pkg, err)
 		}
-		if _, err := rawHash.Write(data); err != nil {
-			return err
+		var files []namedFile
+		for _, name := range pkgNames {
+			data, err := os.ReadFile(filepath.Join(pkgDir, name))
+			if err != nil {
+				return err
+			}
+			if _, err := rawHash.Write(data); err != nil {
+				return err
+			}
+			files = append(files, namedFile{name: name, data: data})
 		}
+		nestedSources[pkg] = files
 	}
 	rawMD5 := hex.EncodeToString(rawHash.Sum(nil))
 
@@ -97,17 +110,33 @@ func run(outPath, cacheKeyOut, legacyOutDir, assertDir string) error {
 	if err := os.WriteFile(outPath, formatted, 0644); err != nil {
 		return err
 	}
+
 	if legacyOutDir != "" {
-		if err := os.MkdirAll(legacyOutDir, 0755); err != nil {
-			return err
+		parent := legacyOutDir
+		// Historical flag value was .../legacy_v1; treat as parent of nested pkgs.
+		if filepath.Base(parent) == "legacy_v1" {
+			parent = filepath.Dir(parent)
 		}
-		for _, name := range legacyNames {
-			data, err := os.ReadFile(filepath.Join(legacyDir, name))
-			if err != nil {
+		for _, pkg := range nestedAssertPkgs {
+			outDir := filepath.Join(parent, pkg)
+			if err := os.MkdirAll(outDir, 0755); err != nil {
 				return err
 			}
-			if err := os.WriteFile(filepath.Join(legacyOutDir, name), data, 0644); err != nil {
-				return err
+			keep := make(map[string]bool, len(nestedSources[pkg]))
+			for _, f := range nestedSources[pkg] {
+				keep[f.name] = true
+			}
+			if entries, err := os.ReadDir(outDir); err == nil {
+				for _, e := range entries {
+					if !e.IsDir() && !keep[e.Name()] {
+						_ = os.Remove(filepath.Join(outDir, e.Name()))
+					}
+				}
+			}
+			for _, f := range nestedSources[pkg] {
+				if err := os.WriteFile(filepath.Join(outDir, f.name), f.data, 0644); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -118,6 +147,11 @@ func run(outPath, cacheKeyOut, legacyOutDir, assertDir string) error {
 		}
 	}
 	return nil
+}
+
+type namedFile struct {
+	name string
+	data []byte
 }
 
 func listSourceFiles(assertDir string) ([]string, error) {

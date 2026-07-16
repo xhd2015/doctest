@@ -245,7 +245,7 @@ passed to `assert.Output` — not required by `doctest vet`. See
 
 ```
 ---
-version: 2
+version: 3
 ---
 Usage: mytool
   build
