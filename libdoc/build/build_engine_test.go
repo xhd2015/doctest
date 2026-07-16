@@ -320,26 +320,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 		t.Fatalf("read leaf_test.go: %v", err)
 	}
 	code := string(leafTestData)
-
 	absRoot, _ := filepath.Abs(root)
-	if !strings.Contains(code, "DOCTEST_ROOT = `"+absRoot+"`") {
-		t.Fatalf("expected DOCTEST_ROOT assignment with path %q, got:\n%s", absRoot, code)
-	}
-	if !strings.Contains(code, "syscall.Getenv(\"DOCTEST_SESSION_ID\")") {
-		t.Fatalf("expected DOCTEST_SESSION_ID from syscall.Getenv, got:\n%s", code)
-	}
-	if !strings.Contains(code, "t.Fatalf(\"DOCTEST_SESSION_ID not set\")") {
-		t.Fatalf("expected DOCTEST_SESSION_ID missing fatal, got:\n%s", code)
-	}
-	if !strings.Contains(code, "os.Chdir(filepath.Join(DOCTEST_ROOT, \"leaf\"))") {
-		t.Fatalf("expected os.Chdir(filepath.Join(DOCTEST_ROOT, \"leaf\")), got:\n%s", code)
-	}
-	if !strings.Contains(code, "__origWd, __wdErr := os.Getwd()") {
-		t.Fatalf("expected os.Getwd() before chdir, got:\n%s", code)
-	}
-	if !strings.Contains(code, "defer os.Chdir(__origWd)") {
-		t.Fatalf("expected defer os.Chdir(__origWd), got:\n%s", code)
-	}
+	assertGeneratedMatchesFixture(t, code, absRoot, "generated_leaf_test.go.fixture")
 	if strings.Contains(code, "func init()") {
 		t.Fatal("expected no func init() in generated code")
 	}
@@ -367,20 +349,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 		t.Fatalf("read root_test.go: %v", err)
 	}
 	code := string(rootTestData)
-
 	absRoot, _ := filepath.Abs(root)
-	if !strings.Contains(code, "DOCTEST_ROOT = `"+absRoot+"`") {
-		t.Fatalf("expected DOCTEST_ROOT assignment with path %q, got:\n%s", absRoot, code)
-	}
-	if !strings.Contains(code, "syscall.Getenv(\"DOCTEST_SESSION_ID\")") {
-		t.Fatalf("expected DOCTEST_SESSION_ID from syscall.Getenv, got:\n%s", code)
-	}
-	if !strings.Contains(code, "t.Fatalf(\"DOCTEST_SESSION_ID not set\")") {
-		t.Fatalf("expected DOCTEST_SESSION_ID missing fatal, got:\n%s", code)
-	}
-	if !strings.Contains(code, "os.Chdir(DOCTEST_ROOT)") {
-		t.Fatalf("expected os.Chdir(DOCTEST_ROOT) for root-level case, got:\n%s", code)
-	}
+	assertGeneratedMatchesFixture(t, code, absRoot, "generated_root_test.go.fixture")
 	if strings.Contains(code, "func init()") {
 		t.Fatal("expected no func init() in generated code")
 	}
@@ -819,3 +789,39 @@ func TestDotProgressIncremental(t *testing.T) {
 		t.Fatalf("expected 2 dots before summary, got %d. output:\n%s", dots, info.output)
 	}
 }
+
+// assertGeneratedMatchesFixture compares generated Go source to a golden
+// fixture under testdata/. Absolute doctest roots are normalized to
+// {{DOCTEST_ROOT}} so the checked-in file is path-stable and reviewable.
+//
+// Set UPDATE_FIXTURES=1 to rewrite the fixture from the current generator.
+func assertGeneratedMatchesFixture(t *testing.T, got, absRoot, fixtureName string) {
+	t.Helper()
+	normalized := strings.ReplaceAll(got, absRoot, "{{DOCTEST_ROOT}}")
+	// Stable trailing newline for diffs.
+	if !strings.HasSuffix(normalized, "\n") {
+		normalized += "\n"
+	}
+
+	fixturePath := filepath.Join("testdata", fixtureName)
+	if os.Getenv("UPDATE_FIXTURES") == "1" {
+		if err := os.MkdirAll(filepath.Dir(fixturePath), 0o755); err != nil {
+			t.Fatalf("mkdir testdata: %v", err)
+		}
+		if err := os.WriteFile(fixturePath, []byte(normalized), 0o644); err != nil {
+			t.Fatalf("write fixture %s: %v", fixturePath, err)
+		}
+		t.Logf("updated fixture %s", fixturePath)
+		return
+	}
+
+	wantBytes, err := os.ReadFile(fixturePath)
+	if err != nil {
+		t.Fatalf("read fixture %s: %v (run with UPDATE_FIXTURES=1 to create)", fixturePath, err)
+	}
+	want := string(wantBytes)
+	if normalized != want {
+		t.Fatalf("generated source does not match fixture %s\n--- got ---\n%s\n--- want ---\n%s", fixtureName, normalized, want)
+	}
+}
+
