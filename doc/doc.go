@@ -30,6 +30,9 @@ var doctestReproduce string
 //go:embed DOCTEST_REVIEW.md
 var doctestReview string
 
+//go:embed DOCTEST_REVIEW_PERF.md
+var doctestReviewPerf string
+
 //go:embed DOCTEST_OUTPUT_ASSERT.md
 var doctestOutputAssert string
 
@@ -50,6 +53,8 @@ func Content(fileName string) (string, error) {
 		content = doctestReproduce
 	case "DOCTEST_REVIEW.md":
 		content = doctestReview
+	case "DOCTEST_REVIEW_PERF.md":
+		content = doctestReviewPerf
 	case "DOCTEST_OUTPUT_ASSERT.md":
 		content = doctestOutputAssert
 	default:

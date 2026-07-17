@@ -19,6 +19,7 @@ skill not installed: implementer
 skill not installed: output-assert
 skill not installed: reproduce
 skill not installed: review
+skill not installed: review-perf
 skill not installed: tdd
 skill not installed: tdd-cli-agent
 skill not installed: tdd-lite

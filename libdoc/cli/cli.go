@@ -44,6 +44,9 @@ Skills:
   skill --install <name> [OPTIONS]
   skill <name> --install [OPTIONS]
 
+Metrics:
+  metrics path|last|top|summary|show|prune
+
 Run doctest <command> --help for command-specific options.
 Run doctest skill --help and doctest skill --install <name> --help for skill flags.
 
@@ -85,7 +88,7 @@ List, print, or install a registered doctest skill.
 
 Registered skills:
   doc-spec, code-spec, tdd, tdd-cli-agent, tdd-lite,
-  reproduce, review, output-assert, implementer, designer
+  reproduce, review, review-perf, output-assert, implementer, designer
 
 Both flag orders are valid (--show/--install before or after <name>).
 
@@ -150,7 +153,7 @@ Examples:
   doctest edit ./tests/feature/ui-leaf/ASSERT.md --add-label manual
 `
 
-const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [--timeout DURATION] [--color] [--no-color] [--changed] [--label EXPR]... [--label-all] [-cpuprofile FILE] [-memprofile FILE] [-memprofilerate N] [-blockprofile FILE] [-blockprofilerate N] [-mutexprofile FILE] [-mutexprofilefraction N] [-trace FILE] [-outputdir DIR] [-coverprofile FILE] [-cover] <dir>
+const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [--timeout DURATION] [--color] [--no-color] [--changed] [--label EXPR]... [--label-all] [--no-metrics] [-cpuprofile FILE] [-memprofile FILE] [-memprofilerate N] [-blockprofile FILE] [-blockprofilerate N] [-mutexprofile FILE] [-mutexprofilefraction N] [-trace FILE] [-outputdir DIR] [-coverprofile FILE] [-cover] <dir>
 
 Run executable Go snippets from a doc-style test directory, allow ./... patterns like go test.
 
@@ -170,6 +173,7 @@ Options:
                     Unlabeled leaves are skipped when this flag is set.
   --label-all       Discovery mode: run all leaves including labeled ones (full
                     suite). Mutually exclusive with --label.
+  --no-metrics      Opt out of suite metrics JSONL recording
   -cpuprofile FILE  Forward CPU profile path to go test (relative paths abs-resolved)
   -memprofile FILE  Forward memory profile path to go test (relative paths abs-resolved)
   -memprofilerate N Forward memprofilerate to go test (including 0)
@@ -281,6 +285,8 @@ func Run(args []string) error {
 		return runSkill(args[1:])
 	case "skills":
 		return runSkills(args[1:])
+	case "metrics":
+		return runMetrics(args[1:])
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
 	}
@@ -619,6 +625,7 @@ func runSkill(args []string) error {
 			"tdd-lite",
 			"reproduce",
 			"review",
+			"review-perf",
 			"output-assert",
 			"implementer",
 			"designer",

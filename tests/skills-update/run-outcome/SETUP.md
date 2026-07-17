@@ -36,6 +36,7 @@ func registryCLINames() []string {
 		"tdd-cli-agent",
 		"reproduce",
 		"review",
+		"review-perf",
 		"tdd",
 		"tdd-lite",
 	}

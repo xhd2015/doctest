@@ -15,6 +15,7 @@ import (
 	"github.com/xhd2015/less-flags"
 	runnerbuild "github.com/xhd2015/doctest/libdoc/build"
 	"github.com/xhd2015/doctest/libdoc/core"
+	"github.com/xhd2015/doctest/libdoc/metrics"
 	"github.com/xhd2015/doctest/libdoc/path_resolve"
 	"github.com/xhd2015/doctest/libdoc/validate"
 )
@@ -50,12 +51,96 @@ func Test(args []string) error {
 		_ = os.Setenv(core.DoctestSessionIDEnv, core.NewDoctestSessionID())
 	}
 
+	// Honor DOCTEST_METRICS_ROOT when MetricsRoot not set via options.
+	if opts.MetricsRoot == "" {
+		if v := os.Getenv(EnvMetricsRoot); v != "" {
+			opts.MetricsRoot = v
+		}
+	}
+
 	opts.SuppressResultSummary = true
 	start := time.Now()
 	var stats runnerbuild.TestRunStats
 	var statsMu sync.Mutex
+	defaultSuite := !opts.LabelAll && len(opts.LabelExprs) == 0
+
+	// Suite-level metrics for the whole CLI invocation (one JSONL when a
+	// single tree; still one file for multi-arg — first tree path as root).
+	var rec *runRecorder
+	if !opts.NoMetrics {
+		metricDir := remainArgs[0]
+		if path_resolve.IsDotDotDotPattern(metricDir) {
+			metricDir = path_resolve.ExtractBasePath(metricDir)
+		}
+		if metricDir == "" || metricDir == "..." {
+			metricDir, _ = os.Getwd()
+		}
+		// resolve target for project id
+		if !path_resolve.IsDotDotDotPattern(remainArgs[0]) {
+			td, _ := resolveTestTarget(remainArgs[0])
+			if root, ok := path_resolve.ResolveRoot(td); ok {
+				metricDir = root
+			} else {
+				metricDir = td
+			}
+		}
+		var openErr error
+		rec, openErr = openRunRecorder(metricDir, opts)
+		if openErr != nil {
+			fmt.Fprintf(opts.Stderr, "doctest: metrics: %v\n", openErr)
+			rec = nil
+		}
+		if rec != nil {
+			defer rec.close()
+			_ = rec.writeRunStart(metricDir, opts, defaultSuite)
+		}
+	}
+
 	runFn := func(dir string, o core.Options) error {
 		o.SuppressResultSummary = true
+		// Avoid nested per-tree files; CLI owns the suite recorder above.
+		o.NoMetrics = true
+		// Leaf events when recorder is active
+		var cases []core.TreeCase
+		if rec != nil {
+			if cs, err := core.DiscoverTreeCases(dir); err == nil {
+				if o.SubDir != "" {
+					cs = core.FilterBySubDir(cs, dir, o.SubDir)
+				}
+				cs, _ = core.FilterCasesByLabel(cs, o)
+				cases = cs
+				leafT0 := time.Now()
+				for _, c := range cases {
+					_ = rec.writeLeafStart(c, dir)
+				}
+				s, err := runnerbuild.TestWithStats(dir, o)
+				leafT1 := time.Now()
+				passLeft := s.Passed
+				for _, c := range cases {
+					result := "fail"
+					if passLeft > 0 {
+						result = "pass"
+						passLeft--
+					}
+					_ = rec.writeLeafEnd(c, dir, leafT0, leafT1, result, false)
+				}
+				for _, sk := range s.Skipped {
+					_ = rec.writeLeafEndSkipped(sk, dir, leafT1)
+				}
+				statsMu.Lock()
+				stats.Passed += s.Passed
+				stats.Total += s.Total
+				stats.Skipped = append(stats.Skipped, s.Skipped...)
+				if s.NoTestsChanged {
+					stats.NoTestsChanged = true
+				}
+				statsMu.Unlock()
+				if err != nil && strings.Contains(err.Error(), "no runnable test cases found") {
+					return ErrNoTestsFound
+				}
+				return err
+			}
+		}
 		s, err := runnerbuild.TestWithStats(dir, o)
 		statsMu.Lock()
 		stats.Passed += s.Passed
@@ -84,6 +169,22 @@ func Test(args []string) error {
 	if stats.Total > 0 {
 		stats.Elapsed = time.Since(start)
 		runnerbuild.PrintResultSummary(opts, stats)
+	}
+
+	// Close metrics with run_end after summary.
+	if rec != nil {
+		warns := []string{}
+		if metrics.ShouldWarnDefaultSuiteSlow(defaultSuite, stats.Total, stats.Elapsed, metrics.DefaultSuiteWarnThreshold) {
+			warns = append(warns, "default_suite_slow")
+		}
+		exitOK := runErr == nil && stats.Passed >= stats.Total && stats.Total > 0
+		_ = rec.writeRunEnd(stats, exitOK, warns)
+		_ = rec.close()
+		rec = nil
+	}
+
+	if metrics.ShouldWarnDefaultSuiteSlow(defaultSuite, stats.Total, stats.Elapsed, metrics.DefaultSuiteWarnThreshold) {
+		fmt.Fprint(opts.Stderr, metrics.FormatDefaultSuiteSlowWarning())
 	}
 
 	if runErr != nil {
@@ -295,6 +396,7 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 		Bool("--no-color", &noColorFlag).
 		Bool("--changed", &opts.ChangedOnly).
 		Bool("--label-all", &opts.LabelAll).
+		Bool("--no-metrics", &opts.NoMetrics).
 		String("-cpuprofile", &opts.CPUProfile).
 		String("-memprofile", &opts.MemProfile).
 		Int("-memprofilerate", &opts.MemProfileRate).
@@ -388,6 +490,12 @@ func absProfilePath(p string) (string, error) {
 		return abs[len(priv):], nil
 	}
 	return abs, nil
+}
+
+// ParseTestOptions parses doctest test flags into core.Options.
+// Exported for package-level tests (metrics flags, labels, etc.).
+func ParseTestOptions(args []string) (core.Options, []string, error) {
+	return parseTestOptions(args)
 }
 
 func parseVetOptions(args []string) (core.Options, []string, error) {
