@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - The command succeeds (exit code 0).
 - stdout and stderr contain **no** `t.Logf` output from the generated test (marker absent).

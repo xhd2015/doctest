@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - Non-zero exit, parse error on stderr, no PASS/FAIL summary.

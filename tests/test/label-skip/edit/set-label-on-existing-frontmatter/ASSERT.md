@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - Exit 0; ASSERT.md frontmatter lists both labels comma-separated.

@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - Stdout contains `No events` or similar.

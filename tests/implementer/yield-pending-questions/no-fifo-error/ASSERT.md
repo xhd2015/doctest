@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code non-zero.
 - Stderr contains "QUESTION_FIFO must be set".

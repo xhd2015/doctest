@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Match succeeds — mid-line `$` treated as literal.
 

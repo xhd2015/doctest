@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Match succeeds. Strict parsing preserves the interior empty line between
   `a` and `b`, and it matches the actual.

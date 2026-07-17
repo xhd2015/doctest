@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - With `_ = helperName` suppression lines, all helpers are marked as used.
 - The build now succeeds (exit 0).

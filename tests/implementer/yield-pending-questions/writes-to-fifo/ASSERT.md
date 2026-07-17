@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - The file contains a JSON line with `type` = `"question"` and the correct text.

@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - `slow` matches `{slow}` only.

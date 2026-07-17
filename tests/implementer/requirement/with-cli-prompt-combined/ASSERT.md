@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - messages.jsonl contains both the requirement file content and the CLI prompt.

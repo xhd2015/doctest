@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - The command succeeds from the nested working directory.
 - The wrapper resolves the underlying runner independent of the caller's cwd.

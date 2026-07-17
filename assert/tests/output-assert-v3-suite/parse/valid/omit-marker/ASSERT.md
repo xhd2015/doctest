@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Parse succeeds with omit marker (count 3) in summary.
 

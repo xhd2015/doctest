@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Child tests are NOT discovered.
 - Stderr contains `warning:` with `git repository mismatch`.

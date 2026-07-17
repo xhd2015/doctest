@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Parse succeeds with `PatternLine[Hint:id]`.
 

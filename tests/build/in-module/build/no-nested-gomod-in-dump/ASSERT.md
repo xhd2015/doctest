@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - `doctest build` exits 0.

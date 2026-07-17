@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - The command succeeds.
 - Count and verbose flags are forwarded to the underlying runner.

@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - Exit 0; ASSERT.md has exact frontmatter after edit via ASSERT.md path.

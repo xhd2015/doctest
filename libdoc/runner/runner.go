@@ -1,10 +1,14 @@
 package runner
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/xhd2015/less-flags"
@@ -39,18 +43,27 @@ func Test(args []string) error {
 		return fmt.Errorf("test requires <dir>")
 	}
 
+	// One session id for the whole CLI invocation so parallel trees share
+	// session.Once / testbin materialization when nested self-tests run.
+	if v, ok := syscall.Getenv(core.DoctestSessionIDEnv); !ok || v == "" {
+		_ = os.Setenv(core.DoctestSessionIDEnv, core.NewDoctestSessionID())
+	}
+
 	opts.SuppressResultSummary = true
 	start := time.Now()
 	var stats runnerbuild.TestRunStats
+	var statsMu sync.Mutex
 	runFn := func(dir string, o core.Options) error {
 		o.SuppressResultSummary = true
 		s, err := runnerbuild.TestWithStats(dir, o)
+		statsMu.Lock()
 		stats.Passed += s.Passed
 		stats.Total += s.Total
 		stats.Skipped = append(stats.Skipped, s.Skipped...)
 		if s.NoTestsChanged {
 			stats.NoTestsChanged = true
 		}
+		statsMu.Unlock()
 		if err != nil && strings.Contains(err.Error(), "no runnable test cases found") {
 			return ErrNoTestsFound
 		}
@@ -118,15 +131,34 @@ func processSingleArg(arg string, opts core.Options, fn func(string, core.Option
 		return fmt.Errorf("bare '...' pattern is not supported; use './...' or 'path/...' instead")
 	}
 	if path_resolve.IsDotDotDotPattern(arg) {
+		// Parallel trees: buffer each tree's streams so progress lines do not interleave.
+		var printMu sync.Mutex
+		stdoutBase := opts.Stdout
+		if stdoutBase == nil {
+			stdoutBase = os.Stdout
+		}
+		stderrBase := opts.Stderr
+		if stderrBase == nil {
+			stderrBase = os.Stderr
+		}
 		return path_resolve.RunForDirs(path_resolve.ExtractBasePath(arg), func(dir string) error {
 			root, _ := path_resolve.ResolveRoot(dir)
 			if root == "" {
 				root = dir
 			}
+			var outBuf, errBuf bytes.Buffer
 			o := opts
 			o.SubDir = dir
 			o.ExplicitLeaf = false
-			return fn(root, o)
+			o.Stdout = &outBuf
+			o.Stderr = &errBuf
+			err := fn(root, o)
+			// stderr first: tree header / "cd ..." then progress on stdout
+			printMu.Lock()
+			_, _ = io.Copy(stderrBase, &errBuf)
+			_, _ = io.Copy(stdoutBase, &outBuf)
+			printMu.Unlock()
+			return err
 		})
 	}
 	targetDir, explicitLeaf := resolveTestTarget(arg)
@@ -261,6 +293,7 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 		Bool("--color", &colorFlag).
 		Bool("--no-color", &noColorFlag).
 		Bool("--changed", &opts.ChangedOnly).
+		Bool("--label-all", &opts.LabelAll).
 		Parse(args)
 	if err != nil {
 		return core.Options{}, nil, err
@@ -270,6 +303,9 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 	}
 	if noColorFlag {
 		opts.Color = core.ColorNever
+	}
+	if opts.LabelAll && len(labelExprs) > 0 {
+		return core.Options{}, nil, fmt.Errorf("--label-all and --label are mutually exclusive")
 	}
 	opts.LabelExprs = labelExprs
 	return opts, remainArgs, nil

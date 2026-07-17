@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - With `Run := run` alias, descendant Setup code can call `Run(t, req)`.
 - The build now succeeds (exit 0).

@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - Stdout contains the sub-agent's response text.

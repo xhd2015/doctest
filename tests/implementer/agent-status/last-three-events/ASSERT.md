@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - Header shows `Events: 8 lines`.

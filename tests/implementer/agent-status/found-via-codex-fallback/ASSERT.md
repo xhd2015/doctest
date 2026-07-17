@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - Stdout contains `from --session-id, matching CODEX_THREAD_ID` (fallback match indicator).

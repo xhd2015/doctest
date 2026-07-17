@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - Exit 0, one test runs, labeled leaf skipped with exact skip block and PASS(1/1).

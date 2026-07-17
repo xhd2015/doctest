@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - Exit 0, exact skip block, no PASS/FAIL summary line.

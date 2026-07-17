@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - SIGINT is delivered during verbose `writeCases` (trigger: `leaf15_test.go` in stderr).

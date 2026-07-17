@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - stderr contains "my-feature" (the doctest tree under tests/ was found).

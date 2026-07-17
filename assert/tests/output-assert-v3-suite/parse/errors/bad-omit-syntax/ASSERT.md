@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Parse fails for invalid omit syntax.
 

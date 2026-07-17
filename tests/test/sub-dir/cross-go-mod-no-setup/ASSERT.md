@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - The command exits 0 with "no tests" warning.
 - go.mod boundary restricts SETUP.md search.

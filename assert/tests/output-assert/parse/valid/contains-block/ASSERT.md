@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Parse succeeds with `ContainsBlock` fragments:3.
 

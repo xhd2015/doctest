@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - Stdout contains "Session created:" with the session ID `my-print-sess`.

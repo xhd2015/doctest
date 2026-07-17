@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - stderr contains "subgroup" (tests under group/subgroup/ found).

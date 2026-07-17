@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - PASS(3/3); skips fast and ui.

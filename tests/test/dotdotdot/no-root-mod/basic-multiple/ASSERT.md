@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - stderr contains mod_a, mod_b, src (non-gitignored modules found).

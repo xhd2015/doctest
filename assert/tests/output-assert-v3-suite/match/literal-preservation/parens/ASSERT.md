@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Match succeeds — parens without alternation treated as literal.
 

@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Non-zero exit code.
 - Stderr does NOT contain `parent_test` (parent is above CWD, `./...` only looks down).

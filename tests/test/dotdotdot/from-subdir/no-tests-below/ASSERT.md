@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Nonzero exit code.
 - `./...` from a directory with no DOCTEST.md at or below finds nothing.

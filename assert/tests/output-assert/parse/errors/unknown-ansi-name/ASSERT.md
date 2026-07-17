@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Parse fails — unknown name without `#` prefix.
 

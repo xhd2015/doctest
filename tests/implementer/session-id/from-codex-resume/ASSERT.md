@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - First call: session directory is created with `main_agent_codex_thread_id=resume-codex-999`.
 - Second call: same session directory is found and reused.

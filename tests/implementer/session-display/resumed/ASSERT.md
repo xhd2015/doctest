@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - First call succeeds and shows "Session created: sess-display-resume-1".
 - Second call with same session ID shows "Session resumed: sess-display-resume-1".

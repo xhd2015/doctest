@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - Stdout contains all three session IDs: `list-alpha`, `list-beta`, `list-gamma`.

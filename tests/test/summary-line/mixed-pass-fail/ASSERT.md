@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - Exit code is non-zero (at least one failure).

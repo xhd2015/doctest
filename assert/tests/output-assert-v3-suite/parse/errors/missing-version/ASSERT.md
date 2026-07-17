@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Parse succeeds via legacy_v1 (literal lines, not v3 AST).
 - Summary shows v1 `LiteralLine` shape, not v3 `RegexLine` / placeholder nodes.

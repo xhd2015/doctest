@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Output has `[YYYY-MM-DDTHH:MM:SS] ` (timestamp + space) followed by exactly one newline.
 - No double newline appended (message already ends with `\n`).

@@ -32,26 +32,13 @@ import (
 	"testing"
 	"time"
 
-	libdocbuild "github.com/xhd2015/doctest/libdoc/build"
+	"github.com/xhd2015/doctest/libdoc/testbin"
 )
 
 func Setup(t *testing.T, req *Request) error {
 	req.Timeout = 120 * time.Second
 
-	tmp := t.TempDir()
-	doctestBin := filepath.Join(tmp, "doctest")
-	buildDir := filepath.Join(DOCTEST_ROOT, "..", "..")
-	buildArgs := []string{"build", "-o", doctestBin}
-	if libdocbuild.NeedsBuildVCSFlag(buildDir) {
-		buildArgs = append(buildArgs, "-buildvcs=false")
-	}
-	buildArgs = append(buildArgs, "./cmd/doctest")
-	build := exec.Command("go", buildArgs...)
-	build.Dir = buildDir
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build doctest: %v\n%s", err, string(out))
-	}
-	req.Bin = doctestBin
+	req.Bin = testbin.Ensure(t, filepath.Join(DOCTEST_ROOT, "..", ".."))
 	return nil
 }
 ```

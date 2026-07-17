@@ -90,6 +90,25 @@ instead of inside the package directory prevents the directory mtime from
 changing. The temp file is then renamed into the leaf directory only when the
 content actually differs.
 
+## Session-scoped run-once (`session.Once`)
+
+Cross-process “run once per (session, key)” for shared setup (binaries, servers,
+etc.) lives in top-level package `github.com/xhd2015/doctest/session`:
+
+```go
+raw, err := session.Once(t, "my-key", func(t testing.TB, cacheDir string) (json.RawMessage, error) {
+    // use cacheDir under UserCacheDir/doctest/sessions/<sid>/once-<slug>/
+    return json.Marshal(struct{ Path string `json:"path"` }{Path: handlePathOrURL})
+})
+```
+
+Layout: `${UserCacheDir}/doctest/sessions/<session-id>/once-<slugify(key)>/{lock,value,error,…}`.  
+Session id is read with **`syscall.Getenv("DOCTEST_SESSION_ID")` only** (same
+rule as below). The return value is **`json.RawMessage`** (raw JSON bytes on disk).
+
+`libdoc/testbin.Ensure` is implemented on top of `session.Once` (value shape
+`{"path":"..."}`).
+
 ## Session ID: injected variable, not harness env read
 
 `doctest test` assigns a new UUID per invocation and exports it to child

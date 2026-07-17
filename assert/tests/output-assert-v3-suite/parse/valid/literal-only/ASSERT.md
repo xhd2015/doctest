@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Parse succeeds with two content lines summarized as `RegexLine+RegexLine`.
 

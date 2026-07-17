@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Stderr contains a message about `--session-id` being required.
 - Exit code is 0.

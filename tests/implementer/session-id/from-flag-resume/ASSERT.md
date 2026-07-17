@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - First call: session directory is created with `explicit_session_id=resume-flag-777`.
 - Second call: same session directory is found and reused.

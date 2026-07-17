@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - Stderr contains `inner_test` (test tree found via subdir discovery).

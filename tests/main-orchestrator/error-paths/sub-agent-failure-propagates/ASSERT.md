@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code non-zero.
 - Stderr or stdout contains the mock error message.

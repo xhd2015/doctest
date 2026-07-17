@@ -139,8 +139,8 @@ func assertModuleSourceForCache() []byte {
 	return []byte(strings.Join(lines[i:], ""))
 }
 
-// WriteInternalModfile copies the parent go.mod and appends an assert replace directive.
-func WriteInternalModfile(modRoot, assertCacheDir string) (string, error) {
+// WriteInternalModfile copies the parent go.mod and appends assert/session replace directives.
+func WriteInternalModfile(modRoot, assertCacheDir, sessionCacheDir string) (string, error) {
 	parentGoMod := filepath.Join(modRoot, "go.mod")
 	data, err := os.ReadFile(parentGoMod)
 	if err != nil {
@@ -150,7 +150,12 @@ func WriteInternalModfile(modRoot, assertCacheDir string) (string, error) {
 	if !strings.HasSuffix(content, "\n") {
 		content += "\n"
 	}
-	content += fmt.Sprintf("\nreplace %s => %s\n", AssertImportPath, assertCacheDir)
+	if assertCacheDir != "" {
+		content += fmt.Sprintf("\nreplace %s => %s\n", AssertImportPath, assertCacheDir)
+	}
+	if sessionCacheDir != "" {
+		content += fmt.Sprintf("\nreplace %s => %s\n", SessionImportPath, sessionCacheDir)
+	}
 
 	modfilePath := filepath.Join(modRoot, ".doctest.mod")
 	if err := os.WriteFile(modfilePath, []byte(content), 0644); err != nil {

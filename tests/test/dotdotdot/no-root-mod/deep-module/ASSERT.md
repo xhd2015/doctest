@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - stderr contains module "c" (deeply nested go.mod found).

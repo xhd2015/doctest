@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code non-zero (tests fail).
 - Output contains "FAIL" and "not implemented".

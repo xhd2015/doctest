@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - The command succeeds.
 - Only the specific leaf test case runs (1 test case).

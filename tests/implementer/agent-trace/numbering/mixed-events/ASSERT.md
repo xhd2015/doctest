@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - Trace numbering is continuous: [1], [2], [3] for the 3 displayable events.

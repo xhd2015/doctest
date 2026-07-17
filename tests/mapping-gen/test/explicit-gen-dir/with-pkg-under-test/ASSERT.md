@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Command succeeds (exit code 0).
 - Source files from the package under test are copied to each leaf directory.

@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - The command fails.
 - stderr reports that fill-code requires a target directory.

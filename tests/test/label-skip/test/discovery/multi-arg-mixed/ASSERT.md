@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - Exit 0, PASS(2/2), aggregated skip block lists labeled leaves from discovery pass.

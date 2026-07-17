@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - AND matches only when all tokens are present.

@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - All phases succeed: RED confirmed, git staged, sub-agent completed.
 - Exit code 0.

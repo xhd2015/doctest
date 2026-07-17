@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - The command rejects `--color` and `--no-color` together with an explicit conflict error.
 - Exit code is non-zero.

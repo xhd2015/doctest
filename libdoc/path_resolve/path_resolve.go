@@ -6,8 +6,10 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/xhd2015/gitops/git"
 )
@@ -29,7 +31,23 @@ func ExtractBasePath(arg string) string {
 	return base
 }
 
+// defaultTreeWorkers caps concurrent light doctest trees for ./... runs.
+const defaultTreeWorkers = 4
+
+// RunForDirs discovers doctest trees under basePath and invokes fn for each.
+// Independent trees run concurrently (bounded) to cut wall time for module-wide
+// `./...` self-tests without thrashing the machine.
 func RunForDirs(basePath string, fn func(dir string) error) error {
+	n := defaultTreeWorkers
+	if max := runtime.GOMAXPROCS(0); max > 0 && max < n {
+		n = max
+	}
+	return RunForDirsLimit(basePath, n, fn)
+}
+
+// RunForDirsLimit is like RunForDirs but caps concurrent tree workers.
+// workers <= 1 runs trees serially (stable for debugging).
+func RunForDirsLimit(basePath string, workers int, fn func(dir string) error) error {
 	dirs, err := FindDotDotDotDirs(basePath)
 	if err != nil {
 		return err
@@ -37,19 +55,124 @@ func RunForDirs(basePath string, fn func(dir string) error) error {
 	if len(dirs) == 0 {
 		return ErrNoTestsFound
 	}
-	var errs []string
-	for _, dir := range dirs {
-		if err := fn(dir); err != nil {
-			if errors.Is(err, ErrNoTestsFound) {
-				continue
-			}
-			errs = append(errs, dir+": "+err.Error())
+	// Two-phase scheduling: light trees first (high fan-out), then heavy
+	// nested-CLI trees (serialized). Mixing them inflates the main tests/
+	// tree from ~2m to 4m+ via CPU thrash.
+	var light, heavy []string
+	for _, d := range dirs {
+		if isHeavySelftestTree(d) {
+			heavy = append(heavy, d)
+		} else {
+			light = append(light, d)
 		}
 	}
+	sort.SliceStable(light, func(i, j int) bool {
+		return estimateTreeWeight(light[i]) > estimateTreeWeight(light[j])
+	})
+	sort.SliceStable(heavy, func(i, j int) bool {
+		return estimateTreeWeight(heavy[i]) > estimateTreeWeight(heavy[j])
+	})
+
+	var errs []string
+	appendErr := func(dir string, err error) {
+		if err == nil || errors.Is(err, ErrNoTestsFound) {
+			return
+		}
+		errs = append(errs, dir+": "+err.Error())
+	}
+
+	// Phase 1: light trees in parallel.
+	if err := runDirsParallel(light, workers, fn, appendErr); err != nil {
+		return err
+	}
+	// Phase 2: heavy trees one at a time (full CPU for nested self-tests).
+	for _, dir := range heavy {
+		appendErr(dir, fn(dir))
+	}
 	if len(errs) > 0 {
+		sort.Strings(errs)
 		return errors.New("test failures:\n" + strings.Join(errs, "\n"))
 	}
 	return nil
+}
+
+func runDirsParallel(dirs []string, workers int, fn func(string) error, onErr func(string, error)) error {
+	if len(dirs) == 0 {
+		return nil
+	}
+	if workers <= 1 || len(dirs) == 1 {
+		for _, dir := range dirs {
+			onErr(dir, fn(dir))
+		}
+		return nil
+	}
+	if workers > len(dirs) {
+		workers = len(dirs)
+	}
+	jobs := make(chan string, len(dirs))
+	for _, d := range dirs {
+		jobs <- d
+	}
+	close(jobs)
+	var (
+		mu sync.Mutex
+		wg sync.WaitGroup
+	)
+	wg.Add(workers)
+	for i := 0; i < workers; i++ {
+		go func() {
+			defer wg.Done()
+			for dir := range jobs {
+				err := fn(dir)
+				if err == nil || errors.Is(err, ErrNoTestsFound) {
+					continue
+				}
+				mu.Lock()
+				onErr(dir, err)
+				mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
+	return nil
+}
+
+// isHeavySelftestTree reports trees under the module's integration suite
+// (…/doctest/tests/…), which shell out to the doctest binary extensively.
+// Pure assert/libdoc/session trees are light and may run freely in parallel.
+func isHeavySelftestTree(dir string) bool {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return false
+	}
+	// Match …/doctest/tests and …/doctest/tests/…
+	sep := string(filepath.Separator)
+	marker := sep + "doctest" + sep + "tests"
+	if strings.HasSuffix(abs, marker) || strings.Contains(abs, marker+sep) {
+		return true
+	}
+	return false
+}
+
+// estimateTreeWeight approximates tree cost by counting ASSERT.md leaves (cheap walk).
+func estimateTreeWeight(dir string) int {
+	n := 0
+	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if d.Name() == "testdata" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.Name() == "ASSERT.md" {
+			n++
+		}
+		return nil
+	})
+	return n
 }
 
 func FindDotDotDotDirs(basePath string) ([]string, error) {

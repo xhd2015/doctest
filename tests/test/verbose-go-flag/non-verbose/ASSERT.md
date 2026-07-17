@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - The command succeeds.
 - stderr shows the go test command WITHOUT `-v`.

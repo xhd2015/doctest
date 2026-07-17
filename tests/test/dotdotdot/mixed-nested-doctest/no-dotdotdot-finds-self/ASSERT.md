@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - `./ancestor/leaf` (without `...`) finds only the leaf test case within the ancestor tree.

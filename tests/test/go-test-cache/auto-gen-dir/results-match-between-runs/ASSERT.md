@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Both runs have the same exit code.
 - Both runs pass (exit 0).

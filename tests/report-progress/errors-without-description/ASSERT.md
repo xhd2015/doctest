@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code non-zero.
 - Stderr contains usage information mentioning `<description>`.

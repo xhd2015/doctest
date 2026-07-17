@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0 (yielding questions is not an error).
 - Stdout contains the question text.

@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - The progress file contains two lines after two invocations.
 - Each line is valid JSON with `type` = `"progress"`.

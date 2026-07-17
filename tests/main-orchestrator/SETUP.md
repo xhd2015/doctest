@@ -34,7 +34,7 @@ import (
     "testing"
     "time"
 
-    libdocbuild "github.com/xhd2015/doctest/libdoc/build"
+	"github.com/xhd2015/doctest/libdoc/testbin"
     "github.com/xhd2015/doctest/libdoc/testtree"
 )
 
@@ -47,18 +47,7 @@ func Setup(t *testing.T, req *Request) error {
         return nil
     }
 
-    doctestBin := filepath.Join(tmp, "doctest")
-    buildDTDir := filepath.Join(DOCTEST_ROOT, "..")
-    buildDTArgs := []string{"build", "-o", doctestBin}
-    if libdocbuild.NeedsBuildVCSFlag(buildDTDir) {
-        buildDTArgs = append(buildDTArgs, "-buildvcs=false")
-    }
-    buildDTArgs = append(buildDTArgs, "./cmd/doctest")
-    buildDT := exec.Command("go", buildDTArgs...)
-    buildDT.Dir = buildDTDir
-    if out, err := buildDT.CombinedOutput(); err != nil {
-        t.Fatalf("build doctest: %v\n%s", err, string(out))
-    }
+    doctestBin := testbin.Ensure(t, filepath.Join(DOCTEST_ROOT, ".."))
 
     yieldPQ := filepath.Join(tmp, "yield-pending-questions")
     if out, err := exec.Command("cp", doctestBin, yieldPQ).CombinedOutput(); err != nil {

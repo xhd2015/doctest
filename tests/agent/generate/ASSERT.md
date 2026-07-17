@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - The command succeeds.
 - stdout or stderr proves the fake Codex response was used.

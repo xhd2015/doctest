@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - messages.jsonl contains the requirement file content "feature spec here".

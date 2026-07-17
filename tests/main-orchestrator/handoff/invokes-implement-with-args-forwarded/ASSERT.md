@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - The --agent-runner flag reaches the agent provider.
 - The mock config response appears in stdout.

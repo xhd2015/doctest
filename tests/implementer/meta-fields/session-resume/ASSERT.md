@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - First call: session directory is created.
 - Second call: same session directory is found and reused.

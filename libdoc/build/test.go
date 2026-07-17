@@ -115,28 +115,23 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		}
 	}
 
-	testArgs := []string{"test", "-mod=mod"}
-	testArgs = append(testArgs, ctx.goCommandExtraArgs()...)
+	// Flags only — packages are appended per go-test invocation (and per shard).
+	flagArgs := []string{"test", "-mod=mod"}
+	flagArgs = append(flagArgs, ctx.goCommandExtraArgs()...)
 	if opts.Verbose {
-		testArgs = append(testArgs, "-v")
+		flagArgs = append(flagArgs, "-v")
 	}
 	if NeedsBuildVCSFlag(runDir) {
-		testArgs = append(testArgs, "-buildvcs=false")
+		flagArgs = append(flagArgs, "-buildvcs=false")
 	}
-	testArgs = append(testArgs, packageArgs...)
 	if opts.Count > 0 {
-		testArgs = append(testArgs, fmt.Sprintf("-count=%d", opts.Count))
+		flagArgs = append(flagArgs, fmt.Sprintf("-count=%d", opts.Count))
 	}
 	if opts.Timeout > 0 {
-		testArgs = append(testArgs, fmt.Sprintf("-timeout=%s", opts.Timeout))
+		flagArgs = append(flagArgs, fmt.Sprintf("-timeout=%s", opts.Timeout))
 	}
 
-	execArgs := append([]string(nil), testArgs...)
-	if !opts.Verbose {
-		execArgs = append(execArgs, "-json")
-	}
-
-	displayArgs := displayGoArgs(testArgs)
+	displayArgs := displayGoArgs(append(append([]string(nil), flagArgs...), packageArgs...))
 	if opts.Verbose {
 		fmt.Fprintf(w, "cd %s && go %s\n\n", pathfmt.Short(runDir), strings.Join(displayArgs, " "))
 	} else {
@@ -144,9 +139,6 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	}
 
 	sessionID := core.DoctestSessionIDForRun()
-	goTestCmd := exec.Command("go", execArgs...)
-	goTestCmd.Dir = runDir
-	goTestCmd.Env = append(os.Environ(), core.DoctestSessionIDEnv+"="+sessionID)
 
 	stdout := opts.Stdout
 	if stdout == nil {
@@ -154,6 +146,10 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	}
 
 	if opts.Verbose {
+		execArgs := append(append([]string(nil), flagArgs...), packageArgs...)
+		goTestCmd := exec.Command("go", execArgs...)
+		goTestCmd.Dir = runDir
+		goTestCmd.Env = append(os.Environ(), core.DoctestSessionIDEnv+"="+sessionID)
 		start := time.Now()
 		out, err := goTestCmd.CombinedOutput()
 		elapsed := time.Since(start)
@@ -168,117 +164,13 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 			return stats, fmt.Errorf("go test failed: %v", err)
 		}
 	} else {
-		stdoutPipe, err := goTestCmd.StdoutPipe()
-		if err != nil {
-			return TestRunStats{}, fmt.Errorf("stdout pipe: %w", err)
-		}
-		stderrPipe, err := goTestCmd.StderrPipe()
-		if err != nil {
-			return TestRunStats{}, fmt.Errorf("stderr pipe: %w", err)
-		}
-
-		if err := goTestCmd.Start(); err != nil {
-			return TestRunStats{}, fmt.Errorf("go test start: %w", err)
-		}
 		start := time.Now()
-
-		passCount := 0
-		failCount := 0
-		cachedCount := 0
-		var failLines []string
-		var detailLines []string
 		style := newColorStyle(opts.Color, stdout)
-		var stdoutWg sync.WaitGroup
-		stdoutWg.Add(1)
-		go func() {
-			defer stdoutWg.Done()
-			type goTestEvent struct {
-				Action  string `json:"Action"`
-				Package string `json:"Package"`
-				Test    string `json:"Test"`
-				Output  string `json:"Output"`
-			}
-			packageCached := make(map[string]bool)
-			failedTests := make(map[string]bool)
-			testOutputs := make(map[string][]string)
-			testKey := func(pkg, test string) string { return pkg + "\x00" + test }
-			flushTestOutput := func(key string) {
-				if failedTests[key] {
-					return
-				}
-				failedTests[key] = true
-				if buf := testOutputs[key]; len(buf) > 0 {
-					detailLines = append(detailLines, buf...)
-					delete(testOutputs, key)
-				}
-			}
-			decoder := json.NewDecoder(stdoutPipe)
-			for {
-				var ev goTestEvent
-				if err := decoder.Decode(&ev); err != nil {
-					if err != io.EOF {
-						fmt.Fprintf(os.Stderr, "read go test json: %v\n", err)
-					}
-					break
-				}
-				switch ev.Action {
-				case "output":
-					trimmed := strings.TrimSpace(ev.Output)
-					if ev.Test == "" && (strings.HasPrefix(trimmed, "ok ") || strings.HasPrefix(trimmed, "ok\t")) {
-						if strings.Contains(ev.Output, "(cached)") {
-							packageCached[ev.Package] = true
-						}
-					}
-					if ev.Test == "" && (strings.HasPrefix(trimmed, "FAIL\t") || strings.HasPrefix(trimmed, "FAIL ")) {
-						failLines = append(failLines, trimmed)
-					}
-					if trimmed != "" && trimmed != "PASS" {
-						if ev.Test != "" {
-							key := testKey(ev.Package, ev.Test)
-							line := strings.TrimRight(ev.Output, "\n")
-							if strings.Contains(ev.Output, "--- FAIL:") {
-								flushTestOutput(key)
-								detailLines = append(detailLines, line)
-							} else if failedTests[key] {
-								detailLines = append(detailLines, line)
-							} else {
-								testOutputs[key] = append(testOutputs[key], line)
-							}
-						} else if !strings.HasPrefix(trimmed, "ok ") && !strings.HasPrefix(trimmed, "ok\t") &&
-							!strings.HasPrefix(trimmed, "FAIL\t") && !strings.HasPrefix(trimmed, "FAIL ") {
-							detailLines = append(detailLines, trimmed)
-						}
-					}
-				case "pass":
-					if ev.Test != "" {
-						delete(testOutputs, testKey(ev.Package, ev.Test))
-						continue
-					}
-					passCount++
-					if packageCached[ev.Package] {
-						cachedCount++
-					}
-					stdout.Write([]byte("."))
-				case "fail":
-					if ev.Test != "" {
-						key := testKey(ev.Package, ev.Test)
-						flushTestOutput(key)
-						continue
-					}
-					failCount++
-					fmt.Fprint(stdout, style.red("."))
-				}
-			}
-		}()
-
-		stderrData, _ := io.ReadAll(stderrPipe)
-		stdoutWg.Wait()
-
-		err = goTestCmd.Wait()
+		result, err := runGoTestJSONShards(runDir, flagArgs, packageArgs, sessionID, stdout, style)
 		elapsed := time.Since(start)
-		stats.Passed = passedCases(stats.Total, failCount)
+		stats.Passed = passedCases(stats.Total, result.failCount)
 
-		fmt.Fprintln(stdout, formatSummary(style, passCount+failCount, passCount, failCount, cachedCount, elapsed))
+		fmt.Fprintln(stdout, formatSummary(style, result.passCount+result.failCount, result.passCount, result.failCount, result.cachedCount, elapsed))
 
 		if !opts.SuppressResultSummary {
 			stats.Elapsed = elapsed
@@ -286,17 +178,14 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 			PrintResultSummary(opts, stats)
 		}
 
-		if len(failLines) > 0 {
-			for _, line := range failLines {
-				fmt.Fprintln(stdout, line)
-			}
-		}
-		for _, line := range detailLines {
+		for _, line := range result.failLines {
 			fmt.Fprintln(stdout, line)
 		}
-
-		if len(stderrData) > 0 {
-			stdout.Write(stderrData)
+		for _, line := range result.detailLines {
+			fmt.Fprintln(stdout, line)
+		}
+		if len(result.stderrData) > 0 {
+			stdout.Write(result.stderrData)
 		}
 
 		if err != nil {
@@ -311,6 +200,222 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		fmt.Fprintln(w)
 	}
 	return stats, nil
+}
+
+type goTestJSONResult struct {
+	passCount   int
+	failCount   int
+	cachedCount int
+	failLines   []string
+	detailLines []string
+	stderrData  []byte
+}
+
+// packageTestShards splits package paths across workers for concurrent go test
+// processes (go test itself runs listed packages serially).
+func packageTestShards(pkgs []string, workers int) [][]string {
+	if len(pkgs) == 0 {
+		return nil
+	}
+	if workers <= 1 || len(pkgs) == 1 {
+		return [][]string{pkgs}
+	}
+	if workers > len(pkgs) {
+		workers = len(pkgs)
+	}
+	shards := make([][]string, workers)
+	for i, p := range pkgs {
+		shards[i%workers] = append(shards[i%workers], p)
+	}
+	out := shards[:0]
+	for _, s := range shards {
+		if len(s) > 0 {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// goTestSlots bounds concurrent `go test` processes in this doctest process.
+// Nested self-test subprocesses have their own pool (separate process).
+var goTestSlots = make(chan struct{}, 4)
+
+func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionID string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
+	// Single go test process per tree. Package sharding multiplies nested
+	// self-test fan-out and has raced go.mod; wall cut is tree concurrency +
+	// heavy/light scheduling in path_resolve.
+	workers := 1
+	shards := packageTestShards(packageArgs, workers)
+	if len(shards) <= 1 {
+		args := append(append([]string(nil), flagArgs...), packageArgs...)
+		return runGoTestJSONOnce(runDir, args, sessionID, stdout, style)
+	}
+
+	// Multi-shard: readonly module mode so concurrent go tests share genDir safely.
+	shardFlags := make([]string, 0, len(flagArgs))
+	for _, a := range flagArgs {
+		if a == "-mod=mod" {
+			shardFlags = append(shardFlags, "-mod=readonly")
+			continue
+		}
+		shardFlags = append(shardFlags, a)
+	}
+
+	var (
+		mu       sync.Mutex
+		merged   goTestJSONResult
+		firstErr error
+		wg       sync.WaitGroup
+	)
+	wg.Add(len(shards))
+	for _, shard := range shards {
+		shard := shard
+		go func() {
+			defer wg.Done()
+			args := append(append([]string(nil), shardFlags...), shard...)
+			// Locked stdout keeps progress dots incremental and non-interleaved by byte.
+			res, err := runGoTestJSONOnce(runDir, args, sessionID, &lockedWriter{w: stdout, mu: &mu}, style)
+			mu.Lock()
+			defer mu.Unlock()
+			merged.passCount += res.passCount
+			merged.failCount += res.failCount
+			merged.cachedCount += res.cachedCount
+			merged.failLines = append(merged.failLines, res.failLines...)
+			merged.detailLines = append(merged.detailLines, res.detailLines...)
+			merged.stderrData = append(merged.stderrData, res.stderrData...)
+			if err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}()
+	}
+	wg.Wait()
+	return merged, firstErr
+}
+
+type lockedWriter struct {
+	w  io.Writer
+	mu *sync.Mutex
+}
+
+func (l *lockedWriter) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.w.Write(p)
+}
+
+func runGoTestJSONOnce(runDir string, testArgs []string, sessionID string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
+	goTestSlots <- struct{}{}
+	defer func() { <-goTestSlots }()
+
+	execArgs := append(append([]string(nil), testArgs...), "-json")
+	goTestCmd := exec.Command("go", execArgs...)
+	goTestCmd.Dir = runDir
+	goTestCmd.Env = append(os.Environ(), core.DoctestSessionIDEnv+"="+sessionID)
+
+	stdoutPipe, err := goTestCmd.StdoutPipe()
+	if err != nil {
+		return goTestJSONResult{}, fmt.Errorf("stdout pipe: %w", err)
+	}
+	stderrPipe, err := goTestCmd.StderrPipe()
+	if err != nil {
+		return goTestJSONResult{}, fmt.Errorf("stderr pipe: %w", err)
+	}
+	if err := goTestCmd.Start(); err != nil {
+		return goTestJSONResult{}, fmt.Errorf("go test start: %w", err)
+	}
+
+	var res goTestJSONResult
+	var stdoutWg sync.WaitGroup
+	stdoutWg.Add(1)
+	go func() {
+		defer stdoutWg.Done()
+		type goTestEvent struct {
+			Action  string `json:"Action"`
+			Package string `json:"Package"`
+			Test    string `json:"Test"`
+			Output  string `json:"Output"`
+		}
+		packageCached := make(map[string]bool)
+		failedTests := make(map[string]bool)
+		testOutputs := make(map[string][]string)
+		testKey := func(pkg, test string) string { return pkg + "\x00" + test }
+		flushTestOutput := func(key string) {
+			if failedTests[key] {
+				return
+			}
+			failedTests[key] = true
+			if buf := testOutputs[key]; len(buf) > 0 {
+				res.detailLines = append(res.detailLines, buf...)
+				delete(testOutputs, key)
+			}
+		}
+		decoder := json.NewDecoder(stdoutPipe)
+		for {
+			var ev goTestEvent
+			if err := decoder.Decode(&ev); err != nil {
+				if err != io.EOF {
+					fmt.Fprintf(os.Stderr, "read go test json: %v\n", err)
+				}
+				break
+			}
+			switch ev.Action {
+			case "output":
+				trimmed := strings.TrimSpace(ev.Output)
+				if ev.Test == "" && (strings.HasPrefix(trimmed, "ok ") || strings.HasPrefix(trimmed, "ok\t")) {
+					if strings.Contains(ev.Output, "(cached)") {
+						packageCached[ev.Package] = true
+					}
+				}
+				if ev.Test == "" && (strings.HasPrefix(trimmed, "FAIL\t") || strings.HasPrefix(trimmed, "FAIL ")) {
+					res.failLines = append(res.failLines, trimmed)
+				}
+				if trimmed != "" && trimmed != "PASS" {
+					if ev.Test != "" {
+						key := testKey(ev.Package, ev.Test)
+						line := strings.TrimRight(ev.Output, "\n")
+						if strings.Contains(ev.Output, "--- FAIL:") {
+							flushTestOutput(key)
+							res.detailLines = append(res.detailLines, line)
+						} else if failedTests[key] {
+							res.detailLines = append(res.detailLines, line)
+						} else {
+							testOutputs[key] = append(testOutputs[key], line)
+						}
+					} else if !strings.HasPrefix(trimmed, "ok ") && !strings.HasPrefix(trimmed, "ok\t") &&
+						!strings.HasPrefix(trimmed, "FAIL\t") && !strings.HasPrefix(trimmed, "FAIL ") {
+						res.detailLines = append(res.detailLines, trimmed)
+					}
+				}
+			case "pass":
+				if ev.Test != "" {
+					delete(testOutputs, testKey(ev.Package, ev.Test))
+					continue
+				}
+				res.passCount++
+				if packageCached[ev.Package] {
+					res.cachedCount++
+				}
+				stdout.Write([]byte("."))
+			case "fail":
+				if ev.Test != "" {
+					key := testKey(ev.Package, ev.Test)
+					flushTestOutput(key)
+					continue
+				}
+				res.failCount++
+				fmt.Fprint(stdout, style.red("."))
+			}
+		}
+	}()
+
+	stderrData, _ := io.ReadAll(stderrPipe)
+	stdoutWg.Wait()
+	err = goTestCmd.Wait()
+	res.stderrData = stderrData
+	if err != nil {
+		return res, err
+	}
+	return res, nil
 }
 
 func countFailuresFromGoTestOutput(out []byte) int {

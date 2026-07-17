@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - First run (group-a sub-dir) discovers 2 test cases and both pass.
 - Second run (full tree) discovers 3 test cases.

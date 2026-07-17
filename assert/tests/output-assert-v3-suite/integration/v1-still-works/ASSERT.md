@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Parse succeeds via legacy_v1 with `ContainsBlock` in summary.
 

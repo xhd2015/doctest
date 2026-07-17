@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - With the fix applied, `doctest test -v` runs successfully (exit 0)
   because the verbose code path now uses `Run()` instead of `CombinedOutput()`
