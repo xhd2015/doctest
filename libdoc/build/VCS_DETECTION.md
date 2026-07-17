@@ -22,7 +22,9 @@ Doctest invokes `go build` / `go test -c` in two contexts, both vulnerable:
 
 1. **Internal temp build dirs**: Created by `os.MkdirTemp` to compile generated test code — never inside a Git working tree.
 
-2. **Project root builds**: Integration tests in `tests/SETUP.md` build the doctest binary from the module root with `go build ./cmd/doctest`. The module root IS a Git repo, but in CI containers Git may reject all operations due to "dubious ownership".
+2. **Project root builds**: Integration tests resolve a shared doctest binary via
+   `libdoc/testbin.Ensure` (`go build -o $CACHE/doctest/selftest-bin/<key>/doctest ./cmd/doctest`).
+   The module root IS a Git repo, but in CI containers Git may reject all operations due to "dubious ownership".
 
 Both cases produce the same error:
 

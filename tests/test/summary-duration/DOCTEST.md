@@ -83,7 +83,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-	libdocbuild "github.com/xhd2015/doctest/libdoc/build"
 )
 
 type Request struct {

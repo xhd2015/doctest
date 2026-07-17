@@ -15,8 +15,9 @@ configure fake Codex so no real LLM or network backend is required.
 ## DSN (Domain Specific Notion)
 
 ### Participants
-- **`doctest`** — the CLI binary under test; every test builds it fresh, then
-  invokes it as a subprocess. It is the single entry point for all behaviors.
+- **`doctest`** — the CLI binary under test; leaves share one binary from
+  `testbin.Ensure` (stable cache path; rebuild only when sources change), then
+  invoke it as a subprocess. It is the single entry point for all behaviors.
 - **Test tree** — a directory hierarchy of `.md` files (DOCTEST.md, SETUP.md,
   ASSERT.md) that the CLI reads, interprets, and executes. It models a decision
   tree of scenarios.
@@ -49,7 +50,6 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-	libdocbuild "github.com/xhd2015/doctest/libdoc/build"
 )
 
 type Request struct {

@@ -28,6 +28,7 @@ doctest vet|build|test|skill -> capture stdout, stderr, exit code
 
 ```go
 import "testing"
+	"github.com/xhd2015/doctest/libdoc/testbin"
 
 func Setup(t *testing.T, req *Request) error {
 	req.Timeout = 30 * time.Second
