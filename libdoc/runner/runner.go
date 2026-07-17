@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -294,6 +295,17 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 		Bool("--no-color", &noColorFlag).
 		Bool("--changed", &opts.ChangedOnly).
 		Bool("--label-all", &opts.LabelAll).
+		String("-cpuprofile", &opts.CPUProfile).
+		String("-memprofile", &opts.MemProfile).
+		Int("-memprofilerate", &opts.MemProfileRate).
+		String("-blockprofile", &opts.BlockProfile).
+		Int("-blockprofilerate", &opts.BlockProfileRate).
+		String("-mutexprofile", &opts.MutexProfile).
+		Int("-mutexprofilefraction", &opts.MutexProfileFraction).
+		String("-trace", &opts.Trace).
+		String("-outputdir", &opts.OutputDir).
+		String("-coverprofile", &opts.CoverProfile).
+		Bool("-cover", &opts.Cover).
 		Parse(args)
 	if err != nil {
 		return core.Options{}, nil, err
@@ -308,7 +320,74 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 		return core.Options{}, nil, fmt.Errorf("--label-all and --label are mutually exclusive")
 	}
 	opts.LabelExprs = labelExprs
+
+	// Abs-resolve relative profile/cover paths against process cwd at parse time.
+	pathFields := []*string{
+		&opts.CPUProfile,
+		&opts.MemProfile,
+		&opts.BlockProfile,
+		&opts.MutexProfile,
+		&opts.Trace,
+		&opts.OutputDir,
+		&opts.CoverProfile,
+	}
+	for _, p := range pathFields {
+		if *p == "" {
+			continue
+		}
+		if !filepath.IsAbs(*p) {
+			abs, absErr := absProfilePath(*p)
+			if absErr != nil {
+				return core.Options{}, nil, absErr
+			}
+			*p = abs
+		}
+	}
+
+	// Ensure parent directories exist so go test can create profile files.
+	// OutputDir itself is a directory destination.
+	for _, dirPath := range []string{opts.OutputDir} {
+		if dirPath == "" {
+			continue
+		}
+		if err := os.MkdirAll(dirPath, 0o755); err != nil {
+			return core.Options{}, nil, fmt.Errorf("create -outputdir: %w", err)
+		}
+	}
+	for _, filePath := range []string{
+		opts.CPUProfile,
+		opts.MemProfile,
+		opts.BlockProfile,
+		opts.MutexProfile,
+		opts.Trace,
+		opts.CoverProfile,
+	} {
+		if filePath == "" {
+			continue
+		}
+		if dir := filepath.Dir(filePath); dir != "" && dir != "." {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return core.Options{}, nil, fmt.Errorf("create profile parent dir: %w", err)
+			}
+		}
+	}
+
 	return opts, remainArgs, nil
+}
+
+// absProfilePath resolves a relative path against the process cwd.
+// On macOS, Getwd often returns the /private/var form while user-facing
+// TempDir paths use /var/...; prefer the non-/private form for stable matching.
+func absProfilePath(p string) (string, error) {
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return "", err
+	}
+	const priv = "/private"
+	if strings.HasPrefix(abs, priv+"/var/") {
+		return abs[len(priv):], nil
+	}
+	return abs, nil
 }
 
 func parseVetOptions(args []string) (core.Options, []string, error) {

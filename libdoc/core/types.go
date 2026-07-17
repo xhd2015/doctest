@@ -104,6 +104,21 @@ type Options struct {
 	// ./...). Mutually exclusive with LabelExprs at the CLI. Explicit leaf
 	// paths already run labeled leaves without this flag.
 	LabelAll bool
+
+	// Go test profiling / cover flags (forwarded to go test).
+	// Path fields are abs-resolved at CLI parse time when relative.
+	// Rate fields use *int so zero is distinguishable from unset.
+	CPUProfile           string
+	MemProfile           string
+	MemProfileRate       *int
+	BlockProfile         string
+	BlockProfileRate     *int
+	MutexProfile         string
+	MutexProfileFraction *int
+	Trace                string
+	OutputDir            string
+	CoverProfile         string
+	Cover                bool
 }
 
 type ValidationError struct {

@@ -150,7 +150,7 @@ Examples:
   doctest edit ./tests/feature/ui-leaf/ASSERT.md --add-label manual
 `
 
-const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [--timeout DURATION] [--color] [--no-color] [--changed] [--label EXPR]... [--label-all] <dir>
+const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [--timeout DURATION] [--color] [--no-color] [--changed] [--label EXPR]... [--label-all] [-cpuprofile FILE] [-memprofile FILE] [-memprofilerate N] [-blockprofile FILE] [-blockprofilerate N] [-mutexprofile FILE] [-mutexprofilefraction N] [-trace FILE] [-outputdir DIR] [-coverprofile FILE] [-cover] <dir>
 
 Run executable Go snippets from a doc-style test directory, allow ./... patterns like go test.
 
@@ -170,6 +170,22 @@ Options:
                     Unlabeled leaves are skipped when this flag is set.
   --label-all       Discovery mode: run all leaves including labeled ones (full
                     suite). Mutually exclusive with --label.
+  -cpuprofile FILE  Forward CPU profile path to go test (relative paths abs-resolved)
+  -memprofile FILE  Forward memory profile path to go test (relative paths abs-resolved)
+  -memprofilerate N Forward memprofilerate to go test (including 0)
+  -blockprofile FILE
+                    Forward block profile path to go test (relative paths abs-resolved)
+  -blockprofilerate N
+                    Forward blockprofilerate to go test (including 0)
+  -mutexprofile FILE
+                    Forward mutex profile path to go test (relative paths abs-resolved)
+  -mutexprofilefraction N
+                    Forward mutexprofilefraction to go test (including 0)
+  -trace FILE       Forward execution trace path to go test (relative paths abs-resolved)
+  -outputdir DIR    Forward profile/output directory to go test (relative paths abs-resolved)
+  -coverprofile FILE
+                    Forward cover profile path to go test (relative paths abs-resolved)
+  -cover            Enable coverage analysis (forward -cover to go test)
   -h, --help        Show help
 
 Examples:
