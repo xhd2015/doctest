@@ -781,7 +781,7 @@ func isCrossDeviceRename(err error) bool {
 }
 
 func CacheMappingGenRoot(absDoctestDir string) (string, string, error) {
-	cacheDir, err := os.UserCacheDir()
+	cacheDir, err := CacheHome()
 	if err != nil {
 		return "", "", err
 	}

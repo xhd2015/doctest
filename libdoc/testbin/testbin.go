@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/xhd2015/doctest/libdoc/build"
+	"github.com/xhd2015/doctest/libdoc/core"
 	"github.com/xhd2015/doctest/session"
 )
 
@@ -76,7 +77,7 @@ func Ensure(t testing.TB, moduleRoot string) string {
 func buildDoctest(absRoot string) (string, error) {
 	sum := sha256.Sum256([]byte(absRoot))
 	key := hex.EncodeToString(sum[:16])
-	cacheBase, err := os.UserCacheDir()
+	cacheBase, err := core.CacheHome()
 	if err != nil {
 		cacheBase = os.TempDir()
 	}

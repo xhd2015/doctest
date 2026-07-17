@@ -33,7 +33,7 @@ var processMemo sync.Map // memoKey -> json.RawMessage
 //
 // cacheDir passed to fn is:
 //
-//	${UserCacheDir}/doctest/sessions/<session-id>/once-<slug(key)>/
+//	${DOCTEST_CACHE_HOME|UserCacheDir}/doctest/sessions/<session-id>/once-<slug(key)>/
 //
 // The returned json.RawMessage is written to cacheDir/value as raw JSON bytes
 // and returned to every subsequent caller with the same session and key.
@@ -120,8 +120,20 @@ func Once(t testing.TB, key string, fn func(t testing.TB, cacheDir string) (json
 	return append(json.RawMessage(nil), out...), nil
 }
 
+// DoctestCacheHomeEnv overrides the root for session Once cache dirs when set.
+// Same name as core.DoctestCacheHomeEnv (kept here so package session has no
+// dependency on libdoc/core).
+const DoctestCacheHomeEnv = "DOCTEST_CACHE_HOME"
+
+func cacheHome() (string, error) {
+	if v := os.Getenv(DoctestCacheHomeEnv); v != "" {
+		return filepath.Abs(v)
+	}
+	return os.UserCacheDir()
+}
+
 func onceDir(sessionID, slug string) (string, error) {
-	base, err := os.UserCacheDir()
+	base, err := cacheHome()
 	if err != nil {
 		base = os.TempDir()
 	}

@@ -49,6 +49,7 @@ import (
 	"time"
 	"github.com/xhd2015/doctest/libdoc/testbin"
 	"github.com/xhd2015/doctest/libdoc/assertmod"
+	"github.com/xhd2015/doctest/libdoc/core"
 	"github.com/xhd2015/doctest/libdoc/testtree"
 )
 
@@ -273,7 +274,7 @@ func assertNestedGoMod(t *testing.T, dir string) {
 	}
 }
 func assertModCacheRoot() (string, error) {
-	cacheDir, err := os.UserCacheDir()
+	cacheDir, err := core.CacheHome()
 	if err != nil {
 		return "", err
 	}

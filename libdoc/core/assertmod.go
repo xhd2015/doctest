@@ -31,7 +31,7 @@ func MaterializeAssertModule() (string, error) {
 	content := assertModuleSourceForCache()
 	md5hex := assertmod.RawSourceCacheKeyMD5()
 
-	cacheDir, err := os.UserCacheDir()
+	cacheDir, err := CacheHome()
 	if err != nil {
 		return "", err
 	}
