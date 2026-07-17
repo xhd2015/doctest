@@ -412,10 +412,11 @@ func CopyGeneratedTree(src, dst string) error {
 	})
 }
 
-func goModSourceFingerprint(modRoot, modPath string, hasMod bool, withAssertReplace bool, assertCacheDir string) (string, error) {
+func goModSourceFingerprint(modRoot, modPath string, hasMod bool, withAssertReplace bool, assertCacheDir string, withSessionReplace bool, sessionCacheDir string) (string, error) {
 	h := sha256.New()
 	effectiveAssertReplace := withAssertReplace && assertCacheDir != "" && modPath != "github.com/xhd2015/doctest"
-	if _, err := fmt.Fprintf(h, "gomod-policy=2\nhasMod=%t\nmodPath=%s\nmodRoot=%s\nwithAssertReplace=%t\neffectiveAssertReplace=%t\nassertCacheDir=%s\n", hasMod, modPath, modRoot, withAssertReplace, effectiveAssertReplace, assertCacheDir); err != nil {
+	effectiveSessionReplace := withSessionReplace && sessionCacheDir != "" && modPath != "github.com/xhd2015/doctest"
+	if _, err := fmt.Fprintf(h, "gomod-policy=3\nhasMod=%t\nmodPath=%s\nmodRoot=%s\nwithAssertReplace=%t\neffectiveAssertReplace=%t\nassertCacheDir=%s\nwithSessionReplace=%t\neffectiveSessionReplace=%t\nsessionCacheDir=%s\n", hasMod, modPath, modRoot, withAssertReplace, effectiveAssertReplace, assertCacheDir, withSessionReplace, effectiveSessionReplace, sessionCacheDir); err != nil {
 		return "", err
 	}
 	goModPath := filepath.Join(modRoot, "go.mod")
@@ -440,8 +441,8 @@ func goModSourceFingerprint(modRoot, modPath string, hasMod bool, withAssertRepl
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-func WriteGoMod(genDir, modRoot, modPath string, hasMod bool, withAssertReplace bool, assertCacheDir string) error {
-	fp, err := goModSourceFingerprint(modRoot, modPath, hasMod, withAssertReplace, assertCacheDir)
+func WriteGoMod(genDir, modRoot, modPath string, hasMod bool, withAssertReplace bool, assertCacheDir string, withSessionReplace bool, sessionCacheDir string) error {
+	fp, err := goModSourceFingerprint(modRoot, modPath, hasMod, withAssertReplace, assertCacheDir, withSessionReplace, sessionCacheDir)
 	if err != nil {
 		return err
 	}
@@ -469,6 +470,9 @@ func WriteGoMod(genDir, modRoot, modPath string, hasMod bool, withAssertReplace 
 	}
 	if withAssertReplace && assertCacheDir != "" && modPath != "github.com/xhd2015/doctest" {
 		content += fmt.Sprintf("replace %s => %s\n", AssertImportPath, assertCacheDir)
+	}
+	if withSessionReplace && sessionCacheDir != "" && modPath != "github.com/xhd2015/doctest" {
+		content += fmt.Sprintf("replace %s => %s\n", SessionImportPath, sessionCacheDir)
 	}
 	if err := os.WriteFile(modFile, []byte(content), 0644); err != nil {
 		return err

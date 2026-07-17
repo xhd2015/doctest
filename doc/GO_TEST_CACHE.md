@@ -90,23 +90,24 @@ instead of inside the package directory prevents the directory mtime from
 changing. The temp file is then renamed into the leaf directory only when the
 content actually differs.
 
-## Session-scoped run-once (`libdoc/session.Once`)
+## Session-scoped run-once (`session.Once`)
 
 Cross-process “run once per (session, key)” for shared setup (binaries, servers,
-etc.) lives in `libdoc/session`:
+etc.) lives in top-level package `github.com/xhd2015/doctest/session`:
 
 ```go
-val, err := session.Once(t, "my-key", func(t testing.TB, cacheDir string) (string, error) {
+raw, err := session.Once(t, "my-key", func(t testing.TB, cacheDir string) (json.RawMessage, error) {
     // use cacheDir under UserCacheDir/doctest/sessions/<sid>/once-<slug>/
-    return handlePathOrURL, nil
+    return json.Marshal(struct{ Path string `json:"path"` }{Path: handlePathOrURL})
 })
 ```
 
 Layout: `${UserCacheDir}/doctest/sessions/<session-id>/once-<slugify(key)>/{lock,value,error,…}`.  
 Session id is read with **`syscall.Getenv("DOCTEST_SESSION_ID")` only** (same
-rule as below). The return value is always a **string** handle (path/URL/id).
+rule as below). The return value is **`json.RawMessage`** (raw JSON bytes on disk).
 
-`libdoc/testbin.Ensure` is implemented on top of `session.Once`.
+`libdoc/testbin.Ensure` is implemented on top of `session.Once` (value shape
+`{"path":"..."}`).
 
 ## Session ID: injected variable, not harness env read
 

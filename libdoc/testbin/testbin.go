@@ -6,6 +6,7 @@ package testbin
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -14,7 +15,7 @@ import (
 	"testing"
 
 	"github.com/xhd2015/doctest/libdoc/build"
-	"github.com/xhd2015/doctest/libdoc/session"
+	"github.com/xhd2015/doctest/session"
 )
 
 // Ensure returns a path to a doctest binary built from moduleRoot/cmd/doctest.
@@ -46,15 +47,30 @@ func Ensure(t testing.TB, moduleRoot string) string {
 	sum := sha256.Sum256([]byte(absRoot))
 	onceKey := "go-binary-" + hex.EncodeToString(sum[:8])
 
-	bin, err := session.Once(t, onceKey, func(t testing.TB, cacheDir string) (string, error) {
+	raw, err := session.Once(t, onceKey, func(t testing.TB, cacheDir string) (json.RawMessage, error) {
 		// Durable output path (survives sessions); session.Once only serializes
 		// concurrent first builds within a session.
-		return buildDoctest(absRoot)
+		path, err := buildDoctest(absRoot)
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(struct {
+			Path string `json:"path"`
+		}{Path: path})
 	})
 	if err != nil {
 		t.Fatalf("build shared doctest binary: %v", err)
 	}
-	return bin
+	var got struct {
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal session.Once value: %v (raw=%s)", err, raw)
+	}
+	if got.Path == "" {
+		t.Fatalf("session.Once returned empty path (raw=%s)", raw)
+	}
+	return got.Path
 }
 
 func buildDoctest(absRoot string) (string, error) {
