@@ -90,6 +90,24 @@ instead of inside the package directory prevents the directory mtime from
 changing. The temp file is then renamed into the leaf directory only when the
 content actually differs.
 
+## Session-scoped run-once (`libdoc/session.Once`)
+
+Cross-process “run once per (session, key)” for shared setup (binaries, servers,
+etc.) lives in `libdoc/session`:
+
+```go
+val, err := session.Once(t, "my-key", func(t testing.TB, cacheDir string) (string, error) {
+    // use cacheDir under UserCacheDir/doctest/sessions/<sid>/once-<slug>/
+    return handlePathOrURL, nil
+})
+```
+
+Layout: `${UserCacheDir}/doctest/sessions/<session-id>/once-<slugify(key)>/{lock,value,error,…}`.  
+Session id is read with **`syscall.Getenv("DOCTEST_SESSION_ID")` only** (same
+rule as below). The return value is always a **string** handle (path/URL/id).
+
+`libdoc/testbin.Ensure` is implemented on top of `session.Once`.
+
 ## Session ID: injected variable, not harness env read
 
 `doctest test` assigns a new UUID per invocation and exports it to child

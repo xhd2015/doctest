@@ -10,62 +10,56 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sync"
 	"syscall"
 	"testing"
 
 	"github.com/xhd2015/doctest/libdoc/build"
+	"github.com/xhd2015/doctest/libdoc/session"
 )
-
-// processCache avoids re-entering go build within the same test process when
-// multiple Setup calls share a package (rare) or helpers call Ensure twice.
-var processCache sync.Map // absModuleRoot -> bin path
 
 // Ensure returns a path to a doctest binary built from moduleRoot/cmd/doctest.
 //
-// The binary is written to a stable cache path keyed by absolute module root:
+// Within one doctest test session, concurrent leaves share a single build
+// attempt via session.Once. The binary itself is written to a durable path
+// keyed by absolute module root so go build is an up-to-date no-op when sources
+// are unchanged:
 //
 //	$CACHE/doctest/selftest-bin/<sha256(absRoot)>/doctest
 //
-// Concurrent callers for the same root serialize via flock; go build is then
-// a no-op when sources are unchanged (shared -o path).
-//
-// Override with env DOCTEST_SELFTEST_BIN to force a prebuilt path (e.g. CI).
+// Override with env DOCTEST_SELFTEST_BIN (read via syscall.Getenv) for CI.
 func Ensure(t testing.TB, moduleRoot string) string {
 	t.Helper()
 
-	if override := os.Getenv("DOCTEST_SELFTEST_BIN"); override != "" {
+	if override, ok := syscall.Getenv("DOCTEST_SELFTEST_BIN"); ok && override != "" {
 		if st, err := os.Stat(override); err == nil && !st.IsDir() {
 			return override
 		}
-		t.Fatalf("DOCTEST_SELFTEST_BIN=%q is not a usable binary: %v", override, errStat(override))
+		t.Fatalf("DOCTEST_SELFTEST_BIN=%q is not a usable binary", override)
 	}
 
 	absRoot, err := filepath.Abs(moduleRoot)
 	if err != nil {
 		t.Fatalf("abs module root: %v", err)
 	}
-	if cached, ok := processCache.Load(absRoot); ok {
-		return cached.(string)
-	}
 
-	bin, err := ensureOnDisk(absRoot)
+	// Key is static slug-friendly: module path is hashed for uniqueness.
+	sum := sha256.Sum256([]byte(absRoot))
+	onceKey := "go-binary-" + hex.EncodeToString(sum[:8])
+
+	bin, err := session.Once(t, onceKey, func(t testing.TB, cacheDir string) (string, error) {
+		// Durable output path (survives sessions); session.Once only serializes
+		// concurrent first builds within a session.
+		return buildDoctest(absRoot)
+	})
 	if err != nil {
 		t.Fatalf("build shared doctest binary: %v", err)
 	}
-	processCache.Store(absRoot, bin)
 	return bin
 }
 
-func errStat(path string) error {
-	_, err := os.Stat(path)
-	return err
-}
-
-func ensureOnDisk(absRoot string) (string, error) {
+func buildDoctest(absRoot string) (string, error) {
 	sum := sha256.Sum256([]byte(absRoot))
-	key := hex.EncodeToString(sum[:16]) // 128-bit prefix is enough
-
+	key := hex.EncodeToString(sum[:16])
 	cacheBase, err := os.UserCacheDir()
 	if err != nil {
 		cacheBase = os.TempDir()
@@ -75,23 +69,6 @@ func ensureOnDisk(absRoot string) (string, error) {
 		return "", err
 	}
 	bin := filepath.Join(dir, "doctest")
-	lockPath := bin + ".lock"
-
-	lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o644)
-	if err != nil {
-		return "", fmt.Errorf("open lock: %w", err)
-	}
-	defer lock.Close()
-	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
-		return "", fmt.Errorf("flock: %w", err)
-	}
-	defer func() { _ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN) }()
-
-	// Re-check after lock: another process may have finished the build.
-	if st, err := os.Stat(bin); err == nil && st.Mode().IsRegular() && st.Size() > 0 {
-		// Still run go build so an outdated binary is refreshed when sources change.
-		// With a stable -o path this is typically a sub-second up-to-date check.
-	}
 
 	args := []string{"build", "-o", bin}
 	if build.NeedsBuildVCSFlag(absRoot) {

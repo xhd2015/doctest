@@ -8,6 +8,9 @@ import (
 )
 
 func TestEnsureSharedAndIdempotent(t *testing.T) {
+	// session.Once requires DOCTEST_SESSION_ID.
+	t.Setenv("DOCTEST_SESSION_ID", "testbin-unit-"+t.Name())
+
 	modRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
@@ -28,8 +31,7 @@ func TestEnsureSharedAndIdempotent(t *testing.T) {
 	if b1 != b2 {
 		t.Fatalf("paths differ: %q vs %q", b1, b2)
 	}
-	// Second Ensure is process-cache hit; should be near-instant.
-	if elapsed > 500*time.Millisecond {
-		t.Fatalf("second Ensure took %v; expected process-cache hit", elapsed)
+	if elapsed > time.Second {
+		t.Fatalf("second Ensure took %v; expected fast reuse", elapsed)
 	}
 }
