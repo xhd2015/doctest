@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Command succeeds (exit code 0).
 - `go build` compiles successfully.

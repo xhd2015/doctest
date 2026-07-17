@@ -17,6 +17,7 @@
 ### Behaviors
 
 - **Discovery skip** — tree root, grouping dir, or `...` pattern omits leaves whose ASSERT.md has `label:`.
+- **`--label-all`** — discovery runs labeled leaves too (full suite); mutually exclusive with `--label`.
 - **Explicit leaf** — concrete leaf directory or `ASSERT.md` path runs labeled tests.
 - **Explanation-only** — frontmatter with `explanation:` but no `label:` never skips.
 - **Skip summary** — lists skipped path, label, and explanation before PASS/FAIL.
@@ -47,7 +48,9 @@ label-skip/
 │   │   ├── explanation-only-runs/        OUTCOME: explanation without label runs
 │   │   ├── grouping-dir/                 OUTCOME: grouping dir skips labeled child
 │   │   ├── dotdotdot-pattern/            OUTCOME: ./mod/... skips labeled
-│   │   └── multi-arg-mixed/              OUTCOME: ./mod/... + explicit leaf, aggregated skip
+│   │   ├── multi-arg-mixed/              OUTCOME: ./mod/... + explicit leaf, aggregated skip
+│   │   ├── label-all-runs-all/           OUTCOME: --label-all runs labeled+fast
+│   │   └── label-all-conflicts-label/    OUTCOME: --label-all + --label → error
 │   └── explicit-leaf/                    MODE: concrete leaf dir or ASSERT.md
 │       ├── runs-labeled/                 OUTCOME: labeled leaf dir executes
 │       └── assert-md-path/               OUTCOME: labeled leaf via ASSERT.md path
@@ -78,6 +81,8 @@ label-skip/
 | 5 | `test/discovery/grouping-dir/` | PASS(1/1) + skip labeled child under grouping dir |
 | 6 | `test/discovery/dotdotdot-pattern/` | PASS(1/1) + skip block via `./mod/...` |
 | 7 | `test/discovery/multi-arg-mixed/` | PASS(2/2) + aggregated skip from discovery pass |
+| 7a | `test/discovery/label-all-runs-all/` | PASS(2/2), no skip block |
+| 7b | `test/discovery/label-all-conflicts-label/` | non-zero, mutually exclusive |
 | 8 | `test/explicit-leaf/runs-labeled/` | PASS(1/1), no skip block |
 | 9 | `test/explicit-leaf/assert-md-path/` | PASS(1/1) via ASSERT.md path, no skip block |
 | 10 | `vet/valid-frontmatter/` | exit 0 |

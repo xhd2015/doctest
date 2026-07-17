@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Match succeeds with 3 omitted middle lines.
 

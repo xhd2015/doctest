@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Parse succeeds; inner text is literal `<optional>`, not a tag.
 

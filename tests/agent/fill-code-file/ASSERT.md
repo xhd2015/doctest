@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - The command fails because the target is not a directory.
 

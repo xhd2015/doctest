@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - `./local_subpath/...` from `workdir/` finds only `workdir/local_subpath/`.

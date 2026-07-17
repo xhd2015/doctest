@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - PASS(1/1); no skip block.

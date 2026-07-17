@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Stderr contains an error about mutual exclusion (e.g. "cannot use --list-sessions with --session-id").
 - Exit code is 0.

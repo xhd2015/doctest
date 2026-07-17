@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -201,5 +202,28 @@ func TestParseTestOptionsTimeoutInvalid(t *testing.T) {
 	_, _, err := parseTestOptions([]string{"--timeout", "bogus", "somedir"})
 	if err == nil {
 		t.Fatal("expected error for invalid --timeout value")
+	}
+}
+
+func TestParseTestOptionsLabelAll(t *testing.T) {
+	opts, remain, err := parseTestOptions([]string{"--label-all", "somedir"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !opts.LabelAll {
+		t.Fatal("expected LabelAll=true")
+	}
+	if len(remain) != 1 || remain[0] != "somedir" {
+		t.Fatalf("remain=%v", remain)
+	}
+}
+
+func TestParseTestOptionsLabelAllConflictsWithLabel(t *testing.T) {
+	_, _, err := parseTestOptions([]string{"--label-all", "--label", "heavy", "somedir"})
+	if err == nil {
+		t.Fatal("expected mutual exclusion error")
+	}
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Fatalf("err=%v", err)
 	}
 }

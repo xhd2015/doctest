@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - The command fails.
 - stderr reports that test requires a directory.

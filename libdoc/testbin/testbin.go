@@ -86,6 +86,24 @@ func buildDoctest(absRoot string) (string, error) {
 	}
 	bin := filepath.Join(dir, "doctest")
 
+	// Cross-process lock: parallel trees may call Ensure with different
+	// DOCTEST_SESSION_ID values and race on the same durable -o path.
+	lockPath := filepath.Join(dir, ".build.lock")
+	lf, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return "", fmt.Errorf("open build lock: %w", err)
+	}
+	defer lf.Close()
+	if err := syscall.Flock(int(lf.Fd()), syscall.LOCK_EX); err != nil {
+		return "", fmt.Errorf("flock build lock: %w", err)
+	}
+	defer syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
+
+	// Another process may have finished while we waited.
+	if st, err := os.Stat(bin); err == nil && !st.IsDir() && st.Size() > 0 {
+		return bin, nil
+	}
+
 	args := []string{"build", "-o", bin}
 	if build.NeedsBuildVCSFlag(absRoot) {
 		args = append(args, "-buildvcs=false")

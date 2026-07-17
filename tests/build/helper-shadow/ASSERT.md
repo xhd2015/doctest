@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - The validation rule now catches helper redefinition before Go compilation.
 - The error message indicates the helper name collision.

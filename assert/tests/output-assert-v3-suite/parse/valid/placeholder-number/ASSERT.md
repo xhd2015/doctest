@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Parse succeeds.
 - Summary mentions PORT placeholder with number type.

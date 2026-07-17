@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Non-zero exit (no session ID source available).
 - Stderr mentions `--session-id` flag.

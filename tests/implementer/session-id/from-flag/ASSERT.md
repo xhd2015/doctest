@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - `explicit_session_id` = `my-sess-flag` (from `--session-id` flag).

@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - `./alpha/simple/...` resolves the doctest root by walking up and runs tests scoped to `alpha/simple/`.

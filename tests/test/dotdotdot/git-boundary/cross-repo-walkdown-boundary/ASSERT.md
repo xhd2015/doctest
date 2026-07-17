@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Non-zero exit code.
 - Stderr does NOT contain `child_test` (walk down stops at git boundary).

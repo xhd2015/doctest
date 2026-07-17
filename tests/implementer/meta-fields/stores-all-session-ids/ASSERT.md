@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - `doctest_agent_implementer_session_id`: `store-prio-1`
 - `explicit_session_id`: absent (flag not used)

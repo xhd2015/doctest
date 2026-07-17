@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - After second run, `go.mod` bytes equal pre-run snapshot.

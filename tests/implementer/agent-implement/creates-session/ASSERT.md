@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - Session directory is created under `~/.doctest/implementer/sessions/YYYY/MM/DD/sess_*/`.

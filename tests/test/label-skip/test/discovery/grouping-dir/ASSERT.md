@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - Exit 0, PASS(1/1), exact skip block for labeled child under grouping dir.

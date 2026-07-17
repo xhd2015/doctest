@@ -74,6 +74,8 @@ type Request struct {
 	ModfilePath	string
 	WithAssertReplace	bool
 	AssertCacheDir	string
+	WithSessionReplace	bool
+	SessionCacheDir	string
 }
 type Response struct {
 	Detected	bool
@@ -95,7 +97,7 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 		}
 		return &Response{CacheDir: cacheDir}, nil
 	case "write-gomod":
-		if err := core.WriteGoMod(req.GenDir, req.ModRoot, req.ModPath, true, req.WithAssertReplace, req.AssertCacheDir); err != nil {
+		if err := core.WriteGoMod(req.GenDir, req.ModRoot, req.ModPath, true, req.WithAssertReplace, req.AssertCacheDir, req.WithSessionReplace, req.SessionCacheDir); err != nil {
 			return nil, err
 		}
 		data, err := os.ReadFile(filepath.Join(req.GenDir, "go.mod"))
@@ -104,7 +106,7 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 		}
 		return &Response{GoModContent: string(data)}, nil
 	case "internal-modfile":
-		path, err := core.WriteInternalModfile(req.ModRoot, req.AssertCacheDir)
+		path, err := core.WriteInternalModfile(req.ModRoot, req.AssertCacheDir, req.SessionCacheDir)
 		if err != nil {
 			return nil, err
 		}

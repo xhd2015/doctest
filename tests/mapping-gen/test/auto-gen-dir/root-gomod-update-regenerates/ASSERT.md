@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Warm-up run succeeds (exit 0) and populates the mapping-gen cache.
 - After root `go.mod` removes the local replace and the `dep/` directory is deleted, the second run still succeeds (exit 0).

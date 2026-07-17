@@ -127,9 +127,13 @@ func PartitionLabeledCases(cases []TreeCase, skipLabeled bool) (run []TreeCase, 
 }
 
 // FilterCasesByLabel applies discovery skip or --label filtering.
+// When opts.LabelAll is true, every case runs (labels ignored for selection).
 // When len(opts.LabelExprs)==0, behavior matches PartitionLabeledCases with skipLabeled=!opts.ExplicitLeaf.
 // When label expressions are set, only matching labeled leaves run; others are skipped with Reason "label filter".
 func FilterCasesByLabel(cases []TreeCase, opts Options) (run []TreeCase, skipped []SkippedCase) {
+	if opts.LabelAll {
+		return cases, nil
+	}
 	if len(opts.LabelExprs) == 0 {
 		return PartitionLabeledCases(cases, !opts.ExplicitLeaf)
 	}

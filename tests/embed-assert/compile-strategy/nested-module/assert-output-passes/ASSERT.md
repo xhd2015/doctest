@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - Subprocess `doctest test` exits 0.

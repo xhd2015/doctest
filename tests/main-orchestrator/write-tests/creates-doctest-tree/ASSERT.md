@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - DOCTEST.md, SETUP.md, basic/SETUP.md, and basic/ASSERT.md all exist.
 - The root DOCTEST.md contains Request and Response types and a Run function.

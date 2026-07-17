@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Both runs exit 0.
 - After modifying only leaf_a's ASSERT.md, leaf_b is cached while leaf_a is rebuilt.

@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - PASS(2/2); skips fast, ui, heavy with label-filter reason.

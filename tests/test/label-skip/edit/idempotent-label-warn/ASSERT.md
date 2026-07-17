@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - Exit 0, exact stderr warning, ASSERT.md frontmatter unchanged.

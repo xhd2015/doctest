@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Match fails for extra actual line.
 

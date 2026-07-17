@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - `events.jsonl` contains events matching the mock config `llm_events`.

@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - Header/border lines (with `═══`) have NO timestamp prefix `[...]`.

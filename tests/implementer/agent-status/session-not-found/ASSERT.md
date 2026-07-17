@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Stderr contains a message indicating the session was not found.
 - Exit code is 0.

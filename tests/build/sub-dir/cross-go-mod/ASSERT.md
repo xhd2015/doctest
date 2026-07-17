@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - The command succeeds using mod-b's SETUP.md.
 - Only 1 test case is built.

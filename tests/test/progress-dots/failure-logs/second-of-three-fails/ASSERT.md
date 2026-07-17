@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - stdout contains `SECOND_FAIL_LOG_MARKER`.
 - stdout has exactly one `--- FAIL:` block (no extra failure output from passing packages).

@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - `main_agent_codex_thread_id` = `codex-tid-222`.

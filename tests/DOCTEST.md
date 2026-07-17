@@ -12,6 +12,24 @@ observable behavior.
 The tests intentionally use the public command boundary. Agent-oriented cases
 configure fake Codex so no real LLM or network backend is required.
 
+### Default `./...` vs full self-test (labels)
+
+Cold module-wide runs (`doctest test -count=1 ./...`) keep a **default** self-test
+entry point that finishes in a few minutes on a typical laptop. Leaves labeled
+`heavy` are **skipped** under discovery (same as other labels) so nested-CLI and
+large cookbook trees do not dominate wall time.
+
+- **Default (fast)**: `doctest test -count=1 ./...` — core CLI/libdoc/assert unit
+  coverage without the heavy cookbook (labeled leaves skipped).
+- **Full suite (all leaves)**: `doctest test -count=1 ./... --label-all` —
+  runs unlabeled **and** labeled leaves (not combined with `--label`).
+- **Heavy-only**: `doctest test -count=1 ./... --label heavy` (and/or explicit
+  tree paths such as `./tests/implementer/...`).
+
+Secondary trees under `tests/*` (for example `changed`, `embed-assert`,
+`label-skip`) and large suites (assert v1 cookbook, v3 real-world, implementer,
+main-orchestrator, nested `tests/test/*`) use `label: heavy` on ASSERT.md.
+
 ## DSN (Domain Specific Notion)
 
 ### Participants

@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Phase 1: `doctest test parent/nested` fails because `verbose_leaf` is a stale always-failing package.
 - Phase 2: renaming `nested` to `nested-renamed` leaves stale generated tests under the old cache path.

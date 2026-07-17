@@ -3,8 +3,8 @@
 **Feature**: build the doctest binary for structure-layout integration tests
 
 ```
-# build fresh doctest binary from module source
-go build ./cmd/doctest -> doctest binary
+# shared CLI binary for structure leaves (cold-start: one go build per module)
+testbin.Ensure(moduleRoot) -> $CACHE/doctest/selftest-bin/<key>/doctest
 
 # invoke subcommands against temp trees or skill output
 doctest vet|build|test|skill -> capture stdout, stderr, exit code
@@ -17,7 +17,7 @@ doctest vet|build|test|skill -> capture stdout, stderr, exit code
 
 ## Steps
 
-1. Build the doctest binary from the module root.
+1. Resolve a shared doctest binary via `testbin.Ensure` (or helper `buildDoctestBin`).
 2. Execute the binary with leaf-specific arguments.
 
 ## Context
@@ -27,12 +27,17 @@ doctest vet|build|test|skill -> capture stdout, stderr, exit code
 - Integration leaves create minimal valid new-layout trees and run `doctest build` or `doctest test`.
 
 ```go
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+	"time"
+
 	"github.com/xhd2015/doctest/libdoc/testbin"
+)
 
 func Setup(t *testing.T, req *Request) error {
-	req.Timeout = 30 * time.Second
-	req.Bin = buildDoctestBin(t)
+	req.Timeout = 120 * time.Second
+	req.Bin = testbin.Ensure(t, filepath.Join(DOCTEST_ROOT, "..", ".."))
 	return nil
 }
 ```

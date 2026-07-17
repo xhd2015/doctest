@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Output has `[YYYY-MM-DDTHH:MM:SS] hello` followed by exactly one newline.
 - No double newline appended.

@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - Leading and trailing spaces do not break parsing.

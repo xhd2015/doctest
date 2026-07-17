@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Both runs exit 0.
 - Second run stdout (summary line) contains ", 1 Cached".

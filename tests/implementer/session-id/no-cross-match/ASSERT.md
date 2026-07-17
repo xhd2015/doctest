@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - First call: session created with `explicit_session_id=sess-A`.
 - Second call: NEW session created with `main_agent_codex_thread_id=sess-B`.

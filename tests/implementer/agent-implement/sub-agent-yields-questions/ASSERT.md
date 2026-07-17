@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0 (yielding questions is not an error).
 - Stdout contains the agent's response, the QUESTIONS separator, and the question JSON with options.

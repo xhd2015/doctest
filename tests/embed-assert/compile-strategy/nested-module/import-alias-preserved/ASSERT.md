@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - `doctest test` exits 0.

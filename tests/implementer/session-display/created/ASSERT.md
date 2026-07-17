@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - The command succeeds.
 - stdout contains "Session created" message with the session ID.

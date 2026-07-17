@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - messages.jsonl contains "hello" (the CLI prompt is recorded without --requirement).

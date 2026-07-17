@@ -107,8 +107,14 @@ Examples:
 doctest test -v ./
 doctest test -v ./path
 
-# Run all doctest trees under the current module
+# Run all doctest trees under the current module (skips leaves with label:)
 doctest test -v ./...
+
+# Full suite: also run labeled leaves (e.g. label: heavy)
+doctest test -v ./... --label-all
+
+# Only leaves matching a label expression
+doctest test -v ./... --label heavy
 
 # Run only tests under tests/feature-a/
 doctest test -v ./tests/feature-a/...

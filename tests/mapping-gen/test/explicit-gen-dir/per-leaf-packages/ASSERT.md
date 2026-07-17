@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Command succeeds (exit code 0).
 - Generated output has per-leaf directory structure: each leaf gets its own dir with `_test.go`.

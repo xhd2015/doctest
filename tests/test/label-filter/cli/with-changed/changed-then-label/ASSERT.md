@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - Only changed `slow` leaf is eligible; label filter matches; PASS(1/1).

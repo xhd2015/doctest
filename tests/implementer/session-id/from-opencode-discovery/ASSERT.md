@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code non-zero (no session ID can be resolved).
 - Stderr contains "cannot detect session id".

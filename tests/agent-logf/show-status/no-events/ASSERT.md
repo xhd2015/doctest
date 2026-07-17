@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Header/summary block (lines with `═══`, `Session:`, `Status:`, `Runner:`, `Created:`, `Events:`) has NO timestamp prefix.
 - `No events yet` message HAS a timestamp prefix.

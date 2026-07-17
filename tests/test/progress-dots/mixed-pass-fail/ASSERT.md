@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - stdout shows 3 dots and summary `(3 Run, 2 Pass, 1 Fail)`.
 - Exit code may be non-zero due to failing test.

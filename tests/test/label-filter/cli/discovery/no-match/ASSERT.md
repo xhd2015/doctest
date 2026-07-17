@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - Exit 0; all five leaves skipped; no PASS/FAIL summary.

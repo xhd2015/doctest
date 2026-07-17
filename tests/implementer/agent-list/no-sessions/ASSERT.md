@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - Stdout indicates no sessions found (e.g. "No sessions" or "0 sessions").

@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - Subprocess may pass or fail for unrelated reasons; **session-mod** cache for

@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Match fails with `hint:path` in error.
 

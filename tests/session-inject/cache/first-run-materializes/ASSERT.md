@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - Subprocess `doctest test` exits 0 (or at least reaches materialize — prefer exit 0 once full stack works).

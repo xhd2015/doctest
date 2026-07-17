@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - The command rejects the invalid `--timeout` value.
 - Exit code is non-zero.

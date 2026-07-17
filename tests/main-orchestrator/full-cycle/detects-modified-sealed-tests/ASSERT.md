@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - `git diff` on the test directory shows the modification.
 - The unstaged diff contains the changed assertion.

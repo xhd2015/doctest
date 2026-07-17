@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - Meta.json has `doctest_agent_implementer_session_id` set to `oc-sess-111`.

@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - `git diff --cached --name-only` lists all test files.
 - `git diff --name-only` (unstaged) is empty.

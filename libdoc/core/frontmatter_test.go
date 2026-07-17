@@ -83,3 +83,25 @@ func TestPartitionLabeledCasesExplicitLeafRunsAll(t *testing.T) {
 		t.Fatalf("run=%#v skipped=%#v", run, skipped)
 	}
 }
+
+func TestFilterCasesByLabelLabelAllRunsAll(t *testing.T) {
+	cases := []TreeCase{
+		{Name: "fast", Path: "fast"},
+		{Name: "slow", Path: "slow", Labels: []string{"heavy"}},
+	}
+	run, skipped := FilterCasesByLabel(cases, Options{LabelAll: true})
+	if len(run) != 2 || len(skipped) != 0 {
+		t.Fatalf("run=%#v skipped=%#v", run, skipped)
+	}
+}
+
+func TestFilterCasesByLabelDiscoveryStillSkipsWithoutLabelAll(t *testing.T) {
+	cases := []TreeCase{
+		{Name: "fast", Path: "fast"},
+		{Name: "slow", Path: "slow", Labels: []string{"heavy"}},
+	}
+	run, skipped := FilterCasesByLabel(cases, Options{})
+	if len(run) != 1 || run[0].Path != "fast" || len(skipped) != 1 {
+		t.Fatalf("run=%#v skipped=%#v", run, skipped)
+	}
+}

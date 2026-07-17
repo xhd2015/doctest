@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - Skip block lists five leaves; each entry has `reason: label filter`.

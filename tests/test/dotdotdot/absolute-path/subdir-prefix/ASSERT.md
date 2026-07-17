@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0 (absolute `/...` path is expanded, not stat'd literally).
 - stderr contains "alpha" (tests under alpha/ found).

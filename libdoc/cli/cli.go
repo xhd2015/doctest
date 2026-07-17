@@ -150,7 +150,7 @@ Examples:
   doctest edit ./tests/feature/ui-leaf/ASSERT.md --add-label manual
 `
 
-const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [--timeout DURATION] [--color] [--no-color] [--changed] [--label EXPR]... <dir>
+const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [--timeout DURATION] [--color] [--no-color] [--changed] [--label EXPR]... [--label-all] <dir>
 
 Run executable Go snippets from a doc-style test directory, allow ./... patterns like go test.
 
@@ -168,11 +168,14 @@ Options:
   --label EXPR      Run only leaves whose ASSERT.md labels match EXPR (repeatable;
                     multiple flags are OR'd). Supports &&, ||, and parentheses.
                     Unlabeled leaves are skipped when this flag is set.
+  --label-all       Discovery mode: run all leaves including labeled ones (full
+                    suite). Mutually exclusive with --label.
   -h, --help        Show help
 
 Examples:
   doctest test -v ./
   doctest test -v ./...
+  doctest test -v ./... --label-all
   doctest test -v ./sub-module/...
   doctest test ./mod --label slow
   doctest test ./mod --label 'slow && ui-automation'

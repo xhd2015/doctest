@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - `doctest test` exits 0 via internal-compile (unchanged from pre-assert behavior).

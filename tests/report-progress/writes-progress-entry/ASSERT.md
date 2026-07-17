@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - The file contains a single JSON line with `type` = `"progress"`.

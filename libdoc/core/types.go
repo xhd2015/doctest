@@ -100,6 +100,10 @@ type Options struct {
 	ChangedOnly           bool
 	ExplicitLeaf          bool
 	LabelExprs            []string
+	// LabelAll, when true, runs labeled leaves under discovery (tree root or
+	// ./...). Mutually exclusive with LabelExprs at the CLI. Explicit leaf
+	// paths already run labeled leaves without this flag.
+	LabelAll bool
 }
 
 type ValidationError struct {

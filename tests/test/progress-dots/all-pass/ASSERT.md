@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - The command succeeds.
 - stdout shows 3 dots and summary `(3 Run, 3 Pass, 0 Fail)`.

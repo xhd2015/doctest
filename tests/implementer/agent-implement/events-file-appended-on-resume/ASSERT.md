@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - `events.jsonl` contains both the pre-existing initial event and the new resume event.

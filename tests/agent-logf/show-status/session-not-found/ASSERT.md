@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - stderr contains "session not found" error message.
 - stderr message does NOT have a timestamp prefix `[...]`.

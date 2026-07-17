@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - First captured run (same env as warmup) reports `1 Cached`.
 - Second captured run (different `DOCTEST_SESSION_ID`) reports `0 Cached` because

@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - Trailing `&&` is rejected.

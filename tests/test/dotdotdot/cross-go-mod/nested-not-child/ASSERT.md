@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - `hidden_test` IS discovered (non-child path, both null git → discover).

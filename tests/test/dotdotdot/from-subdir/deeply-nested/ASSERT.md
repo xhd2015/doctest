@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Exit code 0.
 - `./...` from `group/subgroup/tests/` only finds that tree.

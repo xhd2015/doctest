@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Command exits 0 (no tests is printed to stderr but not an error exit).
 - Stderr contains "no tests".

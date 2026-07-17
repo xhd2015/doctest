@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - First call: session directory created with `main_agent_codex_thread_id=flag-fallback-test` (no `explicit_session_id`).
 - Second call: same session directory found and reused via `--session-id` codex fallback.
