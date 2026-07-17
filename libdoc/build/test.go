@@ -130,6 +130,39 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	if opts.Timeout > 0 {
 		flagArgs = append(flagArgs, fmt.Sprintf("-timeout=%s", opts.Timeout))
 	}
+	if opts.CPUProfile != "" {
+		flagArgs = append(flagArgs, fmt.Sprintf("-cpuprofile=%s", opts.CPUProfile))
+	}
+	if opts.MemProfile != "" {
+		flagArgs = append(flagArgs, fmt.Sprintf("-memprofile=%s", opts.MemProfile))
+	}
+	if opts.MemProfileRate != nil {
+		flagArgs = append(flagArgs, fmt.Sprintf("-memprofilerate=%d", *opts.MemProfileRate))
+	}
+	if opts.BlockProfile != "" {
+		flagArgs = append(flagArgs, fmt.Sprintf("-blockprofile=%s", opts.BlockProfile))
+	}
+	if opts.BlockProfileRate != nil {
+		flagArgs = append(flagArgs, fmt.Sprintf("-blockprofilerate=%d", *opts.BlockProfileRate))
+	}
+	if opts.MutexProfile != "" {
+		flagArgs = append(flagArgs, fmt.Sprintf("-mutexprofile=%s", opts.MutexProfile))
+	}
+	if opts.MutexProfileFraction != nil {
+		flagArgs = append(flagArgs, fmt.Sprintf("-mutexprofilefraction=%d", *opts.MutexProfileFraction))
+	}
+	if opts.Trace != "" {
+		flagArgs = append(flagArgs, fmt.Sprintf("-trace=%s", opts.Trace))
+	}
+	if opts.OutputDir != "" {
+		flagArgs = append(flagArgs, fmt.Sprintf("-outputdir=%s", opts.OutputDir))
+	}
+	if opts.CoverProfile != "" {
+		flagArgs = append(flagArgs, fmt.Sprintf("-coverprofile=%s", opts.CoverProfile))
+	}
+	if opts.Cover {
+		flagArgs = append(flagArgs, "-cover")
+	}
 
 	displayArgs := displayGoArgs(append(append([]string(nil), flagArgs...), packageArgs...))
 	if opts.Verbose {
@@ -145,13 +178,33 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		stdout = os.Stdout
 	}
 
+	// go test rejects most profile/coverprofile/trace flags when multiple packages
+	// are listed on one invocation. Run packages one-at-a-time when those flags are set.
+	singlePkgInvocations := profileFlagsNeedSinglePackage(opts) && len(packageArgs) > 1
+
 	if opts.Verbose {
-		execArgs := append(append([]string(nil), flagArgs...), packageArgs...)
-		goTestCmd := exec.Command("go", execArgs...)
-		goTestCmd.Dir = runDir
-		goTestCmd.Env = append(os.Environ(), core.DoctestSessionIDEnv+"="+sessionID)
 		start := time.Now()
-		out, err := goTestCmd.CombinedOutput()
+		var out []byte
+		var err error
+		if singlePkgInvocations {
+			for _, pkg := range packageArgs {
+				execArgs := append(append([]string(nil), flagArgs...), pkg)
+				goTestCmd := exec.Command("go", execArgs...)
+				goTestCmd.Dir = runDir
+				goTestCmd.Env = append(os.Environ(), core.DoctestSessionIDEnv+"="+sessionID)
+				pkgOut, pkgErr := goTestCmd.CombinedOutput()
+				out = append(out, pkgOut...)
+				if pkgErr != nil && err == nil {
+					err = pkgErr
+				}
+			}
+		} else {
+			execArgs := append(append([]string(nil), flagArgs...), packageArgs...)
+			goTestCmd := exec.Command("go", execArgs...)
+			goTestCmd.Dir = runDir
+			goTestCmd.Env = append(os.Environ(), core.DoctestSessionIDEnv+"="+sessionID)
+			out, err = goTestCmd.CombinedOutput()
+		}
 		elapsed := time.Since(start)
 		stdout.Write(out)
 		stats.Passed = passedCases(stats.Total, countFailuresFromGoTestOutput(out))
@@ -166,7 +219,13 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	} else {
 		start := time.Now()
 		style := newColorStyle(opts.Color, stdout)
-		result, err := runGoTestJSONShards(runDir, flagArgs, packageArgs, sessionID, stdout, style)
+		var result goTestJSONResult
+		var err error
+		if singlePkgInvocations {
+			result, err = runGoTestJSONPerPackage(runDir, flagArgs, packageArgs, sessionID, stdout, style)
+		} else {
+			result, err = runGoTestJSONShards(runDir, flagArgs, packageArgs, sessionID, stdout, style)
+		}
 		elapsed := time.Since(start)
 		stats.Passed = passedCases(stats.Total, result.failCount)
 
@@ -234,6 +293,39 @@ func packageTestShards(pkgs []string, workers int) [][]string {
 		}
 	}
 	return out
+}
+
+// profileFlagsNeedSinglePackage reports whether go test would reject the
+// configured profile/cover/trace flags when multiple packages are listed.
+func profileFlagsNeedSinglePackage(opts core.Options) bool {
+	return opts.CPUProfile != "" ||
+		opts.MemProfile != "" ||
+		opts.BlockProfile != "" ||
+		opts.MutexProfile != "" ||
+		opts.Trace != "" ||
+		opts.CoverProfile != "" ||
+		opts.OutputDir != ""
+}
+
+// runGoTestJSONPerPackage runs one go test process per package (serial) so
+// profile flags that go rejects with multi-package lists still work.
+func runGoTestJSONPerPackage(runDir string, flagArgs, packageArgs []string, sessionID string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
+	var merged goTestJSONResult
+	var firstErr error
+	for _, pkg := range packageArgs {
+		args := append(append([]string(nil), flagArgs...), pkg)
+		res, err := runGoTestJSONOnce(runDir, args, sessionID, stdout, style)
+		merged.passCount += res.passCount
+		merged.failCount += res.failCount
+		merged.cachedCount += res.cachedCount
+		merged.failLines = append(merged.failLines, res.failLines...)
+		merged.detailLines = append(merged.detailLines, res.detailLines...)
+		merged.stderrData = append(merged.stderrData, res.stderrData...)
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return merged, firstErr
 }
 
 // goTestSlots bounds concurrent `go test` processes in this doctest process.

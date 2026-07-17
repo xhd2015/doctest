@@ -31,7 +31,7 @@ func MaterializeSessionModule() (string, error) {
 	content := sessionModuleSourceForCache()
 	md5hex := sessionmod.RawSourceCacheKeyMD5()
 
-	cacheDir, err := os.UserCacheDir()
+	cacheDir, err := CacheHome()
 	if err != nil {
 		return "", err
 	}

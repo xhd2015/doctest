@@ -3,17 +3,18 @@
 **Feature**: first doctest test with assert import creates assert-mod cache directory
 
 ```
-# cold cache (or missing content hash dir)
+# cold cache (isolated DOCTEST_CACHE_HOME is empty)
 doctest test with assert -> creates <md5>/{assert.go,go.mod}
 ```
 
 ## Preconditions
 
-- Expected cache dir for current assert source may not exist before run.
+- Parent `cache/SETUP.md` sets an empty isolated `DOCTEST_CACHE_HOME`.
+- Expected cache dir for current assert source does not exist before run.
 
 ## Steps
 
-1. Record whether expected cache dir exists.
+1. Record that expected cache dir does not exist (cold isolated home).
 2. Create public module with assert leaf and run `doctest test <tests> -v`.
 3. Assert cache dir now exists with correct layout.
 
@@ -29,8 +30,8 @@ func Setup(t *testing.T, req *Request) error {
 	cacheDir := expectedAssertCacheDir(t)
 	if _, err := os.Stat(cacheDir); err == nil {
 		cacheExistedBefore = true
-		os.RemoveAll(cacheDir)
 	}
+	// Do not RemoveAll: isolated DOCTEST_CACHE_HOME must never wipe the global cache.
 	createPublicModuleProject(t, "", defaultAssertAssertGo())
 	setupModuleEnv(t, req)
 	req.Args = []string{"test", testDir, "-v"}
