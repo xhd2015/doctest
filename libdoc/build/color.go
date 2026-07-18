@@ -19,22 +19,39 @@ const (
 	ansiGray  = "\x1b[90m"
 )
 
+// isTerminal reports whether w is an *os.File connected to a character device (TTY).
+func isTerminal(w io.Writer) bool {
+	f, ok := w.(*os.File)
+	if !ok {
+		return false
+	}
+	stat, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	return (stat.Mode() & os.ModeCharDevice) != 0
+}
+
+// ResolveColorMode maps ColorAuto to Always/Never based on whether w is a TTY.
+// Explicit ColorAlways and ColorNever are returned unchanged.
+//
+// Call this against the user-facing stdout (real terminal or pipe) before
+// redirecting progress into intermediate buffers (e.g. parallel ./... trees).
+// Otherwise ColorAuto type-asserts the buffer as *os.File and always disables color.
+func ResolveColorMode(mode core.ColorMode, w io.Writer) core.ColorMode {
+	if mode != core.ColorAuto {
+		return mode
+	}
+	if isTerminal(w) {
+		return core.ColorAlways
+	}
+	return core.ColorNever
+}
+
 func colorEnabled(mode core.ColorMode, w io.Writer) bool {
-	switch mode {
+	switch ResolveColorMode(mode, w) {
 	case core.ColorAlways:
 		return true
-	case core.ColorNever:
-		return false
-	case core.ColorAuto:
-		f, ok := w.(*os.File)
-		if !ok {
-			return false
-		}
-		stat, err := f.Stat()
-		if err != nil {
-			return false
-		}
-		return (stat.Mode() & os.ModeCharDevice) != 0
 	default:
 		return false
 	}

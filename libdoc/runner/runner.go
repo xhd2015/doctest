@@ -45,6 +45,15 @@ func Test(args []string) error {
 		return fmt.Errorf("test requires <dir>")
 	}
 
+	// Resolve ColorAuto against the real user-facing stdout before any
+	// parallel-tree buffering replaces opts.Stdout with a bytes.Buffer.
+	// Otherwise Auto always disables color for `doctest test ./...`.
+	stdoutForColor := opts.Stdout
+	if stdoutForColor == nil {
+		stdoutForColor = os.Stdout
+	}
+	opts.Color = runnerbuild.ResolveColorMode(opts.Color, stdoutForColor)
+
 	// One session id for the whole CLI invocation so parallel trees share
 	// session.Once / testbin materialization when nested self-tests run.
 	if v, ok := syscall.Getenv(core.DoctestSessionIDEnv); !ok || v == "" {

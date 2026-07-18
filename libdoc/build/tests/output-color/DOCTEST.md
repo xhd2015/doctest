@@ -22,6 +22,10 @@ on dot progress and the summary line, controlled by `core.Options.Color`
 - **Summary line** — `N Pass` green when N>0; `N Fail` red when N>0, gray when
   N=0; `N Cached` gray always; `N Run` plain.
 - **Color off** — plain dots and summary (auto on non-TTY pipe, or never).
+- **CLI `./...`** — `runner.Test` resolves `ColorAuto` against the real stdout
+  via `build.ResolveColorMode` *before* buffering each tree into a
+  `bytes.Buffer` (parallel non-interleave). Otherwise Auto would always see a
+  non-file writer and disable color even on a TTY.
 
 ## Decision Tree
 

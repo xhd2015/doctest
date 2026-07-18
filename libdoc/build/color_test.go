@@ -1,8 +1,13 @@
 package build
 
 import (
+	"bytes"
+	"os"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/xhd2015/doctest/libdoc/core"
 )
 
 func TestFormatDisplayDuration(t *testing.T) {
@@ -50,5 +55,68 @@ func TestFormatDisplayDuration(t *testing.T) {
 				t.Fatalf("formatDisplayDuration(%v) = %q, want %q", tt.d, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestResolveColorMode(t *testing.T) {
+	t.Run("always and never unchanged", func(t *testing.T) {
+		var buf bytes.Buffer
+		if got := ResolveColorMode(core.ColorAlways, &buf); got != core.ColorAlways {
+			t.Fatalf("Always on buffer: got %v", got)
+		}
+		if got := ResolveColorMode(core.ColorNever, os.Stdout); got != core.ColorNever {
+			t.Fatalf("Never on stdout: got %v", got)
+		}
+	})
+
+	t.Run("auto on non-file is never", func(t *testing.T) {
+		var buf bytes.Buffer
+		if got := ResolveColorMode(core.ColorAuto, &buf); got != core.ColorNever {
+			t.Fatalf("Auto on buffer: got %v, want Never", got)
+		}
+	})
+
+	t.Run("auto on pipe is never", func(t *testing.T) {
+		r, w, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer r.Close()
+		defer w.Close()
+		if got := ResolveColorMode(core.ColorAuto, w); got != core.ColorNever {
+			t.Fatalf("Auto on pipe: got %v, want Never", got)
+		}
+	})
+}
+
+// Regression: parallel ./... buffers progress into bytes.Buffer. ColorAuto
+// against that buffer would always disable ANSI. The CLI resolves Auto against
+// the real stdout first; after Always, writing into a buffer still emits color.
+func TestColorAfterResolveIntoBuffer(t *testing.T) {
+	var buf bytes.Buffer
+
+	// Without resolve: Auto + buffer → plain.
+	plain := newColorStyle(core.ColorAuto, &buf)
+	if plain.enabled {
+		t.Fatal("ColorAuto against buffer must disable color")
+	}
+	sumPlain := formatSummary(plain, 1, 1, 0, 0, time.Millisecond)
+	if strings.Contains(sumPlain, "\x1b[") {
+		t.Fatalf("expected plain summary, got %q", sumPlain)
+	}
+
+	// After resolve (as runner.Test does against user-facing stdout): Always
+	// into the same buffer shape → colored Pass segment.
+	resolved := ResolveColorMode(core.ColorAlways, &buf) // explicit Always after TTY resolve
+	style := newColorStyle(resolved, &buf)
+	if !style.enabled {
+		t.Fatal("ColorAlways against buffer must enable color")
+	}
+	sum := formatSummary(style, 1, 1, 0, 0, time.Millisecond)
+	if !strings.Contains(sum, ansiGreen+"1 Pass"+ansiReset) {
+		t.Fatalf("expected green 1 Pass in summary, got %q", sum)
+	}
+	if !strings.Contains(sum, ansiGray+"0 Fail"+ansiReset) {
+		t.Fatalf("expected gray 0 Fail in summary, got %q", sum)
 	}
 }
