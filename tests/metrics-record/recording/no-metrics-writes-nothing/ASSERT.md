@@ -11,7 +11,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("unexpected harness error: %v", err)
 	}
 	if len(resp.RunFiles) != 0 {
-		t.Fatalf("NoMetrics should write no run files; got %v\nstderr:\n%s", resp.RunFiles, resp.Stderr)
+		t.Fatalf("default MetricsOn=false should write no run files; got %v\nstderr:\n%s", resp.RunFiles, resp.Stderr)
 	}
 }
 ```

@@ -1,30 +1,29 @@
 # Scenario
 
-**Feature**: `--no-metrics` / NoMetrics prevents any run file under MetricsRoot
+**Feature**: default MetricsOn=false writes no run file under MetricsRoot
 
 ```
-# opt-out recording
-RunTest(fixture, NoMetrics=true, MetricsRoot=tmp) -> no new *.jsonl
+RunTest(fixture, MetricsOn=false, MetricsRoot=tmp) -> no new *.jsonl
 ```
 
 ## Preconditions
 
-- Same 1-leaf pass fixture as enabled cases.
+- Empty MetricsRoot before run.
 
 ## Steps
 
-1. Run suite with NoMetrics true.
-2. Assert zero new JSONL files under MetricsRoot.
+1. Run suite with MetricsOn false (default).
+2. Assert no new run JSONL files.
 
 ## Context
 
-- Suite may still pass tests; only metrics I/O is suppressed.
+- Contrast with enabled-writes leaves that set MetricsOn=true.
 
 ```go
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-	req.NoMetrics = true
+	req.MetricsOn = false
 	return nil
 }
 ```

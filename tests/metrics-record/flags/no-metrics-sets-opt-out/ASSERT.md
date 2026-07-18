@@ -1,7 +1,7 @@
 ## Expected
 
 - Parse succeeds.
-- `opts.NoMetrics == true`.
+- `opts.MetricsOn == true`.
 - Remain args include `./tests`.
 
 ```go
@@ -14,8 +14,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if resp.ParseErr != "" {
 		t.Fatalf("parse error: %s", resp.ParseErr)
 	}
-	if !resp.Opts.NoMetrics {
-		t.Fatal("NoMetrics=false after --no-metrics; want true")
+	if !resp.Opts.MetricsOn {
+		t.Fatal("MetricsOn=false after --metrics-on; want true")
 	}
 	found := false
 	for _, a := range resp.RemainArgs {

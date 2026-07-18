@@ -1,9 +1,9 @@
 # Scenario
 
-**Feature**: `doctest test --help` documents `--no-metrics`
+**Feature**: `doctest test --help` documents `--metrics-on`
 
 ```
-doctest test --help -> Options include --no-metrics (opt out of suite metrics JSONL)
+doctest test --help -> Options include --metrics-on (opt in to suite metrics JSONL)
 ```
 
 ## Preconditions

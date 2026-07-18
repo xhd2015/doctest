@@ -21,7 +21,7 @@ env silence for WARNING, fail-on-slow-suite.
 - **Caller** — `doctest test` (CLI or package entry) that owns one suite wall clock.
 - **Warn helpers** — pure functions deciding whether to emit the default-suite
   slow WARNING and formatting its fixed message (no real 3-minute sleep in tests).
-- **Metrics options** — `NoMetrics` (CLI `--no-metrics`) and injectable
+- **Metrics options** — `MetricsOn` (CLI `--metrics-on`) and injectable
   `MetricsRoot` (test cache root; production uses the user cache layout from P1).
 - **Run recorder** — opens one exclusive JSONL run file under
   `$MetricsRoot/doctest/metrics/<project_id>/runs/`, writes `run_start` /
@@ -37,8 +37,8 @@ env silence for WARNING, fail-on-slow-suite.
   `--label-all`, when elapsed ≤ threshold, or when total is 0.
 - **Format warning** — fixed prose mentioning `WARNING:`, default suite speed
   (3 minutes), `skill:doctest-review-perf`, and `doctest skill review-perf --show`.
-- **Opt-out** — `--no-metrics` / `NoMetrics` skips creating any run file under
-  MetricsRoot (and does not open a writer).
+- **Opt-in** — metrics are off by default; `--metrics-on` / `MetricsOn` enables
+  creating a run file under MetricsRoot.
 - **Record** — with metrics on: write `run_start` (project_id, cwd, argv/flags,
   git branch/commit without dirty, session_id, `mode.default_suite`,
   `schema_version` 1), leaf_start/leaf_end for executed leaves when practical,
@@ -51,8 +51,8 @@ env silence for WARNING, fail-on-slow-suite.
 
 ```
 doctest test [flags] <dir>
-  -> parse --no-metrics / labels -> Options
-  -> if !NoMetrics: open run JSONL under MetricsRoot (or user cache)
+  -> parse --metrics-on / labels -> Options
+  -> if MetricsOn: open run JSONL under MetricsRoot (or user cache)
   -> run_start
   -> execute leaves -> leaf_start / leaf_end*
   -> run_end (+ warnings)
@@ -73,12 +73,12 @@ tests/metrics-record/
 ├── warning-message/                     [FormatDefaultSuiteSlowWarning]
 │   └── required-phrases/                WARNING:, skill, review-perf --show, 3 minutes
 ├── flags/                               [CLI / ParseTestOptions]
-│   ├── default-metrics-on/              omit --no-metrics → NoMetrics=false
-│   └── no-metrics-sets-opt-out/         --no-metrics → NoMetrics=true
+│   ├── default-metrics-on/              omit --metrics-on → MetricsOn=false
+│   └── no-metrics-sets-opt-out/         --metrics-on → MetricsOn=true
 └── recording/                           [suite run under injectable MetricsRoot]
-    ├── no-metrics-writes-nothing/       --no-metrics → no new *.jsonl under root
-    ├── enabled-writes-run-start-end/    metrics on → run_start + run_end present
-    └── enabled-writes-leaf-events/      metrics on + 1 leaf → leaf_start/end present
+    ├── no-metrics-writes-nothing/       default MetricsOn=false → no new *.jsonl
+    ├── enabled-writes-run-start-end/    MetricsOn=true → run_start + run_end present
+    └── enabled-writes-leaf-events/      MetricsOn=true + 1 leaf → leaf_start/end present
 ```
 
 ## Test Index
@@ -91,8 +91,8 @@ tests/metrics-record/
 | `warn-predicate/no-fire-label-exprs` | pure | false when LabelExprs non-empty |
 | `warn-predicate/no-fire-total-zero` | pure | false when total=0 |
 | `warning-message/required-phrases` | pure | fixed message substrings |
-| `flags/default-metrics-on` | parse | `NoMetrics == false` by default |
-| `flags/no-metrics-sets-opt-out` | parse | `--no-metrics` → `NoMetrics == true` |
+| `flags/default-metrics-on` | parse | `MetricsOn == false` by default |
+| `flags/no-metrics-sets-opt-out` | parse | `--metrics-on` → `MetricsOn == true` |
 | `recording/no-metrics-writes-nothing` | integration | MetricsRoot has no new run JSONL |
 | `recording/enabled-writes-run-start-end` | integration | JSONL has run_start then run_end |
 | `recording/enabled-writes-leaf-events` | integration | leaf_start + leaf_end for executed leaf |
@@ -145,7 +145,7 @@ type Request struct {
 
 	// record_run
 	MetricsRoot string // injectable root (t.TempDir); empty → Run creates one
-	NoMetrics   bool
+	MetricsOn   bool
 	Dir         string // fixture tree; empty → Run builds a 1-leaf pass tree
 	LabelAll    bool
 	LabelExprs  []string
@@ -242,8 +242,8 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 				return nil, fmt.Errorf("record_run UseCLI requires req.Bin")
 			}
 			args := []string{"test"}
-			if req.NoMetrics {
-				args = append(args, "--no-metrics")
+			if req.MetricsOn {
+				args = append(args, "--metrics-on")
 			}
 			if req.LabelAll {
 				args = append(args, "--label-all")
@@ -275,7 +275,7 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 				Stderr:      &bytes.Buffer{},
 				Stdout:      &bytes.Buffer{},
 				RemoveTemp:  true,
-				NoMetrics:   req.NoMetrics,
+				MetricsOn:   req.MetricsOn,
 				MetricsRoot: root,
 				LabelAll:    req.LabelAll,
 				LabelExprs:  append([]string(nil), req.LabelExprs...),

@@ -1,7 +1,7 @@
 ## Expected
 
 - Exit code 0.
-- stdout contains `--no-metrics`.
+- stdout contains `--metrics-on`.
 
 ## Exit Code
 
@@ -21,8 +21,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("exit=%d stderr=%s stdout=%s", resp.ExitCode, resp.Stderr, resp.Stdout)
 	}
 	out := resp.Stdout + "\n" + resp.Stderr
-	if !strings.Contains(out, "--no-metrics") {
-		t.Fatalf("test --help missing --no-metrics:\n%s", out)
+	if !strings.Contains(out, "--metrics-on") {
+		t.Fatalf("test --help missing --metrics-on:\n%s", out)
 	}
 }
 ```

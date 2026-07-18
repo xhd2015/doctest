@@ -27,7 +27,7 @@ RunTest(...) -> JSONL includes leaf_start and leaf_end (result pass)
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-	req.NoMetrics = false
+	req.MetricsOn = true
 	return nil
 }
 ```

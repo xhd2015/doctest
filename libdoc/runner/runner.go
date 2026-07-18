@@ -66,8 +66,9 @@ func Test(args []string) error {
 
 	// Suite-level metrics for the whole CLI invocation (one JSONL when a
 	// single tree; still one file for multi-arg — first tree path as root).
+	// Opt-in only: --metrics-on.
 	var rec *runRecorder
-	if !opts.NoMetrics {
+	if opts.MetricsOn {
 		metricDir := remainArgs[0]
 		if path_resolve.IsDotDotDotPattern(metricDir) {
 			metricDir = path_resolve.ExtractBasePath(metricDir)
@@ -99,7 +100,7 @@ func Test(args []string) error {
 	runFn := func(dir string, o core.Options) error {
 		o.SuppressResultSummary = true
 		// Avoid nested per-tree files; CLI owns the suite recorder above.
-		o.NoMetrics = true
+		o.MetricsOn = false
 		// Leaf events when recorder is active
 		var cases []core.TreeCase
 		if rec != nil {
@@ -396,7 +397,7 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 		Bool("--no-color", &noColorFlag).
 		Bool("--changed", &opts.ChangedOnly).
 		Bool("--label-all", &opts.LabelAll).
-		Bool("--no-metrics", &opts.NoMetrics).
+		Bool("--metrics-on", &opts.MetricsOn).
 		String("-cpuprofile", &opts.CPUProfile).
 		String("-memprofile", &opts.MemProfile).
 		Int("-memprofilerate", &opts.MemProfileRate).

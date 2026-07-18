@@ -9,7 +9,7 @@ review-perf WARNING ↔ skill cross-link.
 
 Depends on P1–P4 (`libdoc/metrics`, suite recording, `doctest metrics`,
 `doctest skill review-perf`). Prefer **GREEN** when wiring already works;
-**RED** is OK for help gaps (e.g. `test --help` missing `--no-metrics`).
+**RED** is OK for help gaps (e.g. `test --help` missing `--metrics-on`).
 
 Out of scope: phase timers, fsync, dirty git, fail-on-slow, new analyze flags.
 
@@ -44,7 +44,7 @@ Out of scope: phase timers, fsync, dirty git, fail-on-slow, new analyze flags.
   path / totals) under the same MetricsRoot + project cwd.
 - **Top-level help** — `doctest --help` (or bare usage) lists the `metrics`
   command among product surfaces.
-- **Test help** — `doctest test --help` documents `--no-metrics` (opt-out of
+- **Test help** — `doctest test --help` documents `--metrics-on` (opt-in to
   suite metrics recording).
 - **Skill ↔ WARNING alignment** — every required phrase from
   `FormatDefaultSuiteSlowWarning` appears in the review-perf skill body (so
@@ -62,7 +62,7 @@ create 1-leaf pass tree (temp)
 
 # help
 doctest --help -> mentions metrics
-doctest test --help -> mentions --no-metrics
+doctest test --help -> mentions --metrics-on
 
 # alignment
 FormatDefaultSuiteSlowWarning() phrases ⊆ skill review-perf --show
@@ -77,7 +77,7 @@ tests/metrics-integration/
 │   └── record-then-top/                        JSONL then metrics top
 ├── help/                                       [CLI discovery surfaces]
 │   ├── top-level-lists-metrics/                doctest --help includes metrics
-│   └── test-usage-mentions-no-metrics/         test --help includes --no-metrics
+│   └── test-usage-mentions-no-metrics/         test --help includes --metrics-on
 └── skill-warning-alignment/                    [banner ↔ skill phrases]
     └── warn-phrases-in-skill-show/             FormatDefaultSuiteSlowWarning ⊆ skill
 ```
@@ -89,7 +89,7 @@ tests/metrics-integration/
 | `smoke/record-then-last` | e2e | suite writes JSONL; `metrics last` exit 0 + run evidence |
 | `smoke/record-then-top` | e2e | suite writes JSONL; `metrics top` exit 0 + leaf path |
 | `help/top-level-lists-metrics` | help | exit 0; stdout contains `metrics` |
-| `help/test-usage-mentions-no-metrics` | help | exit 0; stdout contains `--no-metrics` |
+| `help/test-usage-mentions-no-metrics` | help | exit 0; stdout contains `--metrics-on` |
 | `skill-warning-alignment/warn-phrases-in-skill-show` | cross-link | skill show contains WARNING required phrases |
 
 ## How to Run
@@ -238,7 +238,7 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 			if req.Bin == "" {
 				return nil, fmt.Errorf("smoke UseCLI requires req.Bin")
 			}
-			args := []string{"test"}
+			args := []string{"test", "--metrics-on"}
 			args = append(args, req.ExtraTestArgs...)
 			args = append(args, dir)
 			env := []string{"DOCTEST_METRICS_ROOT=" + root}
@@ -258,6 +258,7 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 				Stderr:      &stderr,
 				RemoveTemp:  true,
 				MetricsRoot: root,
+				MetricsOn:   true, // smoke always opt-in
 			}
 			err := runner.RunTest(dir, opts)
 			resp.RecordStdout = stdout.String()

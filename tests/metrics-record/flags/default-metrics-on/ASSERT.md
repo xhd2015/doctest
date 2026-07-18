@@ -1,7 +1,7 @@
 ## Expected
 
 - Parse succeeds.
-- `opts.NoMetrics == false`.
+- `opts.MetricsOn == false`.
 
 ```go
 import "testing"
@@ -13,8 +13,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if resp.ParseErr != "" {
 		t.Fatalf("parse error: %s", resp.ParseErr)
 	}
-	if resp.Opts.NoMetrics {
-		t.Fatal("NoMetrics=true by default; want false (metrics on)")
+	if resp.Opts.MetricsOn {
+		t.Fatal("MetricsOn=true by default; want false (metrics off by default)")
 	}
 }
 ```

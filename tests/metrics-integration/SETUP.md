@@ -11,7 +11,7 @@
 
 # help surfaces
 doctest --help -> metrics
-doctest test --help -> --no-metrics
+doctest test --help -> --metrics-on
 
 # skill ↔ WARNING
 FormatDefaultSuiteSlowWarning phrases ⊆ skill review-perf --show

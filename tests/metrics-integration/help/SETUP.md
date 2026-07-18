@@ -4,7 +4,7 @@
 
 ```
 doctest --help -> lists metrics
-doctest test --help -> documents --no-metrics
+doctest test --help -> documents --metrics-on
 ```
 
 ## Preconditions
@@ -21,7 +21,7 @@ doctest test --help -> documents --no-metrics
 ## Context
 
 - Top-level usage currently documents a Metrics section; test usage should
-  document `--no-metrics` (may be RED until help text is updated).
+  document `--metrics-on` (may be RED until help text is updated).
 
 ```go
 import "testing"

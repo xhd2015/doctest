@@ -104,9 +104,9 @@ type Options struct {
 	// ./...). Mutually exclusive with LabelExprs at the CLI. Explicit leaf
 	// paths already run labeled leaves without this flag.
 	LabelAll bool
-	// NoMetrics opts out of suite metrics JSONL recording (CLI: --no-metrics).
-	// Metrics are on by default.
-	NoMetrics bool
+	// MetricsOn enables suite metrics JSONL recording (CLI: --metrics-on).
+	// Metrics are off by default (opt-in).
+	MetricsOn bool
 	// MetricsRoot is the cache root for metrics files
 	// ($MetricsRoot/doctest/metrics/<project_id>/runs/*.jsonl). Empty means
 	// use os.UserCacheDir() (or DOCTEST_METRICS_ROOT when set by the CLI).

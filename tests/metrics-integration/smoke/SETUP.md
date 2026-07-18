@@ -15,7 +15,7 @@ cwd=fixture + DOCTEST_METRICS_ROOT
 
 ## Preconditions
 
-- Metrics default on (no `--no-metrics`).
+- Metrics must be opt-in (`MetricsOn=true` / `--metrics-on`).
 - Fixture is a minimal pass tree (`testtree.WritePassFailTree` 1 pass) with a
   seeded git `origin` (`FixtureOrigin`) so record and analyze share one project_id.
 - Analyze cwd equals fixture dir for project_id alignment.

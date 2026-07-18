@@ -3,8 +3,8 @@
 **Feature**: metrics-on suite writes run_start and run_end JSONL events
 
 ```
-# default metrics
-RunTest(1-leaf fixture, NoMetrics=false, MetricsRoot=tmp)
+# metrics opt-in
+RunTest(1-leaf fixture, MetricsOn=true, MetricsRoot=tmp)
   -> one *.jsonl with run_start then run_end (schema_version 1)
 ```
 
@@ -29,7 +29,7 @@ RunTest(1-leaf fixture, NoMetrics=false, MetricsRoot=tmp)
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-	req.NoMetrics = false
+	req.MetricsOn = true
 	return nil
 }
 ```

@@ -85,9 +85,14 @@ doctest test ./tests
 
 ### 2. Pull metrics evidence
 
-Metrics are recorded under the project metrics dir (session- and run-scoped
-JSONL under the user metrics root — the **session cache** / metrics store for
-runs).
+Metrics JSONL recording is **opt-in**. Collect evidence with:
+
+```sh
+doctest test ./... --metrics-on
+```
+
+Runs land under the project metrics dir (session- and run-scoped JSONL under
+the user metrics root — the **session cache** / metrics store for runs).
 
 ```sh
 doctest metrics path

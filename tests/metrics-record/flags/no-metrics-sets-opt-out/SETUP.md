@@ -1,10 +1,10 @@
 # Scenario
 
-**Feature**: `--no-metrics` sets NoMetrics opt-out
+**Feature**: `--metrics-on` sets MetricsOn opt-in
 
 ```
 # parse with flag
-parseTestOptions(["--no-metrics", "./tests"]) -> NoMetrics=true
+parseTestOptions(["--metrics-on", "./tests"]) -> MetricsOn=true
 ```
 
 ## Preconditions
@@ -13,8 +13,8 @@ parseTestOptions(["--no-metrics", "./tests"]) -> NoMetrics=true
 
 ## Steps
 
-1. Parse `--no-metrics` plus a path.
-2. Expect NoMetrics true; remain args still include the path.
+1. Parse `--metrics-on` plus a path.
+2. Expect MetricsOn true; remain args still include the path.
 
 ## Context
 
@@ -24,7 +24,7 @@ parseTestOptions(["--no-metrics", "./tests"]) -> NoMetrics=true
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-	req.Args = []string{"--no-metrics", "./tests"}
+	req.Args = []string{"--metrics-on", "./tests"}
 	return nil
 }
 ```

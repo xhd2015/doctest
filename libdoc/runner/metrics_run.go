@@ -123,7 +123,7 @@ type runRecorder struct {
 }
 
 func openRunRecorder(dir string, opts core.Options) (*runRecorder, error) {
-	if opts.NoMetrics {
+	if !opts.MetricsOn {
 		return nil, nil
 	}
 	cacheDir := resolveMetricsRoot(opts)

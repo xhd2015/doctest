@@ -1,27 +1,25 @@
 # Scenario
 
-**Feature**: `doctest test` flag parse for metrics opt-out
+**Feature**: parse metrics flags on doctest test
 
 ```
-# CLI args -> core.Options
-parseTestOptions([...]) -> Options.NoMetrics
+parseTestOptions([...]) -> Options.MetricsOn
 
-# default metrics on; --no-metrics opts out
+# default metrics off; --metrics-on opts in
 ```
 
 ## Preconditions
 
-- `runner.ParseTestOptions` is exported for package-level tests (or implementer
-  re-exports the same parse path used by `runner.Test`).
+- Uses package parse API (`runner.ParseTestOptions`).
 
 ## Steps
 
-1. Set `req.Op = "parse_flags"` and `req.Args`.
-2. Assert `opts.NoMetrics`.
+1. Set `Op=parse_flags` and `Args`.
+2. Assert `opts.MetricsOn`.
 
 ## Context
 
-- Does not run a suite; pure option wiring.
+- Flag order before dir is supported.
 
 ```go
 import "testing"

@@ -1,24 +1,24 @@
 # Scenario
 
-**Feature**: metrics recording enabled by default (no opt-out flag)
+**Feature**: metrics are off by default (opt-in)
 
 ```
-# parse without --no-metrics
-parseTestOptions(["./tests"]) -> NoMetrics=false
+# parse without --metrics-on
+parseTestOptions(["./tests"]) -> MetricsOn=false
 ```
 
 ## Preconditions
 
-- Remain args may include the directory operand.
+- No metrics-related flags in argv.
 
 ## Steps
 
-1. Parse args with only a directory path.
-2. Expect NoMetrics false.
+1. Parse a directory-only argv.
+2. Expect MetricsOn false.
 
 ## Context
 
-- Default: metrics **on**.
+- Recording is enabled only with `--metrics-on` / `MetricsOn=true`.
 
 ```go
 import "testing"
