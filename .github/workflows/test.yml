@@ -7,16 +7,18 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    container:
-      image: golang:1.25.0
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
       - name: Go test
         run: go test -v ./...
 
       - name: Install doctest (this checkout)
         # Use the tree under test so CI proves the cross-device rename fix; @latest may lag.
-        # -buildvcs=false: shallow Actions checkout often cannot stamp VCS metadata.
-        run: go install -buildvcs=false ./cmd/doctest
+        # Run on the Ubuntu VM (not a golang container) so default VCS stamping works
+        # without -buildvcs=false.
+        run: go install ./cmd/doctest
       - name: Doctest
         run: doctest test -v --label-all ./...
