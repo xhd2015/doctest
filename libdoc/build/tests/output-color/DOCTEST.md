@@ -101,8 +101,13 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 	}
 
 	if req.WarmCache {
+		// First run may rewrite gen with -count=1 (no result cache store);
+		// second run stores the entry the measured run should hit.
 		if err := build.Test(subRoot, opts); err != nil {
-			t.Fatalf("cache warmup run failed: %v", err)
+			t.Fatalf("cache warmup run 1 failed: %v", err)
+		}
+		if err := build.Test(subRoot, opts); err != nil {
+			t.Fatalf("cache warmup run 2 failed: %v", err)
 		}
 	}
 

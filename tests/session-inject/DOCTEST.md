@@ -20,10 +20,10 @@
 
 **Behaviors**
 
-- Session import detected → materialize session-mod cache (write-once) before
-  code generation (mirror assert materialize).
-- No session import → skip session-mod materialization.
-- Nested module + session import → `replace` for session points at cache.
+- Session package is always required for inject (`d *session.Doctest`) →
+  materialize session-mod cache (write-once) before code generation (even when
+  author SETUP/ASSERT do not import session).
+- Nested module + session (always) → `replace` for session points at cache.
 - Import path stays `github.com/xhd2015/doctest/session` (no rewrite).
 - A leaf that imports session and calls `Once` can compile and run when the
   embedded module is replaced correctly and `DOCTEST_SESSION_ID` is set for the
@@ -36,7 +36,7 @@ session-inject/
 ├── cache/                                    [session-mod materialization]
 │   ├── first-run-materializes/               B1: creates session-mod/<md5>/
 │   ├── second-run-idempotent/                B2: second run does not rewrite
-│   └── no-import-skips/                      B3: no session import → no cache entry
+│   └── no-import-skips/                      B3: no author session import → still materialize (inject)
 └── replace/                                  [go.mod replace + consumer Once]
     ├── replace-in-gomod/                     R1: replace session => cache path
     └── once-call-succeeds/                   R2: leaf imports session; Once works
@@ -48,7 +48,7 @@ session-inject/
 |------|----------|
 | `cache/first-run-materializes` | B1 — first run creates `$CACHE/doctest/session-mod/<md5>/` with go.mod + sources |
 | `cache/second-run-idempotent` | B2 — second run leaves cache bytes unchanged |
-| `cache/no-import-skips` | B3 — run without session import does not create session-mod entry for current key |
+| `cache/no-import-skips` | B3 — run without author session import still creates session-mod (inject) |
 | `replace/replace-in-gomod` | R1 — nested go.mod contains session replace pointing at cache |
 | `replace/once-call-succeeds` | R2 — subprocess leaf imports session and Once returns JSON |
 

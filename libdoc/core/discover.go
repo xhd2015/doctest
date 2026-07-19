@@ -719,13 +719,15 @@ func MappingGenRoot(absDoctestDir string) (string, string) {
 	return absModRoot, modRoot
 }
 
-func WriteGeneratedCase(leafDir string, tc TreeCase, compileOnly bool, pkgName string, docTestRoot string) (string, error) {
+// WriteGeneratedCase writes the generated test file for one leaf.
+// wrote is true when the on-disk content changed (or the file was created).
+func WriteGeneratedCase(leafDir string, tc TreeCase, compileOnly bool, pkgName string, docTestRoot string) (path string, wrote bool, err error) {
 	if err := os.MkdirAll(leafDir, 0755); err != nil {
-		return "", err
+		return "", false, err
 	}
 	src, err := AssembleTestSource(tc, compileOnly, pkgName, docTestRoot)
 	if err != nil {
-		return "", fmt.Errorf("%s: %w", tc.Path, err)
+		return "", false, fmt.Errorf("%s: %w", tc.Path, err)
 	}
 	testFile := TestFileName(tc)
 	testPath := filepath.Join(leafDir, testFile)
@@ -740,13 +742,13 @@ func WriteGeneratedCase(leafDir string, tc TreeCase, compileOnly bool, pkgName s
 	// (gofmt alone is insufficient — Process also adds/removes imports).
 	res, err := imports.Process(testPath, []byte(src), nil)
 	if err != nil {
-		return "", fmt.Errorf("format imports failed: %w", err)
+		return "", false, fmt.Errorf("format imports failed: %w", err)
 	}
 
 	existing, _ := os.ReadFile(testPath)
 	if string(existing) == string(res) {
 		// Unchanged: leave leafDir completely untouched so GOCACHE can hit.
-		return testPath, nil
+		return testPath, false, nil
 	}
 
 	// Content differs — write atomically via same-dir temp + rename so we
@@ -754,17 +756,17 @@ func WriteGeneratedCase(leafDir string, tc TreeCase, compileOnly bool, pkgName s
 	// (e.g. GitHub Actions). Fall back to WriteFile only on EXDEV.
 	tmpFile, err := os.CreateTemp(leafDir, ".doctest-gen-*")
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	tmpPath := tmpFile.Name()
 	if _, err := tmpFile.Write(res); err != nil {
 		tmpFile.Close()
 		os.Remove(tmpPath)
-		return "", err
+		return "", false, err
 	}
 	if err := tmpFile.Close(); err != nil {
 		os.Remove(tmpPath)
-		return "", err
+		return "", false, err
 	}
 
 	if err := os.Rename(tmpPath, testPath); err != nil {
@@ -772,15 +774,15 @@ func WriteGeneratedCase(leafDir string, tc TreeCase, compileOnly bool, pkgName s
 		// failures (permission, missing path, etc.) should surface as-is.
 		if !isCrossDeviceRename(err) {
 			os.Remove(tmpPath)
-			return "", err
+			return "", false, err
 		}
 		if writeErr := os.WriteFile(testPath, res, 0644); writeErr != nil {
 			os.Remove(tmpPath)
-			return "", fmt.Errorf("rename (cross-device): %w; write fallback: %v", err, writeErr)
+			return "", false, fmt.Errorf("rename (cross-device): %w; write fallback: %v", err, writeErr)
 		}
 		os.Remove(tmpPath)
 	}
-	return testPath, nil
+	return testPath, true, nil
 }
 
 // isCrossDeviceRename reports whether err is an EXDEV from os.Rename

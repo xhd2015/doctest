@@ -211,6 +211,15 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	sessionID := core.DoctestSessionIDForRun()
 	goCache := opts.GoCache
 
+	// When generation rewrote any test file, force -count=1 so go cannot report
+	// a false "(cached)" hit against a previous binary (seen after leaf Chdir
+	// removal). Unchanged re-runs omit this and repopulate the result cache.
+	// Prefer package-scoped -count over `go clean -testcache` (global; races
+	// parallel trees sharing GOCACHE).
+	if ctx.genWrote && opts.Count == 0 {
+		flagArgs = append(flagArgs, "-count=1")
+	}
+
 	stdout := opts.Stdout
 	if stdout == nil {
 		stdout = os.Stdout

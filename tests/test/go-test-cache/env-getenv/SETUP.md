@@ -147,6 +147,9 @@ func doEnvCacheRun(t *testing.T, req *Request) {
 
     baseArgs := []string{"test", testDir}
 
+    // Two warmups with env A: first gen rewrite may use -count=1; second stores
+    // a cache entry for the "1 Cached" first measured run.
+    doRunWithEnv(t, req.Bin, baseArgs, envCfg.EnvValueA)
     doRunWithEnv(t, req.Bin, baseArgs, envCfg.EnvValueA)
 
     envState.FirstResp = doRunWithEnv(t, req.Bin, baseArgs, envCfg.EnvValueA)

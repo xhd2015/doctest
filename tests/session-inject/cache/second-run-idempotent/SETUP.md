@@ -23,18 +23,20 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/xhd2015/doctest/session"
 )
 
 var goModBefore []byte
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	// Ensure warm: materialize via first subprocess if needed.
 	createPublicModuleProject(t, "", defaultSessionAssertGo(), true)
 	setupModuleEnv(t, req)
 	req.Args = []string{"test", testDir, "-v"}
 	// Warm-up run
 	warm := *req
-	if _, err := Run(t, &warm); err != nil {
+	if _, err := Run(t, d, &warm); err != nil {
 		// continue; first-run may still create cache before failing
 		_ = err
 	}

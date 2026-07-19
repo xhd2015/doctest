@@ -132,6 +132,9 @@ func doMultiRun(t *testing.T, req *Request) {
 
     baseArgs := []string{"test", testDir}
 
+    // Two warmups: first generation may force -count=1 (gen rewrite), so a
+    // second warm stores the result for the "1 Cached" first measured run.
+    doRun(t, req.Bin, baseArgs)
     doRun(t, req.Bin, baseArgs)
 
     resp1 := doRun(t, req.Bin, baseArgs)

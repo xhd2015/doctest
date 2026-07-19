@@ -22,6 +22,8 @@ doctest test (run 1) -> doctest test (run 2) -> cache bytes and mtimes unchanged
 import (
 	"path/filepath"
 	"testing"
+
+	"github.com/xhd2015/doctest/session"
 )
 
 var (
@@ -31,12 +33,12 @@ var (
 	beforeGoModDigest	[16]byte
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	createPublicModuleProject(t, "", defaultAssertAssertGo())
 	setupModuleEnv(t, req)
 
 	req.Args = []string{"test", testDir, "-v"}
-	if _, err := Run(t, req); err != nil {
+	if _, err := Run(t, d, req); err != nil {
 		t.Fatalf("first doctest run failed: %v", err)
 	}
 

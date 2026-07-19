@@ -12,14 +12,16 @@ gen-dir -> per-leaf packages -> file system
 
 ## Steps
 
-- Call Run(t, req) from inside Setup.
-- The generator emits Run as lowercase `run`, so uppercase `Run`
-  in the Setup body will be undefined.
+- Call Run(t, d, req) from inside Setup.
+- The generator emits Run as lowercase `run`, then aliases `Run := run`,
+  so uppercase `Run` in the Setup body is the harness Run (with inject `d`).
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+import "github.com/xhd2015/doctest/session"
+
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     req.Name = "leaf"
-    resp, runErr := Run(t, req)
+    resp, runErr := Run(t, d, req)
     _ = resp
     _ = runErr
     return nil

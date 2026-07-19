@@ -18,8 +18,10 @@ progress dots -> . F | verbose -> go test -v | count -> N tests
 - The auto-gen-dir parent provides multi-run Run.
 
 ## Steps
-1. Set cfg.ModifyFile = "SETUP.md" to modify the root SETUP.md between runs.
-2. The Run function will overwrite SETUP.md with new content before the second run.
+1. Set cfg.ModifyFile = "simple/SETUP.md" to modify the leaf SETUP.md between runs
+   (leaf Setup is inlined into generated source; root-only edits still regenerate,
+   but leaf is the clearest cache-bust signal after inject).
+2. The multi-run helper overwrites that file with new content before the second run.
 
 ```go
 import (
@@ -28,8 +30,8 @@ import (
 
 func Setup(t *testing.T, req *Request) error {
     cfg.TestDir = createTempTestProject(t, "mytest")
-    cfg.ModifyFile = "SETUP.md"
-    cfg.ModifyContent = doctestGoBlock("import \"testing\"\n\nfunc Setup(t *testing.T, req *Request) error { req.WorkDir = \"modified\"; return nil }")
+    cfg.ModifyFile = "simple/SETUP.md"
+    cfg.ModifyContent = doctestGoBlock("import \"testing\"\n\nfunc Setup(t *testing.T, req *Request) error { req.WorkDir = \"modified-leaf-setup\"; return nil }")
     doMultiRun(t, req)
     return nil
 }

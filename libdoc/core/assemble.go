@@ -122,6 +122,14 @@ func writeDoctestDConstruct(buf *strings.Builder, docTestRoot, casePath string) 
 	buf.WriteString("\t\tDOCTEST_CASE:       `" + escapedCase + "`,\n")
 	buf.WriteString("\t\tDOCTEST_SESSION_ID: sid,\n")
 	buf.WriteString("\t}\n")
+	// Without process Chdir, go's test result cache no longer auto-tracks the
+	// case directory mtime. Stat case + key docs so edits to SETUP/ASSERT bust
+	// the cache (same role Chdir used to play via testlog).
+	buf.WriteString("\t_, _ = os.Stat(d.DOCTEST_CASE)\n")
+	buf.WriteString("\t_, _ = os.Stat(filepath.Join(d.DOCTEST_CASE, \"SETUP.md\"))\n")
+	buf.WriteString("\t_, _ = os.Stat(filepath.Join(d.DOCTEST_CASE, \"ASSERT.md\"))\n")
+	buf.WriteString("\t_, _ = os.Stat(filepath.Join(d.DOCTEST_ROOT, \"SETUP.md\"))\n")
+	buf.WriteString("\t_, _ = os.Stat(filepath.Join(d.DOCTEST_ROOT, \"DOCTEST.md\"))\n")
 }
 
 func escapeRawString(s string) string {

@@ -13,6 +13,9 @@ import (
 
 func setSession(t *testing.T, id string) {
 	t.Helper()
+	// Isolate Once disk cache so repeated local `go test` runs with fixed
+	// session ids do not skip fn (CI is always clean; local often is not).
+	t.Setenv(DoctestCacheHomeEnv, t.TempDir())
 	t.Setenv(DoctestSessionIDEnv, id)
 	if v, ok := syscall.Getenv(DoctestSessionIDEnv); !ok || v != id {
 		t.Fatalf("syscall.Getenv(%s)=%q,%v want %q", DoctestSessionIDEnv, v, ok, id)

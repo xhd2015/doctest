@@ -1,6 +1,6 @@
 # Scenario
 
-**Feature**: a doc-style test tree where a child SETUP.md's `func Setup` calls `Run(t, req)`
+**Feature**: a doc-style test tree where a child SETUP.md's `func Setup` calls `Run(t, d, req)`
 
 ```
 # parse test tree, generate Go code, compile binary
@@ -11,9 +11,9 @@ gen-dir -> per-leaf packages -> file system
 ```
 
 ## Preconditions
-- A doc-style test tree where a child SETUP.md's `func Setup` calls `Run(t, req)`.
-- The generator lowers `func Run` to lowercase closure `run`, but the Setup body
-  still references uppercase `Run` → "undefined: Run".
+- A doc-style test tree where a child SETUP.md's `func Setup` calls `Run(t, d, req)`.
+- The generator lowers `func Run` to lowercase closure `run`, then aliases
+  `Run := run` so Setup can call uppercase `Run` with the inject `d`.
 
 ## Steps
 1. Run `doctest test` on the testdata fixture, which compiles with `go test -c`.

@@ -1,23 +1,24 @@
 # Scenario
 
-**Feature**: doctest test without session import does not create session-mod entry
+**Feature**: even without author session import, inject still materializes session-mod
 
 ```
-# no session import in SETUP/ASSERT/Run
-doctest test -> skip MaterializeSessionModule for session
+# fixture tree has no github.com/xhd2015/doctest/session import in SETUP/ASSERT/Run
+# but assemble always injects session.Doctest → session-mod cache is created
+doctest test -> MaterializeSessionModule for inject
 ```
 
 ## Preconditions
 
-- Module tree does not import `github.com/xhd2015/doctest/session`.
-- Expected cache dir is removed before run so absence is observable.
+- Module tree does **not** import `github.com/xhd2015/doctest/session` in author harness.
+- Expected cache dir is removed before run so creation is observable.
 
 ## Steps
 
 1. Remove expected session-mod cache dir.
-2. Create public module **without** session import.
-3. Run doctest test.
-4. Assert cache dir still absent.
+2. Create public module **without** session import in fixture sources.
+3. Run doctest test (product always injects `session.Doctest`).
+4. Assert session-mod cache exists for the inject key.
 
 ```go
 import (
