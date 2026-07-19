@@ -315,15 +315,22 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 		t.Fatalf("build: %v", err)
 	}
 
-	leafTestData, err := os.ReadFile(filepath.Join(genDir, "leaf", "leaf_test.go"))
+	// Default hierarchical unified: leaf is non-test RunTestLeaf package.
+	leafData, err := os.ReadFile(filepath.Join(genDir, "leaf", "leaf.go"))
 	if err != nil {
-		t.Fatalf("read leaf_test.go: %v", err)
+		t.Fatalf("read leaf.go: %v", err)
 	}
-	code := string(leafTestData)
+	code := string(leafData)
 	absRoot, _ := filepath.Abs(root)
-	assertGeneratedMatchesFixture(t, code, absRoot, "generated_leaf_test.go.fixture")
-	if strings.Contains(code, "func init()") {
-		t.Fatal("expected no func init() in generated code")
+	assertGeneratedMatchesFixture(t, code, absRoot, "generated_leaf.go.fixture")
+	if !strings.Contains(code, "func init()") {
+		t.Fatal("expected func init() registration in unified leaf package")
+	}
+	if !strings.Contains(code, "session.Doctest") {
+		t.Fatal("expected session.Doctest inject in unified leaf")
+	}
+	if !strings.Contains(code, "DOCTEST_ROOT") {
+		t.Fatal("expected DOCTEST_ROOT in unified leaf")
 	}
 }
 
@@ -344,15 +351,56 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 		t.Fatalf("build: %v", err)
 	}
 
-	rootTestData, err := os.ReadFile(filepath.Join(genDir, "root_test.go"))
-	if err != nil {
-		t.Fatalf("read root_test.go: %v", err)
+	// Root-level ASSERT leaf: gen path is genRoot itself under unified layout.
+	// Prefer suite package as the runnable entry; leaf package is non-test.
+	suitePath := filepath.Join(genDir, "suite", "suite_test.go")
+	if _, err := os.Stat(suitePath); err != nil {
+		t.Fatalf("expected suite/suite_test.go: %v", err)
 	}
-	code := string(rootTestData)
+	// Root leaf package file (non-test) next to gen root modules or named by leaf.
+	var leafCode string
+	entries, _ := os.ReadDir(genDir)
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if strings.HasSuffix(e.Name(), ".go") && !strings.HasSuffix(e.Name(), "_test.go") {
+			data, err := os.ReadFile(filepath.Join(genDir, e.Name()))
+			if err != nil {
+				t.Fatalf("read %s: %v", e.Name(), err)
+			}
+			leafCode = string(data)
+			break
+		}
+	}
+	if leafCode == "" {
+		// Tree-scoped leaf may sit under a dedicated leaf package dir at ".".
+		// Walk for RunTestLeaf.
+		_ = filepath.Walk(genDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil || info == nil || info.IsDir() {
+				return nil
+			}
+			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			data, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return nil
+			}
+			if strings.Contains(string(data), "func RunTestLeaf") {
+				leafCode = string(data)
+				return filepath.SkipAll
+			}
+			return nil
+		})
+	}
+	if leafCode == "" {
+		t.Fatal("expected unified root leaf RunTestLeaf package under gen")
+	}
 	absRoot, _ := filepath.Abs(root)
-	assertGeneratedMatchesFixture(t, code, absRoot, "generated_root_test.go.fixture")
-	if strings.Contains(code, "func init()") {
-		t.Fatal("expected no func init() in generated code")
+	assertGeneratedMatchesFixture(t, leafCode, absRoot, "generated_root_leaf.go.fixture")
+	if !strings.Contains(leafCode, "session.Doctest") {
+		t.Fatal("expected session.Doctest inject in root leaf")
 	}
 }
 
@@ -537,13 +585,19 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatal("expected private func in copied helper.go")
 	}
 
-	leafTestPath := filepath.Join(genDir, "tests", "leaf", "leaf_test.go")
-	testData, err := os.ReadFile(leafTestPath)
+	// Unified leaf is non-test; package under test is also copied into __droot
+	// so Run can call unexported symbols.
+	leafPath := filepath.Join(genDir, "tests", "leaf", "leaf.go")
+	testData, err := os.ReadFile(leafPath)
 	if err != nil {
-		t.Fatalf("expected leaf_test.go: %v", err)
+		t.Fatalf("expected leaf.go: %v", err)
 	}
 	if !strings.Contains(string(testData), "package pkg_tc") {
-		t.Fatalf("expected package pkg_tc in test file, got:\n%s", testData)
+		t.Fatalf("expected package pkg_tc in leaf package, got:\n%s", testData)
+	}
+	drootHelper := filepath.Join(genDir, "tests", "__droot", "helper.go")
+	if _, err := os.Stat(drootHelper); err != nil {
+		t.Fatalf("expected package-under-test sources in __droot: %v", err)
 	}
 }
 
@@ -606,12 +660,12 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 		t.Fatalf("build: %v", err)
 	}
 
-	leafTestData, err := os.ReadFile(filepath.Join(genDir, "leaf", "leaf_test.go"))
+	leafData, err := os.ReadFile(filepath.Join(genDir, "leaf", "leaf.go"))
 	if err != nil {
-		t.Fatalf("read leaf_test.go: %v", err)
+		t.Fatalf("read leaf.go: %v", err)
 	}
-	if !strings.Contains(string(leafTestData), "package testcase") {
-		t.Fatalf("expected package testcase when no metadata, got:\n%s", leafTestData)
+	if !strings.Contains(string(leafData), "package testcase") {
+		t.Fatalf("expected package testcase when no metadata, got:\n%s", leafData)
 	}
 }
 

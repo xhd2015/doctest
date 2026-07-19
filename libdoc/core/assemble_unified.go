@@ -13,11 +13,15 @@ import (
 //
 //	genRoot/
 //	  go.mod
-//	  <treeRel>/__droot/          package droot
-//	  <treeRel>/__registry/       package registry — Register/All
-//	  <treeRel>/__allleaves/      blank-imports every leaf package
-//	  <treeRel>/<leaf>/leaf.go    non-test RunTestLeaf + init Register
+//	  <treeRel>/__droot/             package droot
+//	  <treeRel>/<parent>/setup.go    intermediate packages (shared, same as ref)
+//	  <treeRel>/__registry/          package registry — Register/All
+//	  <treeRel>/__allleaves/         blank-imports every leaf package
+//	  <treeRel>/<leaf>/leaf.go       non-test RunTestLeaf + init Register
 //	  <treeRel>/suite/suite_test.go  iterates registry.All via t.Run
+//
+// Intermediate SETUP packages are written once via WriteRefIntermediatePackages
+// (shared with ref mode). Leaves import ancestors and call RootSetup* → Setup → leaf setups.
 const (
 	UnifiedRegistryDirName  = "__registry"
 	UnifiedRegistryPkgName  = "registry"
@@ -170,7 +174,8 @@ func AssembleUnifiedSuiteTestSource(registryImport, allLeavesImport string) stri
 }
 
 // AssembleUnifiedLeafSource emits a non-test leaf package with RunTestLeaf + init Register.
-// Body matches the thin ref leaf test body (setup/run/assert).
+// Body mirrors hierarchical AssembleRefLeafTestSource: leaf-local docs only, import droot
+// and intermediate packages, call RootSetup* → intermediate Setup → leaf setups → Run → assert.
 func AssembleUnifiedLeafSource(tc TreeCase, compileOnly bool, pkgName, docTestRoot, rootImport, rootAlias, registryImport string) (string, error) {
 	if pkgName == "" {
 		pkgName = "testcase"
@@ -185,9 +190,11 @@ func AssembleUnifiedLeafSource(tc TreeCase, compileOnly bool, pkgName, docTestRo
 		registryImport = treeScopedImport(".", UnifiedRegistryDirName)
 	}
 
-	rootDocs, leafDocs := SplitRefSetupDocs(tc.SetupFiles)
+	part := PartitionRefSetupDocs(tc)
+	rootDocs := part.RootDocs
+	leafDocs := part.LeafDocs
 	renames := collectRootSymbolRenames(rootDocs)
-	rootTypes := collectRootTypeNames(rootDocs)
+	rootTypes := rootTypeNamesForQualify(rootDocs)
 
 	var buf strings.Builder
 	buf.WriteString("package ")
@@ -201,6 +208,11 @@ func AssembleUnifiedLeafSource(tc TreeCase, compileOnly bool, pkgName, docTestRo
 		}
 	}
 	importsMap[rootAlias+"\x00"+rootImport] = &ImportSpec{Name: rootAlias, Path: rootImport}
+	for _, g := range part.Intermediate {
+		alias := RefIntermediateAlias(g.Dir)
+		imp := RefIntermediateImport(rootImport, g.Dir)
+		importsMap[alias+"\x00"+imp] = &ImportSpec{Name: alias, Path: imp}
+	}
 	importsMap[UnifiedRegistryPkgName+"\x00"+registryImport] = &ImportSpec{Name: UnifiedRegistryPkgName, Path: registryImport}
 	writeImportBlock(&buf, importsMap)
 
@@ -217,13 +229,12 @@ func AssembleUnifiedLeafSource(tc TreeCase, compileOnly bool, pkgName, docTestRo
 	buf.WriteString("\t})\n")
 	buf.WriteString("}\n\n")
 
-	// Leaf-only types/helpers — rewrite any references to root symbols.
+	// Leaf-only types/helpers — rewrite references to root + intermediate symbols.
 	var leafBlob strings.Builder
 	writePackageLevelTypesAndMethods(&leafBlob, leafDocs, tc.AssertFile.GoBlock)
 	writePackageLevelConstVars(&leafBlob, leafDocs, tc.AssertFile.GoBlock)
 	writePackageLevelHelpers(&leafBlob, leafDocs, tc.AssertFile.GoBlock)
-	leafTop := qualifyRootSymbols(leafBlob.String(), rootAlias, renames)
-	leafTop = qualifyRootTypes(leafTop, rootAlias, rootTypes)
+	leafTop := qualifyAncestorSymbols(leafBlob.String(), part, rootAlias, renames, rootTypes)
 	buf.WriteString(leafTop)
 
 	buf.WriteString("func ")
@@ -247,19 +258,39 @@ func AssembleUnifiedLeafSource(tc TreeCase, compileOnly bool, pkgName, docTestRo
 		buf.WriteString("\t}\n")
 	}
 
+	// Intermediate setups (exported package funcs), parents first.
+	for _, g := range part.Intermediate {
+		alias := RefIntermediateAlias(g.Dir)
+		setupTotal := 0
+		for _, doc := range g.Docs {
+			if doc.GoBlock != nil && doc.GoBlock.Setup != nil {
+				setupTotal++
+			}
+		}
+		setupIdx := 0
+		for _, doc := range g.Docs {
+			if doc.GoBlock == nil || doc.GoBlock.Setup == nil {
+				continue
+			}
+			name := intermediateSetupName(setupIdx, setupTotal)
+			setupIdx++
+			buf.WriteString(fmt.Sprintf("\tif err := %s.%s(t, d, req); err != nil {\n", alias, name))
+			buf.WriteString(fmt.Sprintf("\t\tt.Fatalf(\"%s failed: %%v\", err)\n", escapeString(doc.Path)))
+			buf.WriteString("\t}\n")
+		}
+	}
+
 	for i, doc := range leafDocs {
 		if doc.GoBlock == nil || doc.GoBlock.Setup == nil {
 			continue
 		}
 		name := fmt.Sprintf("setup%d", i)
 		fn := *doc.GoBlock.Setup
-		fn.Params = qualifyRootTypes(fn.Params, rootAlias, rootTypes)
-		fn.Results = qualifyRootTypes(fn.Results, rootAlias, rootTypes)
-		fn.ResultTypes = qualifyRootTypes(fn.ResultTypes, rootAlias, rootTypes)
-		fn.ClosureResults = qualifyRootTypes(fn.ClosureResults, rootAlias, rootTypes)
-		fn.Body = qualifyRootTypesInBody(fn.Body, rootAlias, rootTypes)
-		fn.Body = qualifyRootSymbols(fn.Body, rootAlias, renames)
-		fn.Params = qualifyRootSymbols(fn.Params, rootAlias, renames)
+		fn.Params = qualifyAncestorSymbols(fn.Params, part, rootAlias, renames, rootTypes)
+		fn.Results = qualifyAncestorSymbols(fn.Results, part, rootAlias, renames, rootTypes)
+		fn.ResultTypes = qualifyAncestorSymbols(fn.ResultTypes, part, rootAlias, renames, rootTypes)
+		fn.ClosureResults = qualifyAncestorSymbols(fn.ClosureResults, part, rootAlias, renames, rootTypes)
+		fn.Body = qualifyAncestorSymbols(fn.Body, part, rootAlias, renames, rootTypes)
 		fn.Params = ensureDoctestParam(fn.Params)
 		writeFuncClosure(&buf, name, fn)
 		buf.WriteString(fmt.Sprintf("\tif err := %s(t, d, req); err != nil {\n", name))
@@ -268,12 +299,11 @@ func AssembleUnifiedLeafSource(tc TreeCase, compileOnly bool, pkgName, docTestRo
 	}
 
 	assertFn := *tc.AssertFile.GoBlock.Assert
-	assertFn.Params = qualifyRootTypes(assertFn.Params, rootAlias, rootTypes)
-	assertFn.Results = qualifyRootTypes(assertFn.Results, rootAlias, rootTypes)
-	assertFn.ResultTypes = qualifyRootTypes(assertFn.ResultTypes, rootAlias, rootTypes)
-	assertFn.ClosureResults = qualifyRootTypes(assertFn.ClosureResults, rootAlias, rootTypes)
-	assertFn.Body = qualifyRootTypesInBody(assertFn.Body, rootAlias, rootTypes)
-	assertFn.Body = qualifyRootSymbols(assertFn.Body, rootAlias, renames)
+	assertFn.Params = qualifyAncestorSymbols(assertFn.Params, part, rootAlias, renames, rootTypes)
+	assertFn.Results = qualifyAncestorSymbols(assertFn.Results, part, rootAlias, renames, rootTypes)
+	assertFn.ResultTypes = qualifyAncestorSymbols(assertFn.ResultTypes, part, rootAlias, renames, rootTypes)
+	assertFn.ClosureResults = qualifyAncestorSymbols(assertFn.ClosureResults, part, rootAlias, renames, rootTypes)
+	assertFn.Body = qualifyAncestorSymbols(assertFn.Body, part, rootAlias, renames, rootTypes)
 	assertFn.Params = ensureDoctestParam(assertFn.Params)
 	writeFuncClosure(&buf, "assert", assertFn)
 
@@ -344,6 +374,58 @@ func WriteUnifiedLeafCase(leafDir string, tc TreeCase, compileOnly bool, pkgName
 		return "", err
 	}
 	return leafPath, nil
+}
+
+// WriteUnifiedTree writes __droot, intermediate packages once, unified leaves,
+// __registry, __allleaves, and suite under genRoot (flat treeRel ".").
+// Useful for unit tests; production generation uses generateContext.writeUnifiedCases.
+func WriteUnifiedTree(genRoot string, cases []TreeCase, docTestRoot string, compileOnly bool, pkgName string) error {
+	if len(cases) == 0 {
+		return fmt.Errorf("WriteUnifiedTree: no cases")
+	}
+	if pkgName == "" {
+		pkgName = "testcase"
+	}
+
+	rootDocs, _ := SplitRefSetupDocs(cases[0].SetupFiles)
+	if len(rootDocs) == 0 {
+		rootDocs = cases[0].SetupFiles
+	}
+	rootSrc, err := AssembleRefRootSource(rootDocs, RefRootPkgName)
+	if err != nil {
+		return err
+	}
+	rootDir := filepath.Join(genRoot, RefRootDirName)
+	rootImport := RefRootImportPath
+	registryImport := UnifiedRegistryImportForTree(".")
+	if err := os.MkdirAll(rootDir, 0755); err != nil {
+		return err
+	}
+	if err := WriteFormattedGo(filepath.Join(rootDir, "droot.go"), rootSrc); err != nil {
+		return fmt.Errorf("write unified ref root package: %w", err)
+	}
+
+	if err := WriteRefIntermediatePackages(genRoot, ".", rootImport, rootDocs, cases); err != nil {
+		return err
+	}
+
+	leafImports := make([]string, 0, len(cases))
+	for _, tc := range cases {
+		leafDir := genRoot
+		if tc.Path != "" {
+			leafDir = filepath.Join(genRoot, tc.Path)
+		}
+		if _, err := WriteUnifiedLeafCase(leafDir, tc, compileOnly, pkgName, docTestRoot, rootImport, registryImport); err != nil {
+			return err
+		}
+		leafRel := tc.Path
+		if leafRel == "" {
+			leafRel = "."
+		}
+		leafImports = append(leafImports, LeafImportForTree(leafRel))
+	}
+
+	return WriteUnifiedTreeExtras(genRoot, ".", leafImports)
 }
 
 // WriteUnifiedTreeExtras writes __registry, __allleaves, and suite for a tree.

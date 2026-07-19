@@ -1,56 +1,39 @@
 # Scenario
 
-**Feature**: experiment unified-package-per-doctest-tree — one go test binary per tree
+**Feature**: default hierarchical unified package-per-tree generation
 
 ```
-# Parse flag into Options (default off; on implies ref)
-parseTestOptions([...]) -> Options.ExperimentUnifiedPackagePerDoctestTree
-                        -> Options.ExperimentRefInsteadOfInline (forced when unified)
-
-# Unified gen + run (flag on)
-RunTest(2-leaf marker fixture, GenDir=tmp, ExperimentUnifiedPackagePerDoctestTree=true)
-  -> gen: __droot + __registry + leaf RunTestLeaf + __allleaves + suite
-  -> go test ./suite (one package)
-  -> both leaves pass
-
-# Control (flag off)
-RunTest(same fixture, unified=false) -> classic multi-leaf *_test.go
+# default path (no experiment flags)
+RunTest(2-leaf marker fixture, GenDir=tmp)
+  -> __droot + __registry + leaf RunTestLeaf + __allleaves + suite
+  -> go test suite only; both leaves pass
 ```
 
 ## Preconditions
 
-- Symbols/behavior expected (implementer; **RED** until present):
-  - `core.Options.ExperimentUnifiedPackagePerDoctestTree bool`
-  - `runner.ParseTestOptions` understands `--experiment-unified-package-per-doctest-tree`
-  - When unified is true, `ExperimentRefInsteadOfInline` is forced true
-  - Generation layout under tree gen root:
-    - `__droot/`, `__registry/`, `__allleaves/`, leaf non-test with `RunTestLeaf`, `suite/suite_test.go`
-  - Suite imports registry + allleaves (+ stdlib os for DOCTEST_METRICS_PARENT_LEAF)
-  - `go test` only the suite package → one test binary per DOCTEST tree
-  - Flag false remains classic: multi-package leaf `*_test.go`
+- Default generation is hierarchical unified (ref packages + suite).
 - Fixtures use distinctive `ExperimentUnifiedRootMarker` /
-  `ROOT_RUN_MARKER_UNIFIED_PACKAGE`.
-- Help token coverage lives in `tests/help/test-options` (parent CLI tree).
+  `ROOT_RUN_MARKER_UNIFIED_PACKAGE` so layout can be counted without
+  hard-coding package dirnames.
+- Leaves never assert complex multi-level Setup edge cases.
 
 ## Steps
 
-1. Leaf Setup sets `req.Op` and branch fields.
-2. Root `Run` dispatches parse or run_gen (+ layout fill).
-3. Leaf Assert checks option bits, run success, gen layout, or go-test package line.
+1. Leaf Setup sets `req.Op=run_gen` and optional Dir/GenDir.
+2. Root `Run` builds fixture (if needed), runs `runner.RunTest` with default Options, fills layout.
+3. Leaf Assert checks run success, gen-layout, or suite-only go test packaging.
 
 ## Context
 
-- Hard product rule: **without the flag, behavior must not change** (classic only).
-- Unified **auto-enables** ref; tests set only the unified Options field on RunTest.
-- Sealed sibling tree `tests/test/experiment-ref-inline/` must keep passing.
+- Help no longer documents experiment flags (`tests/help/test-options`).
+- Sibling tree `tests/test/experiment-ref-inline/` asserts hierarchical ref properties under the same default.
 
 ```go
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-	// Leaves set Op and scenario fields; default keeps Run from erroring if forgotten.
 	if req.Op == "" {
-		req.Op = "parse_flags"
+		req.Op = "run_gen"
 	}
 	return nil
 }

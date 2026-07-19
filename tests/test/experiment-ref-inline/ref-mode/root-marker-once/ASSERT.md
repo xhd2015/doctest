@@ -15,7 +15,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("unexpected harness error: %v", err)
 	}
 	if resp.RunErr != "" {
-		t.Fatalf("ref-mode RunTest failed before layout check: %s\nstderr:\n%s",
+		t.Fatalf("hierarchical RunTest failed before layout check: %s\nstderr:\n%s",
 			resp.RunErr, resp.Stderr)
 	}
 	if resp.MarkerDefCount != 1 {

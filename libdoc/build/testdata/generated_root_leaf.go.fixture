@@ -4,15 +4,22 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
+	droot "testcase/__droot"
+	registry "testcase/__registry"
 	"testing"
 
 	"github.com/xhd2015/doctest/session"
 )
 
-type Request struct{}
-type Response struct{}
+func init() {
+	registry.Register(registry.Entry{
+		Path:   "",
+		Labels: nil,
+		Fn:     RunTestLeaf,
+	})
+}
 
-func TestGeneratedCaseRoot(t *testing.T) {
+func RunTestLeaf(t *testing.T) {
 	var sid string
 	{
 		s, ok := syscall.Getenv("DOCTEST_SESSION_ID")
@@ -31,20 +38,16 @@ func TestGeneratedCaseRoot(t *testing.T) {
 	_, _ = os.Stat(filepath.Join(d.DOCTEST_CASE, "ASSERT.md"))
 	_, _ = os.Stat(filepath.Join(d.DOCTEST_ROOT, "SETUP.md"))
 	_, _ = os.Stat(filepath.Join(d.DOCTEST_ROOT, "DOCTEST.md"))
-	run := func(t *testing.T, _ *session.Doctest, req *Request) (*Response, error) {
-		return &Response{}, nil
-	}
-	Run := run
-	req := &Request{}
-	assert := func(t *testing.T, _ *session.Doctest, req *Request, resp *Response, err error) {
+	Run := droot.Run
+	req := &droot.Request{}
+	assert := func(t *testing.T, _ *session.Doctest, req *droot.Request, resp *droot.Response, err error) {
 	}
 	_ = Run
 	// compileOnly
 	_ = d
 	_ = req
-	_ = run
 	_ = assert
-	var resp *Response
+	var resp *droot.Response
 	var runErr error
 	_ = resp
 	_ = runErr

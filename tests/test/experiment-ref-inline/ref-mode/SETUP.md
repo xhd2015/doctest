@@ -1,29 +1,21 @@
 # Scenario
 
-**Feature**: P1 ref vs classic generation for a simple 2-leaf tree
+**Feature**: hierarchical ref layout under default unified generation
 
 ```
-# fixture: root DOCTEST defines ExperimentP1RootMarker + Run; leaves a/, b/
-RunTest(fixture, GenDir=tmp, ExperimentRefInsteadOfInline=on|off)
-  -> go test passes
-  -> walk GenDir *.go for marker / type Request / imports
+RunTest(2-leaf, GenDir=tmp)
+  -> shared root marker once; thin leaves import ancestors
 ```
 
 ## Preconditions
 
-- Uses package suite entry `runner.RunTest` with explicit `GenDir` (`t.TempDir()`).
-- Fixture built by root helper `createTwoLeafMarkerTree` unless a leaf overrides `Dir`.
-- Layout metrics filled into `Response` after the run (`MarkerDefCount`, leaf flags).
+- Default generation.
+- Explicit GenDir for layout inspection.
 
 ## Steps
 
-1. Set `Op=ref_gen` and `ExperimentRefInsteadOfInline`.
-2. Run suite; assert pass and/or gen layout.
-
-## Context
-
-- Flag off branch: classic inline (marker helper duplicated per leaf).
-- Flag on branch: shared root package + thin leaf tests (P1).
+1. Set `Op=ref_gen`.
+2. Assert run success and/or layout metrics.
 
 ```go
 import "testing"

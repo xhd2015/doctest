@@ -1,6 +1,7 @@
 ## Expected
 - The command succeeds.
 - stdout includes test runner options.
+- Experiment generation flags are no longer documented (unified/ref is default).
 
 ```go
 import (
@@ -19,10 +20,6 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         "Usage: doctest test",
         "-v", "--verbose", "--rm", "-count", "--timeout", "--color", "--no-color",
         "--cold-cache",
-        // Experimental: ref-instead-of-inline generation (P0 plumbing; gen change is P1)
-        "--experiment-ref-instead-of-inline",
-        // Experimental: one go test package/binary per DOCTEST tree (implies ref)
-        "--experiment-unified-package-per-doctest-tree",
         // Go-style profiling / cover flags forwarded to go test
         "-cpuprofile", "-memprofile", "-memprofilerate",
         "-blockprofile", "-blockprofilerate",
@@ -32,6 +29,14 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     } {
         if !strings.Contains(resp.Stdout, want) {
             t.Fatalf("stdout missing %q:\n%s", want, resp.Stdout)
+        }
+    }
+    for _, gone := range []string{
+        "--experiment-ref-instead-of-inline",
+        "--experiment-unified-package-per-doctest-tree",
+    } {
+        if strings.Contains(resp.Stdout, gone) {
+            t.Fatalf("stdout must not document removed experiment flag %q:\n%s", gone, resp.Stdout)
         }
     }
 }

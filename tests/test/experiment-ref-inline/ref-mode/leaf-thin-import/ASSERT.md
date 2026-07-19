@@ -1,10 +1,10 @@
 ## Expected
 
 - Suite run succeeds.
-- At least two leaf `*_test.go` files found under gen.
-- No leaf test file defines `func ExperimentP1RootMarker`.
-- No leaf test file contains `type Request` (types live in root package).
-- Each leaf test file imports at least one non-stdlib package (the root / ancestor package).
+- At least two leaf package `.go` files found under gen (`a/` / `b/`).
+- No leaf package file defines `func ExperimentP1RootMarker`.
+- No leaf package file contains `type Request` (types live in root package).
+- Each leaf package file imports at least one non-stdlib package (root / ancestor).
 
 ```go
 import (
@@ -17,13 +17,13 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("unexpected harness error: %v", err)
 	}
 	if resp.RunErr != "" {
-		t.Fatalf("ref-mode RunTest failed: %s\nstderr:\n%s", resp.RunErr, resp.Stderr)
+		t.Fatalf("hierarchical RunTest failed: %s\nstderr:\n%s", resp.RunErr, resp.Stderr)
 	}
-	if len(resp.LeafTestFiles) < 2 {
-		t.Fatalf("expected ≥2 leaf *_test.go under gen, got %v (all go=%v)",
-			basenames(resp.LeafTestFiles), basenames(resp.GoFiles))
+	if len(resp.LeafGoFiles) < 2 {
+		t.Fatalf("expected ≥2 leaf .go under gen a/b, got %v (all go=%v)",
+			basenames(resp.LeafGoFiles), basenames(resp.GoFiles))
 	}
-	for i, leaf := range resp.LeafTestFiles {
+	for i, leaf := range resp.LeafGoFiles {
 		if i < len(resp.LeafHasMarkerDef) && resp.LeafHasMarkerDef[i] {
 			t.Fatalf("thin leaf %s must not define %s", leaf, experimentP1MarkerFunc)
 		}

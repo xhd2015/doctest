@@ -1,10 +1,10 @@
 # Scenario
 
-**Feature**: 2-leaf fixture passes under default unified generation
+**Feature**: 2-leaf fixture passes under default hierarchical gen
 
 ```
 doctest test --gen-dir tmp fixture/{a,b}
-  -> exit 0; both leaves via suite
+  -> exit 0
 ```
 
 ## Preconditions
@@ -14,14 +14,14 @@ doctest test --gen-dir tmp fixture/{a,b}
 
 ## Steps
 
-1. `Op=run_gen` with empty Dir (auto fixture).
+1. `Op=ref_gen` with empty Dir (auto fixture).
 2. Assert `RunErr` empty.
 
 ```go
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-	req.Op = "run_gen"
+	req.Op = "ref_gen"
 	return nil
 }
 ```

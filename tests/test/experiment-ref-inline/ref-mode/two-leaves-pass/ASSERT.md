@@ -1,6 +1,6 @@
 ## Expected
 
-- Suite run succeeds (`RunErr` empty) with `ExperimentRefInsteadOfInline=true`.
+- Suite run succeeds (`RunErr` empty) under default hierarchical generation.
 - Fixture leaves `a` and `b` both executed successfully (implied by suite success).
 
 ```go
@@ -11,7 +11,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("unexpected harness error: %v", err)
 	}
 	if resp.RunErr != "" {
-		t.Fatalf("ref-mode 2-leaf RunTest failed: %s\nstdout:\n%s\nstderr:\n%s\ngen=%s",
+		t.Fatalf("hierarchical 2-leaf RunTest failed: %s\nstdout:\n%s\nstderr:\n%s\ngen=%s",
 			resp.RunErr, resp.Stdout, resp.Stderr, resp.GenDir)
 	}
 }

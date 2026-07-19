@@ -1,27 +1,19 @@
 # Scenario
 
-**Feature**: classic generation still runs for a tiny tree (P0 regression smoke)
+**Feature**: mini RunTest under default hierarchical generation
 
 ```
-# mini suite run with Options.ExperimentRefInsteadOfInline set or clear
-RunTest(1-leaf pass fixture, ExperimentRefInsteadOfInline=?)
-  -> classic AssembleTestSource (P0) -> leaf pass -> no error
+RunTest(1-pass tree) -> pass
 ```
 
 ## Preconditions
 
-- Uses package suite entry (`runner.RunTest`).
-- Fixture is a one-leaf pass tree from `testtree.WritePassFailTree`.
-- Does **not** inspect generated source for refs (P1).
+- Default generation (no experiment flags).
 
 ## Steps
 
-1. Set `Op=mini_run` and the Options bool.
-2. Assert `RunErr` empty (suite succeeds).
-
-## Context
-
-- Proves the default path and flag-on path do not break classic gen in P0.
+1. Set `Op=mini_run`.
+2. Assert success.
 
 ```go
 import "testing"

@@ -1,6 +1,6 @@
 ## Expected
 
-- Suite run succeeds (`RunErr` empty) with `ExperimentUnifiedPackagePerDoctestTree=true`.
+- Suite run succeeds (`RunErr` empty) under default unified generation.
 - Fixture leaves `a` and `b` both executed successfully (implied by suite success).
 
 ```go

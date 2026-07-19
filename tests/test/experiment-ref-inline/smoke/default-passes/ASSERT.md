@@ -11,7 +11,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("unexpected harness error: %v", err)
 	}
 	if resp.RunErr != "" {
-		t.Fatalf("RunTest failed with flag off (classic default path): %s\nstdout:\n%s\nstderr:\n%s",
+		t.Fatalf("RunTest failed under default hierarchical gen: %s\nstdout:\n%s\nstderr:\n%s",
 			resp.RunErr, resp.Stdout, resp.Stderr)
 	}
 }

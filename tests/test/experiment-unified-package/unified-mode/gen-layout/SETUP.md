@@ -1,36 +1,28 @@
 # Scenario
 
-**Feature**: unified gen layout under GenDir
+**Feature**: default gen layout is hierarchical unified packages
 
 ```
-RunTest(2-leaf, unified=true, GenDir=tmp)
-  -> walk GenDir
-  -> __droot, __registry, __allleaves, suite present
-  -> leaf packages are non-_test with RunTestLeaf
-  -> no leaf a|b *_test.go
-  -> suite imports only __registry + __allleaves
+RunTest(2-leaf, GenDir=tmp)
+  -> __droot, __registry, __allleaves, suite
+  -> leaf non-test RunTestLeaf; no leaf *_test.go
 ```
 
 ## Preconditions
 
-- Same default fixture and unified Options as siblings.
+- Default generation (no experiment flags).
+- GenDir kept for walk.
 
 ## Steps
 
-1. Run with unified flag on.
-2. Assert directory/file shape and suite imports from `Response` layout fields.
-
-## Context
-
-- Layout names are locked: `__droot`, `__registry`, `__allleaves`, `suite`.
-- Leaf entrypoint name locked: `RunTestLeaf`.
+1. `Op=run_gen`.
+2. Assert layout fields on Response.
 
 ```go
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
 	req.Op = "run_gen"
-	req.ExperimentUnifiedPackagePerDoctestTree = true
 	return nil
 }
 ```

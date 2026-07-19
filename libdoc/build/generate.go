@@ -31,11 +31,9 @@ type generateContext struct {
 	sessionCacheDir string
 	modfilePath     string
 	removeLegacyTmp bool
-	// refMode enables experiment ref-instead-of-inline generation (shared root
-	// package + thin leaf tests). Classic AssembleTestSource when false.
-	refMode bool
-	// unifiedMode: one suite package per DOCTEST tree (implies refMode).
-	// Leaves are non-test RunTestLeaf packages registered into __registry.
+	// unifiedMode: hierarchical ref packages + one suite package per DOCTEST tree.
+	// Always true for normal generation; false only for internal-compile trees
+	// (module-internal import path layout still uses classic AssembleTestSource).
 	unifiedMode bool
 	// genWrote is true if any generated Go file content changed this run.
 	// Callers force go test -count=1 so result cache cannot report a false hit
@@ -56,12 +54,11 @@ func newGenerateContext(dir string, opts core.Options, cases []core.TreeCase, w 
 	// session module replace (not only trees whose author harness imports it).
 	sessionImport := true
 
-	// Ref mode uses a separate package DAG; skip for internal-compile trees
-	// (module-internal import path layout is out of P1 scope).
-	// Unified package-per-tree implies ref (also forced at parse time).
+	// Default generation is hierarchical unified (ref packages + suite).
+	// Internal-compile trees keep classic AssembleTestSource (module-internal
+	// import path layout).
 	internalCompile := hasMod && core.CasesImportInternalPackage(cases, modPath)
-	unifiedMode := opts.ExperimentUnifiedPackagePerDoctestTree && !internalCompile
-	refMode := (opts.ExperimentRefInsteadOfInline || opts.ExperimentUnifiedPackagePerDoctestTree) && !internalCompile
+	unifiedMode := !internalCompile
 
 	ctx := &generateContext{
 		w:               w,
@@ -75,7 +72,6 @@ func newGenerateContext(dir string, opts core.Options, cases []core.TreeCase, w 
 		internalCompile: internalCompile,
 		assertImport:    assertImport,
 		sessionImport:   sessionImport,
-		refMode:         refMode,
 		unifiedMode:     unifiedMode,
 	}
 
@@ -115,12 +111,8 @@ func newGenerateContext(dir string, opts core.Options, cases []core.TreeCase, w 
 			ctx.removeLegacyTmp = opts.RemoveTemp
 		} else {
 			var cacheErr error
-			if refMode {
-				// Isolate ref-mode cache from classic mapping-gen.
-				genRoot, _, cacheErr = core.CacheMappingGenRefRoot(absRoot)
-			} else {
-				genRoot, _, cacheErr = core.CacheMappingGenRoot(absRoot)
-			}
+			// Single warm mapping-gen path for hierarchical unified generation.
+			genRoot, _, cacheErr = core.CacheMappingGenRoot(absRoot)
 			if cacheErr != nil {
 				return nil, cacheErr
 			}
@@ -193,13 +185,11 @@ func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) 
 		}
 	}
 
-	if ctx.refMode {
-		if ctx.unifiedMode {
-			return ctx.writeUnifiedCases(cases, compileOnly, pkgName, hasPkgUnderTest, srcDir, origPkg)
-		}
-		return ctx.writeRefCases(cases, compileOnly, pkgName, hasPkgUnderTest, srcDir, origPkg)
+	if ctx.unifiedMode {
+		return ctx.writeUnifiedCases(cases, compileOnly, pkgName, hasPkgUnderTest, srcDir, origPkg)
 	}
 
+	// Internal-compile only: classic full-inline AssembleTestSource per leaf.
 	for _, tc := range cases {
 		absLeafDir := filepath.Join(ctx.absRoot, tc.Path)
 		leafDir, err := core.GenDirForLeaf(ctx.genRoot, ctx.absModRoot, absLeafDir)
@@ -237,71 +227,6 @@ func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) 
 	return nil
 }
 
-// writeRefCases generates the shared root package once plus thin leaf tests.
-func (ctx *generateContext) writeRefCases(cases []core.TreeCase, compileOnly bool, pkgName string, hasPkgUnderTest bool, srcDir, origPkg string) error {
-	if len(cases) == 0 {
-		return nil
-	}
-
-	rootDocs, _ := core.SplitRefSetupDocs(cases[0].SetupFiles)
-	if len(rootDocs) == 0 {
-		rootDocs = cases[0].SetupFiles
-	}
-	rootSrc, err := core.AssembleRefRootSource(rootDocs, core.RefRootPkgName)
-	if err != nil {
-		return err
-	}
-
-	// Tree-scoped __droot so multi-tree ./... sharing one GenDir (cold-cache)
-	// does not overwrite another tree's root package.
-	treeRel := ctx.treeRel()
-	rootDir := core.RefRootDirForTree(ctx.genRoot, treeRel)
-	rootImport := core.RefRootImportForTree(treeRel)
-	if err := os.MkdirAll(rootDir, 0755); err != nil {
-		return err
-	}
-	rootPath := filepath.Join(rootDir, "droot.go")
-	if err := core.WriteFormattedGo(rootPath, rootSrc); err != nil {
-		return fmt.Errorf("write ref root package: %w", err)
-	}
-	if ctx.verbose && ctx.w != nil {
-		fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(rootPath))
-	}
-
-	for _, tc := range cases {
-		absLeafDir := filepath.Join(ctx.absRoot, tc.Path)
-		leafDir, err := core.GenDirForLeaf(ctx.genRoot, ctx.absModRoot, absLeafDir)
-		if err != nil {
-			return fmt.Errorf("gen dir for leaf %s: %w", tc.Path, err)
-		}
-
-		if hasPkgUnderTest {
-			if _, err := core.CopySourceFiles(leafDir, srcDir, origPkg); err != nil {
-				return fmt.Errorf("copy source files to %s: %w", leafDir, err)
-			}
-		}
-
-		testPath, err := core.WriteRefLeafCase(leafDir, tc, compileOnly, pkgName, ctx.absRoot, rootImport)
-		if err != nil {
-			return err
-		}
-		if ctx.verbose && ctx.w != nil {
-			if compileOnly {
-				fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(leafDir))
-			} else {
-				fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(testPath))
-			}
-		}
-	}
-
-	if ctx.hasMod && !ctx.internalCompile {
-		if err := core.CondTidyGoMod(ctx.genRoot); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // treeRel is the doctest root path relative to the module root (or ".").
 func (ctx *generateContext) treeRel() string {
 	treeRel := "."
@@ -311,8 +236,9 @@ func (ctx *generateContext) treeRel() string {
 	return treeRel
 }
 
-// writeUnifiedCases generates ref root + registry + non-test leaf packages +
-// __allleaves blank-import fan-in + suite iterator (one go test package/binary).
+// writeUnifiedCases generates ref root + intermediate packages once + registry +
+// non-test leaf packages + __allleaves blank-import fan-in + suite iterator
+// (one go test package/binary).
 func (ctx *generateContext) writeUnifiedCases(cases []core.TreeCase, compileOnly bool, pkgName string, hasPkgUnderTest bool, srcDir, origPkg string) error {
 	if len(cases) == 0 {
 		return nil
@@ -322,10 +248,6 @@ func (ctx *generateContext) writeUnifiedCases(cases []core.TreeCase, compileOnly
 	if len(rootDocs) == 0 {
 		rootDocs = cases[0].SetupFiles
 	}
-	rootSrc, err := core.AssembleRefRootSource(rootDocs, core.RefRootPkgName)
-	if err != nil {
-		return err
-	}
 
 	treeRel := ctx.treeRel()
 	rootDir := core.RefRootDirForTree(ctx.genRoot, treeRel)
@@ -334,12 +256,37 @@ func (ctx *generateContext) writeUnifiedCases(cases []core.TreeCase, compileOnly
 	if err := os.MkdirAll(rootDir, 0755); err != nil {
 		return err
 	}
+
+	// Package-under-test sources must live with Run/types so unexported
+	// symbols remain callable (classic single-package semantics).
+	rootPkgName := core.RefRootPkgName
+	if hasPkgUnderTest {
+		rootPkgName = pkgName
+		if _, err := core.CopySourceFiles(rootDir, srcDir, origPkg); err != nil {
+			return fmt.Errorf("copy source files to ref root: %w", err)
+		}
+	}
+	rootSrc, err := core.AssembleRefRootSource(rootDocs, rootPkgName)
+	if err != nil {
+		return err
+	}
 	rootPath := filepath.Join(rootDir, "droot.go")
 	if err := core.WriteFormattedGo(rootPath, rootSrc); err != nil {
 		return fmt.Errorf("write unified ref root package: %w", err)
 	}
 	if ctx.verbose && ctx.w != nil {
 		fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(rootPath))
+	}
+
+	// Intermediate packages once (parents first), shared across leaves — same as ref.
+	if err := core.WriteRefIntermediatePackages(ctx.genRoot, treeRel, rootImport, rootDocs, cases); err != nil {
+		return err
+	}
+	if ctx.verbose && ctx.w != nil {
+		for _, g := range core.CollectUniqueRefIntermediates(cases) {
+			interPath := filepath.Join(core.RefIntermediateDirForTree(ctx.genRoot, treeRel, g.Dir), core.RefIntermediateFileName)
+			fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(interPath))
+		}
 	}
 
 	leafImports := make([]string, 0, len(cases))

@@ -1,115 +1,74 @@
-# Experiment: `--experiment-unified-package-per-doctest-tree`
+# Default: hierarchical unified package per DOCTEST tree
 
 ## Version
-0.0.2
+0.0.3
 
-Classic-TDD specification for **one go test package/binary per DOCTEST tree**
-when the experimental unified-package flag is set.
+Default generation produces **one go test package/binary per DOCTEST tree**
+using hierarchical ref packages (no experiment flags).
 
-When `--experiment-unified-package-per-doctest-tree` is **on**:
+Per DOCTEST.md root, generate:
 
-1. **Automatically enable** `--experiment-ref-instead-of-inline` (ref package DAG).
-2. Per DOCTEST.md root, generate:
-   - `__droot/` — shared types/Run (ref)
-   - `__registry/` — tree-local `Register` / `All`
-   - leaf packages as **non-`_test`** sources with **`RunTestLeaf(t *testing.T)`** + `init()` registration
-   - `__allleaves/` — blank-imports every leaf package (suite only imports this + registry)
-   - `suite/suite_test.go` — thin iterator: `t.Run(path, fn)` over registry
-3. **`go test` only the suite package** → **one test binary** per tree.
-4. Flag **off**: classic behavior 100% unchanged (ref-only flag still works as today).
+1. `__droot/` — shared types/Run (ref)
+2. `__registry/` — tree-local `Register` / `All`
+3. leaf packages as **non-`_test`** sources with **`RunTestLeaf(t *testing.T)`** + `init()` registration
+4. `__allleaves/` — blank-imports every leaf package (suite only imports this + registry)
+5. `suite/suite_test.go` — thin iterator: `t.Run(path, fn)` over registry
 
-These tests do **not** implement production code. Expect **RED** until the
-implementer lands Options plumbing + unified generation + suite runner.
-
-**Out of scope:** intermediate SETUP as separate packages beyond current ref,
-making unified the default, full `./...` perf report.
+**`go test` only the suite package** → **one test binary** per tree.
 
 # DSN (Domain Specific Notion)
 
 ### Participants
 
-- **Caller** — `doctest test` CLI (or package entry) that parses argv into options.
-- **Parse layer** — `runner.ParseTestOptions(args)` filling `core.Options`.
-- **Options** — `ExperimentUnifiedPackagePerDoctestTree bool` (CLI:
-  `--experiment-unified-package-per-doctest-tree`; default **false**). When true,
-  forces `ExperimentRefInsteadOfInline = true`.
-- **Classic generator** — existing multi-package path: one `*_test.go` package
-  per leaf; `go test ./a ./b …`.
-- **Ref generator** — shared `__droot` + thin leaf tests (existing experiment).
-- **Unified generator** — extends ref: leaf **non-test** packages expose
+- **Caller** — `doctest test` CLI (or package entry).
+- **Unified generator** — hierarchical ref + leaf **non-test** packages with
   `RunTestLeaf`; `__registry` + `__allleaves` fan-in; single `suite` package
   iterates registered leaves via `t.Run`.
 - **Gen root** — explicit `--gen-dir` / `Options.GenDir` under `t.TempDir()` so
   layout is inspectable.
-- **Help** — documents the flag as experimental (`tests/help/test-options`).
 
 ### Behaviors
 
-- **Default off** — omit flag → unified field false → classic (or ref-only if
-  that separate flag is set); no suite-only packaging.
-- **Opt-in** — unified flag → field true **and** ref forced on.
+- **Default** — no flag → unified hierarchical layout.
 - **Layout** — gen contains `__droot`, `__registry`, `__allleaves`, `suite`;
   leaves are non-`_test` with `RunTestLeaf`; no per-leaf `*_test.go` for fixture
   leaves `a`/`b`.
 - **Single package** — displayed `go test` line lists only the suite package
   (not `./a ./b`).
-- **Both leaves pass** — simple 2-leaf fixture exits successfully under flag on.
-- **Announce** — stderr/stdout mentions unified (and ref) when flag on.
-- **Control** — flag off keeps classic multi-leaf `*_test.go` packages.
+- **Both leaves pass** — simple 2-leaf fixture exits successfully under default.
 
 ### Pipeline sketch
 
 ```
-doctest test [--experiment-unified-package-per-doctest-tree] [--gen-dir DIR] <tree>
-  -> ParseTestOptions
-       -> Options.ExperimentUnifiedPackagePerDoctestTree
-       -> if true: force ExperimentRefInsteadOfInline
-  -> if unified: gen __droot + __registry + leaf RunTestLeaf + __allleaves + suite
-       -> go test ./…/suite   (one package / one binary)
-  -> if off: classic AssembleTestSource per leaf (or ref-only if that flag alone)
+doctest test [--gen-dir DIR] <tree>
+  -> hierarchical unified gen: __droot + __registry + leaf RunTestLeaf + __allleaves + suite
+  -> go test ./…/suite   (one package / one binary)
 ```
 
 ## Decision Tree
 
 ```
 tests/test/experiment-unified-package/
-├── flags/                                 [ParseTestOptions]
-│   ├── default-off/                       omit flag → unified false; ref false
-│   └── flag-on-implies-ref/               unified flag → true; forces ref true
-├── unified-mode/                          [RunTest flag on + GenDir]
-│   ├── two-leaves-pass/                   exit/run success for a+b
-│   ├── gen-layout/                        __droot/__registry/__allleaves/suite;
-│   │                                      leaf RunTestLeaf; no leaf *_test.go
-│   ├── suite-only-go-test/                go test line: single suite package
-│   └── stderr-announce/                   mentions unified (+ ref)
-└── control/                               [flag off]
-    └── classic-unchanged/                 classic multi-leaf *_test.go layout
+└── unified-mode/                          [RunTest default + GenDir]
+    ├── two-leaves-pass/                   exit/run success for a+b
+    ├── gen-layout/                        __droot/__registry/__allleaves/suite;
+    │                                      leaf RunTestLeaf; no leaf *_test.go
+    └── suite-only-go-test/                go test line: single suite package
 ```
-
-Sibling help (parent CLI tree): `tests/help/test-options` (token for this flag).
 
 ## Test Index
 
 | Leaf | Expected |
 |------|----------|
-| `flags/default-off` | unified false; ref false by default |
-| `flags/flag-on-implies-ref` | unified true; ref auto true; remain has path |
-| `unified-mode/two-leaves-pass` | 2-leaf fixture passes with unified flag |
+| `unified-mode/two-leaves-pass` | 2-leaf fixture passes under default gen |
 | `unified-mode/gen-layout` | `__droot`, `__registry`, `__allleaves`, `suite`; leaf `RunTestLeaf`; no leaf `*_test.go` |
 | `unified-mode/suite-only-go-test` | displayed `go test` has one package containing `suite` (not `./a ./b`) |
-| `unified-mode/stderr-announce` | stderr/stdout contains unified (+ experiment/ref) |
-| `control/classic-unchanged` | flag off: leaf `*_test.go` present; classic multi-package shape |
 
 ## How to Run
 
 ```sh
 doctest vet ./tests/test/experiment-unified-package/
 doctest test ./tests/test/experiment-unified-package/
-doctest test ./tests/test/experiment-unified-package/flags/...
-doctest test ./tests/test/experiment-unified-package/unified-mode/...
-doctest test ./tests/test/experiment-unified-package/control/...
-doctest test ./tests/help/test-options
-doctest test ./tests/test/experiment-ref-inline/...   # no break
 ```
 
 ```go
@@ -132,23 +91,14 @@ const experimentUnifiedMarkerLiteral = "ROOT_RUN_MARKER_UNIFIED_PACKAGE"
 
 // Request selects one surface. Leaves set Op and related fields.
 type Request struct {
-	Op string // parse_flags | run_gen
-
-	// parse_flags
-	Args []string
+	Op string // run_gen
 
 	// run_gen
-	ExperimentUnifiedPackagePerDoctestTree bool
-	Dir                                    string // fixture tree; empty → Run builds default
-	GenDir                                 string // empty → t.TempDir()
+	Dir    string // fixture tree; empty → Run builds default
+	GenDir string // empty → t.TempDir()
 }
 
 type Response struct {
-	// flags
-	Opts       core.Options
-	RemainArgs []string
-	ParseErr   string
-
 	// run_gen
 	RunErr string
 	Stdout string
@@ -157,18 +107,18 @@ type Response struct {
 	GenDir string
 
 	// layout / go-test package hints (filled by Run)
-	GoFiles              []string // absolute paths of *.go under GenDir
-	HasDroot             bool
-	HasRegistry          bool
-	HasAllLeaves         bool
-	HasSuite             bool
-	SuiteTestFiles       []string // *suite*_test.go or under …/suite/
-	SuiteImportLines     []string // imports from first suite test file
-	LeafNonTestGoFiles   []string // non-_test .go under leaf a/ or b/
-	LeafHasRunTestLeaf   []bool   // parallel to LeafNonTestGoFiles
-	LeafTestGoFiles      []string // *_test.go under leaf a/ or b/ (want empty when unified)
-	GoTestPackageArgs    []string // ./… package args from displayed go test line
-	GoTestDisplayLine    string   // full "go test …" line from stdout/stderr
+	GoFiles            []string // absolute paths of *.go under GenDir
+	HasDroot           bool
+	HasRegistry        bool
+	HasAllLeaves       bool
+	HasSuite           bool
+	SuiteTestFiles     []string // *suite*_test.go or under …/suite/
+	SuiteImportLines   []string // imports from first suite test file
+	LeafNonTestGoFiles []string // non-_test .go under leaf a/ or b/
+	LeafHasRunTestLeaf []bool   // parallel to LeafNonTestGoFiles
+	LeafTestGoFiles    []string // *_test.go under leaf a/ or b/ (want empty when unified)
+	GoTestPackageArgs  []string // ./… package args from displayed go test line
+	GoTestDisplayLine  string   // full "go test …" line from stdout/stderr
 }
 
 func Run(t *testing.T, req *Request) (*Response, error) {
@@ -176,16 +126,6 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 	resp := &Response{}
 
 	switch req.Op {
-	case "parse_flags":
-		opts, remain, err := runner.ParseTestOptions(req.Args)
-		if err != nil {
-			resp.ParseErr = err.Error()
-			return resp, nil
-		}
-		resp.Opts = opts
-		resp.RemainArgs = remain
-		return resp, nil
-
 	case "run_gen":
 		dir := req.Dir
 		if dir == "" {
@@ -205,8 +145,6 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 			Stderr:     &stderr,
 			GenDir:     genDir,
 			RemoveTemp: false, // keep GenDir for layout asserts
-			// Set only the unified flag. Production must auto-enable ref.
-			ExperimentUnifiedPackagePerDoctestTree: req.ExperimentUnifiedPackagePerDoctestTree,
 		}
 		err := runner.RunTest(dir, opts)
 		resp.Stdout = stdout.String()

@@ -92,15 +92,6 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	ctx.installInterruptCleanup()
 	defer ctx.Close()
 
-	// Force ref when unified is set (also done at parse time for CLI).
-	if opts.ExperimentUnifiedPackagePerDoctestTree {
-		opts.ExperimentRefInsteadOfInline = true
-		fmt.Fprintln(w, "doctest: experiment: unified-package-per-doctest-tree")
-	}
-	if opts.ExperimentRefInsteadOfInline {
-		fmt.Fprintln(w, "doctest: experiment: ref-instead-of-inline")
-	}
-
 	if opts.Verbose {
 		ctx.announceRoots()
 		if opts.ChangedOnly {
@@ -211,14 +202,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	sessionID := core.DoctestSessionIDForRun()
 	goCache := opts.GoCache
 
-	// When generation rewrote any test file, force -count=1 so go cannot report
-	// a false "(cached)" hit against a previous binary (seen after leaf Chdir
-	// removal). Unchanged re-runs omit this and repopulate the result cache.
-	// Prefer package-scoped -count over `go clean -testcache` (global; races
-	// parallel trees sharing GOCACHE).
-	if ctx.genWrote && opts.Count == 0 {
-		flagArgs = append(flagArgs, "-count=1")
-	}
+	// DIG: genWrote -count=1 removed for investigation
 
 	stdout := opts.Stdout
 	if stdout == nil {
@@ -696,7 +680,16 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache stri
 		packageCached := make(map[string]bool)
 		failedTests := make(map[string]bool)
 		testOutputs := make(map[string][]string)
+		// suiteLeaf* count progress + summary from unified suite subtests
+		// (TestDoctestSuite/<leafPath>). When any leaf subtest is seen, skip
+		// package-level dots and use leaf pass/fail/cached for the summary so
+		// one suite binary still reports one result per leaf (not 1 package).
+		suiteLeafPass := 0
+		suiteLeafFail := 0
 		testKey := func(pkg, test string) string { return pkg + "\x00" + test }
+		isSuiteLeafSubtest := func(test string) bool {
+			return strings.HasPrefix(test, UnifiedSuiteTestName+"/")
+		}
 		flushTestOutput := func(key string) {
 			if failedTests[key] {
 				return
@@ -770,6 +763,10 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache stri
 				if ev.Test != "" {
 					recordTest(ev.Test, ev.Elapsed)
 					delete(testOutputs, testKey(ev.Package, ev.Test))
+					if isSuiteLeafSubtest(ev.Test) {
+						suiteLeafPass++
+						stdout.Write([]byte("."))
+					}
 					continue
 				}
 				res.passCount++
@@ -777,17 +774,43 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache stri
 					res.cachedCount++
 				}
 				recordPkg(ev.Package, ev.Elapsed, packageCached[ev.Package])
-				stdout.Write([]byte("."))
+				if suiteLeafPass+suiteLeafFail == 0 {
+					stdout.Write([]byte("."))
+				}
 			case "fail":
 				if ev.Test != "" {
 					recordTest(ev.Test, ev.Elapsed)
 					key := testKey(ev.Package, ev.Test)
 					flushTestOutput(key)
+					if isSuiteLeafSubtest(ev.Test) {
+						suiteLeafFail++
+						fmt.Fprint(stdout, style.red("."))
+					}
 					continue
 				}
 				res.failCount++
 				recordPkg(ev.Package, ev.Elapsed, false)
-				fmt.Fprint(stdout, style.red("."))
+				if suiteLeafPass+suiteLeafFail == 0 {
+					fmt.Fprint(stdout, style.red("."))
+				}
+			}
+		}
+		// Prefer leaf-level counts for unified suite so multi-leaf trees report
+		// N Run / N Pass instead of a single package result.
+		if suiteLeafPass+suiteLeafFail > 0 {
+			res.passCount = suiteLeafPass
+			res.failCount = suiteLeafFail
+			anyCached := false
+			for _, c := range packageCached {
+				if c {
+					anyCached = true
+					break
+				}
+			}
+			if anyCached {
+				res.cachedCount = suiteLeafPass
+			} else {
+				res.cachedCount = 0
 			}
 		}
 	}()

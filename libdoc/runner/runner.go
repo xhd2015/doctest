@@ -462,8 +462,6 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 		String("-outputdir", &opts.OutputDir).
 		String("-coverprofile", &opts.CoverProfile).
 		Bool("-cover", &opts.Cover).
-		Bool("--experiment-ref-instead-of-inline", &opts.ExperimentRefInsteadOfInline).
-		Bool("--experiment-unified-package-per-doctest-tree", &opts.ExperimentUnifiedPackagePerDoctestTree).
 		Parse(args)
 	if err != nil {
 		return core.Options{}, nil, err
@@ -478,10 +476,6 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 		return core.Options{}, nil, fmt.Errorf("--label-all and --label are mutually exclusive")
 	}
 	opts.LabelExprs = labelExprs
-	// Unified package-per-tree implies ref-instead-of-inline generation.
-	if opts.ExperimentUnifiedPackagePerDoctestTree {
-		opts.ExperimentRefInsteadOfInline = true
-	}
 
 	// Abs-resolve relative profile/cover paths against process cwd at parse time.
 	pathFields := []*string{

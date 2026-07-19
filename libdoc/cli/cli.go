@@ -153,7 +153,7 @@ Examples:
   doctest edit ./tests/feature/ui-leaf/ASSERT.md --add-label manual
 `
 
-const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [--timeout DURATION] [--color] [--no-color] [--changed] [--label EXPR]... [--label-all] [--metrics-on] [--cold-cache] [--experiment-ref-instead-of-inline] [--experiment-unified-package-per-doctest-tree] [-cpuprofile FILE] [-memprofile FILE] [-memprofilerate N] [-blockprofile FILE] [-blockprofilerate N] [-mutexprofile FILE] [-mutexprofilefraction N] [-trace FILE] [-outputdir DIR] [-coverprofile FILE] [-cover] <dir>
+const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [--timeout DURATION] [--color] [--no-color] [--changed] [--label EXPR]... [--label-all] [--metrics-on] [--cold-cache] [-cpuprofile FILE] [-memprofile FILE] [-memprofilerate N] [-blockprofile FILE] [-blockprofilerate N] [-mutexprofile FILE] [-mutexprofilefraction N] [-trace FILE] [-outputdir DIR] [-coverprofile FILE] [-cover] <dir>
 
 Run executable Go snippets from a doc-style test directory, allow ./... patterns like go test.
 
@@ -194,13 +194,6 @@ Options:
   -coverprofile FILE
                     Forward cover profile path to go test (relative paths abs-resolved)
   -cover            Enable coverage analysis (forward -cover to go test)
-  --experiment-ref-instead-of-inline
-                    Experimental: generate a shared root package + thin leaf tests
-                    that import it (ref-instead-of-inline) instead of classic inline
-  --experiment-unified-package-per-doctest-tree
-                    Experimental: one go test package/binary per DOCTEST tree
-                    (implies --experiment-ref-instead-of-inline; suite iterator
-                    over registered leaf RunTestLeaf funcs)
   -h, --help        Show help
 
 Examples:

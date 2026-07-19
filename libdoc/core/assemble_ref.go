@@ -21,17 +21,21 @@ import (
 //
 //	genRoot/
 //	  go.mod
-//	  <treeRel>/__droot/droot.go   package droot — types, Run, root helpers
-//	  <treeRel>/<leaf>/…_test.go   thin tests importing testcase/<treeRel>/__droot
+//	  <treeRel>/__droot/droot.go          package droot — types, Run, root helpers
+//	  <treeRel>/<parent>/setup.go         intermediate package (non-test)
+//	  <treeRel>/<parent>/<mid>/setup.go   nested intermediate package
+//	  <treeRel>/<leaf>/…_test.go          thin tests: leaf-local only + import ancestors
 //
 // treeRel is the path of the doctest root relative to the module root (or "." →
-// __droot at gen root). This keeps multi-tree ./... + shared GenDir (cold-cache)
-// from overwriting each other's __droot packages.
+// packages at gen root). This keeps multi-tree ./... + shared GenDir (cold-cache)
+// from overwriting each other's packages.
 const (
 	RefRootDirName = "__droot"
 	RefRootPkgName = "droot"
 	// RefRootImportPath is the legacy flat import used when treeRel is ".".
 	RefRootImportPath = "testcase/__droot"
+	// RefIntermediateFileName is the stable non-test filename for intermediate packages.
+	RefIntermediateFileName = "setup.go"
 )
 
 // RefRootImportForTree returns the go import path for the tree-scoped droot package.
@@ -60,7 +64,23 @@ func isRootSetupDoc(doc SetupDocument) bool {
 	return p == "DOCTEST.md" || p == "SETUP.md" || p == ""
 }
 
+// RefIntermediateGroup is one intermediate directory's SETUP docs (shared package).
+// Dir is relative to the doctest root (filepath slash form), e.g. "feature/mid".
+type RefIntermediateGroup struct {
+	Dir  string
+	Docs []SetupDocument
+}
+
+// RefSetupPartition is the hierarchical split of a case's setup chain for ref mode.
+type RefSetupPartition struct {
+	RootDocs     []SetupDocument
+	Intermediate []RefIntermediateGroup // parents first (root → leaf order)
+	LeafDocs     []SetupDocument
+}
+
 // SplitRefSetupDocs partitions the setup chain into root vs non-root docs.
+// Prefer PartitionRefSetupDocs for hierarchical intermediate packages; this
+// helper remains for callers that only need root vs everything-else.
 func SplitRefSetupDocs(setupFiles []SetupDocument) (rootDocs, leafDocs []SetupDocument) {
 	for _, doc := range setupFiles {
 		if isRootSetupDoc(doc) {
@@ -70,6 +90,292 @@ func SplitRefSetupDocs(setupFiles []SetupDocument) (rootDocs, leafDocs []SetupDo
 		}
 	}
 	return rootDocs, leafDocs
+}
+
+// PartitionRefSetupDocs splits tc.SetupFiles into root, ordered intermediate
+// groups (strict path prefixes of tc.Path), and leaf-local docs (dir == tc.Path).
+func PartitionRefSetupDocs(tc TreeCase) RefSetupPartition {
+	return PartitionRefSetupDocsFrom(tc.Path, tc.SetupFiles)
+}
+
+// PartitionRefSetupDocsFrom is the path-based form of PartitionRefSetupDocs.
+func PartitionRefSetupDocsFrom(leafPath string, setupFiles []SetupDocument) RefSetupPartition {
+	leafPath = cleanRelDir(leafPath)
+	var part RefSetupPartition
+	groups := make(map[string][]SetupDocument)
+	var order []string
+	for _, doc := range setupFiles {
+		if isRootSetupDoc(doc) {
+			part.RootDocs = append(part.RootDocs, doc)
+			continue
+		}
+		// Docs without a Go block never produce packages or inlined code.
+		if doc.GoBlock == nil {
+			continue
+		}
+		dir := setupDocDir(doc)
+		if dir == leafPath {
+			part.LeafDocs = append(part.LeafDocs, doc)
+			continue
+		}
+		if leafPath != "" && isStrictPathPrefix(dir, leafPath) {
+			if _, ok := groups[dir]; !ok {
+				order = append(order, dir)
+			}
+			groups[dir] = append(groups[dir], doc)
+			continue
+		}
+		// Fallback: treat as leaf-local (matches historical non-root-in-leaf behavior).
+		part.LeafDocs = append(part.LeafDocs, doc)
+	}
+	sort.SliceStable(order, func(i, j int) bool {
+		di, dj := pathDepth(order[i]), pathDepth(order[j])
+		if di != dj {
+			return di < dj
+		}
+		return order[i] < order[j]
+	})
+	for _, dir := range order {
+		part.Intermediate = append(part.Intermediate, RefIntermediateGroup{
+			Dir:  dir,
+			Docs: groups[dir],
+		})
+	}
+	return part
+}
+
+// CollectUniqueRefIntermediates returns unique intermediate groups across cases,
+// ordered parents-first so packages can be written with parent imports resolved.
+func CollectUniqueRefIntermediates(cases []TreeCase) []RefIntermediateGroup {
+	seen := make(map[string]RefIntermediateGroup)
+	var order []string
+	for _, tc := range cases {
+		part := PartitionRefSetupDocs(tc)
+		for _, g := range part.Intermediate {
+			if _, ok := seen[g.Dir]; ok {
+				continue
+			}
+			seen[g.Dir] = g
+			order = append(order, g.Dir)
+		}
+	}
+	sort.SliceStable(order, func(i, j int) bool {
+		di, dj := pathDepth(order[i]), pathDepth(order[j])
+		if di != dj {
+			return di < dj
+		}
+		return order[i] < order[j]
+	})
+	out := make([]RefIntermediateGroup, 0, len(order))
+	for _, dir := range order {
+		out = append(out, seen[dir])
+	}
+	return out
+}
+
+func setupDocDir(doc SetupDocument) string {
+	p := filepath.ToSlash(doc.Path)
+	if p == "" || p == "DOCTEST.md" || p == "SETUP.md" {
+		return ""
+	}
+	return cleanRelDir(filepath.Dir(p))
+}
+
+func cleanRelDir(p string) string {
+	p = filepath.ToSlash(filepath.Clean(p))
+	if p == "." || p == "/" {
+		return ""
+	}
+	return strings.TrimPrefix(p, "./")
+}
+
+func pathDepth(p string) int {
+	p = cleanRelDir(p)
+	if p == "" {
+		return 0
+	}
+	return strings.Count(p, "/") + 1
+}
+
+// isStrictPathPrefix reports whether dir is a strict path prefix of leaf
+// (dir != leaf and leaf starts with dir+"/").
+func isStrictPathPrefix(dir, leaf string) bool {
+	dir = cleanRelDir(dir)
+	leaf = cleanRelDir(leaf)
+	if dir == "" || leaf == "" || dir == leaf {
+		return false
+	}
+	return strings.HasPrefix(leaf, dir+"/")
+}
+
+// parentRelDir returns the parent of dir relative to doctest root, or "" for top-level.
+func parentRelDir(dir string) string {
+	dir = cleanRelDir(dir)
+	if dir == "" {
+		return ""
+	}
+	return cleanRelDir(filepath.Dir(dir))
+}
+
+// RefTreeImportPrefix returns the import path prefix for a tree (testcase or testcase/<treeRel>).
+func RefTreeImportPrefix(rootImport string) string {
+	if rootImport == "" {
+		rootImport = RefRootImportPath
+	}
+	rootImport = filepath.ToSlash(rootImport)
+	suffix := "/" + RefRootDirName
+	if strings.HasSuffix(rootImport, suffix) {
+		return strings.TrimSuffix(rootImport, suffix)
+	}
+	if rootImport == "testcase/"+RefRootDirName || rootImport == RefRootImportPath {
+		return "testcase"
+	}
+	return "testcase"
+}
+
+// RefIntermediateImport returns the go import path for an intermediate package.
+// dirRel is relative to the doctest root (e.g. "feature/mid").
+func RefIntermediateImport(rootImport, dirRel string) string {
+	dirRel = cleanRelDir(dirRel)
+	if dirRel == "" {
+		return RefTreeImportPrefix(rootImport)
+	}
+	return RefTreeImportPrefix(rootImport) + "/" + dirRel
+}
+
+// RefIntermediateDirForTree returns the filesystem directory for an intermediate package.
+func RefIntermediateDirForTree(genRoot, treeRel, dirRel string) string {
+	dirRel = filepath.Clean(dirRel)
+	base := genRoot
+	treeRel = filepath.Clean(treeRel)
+	if treeRel != "" && treeRel != "." {
+		base = filepath.Join(genRoot, treeRel)
+	}
+	if dirRel == "" || dirRel == "." {
+		return base
+	}
+	return filepath.Join(base, dirRel)
+}
+
+// predeclaredGoIdents are universe identifiers that must not be used as package
+// names or import aliases. An alias like `error` shadows the builtin type in
+// signatures such as `err error` (seen with intermediate dirs named "error").
+var predeclaredGoIdents = map[string]bool{
+	"any": true, "bool": true, "byte": true, "comparable": true,
+	"complex64": true, "complex128": true, "error": true,
+	"float32": true, "float64": true,
+	"int": true, "int8": true, "int16": true, "int32": true, "int64": true,
+	"rune": true, "string": true,
+	"uint": true, "uint8": true, "uint16": true, "uint32": true, "uint64": true, "uintptr": true,
+	"true": true, "false": true, "iota": true, "nil": true,
+	"append": true, "cap": true, "clear": true, "close": true, "complex": true, "copy": true,
+	"delete": true, "imag": true, "len": true, "make": true, "max": true, "min": true,
+	"new": true, "panic": true, "print": true, "println": true, "real": true, "recover": true,
+}
+
+// SanitizePackageName turns a directory basename into a valid Go package identifier.
+func SanitizePackageName(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "pkg"
+	}
+	var b strings.Builder
+	for i, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			if i == 0 || b.Len() == 0 {
+				b.WriteByte('p')
+			}
+			b.WriteRune(r)
+		case r == '_':
+			if b.Len() == 0 {
+				b.WriteByte('p')
+			}
+			b.WriteByte('_')
+		default:
+			if b.Len() > 0 {
+				b.WriteByte('_')
+			}
+		}
+	}
+	out := b.String()
+	out = strings.Trim(out, "_")
+	if out == "" {
+		return "pkg"
+	}
+	// Leading digit after trim should not happen; keep safe.
+	if out[0] >= '0' && out[0] <= '9' {
+		out = "p" + out
+	}
+	if token.IsKeyword(out) || predeclaredGoIdents[out] {
+		return "pkg_" + out
+	}
+	// Avoid colliding with the reserved root package name when nested oddly.
+	if out == RefRootPkgName || out == RefRootDirName {
+		return "pkg_" + out
+	}
+	return out
+}
+
+// RefIntermediatePkgName is the package clause name for an intermediate dir (basename).
+func RefIntermediatePkgName(dirRel string) string {
+	dirRel = cleanRelDir(dirRel)
+	base := filepath.Base(dirRel)
+	if base == "" || base == "." {
+		return "pkg"
+	}
+	return SanitizePackageName(base)
+}
+
+// RefIntermediateAlias is a unique import alias for an intermediate dir (path-based).
+func RefIntermediateAlias(dirRel string) string {
+	dirRel = cleanRelDir(dirRel)
+	if dirRel == "" {
+		return "pkg"
+	}
+	return SanitizePackageName(strings.ReplaceAll(dirRel, "/", "_"))
+}
+
+// intermediateSetupName returns the exported Setup symbol for the i-th setup in a group.
+func intermediateSetupName(i, total int) string {
+	if total <= 1 {
+		return "Setup"
+	}
+	return fmt.Sprintf("Setup%d", i)
+}
+
+// resolveRefParent picks the nearest ancestor intermediate package, or droot.
+// intermediateByDir maps dir → group for packages that will exist on disk.
+func resolveRefParent(dir string, intermediateByDir map[string]RefIntermediateGroup, rootImport string) (parentImport, parentAlias string, parentDocs []SetupDocument, parentIsRoot bool) {
+	chain := resolveRefAncestorChain(dir, intermediateByDir)
+	if len(chain) == 0 {
+		if rootImport == "" {
+			rootImport = RefRootImportPath
+		}
+		return rootImport, RefRootPkgName, nil, true
+	}
+	nearest := chain[len(chain)-1]
+	return RefIntermediateImport(rootImport, nearest.Dir), RefIntermediateAlias(nearest.Dir), nearest.Docs, false
+}
+
+// resolveRefAncestorChain returns intermediate ancestor groups for dir, ordered
+// parents-first (rootward → nearest parent). Empty means only droot is parent.
+func resolveRefAncestorChain(dir string, intermediateByDir map[string]RefIntermediateGroup) []RefIntermediateGroup {
+	var up []RefIntermediateGroup
+	p := parentRelDir(dir)
+	for p != "" {
+		if g, ok := intermediateByDir[p]; ok {
+			up = append(up, g)
+		}
+		p = parentRelDir(p)
+	}
+	// up is nearest-first; reverse to parents-first.
+	for i, j := 0, len(up)-1; i < j; i, j = i+1, j-1 {
+		up[i], up[j] = up[j], up[i]
+	}
+	return up
 }
 
 // collectRootSymbolRenames maps unexported root package symbols to exported
@@ -200,9 +506,9 @@ func qualifyRootSymbols(src, alias string, renames map[string]string) string {
 // (empty lit) cannot desync the rewrite from the source.
 func scanReplaceIdents(src string, repl func(name string, afterDot bool) string) string {
 	type tok struct {
-		off  int
-		tok  token.Token
-		lit  string
+		off int
+		tok token.Token
+		lit string
 	}
 	fset := token.NewFileSet()
 	file := fset.AddFile("", fset.Base(), len(src))
@@ -344,8 +650,114 @@ func AssembleRefRootSource(rootDocs []SetupDocument, pkgName string) (string, er
 	return buf.String(), nil
 }
 
+// AssembleRefIntermediateSource emits a non-test intermediate package from
+// SETUP docs for one directory. It imports droot and every intermediate
+// ancestor (parents-first), exports Setup + helpers (same export rename pattern
+// as root), and qualifies ancestor/root symbols so multi-level chains can call
+// grandparent helpers (e.g. cold-cache → gen-dir-mode → auto).
+//
+// ancestors is ordered parents-first (rootward → nearest parent); empty means
+// only droot is the parent.
+func AssembleRefIntermediateSource(
+	docs []SetupDocument,
+	pkgName string,
+	rootImport, rootAlias string,
+	rootDocs []SetupDocument,
+	ancestors []RefIntermediateGroup,
+) (string, error) {
+	if pkgName == "" {
+		pkgName = "pkg"
+	}
+	if rootImport == "" {
+		rootImport = RefRootImportPath
+	}
+	if rootAlias == "" {
+		rootAlias = RefRootPkgName
+	}
+
+	rootRenames := collectRootSymbolRenames(rootDocs)
+	rootTypes := rootTypeNamesForQualify(rootDocs)
+	ownRenames := collectRootSymbolRenames(docs)
+
+	var buf strings.Builder
+	buf.WriteString("package ")
+	buf.WriteString(pkgName)
+	buf.WriteString("\n\n")
+
+	importsMap := collectImports(docs, GoBlock{})
+	if _, ok := importsMap["testing"]; !ok {
+		importsMap["testing"] = &ImportSpec{Path: "testing"}
+	}
+	if _, ok := importsMap[sessionImportPath]; !ok {
+		importsMap[sessionImportPath] = &ImportSpec{Path: sessionImportPath}
+	}
+	importsMap[rootAlias+"\x00"+rootImport] = &ImportSpec{Name: rootAlias, Path: rootImport}
+	for _, g := range ancestors {
+		alias := RefIntermediateAlias(g.Dir)
+		imp := RefIntermediateImport(rootImport, g.Dir)
+		importsMap[alias+"\x00"+imp] = &ImportSpec{Name: alias, Path: imp}
+	}
+	writeImportBlock(&buf, importsMap)
+
+	var body strings.Builder
+	writePackageLevelTypesAndMethods(&body, docs, GoBlock{})
+	writePackageLevelConstVars(&body, docs, GoBlock{})
+	writePackageLevelHelpers(&body, docs, GoBlock{})
+
+	setupTotal := 0
+	for _, doc := range docs {
+		if doc.GoBlock != nil && doc.GoBlock.Setup != nil {
+			setupTotal++
+		}
+	}
+	setupIdx := 0
+	for _, doc := range docs {
+		if doc.GoBlock == nil || doc.GoBlock.Setup == nil {
+			continue
+		}
+		fn := *doc.GoBlock.Setup
+		fn.Name = intermediateSetupName(setupIdx, setupTotal)
+		setupIdx++
+		fn.Params = ensureDoctestParam(fn.Params)
+		writePackageFunc(&body, fn)
+		body.WriteString("\n")
+	}
+
+	bodyStr := rewriteBareIdents(body.String(), ownRenames)
+	// Qualify ancestor symbols parents-first (same order as leaf qualifyAncestorSymbols).
+	// Only types actually declared on each intermediate — never default
+	// Request/Response (those live on droot).
+	for _, g := range ancestors {
+		alias := RefIntermediateAlias(g.Dir)
+		bodyStr = qualifyRootSymbols(bodyStr, alias, collectRootSymbolRenames(g.Docs))
+		bodyStr = qualifyRootTypes(bodyStr, alias, collectRootTypeNames(g.Docs))
+	}
+	bodyStr = qualifyRootSymbols(bodyStr, rootAlias, rootRenames)
+	bodyStr = qualifyRootTypes(bodyStr, rootAlias, rootTypes)
+	buf.WriteString(bodyStr)
+	return buf.String(), nil
+}
+
+// qualifyAncestorSymbols rewrites bare symbols/types from each intermediate
+// ancestor and from root into alias-qualified form (for leaf-local code).
+func qualifyAncestorSymbols(src string, part RefSetupPartition, rootAlias string, rootRenames map[string]string, rootTypes []string) string {
+	if src == "" {
+		return src
+	}
+	// Parents first is fine; helper names are unique across the chain.
+	for _, g := range part.Intermediate {
+		alias := RefIntermediateAlias(g.Dir)
+		src = qualifyRootSymbols(src, alias, collectRootSymbolRenames(g.Docs))
+		src = qualifyRootTypes(src, alias, collectRootTypeNames(g.Docs))
+	}
+	src = qualifyRootSymbols(src, rootAlias, rootRenames)
+	src = qualifyRootTypes(src, rootAlias, rootTypes)
+	return src
+}
+
 // AssembleRefLeafTestSource emits a thin leaf *_test.go that imports the root
-// package. Leaf must not redefine root types or root helpers.
+// package and intermediate ancestor packages. Leaf must not redefine root types
+// or inline intermediate SETUP bodies.
 func AssembleRefLeafTestSource(tc TreeCase, compileOnly bool, pkgName, docTestRoot, rootImport, rootAlias string) (string, error) {
 	if pkgName == "" {
 		pkgName = "testcase"
@@ -357,9 +769,11 @@ func AssembleRefLeafTestSource(tc TreeCase, compileOnly bool, pkgName, docTestRo
 		rootAlias = RefRootPkgName
 	}
 
-	rootDocs, leafDocs := SplitRefSetupDocs(tc.SetupFiles)
+	part := PartitionRefSetupDocs(tc)
+	rootDocs := part.RootDocs
+	leafDocs := part.LeafDocs
 	renames := collectRootSymbolRenames(rootDocs)
-	rootTypes := collectRootTypeNames(rootDocs)
+	rootTypes := rootTypeNamesForQualify(rootDocs)
 
 	var buf strings.Builder
 	buf.WriteString("package ")
@@ -373,16 +787,19 @@ func AssembleRefLeafTestSource(tc TreeCase, compileOnly bool, pkgName, docTestRo
 		}
 	}
 	importsMap[rootAlias+"\x00"+rootImport] = &ImportSpec{Name: rootAlias, Path: rootImport}
+	for _, g := range part.Intermediate {
+		alias := RefIntermediateAlias(g.Dir)
+		imp := RefIntermediateImport(rootImport, g.Dir)
+		importsMap[alias+"\x00"+imp] = &ImportSpec{Name: alias, Path: imp}
+	}
 	writeImportBlock(&buf, importsMap)
 
-	// Leaf-only types/helpers — rewrite any references to root symbols.
+	// Leaf-only types/helpers — rewrite references to root + intermediate symbols.
 	var leafBlob strings.Builder
 	writePackageLevelTypesAndMethods(&leafBlob, leafDocs, tc.AssertFile.GoBlock)
 	writePackageLevelConstVars(&leafBlob, leafDocs, tc.AssertFile.GoBlock)
 	writePackageLevelHelpers(&leafBlob, leafDocs, tc.AssertFile.GoBlock)
-	leafTop := qualifyRootSymbols(leafBlob.String(), rootAlias, renames)
-	// Root-declared types in leaf helpers/types become droot.X
-	leafTop = qualifyRootTypes(leafTop, rootAlias, rootTypes)
+	leafTop := qualifyAncestorSymbols(leafBlob.String(), part, rootAlias, renames, rootTypes)
 	buf.WriteString(leafTop)
 
 	buf.WriteString("func ")
@@ -406,19 +823,39 @@ func AssembleRefLeafTestSource(tc TreeCase, compileOnly bool, pkgName, docTestRo
 		buf.WriteString("\t}\n")
 	}
 
+	// Intermediate setups (exported package funcs), parents first.
+	for _, g := range part.Intermediate {
+		alias := RefIntermediateAlias(g.Dir)
+		setupTotal := 0
+		for _, doc := range g.Docs {
+			if doc.GoBlock != nil && doc.GoBlock.Setup != nil {
+				setupTotal++
+			}
+		}
+		setupIdx := 0
+		for _, doc := range g.Docs {
+			if doc.GoBlock == nil || doc.GoBlock.Setup == nil {
+				continue
+			}
+			name := intermediateSetupName(setupIdx, setupTotal)
+			setupIdx++
+			buf.WriteString(fmt.Sprintf("\tif err := %s.%s(t, d, req); err != nil {\n", alias, name))
+			buf.WriteString(fmt.Sprintf("\t\tt.Fatalf(\"%s failed: %%v\", err)\n", escapeString(doc.Path)))
+			buf.WriteString("\t}\n")
+		}
+	}
+
 	for i, doc := range leafDocs {
 		if doc.GoBlock == nil || doc.GoBlock.Setup == nil {
 			continue
 		}
 		name := fmt.Sprintf("setup%d", i)
 		fn := *doc.GoBlock.Setup
-		fn.Params = qualifyRootTypes(fn.Params, rootAlias, rootTypes)
-		fn.Results = qualifyRootTypes(fn.Results, rootAlias, rootTypes)
-		fn.ResultTypes = qualifyRootTypes(fn.ResultTypes, rootAlias, rootTypes)
-		fn.ClosureResults = qualifyRootTypes(fn.ClosureResults, rootAlias, rootTypes)
-		fn.Body = qualifyRootTypesInBody(fn.Body, rootAlias, rootTypes)
-		fn.Body = qualifyRootSymbols(fn.Body, rootAlias, renames)
-		fn.Params = qualifyRootSymbols(fn.Params, rootAlias, renames)
+		fn.Params = qualifyAncestorSymbols(fn.Params, part, rootAlias, renames, rootTypes)
+		fn.Results = qualifyAncestorSymbols(fn.Results, part, rootAlias, renames, rootTypes)
+		fn.ResultTypes = qualifyAncestorSymbols(fn.ResultTypes, part, rootAlias, renames, rootTypes)
+		fn.ClosureResults = qualifyAncestorSymbols(fn.ClosureResults, part, rootAlias, renames, rootTypes)
+		fn.Body = qualifyAncestorSymbols(fn.Body, part, rootAlias, renames, rootTypes)
 		fn.Params = ensureDoctestParam(fn.Params)
 		writeFuncClosure(&buf, name, fn)
 		buf.WriteString(fmt.Sprintf("\tif err := %s(t, d, req); err != nil {\n", name))
@@ -427,12 +864,11 @@ func AssembleRefLeafTestSource(tc TreeCase, compileOnly bool, pkgName, docTestRo
 	}
 
 	assertFn := *tc.AssertFile.GoBlock.Assert
-	assertFn.Params = qualifyRootTypes(assertFn.Params, rootAlias, rootTypes)
-	assertFn.Results = qualifyRootTypes(assertFn.Results, rootAlias, rootTypes)
-	assertFn.ResultTypes = qualifyRootTypes(assertFn.ResultTypes, rootAlias, rootTypes)
-	assertFn.ClosureResults = qualifyRootTypes(assertFn.ClosureResults, rootAlias, rootTypes)
-	assertFn.Body = qualifyRootTypesInBody(assertFn.Body, rootAlias, rootTypes)
-	assertFn.Body = qualifyRootSymbols(assertFn.Body, rootAlias, renames)
+	assertFn.Params = qualifyAncestorSymbols(assertFn.Params, part, rootAlias, renames, rootTypes)
+	assertFn.Results = qualifyAncestorSymbols(assertFn.Results, part, rootAlias, renames, rootTypes)
+	assertFn.ResultTypes = qualifyAncestorSymbols(assertFn.ResultTypes, part, rootAlias, renames, rootTypes)
+	assertFn.ClosureResults = qualifyAncestorSymbols(assertFn.ClosureResults, part, rootAlias, renames, rootTypes)
+	assertFn.Body = qualifyAncestorSymbols(assertFn.Body, part, rootAlias, renames, rootTypes)
 	assertFn.Params = ensureDoctestParam(assertFn.Params)
 	writeFuncClosure(&buf, "assert", assertFn)
 
@@ -506,15 +942,14 @@ func collectRootTypeNames(rootDocs []SetupDocument) []string {
 	return names
 }
 
-// qualifyRootTypes rewrites bare root type identifiers to rootAlias.X
-// (Request, Response, and any other types declared in root docs).
+// qualifyRootTypes rewrites bare type identifiers in rootTypeNames to alias.X.
+// An empty rootTypeNames means no rewrites (callers must pass Request/Response
+// explicitly for root — do not default here, or intermediate packages with no
+// local types would steal Request/Response onto the wrong alias).
 // Skips string/comment content so fixture generators keep raw `*Request` text.
 func qualifyRootTypes(s, rootAlias string, rootTypeNames []string) string {
-	if s == "" {
+	if s == "" || len(rootTypeNames) == 0 {
 		return s
-	}
-	if len(rootTypeNames) == 0 {
-		rootTypeNames = []string{"Request", "Response"}
 	}
 	typeSet := map[string]bool{}
 	for _, t := range rootTypeNames {
@@ -528,11 +963,31 @@ func qualifyRootTypes(s, rootAlias string, rootTypeNames []string) string {
 	})
 }
 
+// rootTypeNamesForQualify returns type names declared in root docs, always
+// including Request and Response so leaf/intermediate Setup params qualify.
+func rootTypeNamesForQualify(rootDocs []SetupDocument) []string {
+	names := collectRootTypeNames(rootDocs)
+	seen := map[string]bool{}
+	for _, n := range names {
+		seen[n] = true
+	}
+	for _, req := range []string{"Request", "Response"} {
+		if !seen[req] {
+			names = append(names, req)
+			seen[req] = true
+		}
+	}
+	// Prefer longer names first (stable with collectRootTypeNames).
+	sort.Slice(names, func(i, j int) bool { return len(names[i]) > len(names[j]) })
+	return names
+}
+
 func qualifyRootTypesInBody(body, rootAlias string, rootTypeNames []string) string {
 	return qualifyRootTypes(body, rootAlias, rootTypeNames)
 }
 
-// WriteRefTree writes the shared root package once and thin leaf tests for each case.
+// WriteRefTree writes the shared root package, intermediate packages once, and
+// thin leaf tests for each case. Flat layout (treeRel ".") under genRoot.
 func WriteRefTree(genRoot string, cases []TreeCase, docTestRoot string, compileOnly bool, pkgName string) error {
 	if len(cases) == 0 {
 		return fmt.Errorf("WriteRefTree: no cases")
@@ -549,8 +1004,7 @@ func WriteRefTree(genRoot string, cases []TreeCase, docTestRoot string, compileO
 	if err != nil {
 		return err
 	}
-	// Tree-relative layout: put __droot next to leaves under tree path.
-	// docTestRoot is the tree root; without mod root we use flat __droot.
+	// Flat layout without mod/tree scoping: __droot at gen root.
 	rootDir := filepath.Join(genRoot, RefRootDirName)
 	rootImport := RefRootImportPath
 	if err := os.MkdirAll(rootDir, 0755); err != nil {
@@ -561,6 +1015,10 @@ func WriteRefTree(genRoot string, cases []TreeCase, docTestRoot string, compileO
 		return fmt.Errorf("write ref root package: %w", err)
 	}
 
+	if err := WriteRefIntermediatePackages(genRoot, ".", rootImport, rootDocs, cases); err != nil {
+		return err
+	}
+
 	for _, tc := range cases {
 		leafDir := genRoot
 		if tc.Path != "" {
@@ -568,6 +1026,40 @@ func WriteRefTree(genRoot string, cases []TreeCase, docTestRoot string, compileO
 		}
 		if _, err := WriteRefLeafCase(leafDir, tc, compileOnly, pkgName, docTestRoot, rootImport); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// WriteRefIntermediatePackages writes each unique intermediate package once under
+// genRoot (tree-scoped when treeRel is not ".").
+func WriteRefIntermediatePackages(genRoot, treeRel, rootImport string, rootDocs []SetupDocument, cases []TreeCase) error {
+	if rootImport == "" {
+		rootImport = RefRootImportPath
+	}
+	groups := CollectUniqueRefIntermediates(cases)
+	byDir := make(map[string]RefIntermediateGroup, len(groups))
+	for _, g := range groups {
+		byDir[g.Dir] = g
+	}
+	for _, g := range groups {
+		ancestors := resolveRefAncestorChain(g.Dir, byDir)
+		pkgName := RefIntermediatePkgName(g.Dir)
+		src, err := AssembleRefIntermediateSource(
+			g.Docs, pkgName,
+			rootImport, RefRootPkgName, rootDocs,
+			ancestors,
+		)
+		if err != nil {
+			return fmt.Errorf("assemble intermediate %s: %w", g.Dir, err)
+		}
+		dir := RefIntermediateDirForTree(genRoot, treeRel, g.Dir)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return err
+		}
+		path := filepath.Join(dir, RefIntermediateFileName)
+		if err := WriteFormattedGo(path, src); err != nil {
+			return fmt.Errorf("write intermediate package %s: %w", g.Dir, err)
 		}
 	}
 	return nil
@@ -634,13 +1126,4 @@ func WriteFormattedGo(path, src string) error {
 	return nil
 }
 
-// CacheMappingGenRefRoot returns a cache gen root isolated from classic mapping-gen.
-func CacheMappingGenRefRoot(absDoctestDir string) (string, string, error) {
-	cacheDir, err := CacheHome()
-	if err != nil {
-		return "", "", err
-	}
-	absModRoot, _ := MappingGenRoot(absDoctestDir)
-	mappingRoot := filepath.Join(cacheDir, "doctest", "mapping-gen-ref", absModRoot)
-	return mappingRoot, absModRoot, nil
-}
+

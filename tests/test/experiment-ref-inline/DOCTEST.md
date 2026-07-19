@@ -1,110 +1,69 @@
-# Experiment: `--experiment-ref-instead-of-inline` — P0 plumbing + P1 ref generation
+# Default hierarchical ref packages (under unified suite generation)
 
 ## Version
-0.0.2
+0.0.3
 
-Classic-TDD specification spanning:
+Default generation uses a **hierarchical ref package DAG** inside the unified
+suite path: root package owns `Request`/`Response`/`Run` (+ root helpers);
+leaves import ancestors instead of inlining root source.
 
-- **P0** (sealed): parse/plumb `--experiment-ref-instead-of-inline` into
-  `core.Options.ExperimentRefInsteadOfInline` (default false).
-- **P1** (this extension): when the flag is **on**, generate a **package DAG**
-  for simple trees — root package owns `Request`/`Response`/`Run` (+ root
-  helpers); thin leaf `_test.go` files **import** root instead of inlining
-  ancestor source. Flag **off** keeps classic per-leaf inline assembly only.
-
-These tests do **not** implement production code. Expect **RED** on new P1
-leaves until the implementer lands the separate ref assemble path.
-
-**Out of scope (P2+):** deep multi-level Setup edge cases, methods on Request
-defined outside root (hard error may wait), full-suite perf, assert package
-rewrites.
+No experiment flags; classic full-inline per leaf is not the production default.
 
 # DSN (Domain Specific Notion)
 
 ### Participants
 
-- **Caller** — `doctest test` CLI (or package entry) that parses argv into options.
-- **Parse layer** — `runner.ParseTestOptions(args)` filling `core.Options`.
-- **Options** — `ExperimentRefInsteadOfInline bool` (CLI:
-  `--experiment-ref-instead-of-inline`; default **false**).
-- **Classic generator** — existing `AssembleTestSource`: one package per leaf;
-  root types/`Run` inlined into each leaf `_test.go` (Run as local closure).
-- **Ref generator (P1)** — separate assemble path when the flag is on: root
-  package file(s) under the gen root hold `Run`/types/helpers once; intermediate
-  SETUP dirs may become packages; leaf packages import ancestors; leaf tests are
-  thin (chdir, inject `DOCTEST_*`, Setup chain, Run, Assert).
-- **Gen root** — explicit `--gen-dir` / `Options.GenDir` under `t.TempDir()` in
-  tests so layout is inspectable. Production should isolate ref mode from warm
-  classic mapping-gen cache (e.g. mode marker or `mapping-gen-ref`).
-- **Help** — documents the flag as experimental (`tests/help/test-options`).
+- **Caller** — `doctest test` CLI (or package entry).
+- **Ref/unified generator** — root package under `__droot` holds `Run`/types/helpers
+  once; intermediate SETUP dirs may become packages; leaf packages import
+  ancestors; unified leaves expose `RunTestLeaf` (non-test packages).
+- **Gen root** — explicit `Options.GenDir` under `t.TempDir()` so layout is
+  inspectable. Production warm cache is `mapping-gen`.
 
 ### Behaviors
 
-- **Default off** — omit flag → field false → classic inline only.
-- **Opt-in** — flag → field true → ref package DAG for simple trees.
+- **Default** — hierarchical ref packages (shared root marker once).
 - **Run once** — distinctive root helper / `Run` body appears **once** on disk
-  under gen root when flag on; twice (per leaf) when flag off (classic).
-- **Thin leaves** — flag on: leaf `_test.go` does not redefine root types /
-  marker helper; imports the root package path.
-- **Both leaves pass** — simple 2-leaf fixture exits successfully under flag on.
-- **Announce (optional)** — stderr may mention `experiment: ref-instead-of-inline`
-  (or similar) when flag on.
+  under gen root.
+- **Thin leaves** — leaf packages do not redefine root types / marker helper;
+  import non-stdlib ancestor packages.
+- **Both leaves pass** — simple 2-leaf fixture exits successfully under default.
+- **Smoke** — mini one-leaf tree still passes under default generation.
 
 ### Pipeline sketch
 
 ```
-doctest test [--experiment-ref-instead-of-inline] [--gen-dir DIR] <tree>
-  -> ParseTestOptions -> Options.ExperimentRefInsteadOfInline
-  -> if false: classic AssembleTestSource per leaf
-  -> if true:  ref package DAG (root package + thin leaf tests)
-  -> go test packages under gen root
+doctest test [--gen-dir DIR] <tree>
+  -> hierarchical unified (ref packages + suite)
+  -> go test suite package under gen root
 ```
 
 ## Decision Tree
 
 ```
 tests/test/experiment-ref-inline/
-├── flags/                                 [P0 ParseTestOptions]
-│   ├── default-off/                       omit flag → false
-│   └── flag-on/                           flag → true; remain has path
-├── smoke/                                 [P0 mini RunTest]
-│   ├── flag-off-still-passes/             field false → tiny tree ok
-│   └── flag-on-still-passes/              field true → tiny tree ok
-└── ref-mode/                              [P1 gen layout + 2-leaf fixture]
-    ├── flag-off/                          classic path
-    │   └── classic-inline-layout/         per-leaf inline; marker helper ×N leaves
-    └── flag-on/                           ref path
-        ├── two-leaves-pass/               exit/run success for a+b
-        ├── root-marker-once/              marker helper defined once under gen
-        ├── leaf-thin-import/              leaves import root; no type Request/marker def
-        └── stderr-announce/               optional meta line on stderr
+├── smoke/                                 [mini RunTest]
+│   └── default-passes/                    tiny tree ok under default gen
+└── ref-mode/                              [gen layout + 2-leaf fixture]
+    ├── two-leaves-pass/                   exit/run success for a+b
+    ├── root-marker-once/                  marker helper defined once under gen
+    └── leaf-thin-import/                  leaves import root; no type Request/marker def
 ```
-
-Sibling help (parent CLI tree): `tests/help/test-options`.
 
 ## Test Index
 
-| Leaf | Phase | Expected |
-|------|--------|----------|
-| `flags/default-off` | P0 | field false by default |
-| `flags/flag-on` | P0 | flag → true; remain includes path |
-| `smoke/flag-off-still-passes` | P0 | mini run flag off ok |
-| `smoke/flag-on-still-passes` | P0 | mini run flag on ok |
-| `ref-mode/flag-off/classic-inline-layout` | P1 | 2 leaves pass; each leaf `_test.go` defines marker helper; no single shared root-only package required |
-| `ref-mode/flag-on/two-leaves-pass` | P1 | 2-leaf fixture passes with flag on |
-| `ref-mode/flag-on/root-marker-once` | P1 | `func ExperimentP1RootMarker` defined exactly once under gen |
-| `ref-mode/flag-on/leaf-thin-import` | P1 | leaf `_test.go` lacks marker def + `type Request`; imports non-stdlib package |
-| `ref-mode/flag-on/stderr-announce` | P1 | stderr contains `experiment` + `ref-instead-of-inline` (soft layout) |
+| Leaf | Expected |
+|------|----------|
+| `smoke/default-passes` | mini run under default gen ok |
+| `ref-mode/two-leaves-pass` | 2-leaf fixture passes under default |
+| `ref-mode/root-marker-once` | `func ExperimentP1RootMarker` defined exactly once under gen |
+| `ref-mode/leaf-thin-import` | leaf packages lack marker def + `type Request`; import non-stdlib package |
 
 ## How to Run
 
 ```sh
 doctest vet ./tests/test/experiment-ref-inline/
 doctest test ./tests/test/experiment-ref-inline/
-doctest test ./tests/test/experiment-ref-inline/flags/...
-doctest test ./tests/test/experiment-ref-inline/smoke/...
-doctest test ./tests/test/experiment-ref-inline/ref-mode/...
-doctest test ./tests/help/test-options
 ```
 
 ```go
@@ -121,42 +80,33 @@ import (
 	"github.com/xhd2015/doctest/libdoc/testtree"
 )
 
-// Distinctive root helper name/body used in P1 fixtures so gen layout can be counted.
+// Distinctive root helper name/body used in fixtures so gen layout can be counted.
 const experimentP1MarkerFunc = "ExperimentP1RootMarker"
 const experimentP1MarkerLiteral = "ROOT_RUN_MARKER_P1_EXPERIMENT_REF"
 
 // Request selects one surface. Leaves set Op and related fields.
 type Request struct {
-	Op string // parse_flags | mini_run | ref_gen
-
-	// parse_flags
-	Args []string
+	Op string // mini_run | ref_gen
 
 	// mini_run / ref_gen
-	ExperimentRefInsteadOfInline bool
-	Dir                          string // fixture tree; empty → Run builds default fixture
-	GenDir                       string // ref_gen only; empty → t.TempDir()
+	Dir    string // fixture tree; empty → Run builds default fixture
+	GenDir string // ref_gen only; empty → t.TempDir()
 }
 
 type Response struct {
-	// flags
-	Opts       core.Options
-	RemainArgs []string
-	ParseErr   string
-
 	// mini_run / ref_gen
-	RunErr   string
-	Stdout   string
-	Stderr   string
-	Dir      string
-	GenDir   string
+	RunErr string
+	Stdout string
+	Stderr string
+	Dir    string
+	GenDir string
 
 	// ref_gen layout hints (filled by Run for assert convenience)
 	GoFiles          []string // absolute paths of *.go under GenDir
 	MarkerDefCount   int      // files defining func ExperimentP1RootMarker
 	MarkerDefFiles   []string
-	LeafTestFiles    []string // *a*_test.go / *b*_test.go style leaf tests
-	LeafHasMarkerDef []bool   // parallel to LeafTestFiles
+	LeafGoFiles      []string // leaf package .go under a/ or b/ (non-suite)
+	LeafHasMarkerDef []bool   // parallel to LeafGoFiles
 	LeafHasTypeReq   []bool
 	LeafImportLines  [][]string
 }
@@ -166,16 +116,6 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 	resp := &Response{}
 
 	switch req.Op {
-	case "parse_flags":
-		opts, remain, err := runner.ParseTestOptions(req.Args)
-		if err != nil {
-			resp.ParseErr = err.Error()
-			return resp, nil
-		}
-		resp.Opts = opts
-		resp.RemainArgs = remain
-		return resp, nil
-
 	case "mini_run":
 		dir := req.Dir
 		if dir == "" {
@@ -185,10 +125,9 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 
 		var stdout, stderr bytes.Buffer
 		opts := core.Options{
-			Stdout:                       &stdout,
-			Stderr:                       &stderr,
-			RemoveTemp:                   true,
-			ExperimentRefInsteadOfInline: req.ExperimentRefInsteadOfInline,
+			Stdout:     &stdout,
+			Stderr:     &stderr,
+			RemoveTemp: true,
 		}
 		err := runner.RunTest(dir, opts)
 		resp.Stdout = stdout.String()
@@ -213,11 +152,10 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 
 		var stdout, stderr bytes.Buffer
 		opts := core.Options{
-			Stdout:                       &stdout,
-			Stderr:                       &stderr,
-			GenDir:                       genDir,
-			RemoveTemp:                   false, // keep GenDir for layout asserts
-			ExperimentRefInsteadOfInline: req.ExperimentRefInsteadOfInline,
+			Stdout:     &stdout,
+			Stderr:     &stderr,
+			GenDir:     genDir,
+			RemoveTemp: false, // keep GenDir for layout asserts
 		}
 		err := runner.RunTest(dir, opts)
 		resp.Stdout = stdout.String()
@@ -241,8 +179,8 @@ func createOnePassTree(t *testing.T) string {
 }
 
 // createTwoLeafMarkerTree builds a simple 2-leaf doctest tree whose root DOCTEST
-// defines ExperimentP1RootMarker + Run that references it. Classic gen duplicates
-// the helper per leaf; ref gen should emit it once in a shared root package.
+// defines ExperimentP1RootMarker + Run that references it. Hierarchical gen should
+// emit the helper once in the shared root package.
 func createTwoLeafMarkerTree(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
@@ -321,21 +259,32 @@ func fillGenLayout(t *testing.T, resp *Response) {
 			resp.MarkerDefCount++
 			resp.MarkerDefFiles = append(resp.MarkerDefFiles, path)
 		}
-		base := filepath.Base(path)
-		// Leaf tests for fixture leaves a/ and b/ (classic: a/a_test.go, b/b_test.go).
-		if strings.HasSuffix(base, "_test.go") {
-			rel, _ := filepath.Rel(resp.GenDir, path)
-			relSlash := filepath.ToSlash(rel)
-			if strings.Contains(relSlash, "/a/") || strings.HasPrefix(relSlash, "a/") ||
-				strings.Contains(relSlash, "/b/") || strings.HasPrefix(relSlash, "b/") ||
-				base == "a_test.go" || base == "b_test.go" {
-				resp.LeafTestFiles = append(resp.LeafTestFiles, path)
-				resp.LeafHasMarkerDef = append(resp.LeafHasMarkerDef, strings.Contains(body, markerSig))
-				resp.LeafHasTypeReq = append(resp.LeafHasTypeReq, strings.Contains(body, "type Request"))
-				resp.LeafImportLines = append(resp.LeafImportLines, importLines(body))
+		rel, _ := filepath.Rel(resp.GenDir, path)
+		relSlash := filepath.ToSlash(rel)
+		// Fixture leaves a/ and b/ only (not suite/registry/allleaves/droot).
+		if !isLeafABPath(relSlash) {
+			continue
+		}
+		resp.LeafGoFiles = append(resp.LeafGoFiles, path)
+		resp.LeafHasMarkerDef = append(resp.LeafHasMarkerDef, strings.Contains(body, markerSig))
+		resp.LeafHasTypeReq = append(resp.LeafHasTypeReq, strings.Contains(body, "type Request"))
+		resp.LeafImportLines = append(resp.LeafImportLines, importLines(body))
+	}
+}
+
+func isLeafABPath(relSlash string) bool {
+	parts := strings.Split(relSlash, "/")
+	for i, p := range parts {
+		if p == "a" || p == "b" {
+			for _, prev := range parts[:i] {
+				if prev == "suite" || strings.HasPrefix(prev, "__") {
+					return false
+				}
 			}
+			return true
 		}
 	}
+	return false
 }
 
 func importLines(src string) []string {
