@@ -19,6 +19,7 @@ Subcommands:
   path      Print the project metrics directory
   last      Summarize the newest run
   top       Rank slowest leaves in a run
+  phases    Break down pipeline phases (discover/generate/go_test/…)
   summary   Aggregate stats across recent runs
   show      Dump one run (latest or by run id)
   prune     Delete oldest run files beyond retention (keep 30)
@@ -33,6 +34,11 @@ Options for top:
   --json               Machine-readable JSON on stdout
   --run last|ID        Select run (default: last)
 
+Options for phases:
+  --run last|ID        Select run (default: last)
+  --n N                Limit top trees by go_test (default 10)
+  --json               Machine-readable JSON on stdout
+
 Options for summary:
   --last N             Aggregate last N runs (default 5)
   --default-only       Only default-suite runs
@@ -42,6 +48,7 @@ Examples:
   doctest metrics path
   doctest metrics last
   doctest metrics top --n 5 --unlabeled-only
+  doctest metrics phases --run last
   doctest metrics summary --last 2 --json
   doctest metrics show <run-id>
   doctest metrics prune
@@ -61,6 +68,8 @@ func runMetrics(args []string) error {
 		return metricsLast(rest)
 	case "top":
 		return metricsTop(rest)
+	case "phases":
+		return metricsPhases(rest)
 	case "summary":
 		return metricsSummary(rest)
 	case "show":
@@ -159,6 +168,105 @@ func printRunSummaryHuman(s metrics.RunSummary) {
 			fmt.Printf("  %s  %s  %s\n", row.Path, metrics.FormatDurationNS(row.ElapsedNs), row.Result)
 		}
 	}
+}
+
+func metricsPhases(args []string) error {
+	if helpArgs(args) {
+		fmt.Print(`Usage: doctest metrics phases [options]
+
+Break down pipeline phase costs for a recorded run (discover, materialize,
+generate, go_test, …). Phase totals are summed tree walls and may exceed suite
+wall when trees run in parallel.
+
+Options:
+  --run last|ID
+  --n N
+  --json
+`)
+		return nil
+	}
+	asJSON := false
+	runSel := "last"
+	n := 10
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "-h" || a == "--help":
+			return metricsPhases([]string{"--help"})
+		case a == "--json":
+			asJSON = true
+		case a == "--n" || a == "-n":
+			if i+1 >= len(args) {
+				return fmt.Errorf("--n requires a value")
+			}
+			i++
+			v, err := strconv.Atoi(args[i])
+			if err != nil || v < 0 {
+				return fmt.Errorf("invalid --n: %s", args[i])
+			}
+			n = v
+		case strings.HasPrefix(a, "--n="):
+			v, err := strconv.Atoi(strings.TrimPrefix(a, "--n="))
+			if err != nil || v < 0 {
+				return fmt.Errorf("invalid --n: %s", a)
+			}
+			n = v
+		case a == "--run":
+			if i+1 >= len(args) {
+				return fmt.Errorf("--run requires a value")
+			}
+			i++
+			runSel = args[i]
+		case strings.HasPrefix(a, "--run="):
+			runSel = strings.TrimPrefix(a, "--run=")
+		default:
+			return fmt.Errorf("unknown flag for metrics phases: %s", a)
+		}
+	}
+
+	ctx, err := loadMetricsCtx()
+	if err != nil {
+		return err
+	}
+	files, err := metrics.ListRunFiles(ctx.RunsDir)
+	if err != nil {
+		return err
+	}
+	rf, err := metrics.SelectRun(files, runSel, false)
+	if err != nil {
+		return err
+	}
+	evs, err := metrics.ReadEvents(rf.Path)
+	if err != nil {
+		return err
+	}
+	a := metrics.AnalyzePhases(*rf, evs)
+	a.TopTrees = metrics.TopTreesByPhase(a.Phases, "go_test", n)
+	if asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(a)
+	}
+	fmt.Printf("run_id: %s\n", a.RunID)
+	if a.WallNs > 0 {
+		fmt.Printf("suite_wall: %s\n", metrics.FormatDurationNS(a.WallNs))
+	}
+	fmt.Println("phase totals (summed tree wall; may exceed suite wall when parallel):")
+	if len(a.Totals.ByPhase) == 0 {
+		fmt.Println("  (no phase events — re-run with --metrics-on on a binary that emits phases)")
+	} else {
+		for _, name := range a.Totals.Order {
+			ns := a.Totals.ByPhase[name]
+			fmt.Printf("  %-14s %s\n", name, metrics.FormatDurationNS(ns))
+		}
+	}
+	if len(a.TopTrees) > 0 {
+		fmt.Println("top trees by go_test:")
+		for i, row := range a.TopTrees {
+			fmt.Printf("  %d. %s  %s\n", i+1, row.Tree, metrics.FormatDurationNS(row.ElapsedNs))
+		}
+	}
+	return nil
 }
 
 func metricsTop(args []string) error {

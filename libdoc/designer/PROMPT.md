@@ -83,17 +83,20 @@ Follow the doc-style test specifications appended below (`__DOCTEST_SPEC__` and
 `Request`/`Response`/`Run`/`Setup`/`Assert` rules, and inheritance — do not
 rely on memory or improvise structure.
 
-Generated tests expose `DOCTEST_ROOT` and `DOCTEST_SESSION_ID` (per
-`doctest test` run). **`DOCTEST_SESSION_ID` is an injected variable** in every
-generated test — reference it directly in harness helpers. Do **not** call
-`os.Getenv("DOCTEST_SESSION_ID")`; `doctest vet` rejects that anti-pattern.
+Generated tests pass `d *session.Doctest` into Setup / Run / Assert (second
+parameter after `t`; optional in author source). Use fields
+`d.DOCTEST_ROOT` (tree root), `d.DOCTEST_CASE` (leaf case dir), and
+`d.DOCTEST_SESSION_ID` (per `doctest test` run). Process **cwd is undetermined** —
+do not assume leaf cwd or use bare relative paths; join with `d.DOCTEST_CASE`.
+Do **not** call `os.Getenv("DOCTEST_SESSION_ID")`; `doctest vet` rejects that
+anti-pattern. Prefer `d.DOCTEST_SESSION_ID` in harness code.
 
 ### Session-scoped shared setup (file lock + cache)
 
 When many leaves repeat expensive setup (build binaries, seed archives, large
 fixtures), amortize it once per `doctest test` invocation:
 
-1. Cache dir: `$TMPDIR/<feature>-doctest-<DOCTEST_SESSION_ID>/` (same id for all
+1. Cache dir: `$TMPDIR/<feature>-doctest-<d.DOCTEST_SESSION_ID>/` (same id for all
    parallel leaf packages in the run).
 2. `syscall.Flock` on a lock file inside the cache dir — first package populates;
    others wait and reuse.
@@ -101,9 +104,10 @@ fixtures), amortize it once per `doctest test` invocation:
 4. Share only safe artifacts (compiled binaries, generic seed archives). Keep
    per-leaf temp dirs for mutated state (custom excludes, isolated server homes).
 
-Put shared helpers (`sessionCacheDir`, `withFileLock`, `buildOnce`) in root
-`SETUP.md` and document the cache layout in **Preconditions**. See the design
-spec section **Session-scoped shared setup (`DOCTEST_SESSION_ID`)**.
+Put shared helpers (`sessionCacheDir(d *session.Doctest)`, `withFileLock`,
+`buildOnce`) in root `SETUP.md` (helpers that need paths take `d`) and document
+the cache layout in **Preconditions**. See the design spec section
+**Session-scoped shared setup**.
 
 Coverage checklist — ensure every leaf covers:
 - Happy paths for every valid input combination

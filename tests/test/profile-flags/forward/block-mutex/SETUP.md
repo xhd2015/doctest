@@ -19,20 +19,21 @@ doctest test -v \
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
-	dir := filepath.Join(os.TempDir(), "doctest-profile-flags-"+DOCTEST_SESSION_ID, "block-mutex")
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	dir := filepath.Join(os.TempDir(), "doctest-profile-flags-"+d.DOCTEST_SESSION_ID, "block-mutex")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	block := filepath.Join(dir, "block.out")
 	mutex := filepath.Join(dir, "mutex.out")
 
-	exampleDir := filepath.Join(DOCTEST_ROOT, "testdata", "basic-request-runner")
+	exampleDir := filepath.Join(d.DOCTEST_ROOT, "testdata", "basic-request-runner")
 	req.Args = []string{
 		"test", "-v",
 		"-blockprofile", block,

@@ -17,18 +17,19 @@ doctest test -v <dir> [flags] -> stderr: "cd ... && go test ... -cpuprofile=... 
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	// Forward leaves run a nested go test; keep generous timeout.
 	if req.Timeout < 120*time.Second {
 		req.Timeout = 120 * time.Second
 	}
-	exampleDir := filepath.Join(DOCTEST_ROOT, "testdata", "basic-request-runner")
+	exampleDir := filepath.Join(d.DOCTEST_ROOT, "testdata", "basic-request-runner")
 	if _, err := os.Stat(exampleDir); err != nil {
 		t.Fatalf("fixture %s: %v", exampleDir, err)
 	}

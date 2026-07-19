@@ -15,12 +15,13 @@ doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
     "path/filepath"
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
-    exampleDir := filepath.Join(DOCTEST_ROOT, "testdata", "basic-request-runner")
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+    exampleDir := filepath.Join(d.DOCTEST_ROOT, "testdata", "basic-request-runner")
     req.Args = []string{"test", "-v", "--timeout", "45s", exampleDir}
     return nil
 }

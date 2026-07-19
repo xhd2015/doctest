@@ -18,6 +18,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     for _, want := range []string{
         "Usage: doctest test",
         "-v", "--verbose", "--rm", "-count", "--timeout", "--color", "--no-color",
+        "--cold-cache",
+        // Experimental: ref-instead-of-inline generation (P0 plumbing; gen change is P1)
+        "--experiment-ref-instead-of-inline",
+        // Experimental: one go test package/binary per DOCTEST tree (implies ref)
+        "--experiment-unified-package-per-doctest-tree",
         // Go-style profiling / cover flags forwarded to go test
         "-cpuprofile", "-memprofile", "-memprofilerate",
         "-blockprofile", "-blockprofilerate",

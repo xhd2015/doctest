@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/xhd2015/doctest/libdoc/rules"
@@ -441,7 +442,15 @@ func goModSourceFingerprint(modRoot, modPath string, hasMod bool, withAssertRepl
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
+// genModMu serializes WriteGoMod / CondTidyGoMod so parallel ./... trees that
+// share one gen root (e.g. --cold-cache mapping-gen-cold) do not race on
+// go.mod / go.sum / tidy markers.
+var genModMu sync.Mutex
+
 func WriteGoMod(genDir, modRoot, modPath string, hasMod bool, withAssertReplace bool, assertCacheDir string, withSessionReplace bool, sessionCacheDir string) error {
+	genModMu.Lock()
+	defer genModMu.Unlock()
+
 	fp, err := goModSourceFingerprint(modRoot, modPath, hasMod, withAssertReplace, assertCacheDir, withSessionReplace, sessionCacheDir)
 	if err != nil {
 		return err
@@ -547,6 +556,7 @@ func readExtraReplaces(modRoot, mainModPath string) string {
 }
 
 func TidyGoMod(genDir string) error {
+	// Caller must hold genModMu when concurrent trees share genDir.
 	tidy := exec.Command("go", "mod", "tidy")
 	tidy.Dir = genDir
 	if out, err := tidy.CombinedOutput(); err != nil {
@@ -556,6 +566,9 @@ func TidyGoMod(genDir string) error {
 }
 
 func CondTidyGoMod(genDir string) error {
+	genModMu.Lock()
+	defer genModMu.Unlock()
+
 	markerFile := filepath.Join(genDir, "doctest.tidy-done")
 	if _, err := os.Stat(markerFile); err == nil {
 		return nil

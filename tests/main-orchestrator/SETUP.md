@@ -25,6 +25,7 @@ user <--questions-- implement agent <--yields-- orchestrator -> resume
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
     "errors"
     "fmt"
     "os"
@@ -38,7 +39,7 @@ import (
     "github.com/xhd2015/doctest/libdoc/testtree"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     tmp := t.TempDir()
 
     fakeCodex, err := exec.LookPath("fake-codex")
@@ -47,7 +48,7 @@ func Setup(t *testing.T, req *Request) error {
         return nil
     }
 
-    doctestBin := testbin.Ensure(t, filepath.Join(DOCTEST_ROOT, ".."))
+    doctestBin := testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, ".."))
 
     yieldPQ := filepath.Join(tmp, "yield-pending-questions")
     if out, err := exec.Command("cp", doctestBin, yieldPQ).CombinedOutput(); err != nil {

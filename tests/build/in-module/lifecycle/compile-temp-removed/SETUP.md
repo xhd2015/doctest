@@ -19,10 +19,12 @@ doctest test --gen-dir <module>/_gen -> temp compile -> remove temp -> keep dump
 3. Verify no `.doctest_run_*` under `moduleRoot` and dump still exists.
 
 ```go
-import "testing"
-
-func Setup(t *testing.T, req *Request) error {
-	createInternalModuleProject(t)
+import (
+"testing"
+"github.com/xhd2015/doctest/session"
+)
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	createInternalModuleProject(t, d)
 	setupModuleEnv(t, req)
 	req.Args = append(req.Args, testDir, "--gen-dir", genDir, "-v")
 	return nil

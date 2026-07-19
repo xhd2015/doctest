@@ -86,12 +86,33 @@ func (c colorStyle) gray(s string) string {
 	return ansiGray + s + ansiReset
 }
 
+// PhaseTiming is a wall-clock span for one pipeline step inside a tree run
+// (discover / materialize / generate / go_test / post).
+type PhaseTiming struct {
+	Name      string // e.g. "discover", "generate", "go_test"
+	ElapsedNs int64
+}
+
+// LeafTiming is attributed wall time for one leaf when available:
+// multi-package trees use go test -json package Elapsed; unified suite trees
+// use subtest Elapsed under TestDoctestSuite/<leafPath>. ElapsedNs may be 0
+// when unmappable.
+type LeafTiming struct {
+	Path      string
+	ElapsedNs int64
+	Cached    bool
+}
+
 type TestRunStats struct {
 	Passed         int
 	Total          int
 	Elapsed        time.Duration
 	NoTestsChanged bool
 	Skipped        []core.SkippedCase
+	// Phases are filled by TestWithStats when the tree actually runs.
+	Phases []PhaseTiming
+	// LeafTimings map leaf paths to go-test package elapsed when available.
+	LeafTimings []LeafTiming
 }
 
 func formatDisplayDuration(d time.Duration) string {

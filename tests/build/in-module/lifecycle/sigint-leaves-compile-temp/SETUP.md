@@ -23,10 +23,12 @@ signal handler calls ctx.Close() before exit so in-module compile temp is not le
 3. Verify no `.doctest_run_*` remains under `moduleRoot`.
 
 ```go
-import "testing"
-
-func Setup(t *testing.T, req *Request) error {
-	createInternalModuleProjectWithLeaves(t)
+import (
+"testing"
+"github.com/xhd2015/doctest/session"
+)
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	createInternalModuleProjectWithLeaves(t, d)
 	_ = genDir
 	setupModuleEnv(t, req)
 	req.InterruptDuringWriteCases = true

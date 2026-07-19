@@ -32,6 +32,7 @@ create session -> run sub-agent -> events recorded -> yield questions -> resume
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
     "encoding/json"
     "fmt"
     "os"
@@ -44,11 +45,11 @@ import (
 	"github.com/xhd2015/doctest/libdoc/testbin"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     req.Timeout = 60 * time.Second
 
     tmp := t.TempDir()
-    doctestBin := testbin.Ensure(t, filepath.Join(DOCTEST_ROOT, ".."))
+    doctestBin := testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, ".."))
 
     fakeCodex, err := exec.LookPath("fake-codex")
     if err != nil {

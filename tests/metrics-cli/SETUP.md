@@ -37,6 +37,7 @@ cwd (git origin) -> project_id
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -50,12 +51,12 @@ import (
 	"github.com/xhd2015/doctest/libdoc/testbin"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	if req.Timeout == 0 {
 		req.Timeout = 45 * time.Second
 	}
 	if req.Bin == "" {
-		req.Bin = testbin.Ensure(t, filepath.Join(DOCTEST_ROOT, "..", ".."))
+		req.Bin = testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, "..", ".."))
 	}
 	return nil
 }

@@ -19,14 +19,15 @@ doctest test <tests> --gen-dir <outside> -> .doctest_run_* under moduleRoot -> d
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
 	"path/filepath"
 	"testing"
 )
 
 var outsideGenDir string
 
-func Setup(t *testing.T, req *Request) error {
-	createInternalModuleProject(t)
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	createInternalModuleProject(t, d)
 	_ = genDir
 	outsideGenDir = filepath.Join(t.TempDir(), "outside_dump")
 	setupModuleEnv(t, req)

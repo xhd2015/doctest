@@ -19,12 +19,13 @@ doctest test --gen-dir _gen -> temp compile -> dump copy without go.mod
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
 	"path/filepath"
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
-	createInternalAssertProject(t)
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	createInternalAssertProject(t, d)
 	setupModuleEnv(t, req)
 	req.Args = []string{"test", testDir, "--gen-dir", filepath.Join(moduleRoot, "_gen"), "-v"}
 	return nil

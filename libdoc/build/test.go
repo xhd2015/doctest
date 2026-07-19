@@ -29,24 +29,28 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	}
 
 	absRoot, _ := filepath.Abs(dir)
+	var phases []PhaseTiming
+	track := func(name string, since time.Time) {
+		phases = append(phases, PhaseTiming{Name: name, ElapsedNs: time.Since(since).Nanoseconds()})
+	}
 
-	var allCases, cases []core.TreeCase
-	var err error
-
-	allCases, err = core.DiscoverTreeCases(dir)
+	// --- discover ---
+	tDiscover := time.Now()
+	allCases, err := core.DiscoverTreeCases(dir)
 	if err != nil {
-		return TestRunStats{}, err
+		return TestRunStats{Phases: phases}, err
 	}
 	if opts.SubDir != "" {
 		allCases = core.FilterBySubDir(allCases, dir, opts.SubDir)
 	}
 
 	var changedInfo core.ChangedRunInfo
-	cases = allCases
+	cases := allCases
 	if opts.ChangedOnly {
 		gitRoot, changedFiles, err := core.ChangedGitFiles(dir)
 		if err != nil {
-			return TestRunStats{}, err
+			track("discover", tDiscover)
+			return TestRunStats{Phases: phases}, err
 		}
 		changedInfo = core.ChangedRunInfoForTree(allCases, dir, gitRoot, changedFiles)
 		cases = core.FilterByChangedFiles(allCases, dir, gitRoot, changedFiles)
@@ -54,7 +58,8 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 			fmt.Fprintln(w, core.FormatDoctestAnnouncement(pathfmt.Short(dir), changedInfo, true, 0))
 		}
 		if len(cases) == 0 {
-			return TestRunStats{NoTestsChanged: true}, nil
+			track("discover", tDiscover)
+			return TestRunStats{NoTestsChanged: true, Phases: phases}, nil
 		}
 	}
 
@@ -62,25 +67,39 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	for i := range skipped {
 		skipped[i].DisplayPath = SkippedDisplayPath(dir, skipped[i].Path)
 	}
+	track("discover", tDiscover)
 	if len(cases) == 0 {
 		if len(skipped) > 0 {
-			stats := TestRunStats{Skipped: skipped}
+			stats := TestRunStats{Skipped: skipped, Phases: phases}
 			if !opts.SuppressResultSummary {
 				PrintSkippedSummary(skipped)
 			}
 			return stats, nil
 		}
-		return TestRunStats{}, fmt.Errorf("%s: no runnable test cases found", dir)
+		return TestRunStats{Phases: phases}, fmt.Errorf("%s: no runnable test cases found", dir)
 	}
 
 	stats := TestRunStats{Total: len(cases), Skipped: skipped}
 
+	// --- materialize ---
+	tMat := time.Now()
 	ctx, err := newGenerateContext(dir, opts, cases, w, false, opts.Verbose)
 	if err != nil {
-		return TestRunStats{}, err
+		stats.Phases = phases
+		return stats, err
 	}
+	track("materialize", tMat)
 	ctx.installInterruptCleanup()
 	defer ctx.Close()
+
+	// Force ref when unified is set (also done at parse time for CLI).
+	if opts.ExperimentUnifiedPackagePerDoctestTree {
+		opts.ExperimentRefInsteadOfInline = true
+		fmt.Fprintln(w, "doctest: experiment: unified-package-per-doctest-tree")
+	}
+	if opts.ExperimentRefInsteadOfInline {
+		fmt.Fprintln(w, "doctest: experiment: ref-instead-of-inline")
+	}
 
 	if opts.Verbose {
 		ctx.announceRoots()
@@ -90,30 +109,48 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 			fmt.Fprintf(w, "doctest: %s\n\n", pathfmt.Short(dir))
 		}
 		if _, err := core.DiscoverTreeCasesVerbose(dir, w); err != nil {
-			return TestRunStats{}, err
+			stats.Phases = phases
+			return stats, err
 		}
 		fmt.Fprintf(w, "─── %d test cases\n\n", len(cases))
 	} else if !opts.ChangedOnly {
 		fmt.Fprintf(w, "doctest: %s (%d tests)\n", pathfmt.Short(dir), len(cases))
 	}
 
+	// --- generate ---
+	tGen := time.Now()
 	if err := ctx.writeCases(cases, false); err != nil {
-		return TestRunStats{}, err
+		track("generate", tGen)
+		stats.Phases = phases
+		return stats, err
 	}
 
 	runDir, isSingleLeaf := ctx.runDir(absRoot, opts, cases)
 
 	var packageArgs []string
-	if isSingleLeaf {
+	if ctx.unifiedMode {
+		// Always suite-only packaging (even for a single leaf).
+		runDir = ctx.scopedMultiRunDir(absRoot)
+		var pkgErr error
+		packageArgs, pkgErr = ctx.packageArgsForCases(runDir, absRoot, cases)
+		if pkgErr != nil {
+			track("generate", tGen)
+			stats.Phases = phases
+			return stats, pkgErr
+		}
+	} else if isSingleLeaf {
 		packageArgs = []string{"."}
 	} else {
 		runDir = ctx.scopedMultiRunDir(absRoot)
 		var pkgErr error
 		packageArgs, pkgErr = ctx.packageArgsForCases(runDir, absRoot, cases)
 		if pkgErr != nil {
-			return TestRunStats{}, pkgErr
+			track("generate", tGen)
+			stats.Phases = phases
+			return stats, pkgErr
 		}
 	}
+	track("generate", tGen)
 
 	// Flags only — packages are appended per go-test invocation (and per shard).
 	flagArgs := []string{"test", "-mod=mod"}
@@ -172,6 +209,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	}
 
 	sessionID := core.DoctestSessionIDForRun()
+	goCache := opts.GoCache
 
 	stdout := opts.Stdout
 	if stdout == nil {
@@ -182,8 +220,10 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	// are listed on one invocation. Run packages one-at-a-time when those flags are set.
 	singlePkgInvocations := profileFlagsNeedSinglePackage(opts) && len(packageArgs) > 1
 
+	// --- go_test ---
+	tGo := time.Now()
+	var goTestElapsed time.Duration
 	if opts.Verbose {
-		start := time.Now()
 		var out []byte
 		var err error
 		if singlePkgInvocations {
@@ -191,7 +231,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 				execArgs := append(append([]string(nil), flagArgs...), pkg)
 				goTestCmd := exec.Command("go", execArgs...)
 				goTestCmd.Dir = runDir
-				goTestCmd.Env = append(os.Environ(), core.DoctestSessionIDEnv+"="+sessionID)
+				goTestCmd.Env = goTestEnv(sessionID, goCache)
 				pkgOut, pkgErr := goTestCmd.CombinedOutput()
 				out = append(out, pkgOut...)
 				if pkgErr != nil && err == nil {
@@ -202,37 +242,48 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 			execArgs := append(append([]string(nil), flagArgs...), packageArgs...)
 			goTestCmd := exec.Command("go", execArgs...)
 			goTestCmd.Dir = runDir
-			goTestCmd.Env = append(os.Environ(), core.DoctestSessionIDEnv+"="+sessionID)
+			goTestCmd.Env = goTestEnv(sessionID, goCache)
 			out, err = goTestCmd.CombinedOutput()
 		}
-		elapsed := time.Since(start)
+		goTestElapsed = time.Since(tGo)
+		track("go_test", tGo)
 		stdout.Write(out)
 		stats.Passed = passedCases(stats.Total, countFailuresFromGoTestOutput(out))
+		// Verbose path: no package Elapsed; single-leaf gets full go_test wall.
+		if len(cases) == 1 {
+			stats.LeafTimings = []LeafTiming{{Path: cases[0].Path, ElapsedNs: goTestElapsed.Nanoseconds()}}
+		}
 		if !opts.SuppressResultSummary {
-			stats.Elapsed = elapsed
+			stats.Elapsed = goTestElapsed
 			PrintSkippedSummary(stats.Skipped)
 			PrintResultSummary(opts, stats)
 		}
 		if err != nil {
+			stats.Phases = phases
 			return stats, fmt.Errorf("go test failed: %v", err)
 		}
 	} else {
-		start := time.Now()
 		style := newColorStyle(opts.Color, stdout)
 		var result goTestJSONResult
 		var err error
 		if singlePkgInvocations {
-			result, err = runGoTestJSONPerPackage(runDir, flagArgs, packageArgs, sessionID, stdout, style)
+			result, err = runGoTestJSONPerPackage(runDir, flagArgs, packageArgs, sessionID, goCache, stdout, style)
 		} else {
-			result, err = runGoTestJSONShards(runDir, flagArgs, packageArgs, sessionID, stdout, style)
+			result, err = runGoTestJSONShards(runDir, flagArgs, packageArgs, sessionID, goCache, stdout, style)
 		}
-		elapsed := time.Since(start)
+		goTestElapsed = time.Since(tGo)
+		track("go_test", tGo)
 		stats.Passed = passedCases(stats.Total, result.failCount)
+		if ctx.unifiedMode {
+			stats.LeafTimings = leafTimingsFromSubtests(cases, result, goTestElapsed)
+		} else {
+			stats.LeafTimings = leafTimingsFromPackages(cases, packageArgs, isSingleLeaf, result, goTestElapsed)
+		}
 
-		fmt.Fprintln(stdout, formatSummary(style, result.passCount+result.failCount, result.passCount, result.failCount, result.cachedCount, elapsed))
+		fmt.Fprintln(stdout, formatSummary(style, result.passCount+result.failCount, result.passCount, result.failCount, result.cachedCount, goTestElapsed))
 
 		if !opts.SuppressResultSummary {
-			stats.Elapsed = elapsed
+			stats.Elapsed = goTestElapsed
 			PrintSkippedSummary(stats.Skipped)
 			PrintResultSummary(opts, stats)
 		}
@@ -248,26 +299,198 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		}
 
 		if err != nil {
+			stats.Phases = phases
 			return stats, fmt.Errorf("go test: %w", err)
 		}
 	}
 
+	tPost := time.Now()
 	if err := ctx.syncDump(); err != nil {
+		track("post", tPost)
+		stats.Phases = phases
 		return stats, err
+	}
+	if d := time.Since(tPost); d > time.Millisecond {
+		track("post", tPost)
 	}
 	if !opts.Verbose {
 		fmt.Fprintln(w)
 	}
+	stats.Phases = phases
 	return stats, nil
 }
 
+// UnifiedSuiteTestName is the go test function that iterates registered leaves.
+const UnifiedSuiteTestName = "TestDoctestSuite"
+
+// leafTimingsFromSubtests attributes go test -json subtest Elapsed under the
+// unified suite (t.Run(leafPath, …) → TestDoctestSuite/<leafPath>).
+// When unmappable, elapsed stays 0 (do not clone suite wall onto every leaf).
+func leafTimingsFromSubtests(cases []core.TreeCase, result goTestJSONResult, goTestWall time.Duration) []LeafTiming {
+	out := make([]LeafTiming, 0, len(cases))
+	byRel := map[string]int64{}
+	prefix := UnifiedSuiteTestName + "/"
+	for test, ns := range result.testElapsedNs {
+		if !strings.HasPrefix(test, prefix) {
+			continue
+		}
+		rel := test[len(prefix):]
+		if rel == "" {
+			continue
+		}
+		// Prefer the deepest subtest elapsed (leaf path); keep max if duplicates.
+		if ns > byRel[rel] {
+			byRel[rel] = ns
+		}
+	}
+	// Single-leaf unified: if only package elapsed exists, fall back once.
+	if len(cases) == 1 && len(byRel) == 0 {
+		var ns int64
+		for _, e := range result.pkgElapsedNs {
+			if e > ns {
+				ns = e
+			}
+		}
+		if ns == 0 {
+			ns = goTestWall.Nanoseconds()
+		}
+		return []LeafTiming{{Path: cases[0].Path, ElapsedNs: ns}}
+	}
+	for _, tc := range cases {
+		lt := LeafTiming{Path: tc.Path}
+		slash := filepath.ToSlash(tc.Path)
+		if ns, ok := byRel[slash]; ok {
+			lt.ElapsedNs = ns
+		} else if ns, ok := byRel[tc.Path]; ok {
+			lt.ElapsedNs = ns
+		} else {
+			// Match by suffix (absolute vs relative discovery paths).
+			for rel, ns := range byRel {
+				if slash == rel || strings.HasSuffix(slash, "/"+rel) || strings.HasSuffix(rel, "/"+slash) {
+					lt.ElapsedNs = ns
+					break
+				}
+			}
+		}
+		out = append(out, lt)
+	}
+	return out
+}
+
+// leafTimingsFromPackages attributes go test -json package Elapsed to leaves.
+// When unmappable, multi-leaf elapsed stays 0 (do not clone tree wall onto every leaf).
+func leafTimingsFromPackages(cases []core.TreeCase, packageArgs []string, isSingleLeaf bool, result goTestJSONResult, goTestWall time.Duration) []LeafTiming {
+	out := make([]LeafTiming, 0, len(cases))
+	if isSingleLeaf && len(cases) == 1 {
+		cached := false
+		for _, c := range result.pkgCached {
+			if c {
+				cached = true
+				break
+			}
+		}
+		// Prefer package elapsed when present.
+		var ns int64
+		for _, e := range result.pkgElapsedNs {
+			if e > ns {
+				ns = e
+			}
+		}
+		if ns == 0 {
+			ns = goTestWall.Nanoseconds()
+		}
+		return []LeafTiming{{Path: cases[0].Path, ElapsedNs: ns, Cached: cached}}
+	}
+	for _, tc := range cases {
+		lt := LeafTiming{Path: tc.Path}
+		slash := filepath.ToSlash(tc.Path)
+		for pkg, ns := range result.pkgElapsedNs {
+			if packageMatchesLeaf(pkg, slash) {
+				lt.ElapsedNs = ns
+				lt.Cached = result.pkgCached[pkg]
+				break
+			}
+		}
+		// Fallback: packageArgs "./rel" vs leaf path suffix.
+		if lt.ElapsedNs == 0 {
+			for _, arg := range packageArgs {
+				rel := strings.TrimPrefix(filepath.ToSlash(arg), "./")
+				if rel == slash || strings.HasSuffix(rel, "/"+slash) || strings.HasSuffix(slash, "/"+rel) || rel == filepath.Base(slash) {
+					// try match any pkg ending with rel
+					for pkg, ns := range result.pkgElapsedNs {
+						if strings.HasSuffix(filepath.ToSlash(pkg), "/"+rel) || strings.HasSuffix(filepath.ToSlash(pkg), rel) {
+							lt.ElapsedNs = ns
+							lt.Cached = result.pkgCached[pkg]
+							break
+						}
+					}
+				}
+				if lt.ElapsedNs > 0 {
+					break
+				}
+			}
+		}
+		out = append(out, lt)
+	}
+	return out
+}
+
+func packageMatchesLeaf(pkg, leafSlash string) bool {
+	p := filepath.ToSlash(pkg)
+	if p == leafSlash {
+		return true
+	}
+	if strings.HasSuffix(p, "/"+leafSlash) {
+		return true
+	}
+	// last path segment(s)
+	base := filepath.Base(leafSlash)
+	return strings.HasSuffix(p, "/"+base) && strings.Contains(p, leafSlash)
+}
+
 type goTestJSONResult struct {
-	passCount   int
-	failCount   int
-	cachedCount int
-	failLines   []string
-	detailLines []string
-	stderrData  []byte
+	passCount     int
+	failCount     int
+	cachedCount   int
+	failLines     []string
+	detailLines   []string
+	stderrData    []byte
+	pkgElapsedNs  map[string]int64 // import path -> package-level Elapsed from -json
+	pkgCached     map[string]bool
+	testElapsedNs map[string]int64 // full test name (incl. subtests) -> Elapsed
+}
+
+func mergeGoTestJSONResult(dst *goTestJSONResult, src goTestJSONResult) {
+	dst.passCount += src.passCount
+	dst.failCount += src.failCount
+	dst.cachedCount += src.cachedCount
+	dst.failLines = append(dst.failLines, src.failLines...)
+	dst.detailLines = append(dst.detailLines, src.detailLines...)
+	dst.stderrData = append(dst.stderrData, src.stderrData...)
+	if src.pkgElapsedNs != nil {
+		if dst.pkgElapsedNs == nil {
+			dst.pkgElapsedNs = make(map[string]int64)
+		}
+		for k, v := range src.pkgElapsedNs {
+			dst.pkgElapsedNs[k] = v
+		}
+	}
+	if src.pkgCached != nil {
+		if dst.pkgCached == nil {
+			dst.pkgCached = make(map[string]bool)
+		}
+		for k, v := range src.pkgCached {
+			dst.pkgCached[k] = v
+		}
+	}
+	if src.testElapsedNs != nil {
+		if dst.testElapsedNs == nil {
+			dst.testElapsedNs = make(map[string]int64)
+		}
+		for k, v := range src.testElapsedNs {
+			dst.testElapsedNs[k] = v
+		}
+	}
 }
 
 // packageTestShards splits package paths across workers for concurrent go test
@@ -307,20 +530,25 @@ func profileFlagsNeedSinglePackage(opts core.Options) bool {
 		opts.OutputDir != ""
 }
 
+// goTestEnv builds the environment for a child `go test` process, including
+// DOCTEST_SESSION_ID and an optional isolated GOCACHE (cold-cache mode).
+func goTestEnv(sessionID, goCache string) []string {
+	env := append(os.Environ(), core.DoctestSessionIDEnv+"="+sessionID)
+	if goCache != "" {
+		env = append(env, "GOCACHE="+goCache)
+	}
+	return env
+}
+
 // runGoTestJSONPerPackage runs one go test process per package (serial) so
 // profile flags that go rejects with multi-package lists still work.
-func runGoTestJSONPerPackage(runDir string, flagArgs, packageArgs []string, sessionID string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
+func runGoTestJSONPerPackage(runDir string, flagArgs, packageArgs []string, sessionID, goCache string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
 	var merged goTestJSONResult
 	var firstErr error
 	for _, pkg := range packageArgs {
 		args := append(append([]string(nil), flagArgs...), pkg)
-		res, err := runGoTestJSONOnce(runDir, args, sessionID, stdout, style)
-		merged.passCount += res.passCount
-		merged.failCount += res.failCount
-		merged.cachedCount += res.cachedCount
-		merged.failLines = append(merged.failLines, res.failLines...)
-		merged.detailLines = append(merged.detailLines, res.detailLines...)
-		merged.stderrData = append(merged.stderrData, res.stderrData...)
+		res, err := runGoTestJSONOnce(runDir, args, sessionID, goCache, stdout, style)
+		mergeGoTestJSONResult(&merged, res)
 		if err != nil && firstErr == nil {
 			firstErr = err
 		}
@@ -332,7 +560,34 @@ func runGoTestJSONPerPackage(runDir string, flagArgs, packageArgs []string, sess
 // Nested self-test subprocesses have their own pool (separate process).
 var goTestSlots = make(chan struct{}, 4)
 
-func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionID string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
+// goTestModRootMu serializes go test under the same module root so parallel
+// ./... trees sharing one gen root (e.g. cold mapping-gen-cold) do not race.
+var goTestModRootMu sync.Map // absModDir -> *sync.Mutex
+
+func lockGoTestModule(runDir string) func() {
+	modDir := runDir
+	for {
+		if _, err := os.Stat(filepath.Join(modDir, "go.mod")); err == nil {
+			break
+		}
+		parent := filepath.Dir(modDir)
+		if parent == modDir {
+			modDir = runDir
+			break
+		}
+		modDir = parent
+	}
+	abs, err := filepath.Abs(modDir)
+	if err != nil {
+		abs = modDir
+	}
+	v, _ := goTestModRootMu.LoadOrStore(abs, &sync.Mutex{})
+	mu := v.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
+}
+
+func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionID, goCache string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
 	// Single go test process per tree. Package sharding multiplies nested
 	// self-test fan-out and has raced go.mod; wall cut is tree concurrency +
 	// heavy/light scheduling in path_resolve.
@@ -340,7 +595,7 @@ func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionI
 	shards := packageTestShards(packageArgs, workers)
 	if len(shards) <= 1 {
 		args := append(append([]string(nil), flagArgs...), packageArgs...)
-		return runGoTestJSONOnce(runDir, args, sessionID, stdout, style)
+		return runGoTestJSONOnce(runDir, args, sessionID, goCache, stdout, style)
 	}
 
 	// Multi-shard: readonly module mode so concurrent go tests share genDir safely.
@@ -366,15 +621,10 @@ func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionI
 			defer wg.Done()
 			args := append(append([]string(nil), shardFlags...), shard...)
 			// Locked stdout keeps progress dots incremental and non-interleaved by byte.
-			res, err := runGoTestJSONOnce(runDir, args, sessionID, &lockedWriter{w: stdout, mu: &mu}, style)
+			res, err := runGoTestJSONOnce(runDir, args, sessionID, goCache, &lockedWriter{w: stdout, mu: &mu}, style)
 			mu.Lock()
 			defer mu.Unlock()
-			merged.passCount += res.passCount
-			merged.failCount += res.failCount
-			merged.cachedCount += res.cachedCount
-			merged.failLines = append(merged.failLines, res.failLines...)
-			merged.detailLines = append(merged.detailLines, res.detailLines...)
-			merged.stderrData = append(merged.stderrData, res.stderrData...)
+			mergeGoTestJSONResult(&merged, res)
 			if err != nil && firstErr == nil {
 				firstErr = err
 			}
@@ -395,14 +645,17 @@ func (l *lockedWriter) Write(p []byte) (int, error) {
 	return l.w.Write(p)
 }
 
-func runGoTestJSONOnce(runDir string, testArgs []string, sessionID string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
+func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
 	goTestSlots <- struct{}{}
 	defer func() { <-goTestSlots }()
+
+	unlockMod := lockGoTestModule(runDir)
+	defer unlockMod()
 
 	execArgs := append(append([]string(nil), testArgs...), "-json")
 	goTestCmd := exec.Command("go", execArgs...)
 	goTestCmd.Dir = runDir
-	goTestCmd.Env = append(os.Environ(), core.DoctestSessionIDEnv+"="+sessionID)
+	goTestCmd.Env = goTestEnv(sessionID, goCache)
 
 	stdoutPipe, err := goTestCmd.StdoutPipe()
 	if err != nil {
@@ -417,15 +670,19 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID string, stdou
 	}
 
 	var res goTestJSONResult
+	res.pkgElapsedNs = make(map[string]int64)
+	res.pkgCached = make(map[string]bool)
+	res.testElapsedNs = make(map[string]int64)
 	var stdoutWg sync.WaitGroup
 	stdoutWg.Add(1)
 	go func() {
 		defer stdoutWg.Done()
 		type goTestEvent struct {
-			Action  string `json:"Action"`
-			Package string `json:"Package"`
-			Test    string `json:"Test"`
-			Output  string `json:"Output"`
+			Action  string  `json:"Action"`
+			Package string  `json:"Package"`
+			Test    string  `json:"Test"`
+			Output  string  `json:"Output"`
+			Elapsed float64 `json:"Elapsed"`
 		}
 		packageCached := make(map[string]bool)
 		failedTests := make(map[string]bool)
@@ -439,6 +696,28 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID string, stdou
 			if buf := testOutputs[key]; len(buf) > 0 {
 				res.detailLines = append(res.detailLines, buf...)
 				delete(testOutputs, key)
+			}
+		}
+		recordPkg := func(pkg string, elapsed float64, cached bool) {
+			if pkg == "" {
+				return
+			}
+			if elapsed > 0 {
+				res.pkgElapsedNs[pkg] = int64(elapsed * float64(time.Second))
+			}
+			if cached {
+				res.pkgCached[pkg] = true
+				packageCached[pkg] = true
+			}
+		}
+		recordTest := func(test string, elapsed float64) {
+			if test == "" {
+				return
+			}
+			// Keep max elapsed if the same name appears more than once.
+			ns := int64(elapsed * float64(time.Second))
+			if ns > res.testElapsedNs[test] {
+				res.testElapsedNs[test] = ns
 			}
 		}
 		decoder := json.NewDecoder(stdoutPipe)
@@ -480,6 +759,7 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID string, stdou
 				}
 			case "pass":
 				if ev.Test != "" {
+					recordTest(ev.Test, ev.Elapsed)
 					delete(testOutputs, testKey(ev.Package, ev.Test))
 					continue
 				}
@@ -487,14 +767,17 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID string, stdou
 				if packageCached[ev.Package] {
 					res.cachedCount++
 				}
+				recordPkg(ev.Package, ev.Elapsed, packageCached[ev.Package])
 				stdout.Write([]byte("."))
 			case "fail":
 				if ev.Test != "" {
+					recordTest(ev.Test, ev.Elapsed)
 					key := testKey(ev.Package, ev.Test)
 					flushTestOutput(key)
 					continue
 				}
 				res.failCount++
+				recordPkg(ev.Package, ev.Elapsed, false)
 				fmt.Fprint(stdout, style.red("."))
 			}
 		}

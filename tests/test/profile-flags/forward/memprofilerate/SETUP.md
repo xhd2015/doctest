@@ -15,19 +15,20 @@ doctest test -v -memprofilerate 0 -memprofile <abs> <dir>
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
-	dir := filepath.Join(os.TempDir(), "doctest-profile-flags-"+DOCTEST_SESSION_ID, "memrate")
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	dir := filepath.Join(os.TempDir(), "doctest-profile-flags-"+d.DOCTEST_SESSION_ID, "memrate")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	absMem := filepath.Join(dir, "mem.out")
 
-	exampleDir := filepath.Join(DOCTEST_ROOT, "testdata", "basic-request-runner")
+	exampleDir := filepath.Join(d.DOCTEST_ROOT, "testdata", "basic-request-runner")
 	req.Args = []string{
 		"test", "-v",
 		"-memprofilerate", "0",

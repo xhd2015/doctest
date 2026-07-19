@@ -42,6 +42,7 @@ FormatDefaultSuiteSlowWarning phrases ⊆ skill review-perf --show
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
 	"path/filepath"
 	"testing"
 	"time"
@@ -49,13 +50,13 @@ import (
 	"github.com/xhd2015/doctest/libdoc/testbin"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	if req.Timeout == 0 {
 		req.Timeout = 90 * time.Second
 	}
 	// Smoke analyze + help + skill need the CLI binary.
 	if req.Bin == "" {
-		req.Bin = testbin.Ensure(t, filepath.Join(DOCTEST_ROOT, "..", ".."))
+		req.Bin = testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, "..", ".."))
 	}
 	return nil
 }

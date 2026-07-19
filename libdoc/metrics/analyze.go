@@ -38,6 +38,46 @@ type LeafRow struct {
 	Cached    bool     `json:"cached,omitempty"`
 }
 
+// PhaseRow is one pipeline phase event (type=phase).
+type PhaseRow struct {
+	Scope      string `json:"scope"` // suite | tree | nested
+	Phase      string `json:"phase"` // discover | materialize | generate | go_test | …
+	Tree       string `json:"tree,omitempty"`
+	ParentLeaf string `json:"parent_leaf,omitempty"` // set when scope=nested
+	ElapsedNs  int64  `json:"elapsed_ns"`
+}
+
+// NestedPhaseRow ranks nested re-entry cost (scope=nested) by parent leaf.
+type NestedPhaseRow struct {
+	ParentLeaf string `json:"parent_leaf"`
+	Phase      string `json:"phase"`
+	ElapsedNs  int64  `json:"elapsed_ns"`
+	Tree       string `json:"tree,omitempty"`
+}
+
+// PhaseTotals aggregates phase wall times (sum of tree walls; may exceed suite wall when parallel).
+type PhaseTotals struct {
+	ByPhase map[string]int64 `json:"by_phase"` // phase name -> summed elapsed_ns
+	// Ordered known phases first for stable display.
+	Order []string `json:"order,omitempty"`
+}
+
+// PhaseAnalysis is the result of ExtractPhases + totals for one run.
+type PhaseAnalysis struct {
+	RunID     string         `json:"run_id"`
+	WallNs    int64          `json:"wall_ns"` // suite wall from run_end when present
+	Phases    []PhaseRow     `json:"phases"`
+	Totals    PhaseTotals    `json:"totals"`
+	TopTrees  []PhaseTreeRow `json:"top_trees,omitempty"` // by go_test
+}
+
+// PhaseTreeRow ranks trees by one phase (typically go_test).
+type PhaseTreeRow struct {
+	Tree      string `json:"tree"`
+	ElapsedNs int64  `json:"elapsed_ns"`
+	Phase     string `json:"phase"`
+}
+
 // RunSummary is a human/machine summary of one run file.
 type RunSummary struct {
 	RunID         string    `json:"run_id"`
@@ -320,6 +360,166 @@ func SummarizeRun(rf RunFile, events []Event) RunSummary {
 	s.LeafCount = len(leaves)
 	s.Slowest = RankLeaves(leaves, false, 5)
 	return s
+}
+
+// knownPhaseOrder is display order for common pipeline phases.
+var knownPhaseOrder = []string{
+	"cold_cache", "resolve", "discover", "materialize", "generate", "go_test", "post",
+}
+
+// ExtractPhases collects type=phase events.
+func ExtractPhases(events []Event) []PhaseRow {
+	var rows []PhaseRow
+	for _, ev := range events {
+		if eventType(ev) != "phase" {
+			continue
+		}
+		rows = append(rows, PhaseRow{
+			Scope:      eventString(ev, "scope"),
+			Phase:      eventString(ev, "phase"),
+			Tree:       eventString(ev, "tree"),
+			ParentLeaf: eventString(ev, "parent_leaf"),
+			ElapsedNs:  eventInt64(ev, "elapsed_ns"),
+		})
+	}
+	return rows
+}
+
+// ExtractNestedPhases returns only scope=nested phase rows.
+func ExtractNestedPhases(events []Event) []PhaseRow {
+	var out []PhaseRow
+	for _, r := range ExtractPhases(events) {
+		if r.Scope == "nested" {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// RankNestedByParentLeaf sums nested phase elapsed per parent_leaf (all nested
+// phases), slowest first. limit n (0 = no limit). Non-nested rows are ignored.
+func RankNestedByParentLeaf(rows []PhaseRow, n int) []NestedPhaseRow {
+	by := map[string]int64{}
+	for _, r := range rows {
+		if r.Scope != "nested" {
+			continue
+		}
+		key := r.ParentLeaf
+		if key == "" {
+			key = "(unknown)"
+		}
+		by[key] += r.ElapsedNs
+	}
+	var out []NestedPhaseRow
+	for leaf, ns := range by {
+		out = append(out, NestedPhaseRow{ParentLeaf: leaf, Phase: "all", ElapsedNs: ns})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].ElapsedNs == out[j].ElapsedNs {
+			return out[i].ParentLeaf < out[j].ParentLeaf
+		}
+		return out[i].ElapsedNs > out[j].ElapsedNs
+	})
+	if n > 0 && len(out) > n {
+		out = out[:n]
+	}
+	return out
+}
+
+// RankNestedGoTest ranks nested go_test phases by elapsed, slowest first.
+func RankNestedGoTest(rows []PhaseRow, n int) []NestedPhaseRow {
+	var out []NestedPhaseRow
+	for _, r := range rows {
+		if r.Scope != "nested" || r.Phase != "go_test" {
+			continue
+		}
+		out = append(out, NestedPhaseRow{
+			ParentLeaf: r.ParentLeaf,
+			Phase:      r.Phase,
+			ElapsedNs:  r.ElapsedNs,
+			Tree:       r.Tree,
+		})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].ElapsedNs == out[j].ElapsedNs {
+			return out[i].ParentLeaf < out[j].ParentLeaf
+		}
+		return out[i].ElapsedNs > out[j].ElapsedNs
+	})
+	if n > 0 && len(out) > n {
+		out = out[:n]
+	}
+	return out
+}
+
+// SumPhases sums elapsed_ns by phase name (all scopes).
+func SumPhases(rows []PhaseRow) PhaseTotals {
+	by := map[string]int64{}
+	seen := map[string]bool{}
+	for _, r := range rows {
+		if r.Phase == "" {
+			continue
+		}
+		by[r.Phase] += r.ElapsedNs
+		seen[r.Phase] = true
+	}
+	var order []string
+	for _, p := range knownPhaseOrder {
+		if seen[p] {
+			order = append(order, p)
+			delete(seen, p)
+		}
+	}
+	var rest []string
+	for p := range seen {
+		rest = append(rest, p)
+	}
+	sort.Strings(rest)
+	order = append(order, rest...)
+	return PhaseTotals{ByPhase: by, Order: order}
+}
+
+// TopTreesByPhase ranks trees by summed elapsed for a given phase name.
+func TopTreesByPhase(rows []PhaseRow, phase string, n int) []PhaseTreeRow {
+	byTree := map[string]int64{}
+	for _, r := range rows {
+		if r.Phase != phase || r.Tree == "" {
+			continue
+		}
+		byTree[r.Tree] += r.ElapsedNs
+	}
+	var out []PhaseTreeRow
+	for tree, ns := range byTree {
+		out = append(out, PhaseTreeRow{Tree: tree, ElapsedNs: ns, Phase: phase})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].ElapsedNs == out[j].ElapsedNs {
+			return out[i].Tree < out[j].Tree
+		}
+		return out[i].ElapsedNs > out[j].ElapsedNs
+	})
+	if n > 0 && len(out) > n {
+		out = out[:n]
+	}
+	return out
+}
+
+// AnalyzePhases builds a full phase view for one run file.
+func AnalyzePhases(rf RunFile, events []Event) PhaseAnalysis {
+	rows := ExtractPhases(events)
+	a := PhaseAnalysis{
+		RunID:  rf.ID,
+		Phases: rows,
+		Totals: SumPhases(rows),
+	}
+	for _, ev := range events {
+		if eventType(ev) == "run_end" {
+			a.WallNs = eventInt64(ev, "wall_ns")
+			break
+		}
+	}
+	a.TopTrees = TopTreesByPhase(rows, "go_test", 10)
+	return a
 }
 
 // SelectRun chooses a run file given --run id ("last" or empty => newest).

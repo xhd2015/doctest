@@ -5,9 +5,12 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"path/filepath"
 	"sort"
 	"strings"
 )
+
+const sessionImportPath = "github.com/xhd2015/doctest/session"
 
 func AssembleTestSource(tc TreeCase, compileOnly bool, pkgName string, docTestRoot string) (string, error) {
 	var buf strings.Builder
@@ -16,7 +19,7 @@ func AssembleTestSource(tc TreeCase, compileOnly bool, pkgName string, docTestRo
 	buf.WriteString("\n\n")
 
 	imports := collectImports(tc.SetupFiles, tc.AssertFile.GoBlock)
-	for _, pkg := range []string{"testing", "os", "path/filepath", "syscall"} {
+	for _, pkg := range []string{"testing", "syscall", sessionImportPath} {
 		if _, ok := imports[pkg]; !ok {
 			imports[pkg] = &ImportSpec{Path: pkg}
 		}
@@ -41,12 +44,7 @@ func AssembleTestSource(tc TreeCase, compileOnly bool, pkgName string, docTestRo
 	// Types, methods, consts/vars, and helpers at package level so methods can
 	// implement interfaces and package helpers can reference shared vars
 	// (e.g. uuidShape used by assertUUID). Go forbids methods on function-local types.
-	// DOCTEST_ROOT / DOCTEST_SESSION_ID are package-level vars so package helpers
-	// (e.g. sessionCacheDir) can read them; the test assigns them on entry.
-	buf.WriteString("var (\n")
-	buf.WriteString("\tDOCTEST_ROOT       string\n")
-	buf.WriteString("\tDOCTEST_SESSION_ID string\n")
-	buf.WriteString(")\n\n")
+	// Session context is injected as d *session.Doctest (no package free DOCTEST_* vars).
 	writePackageLevelTypesAndMethods(&buf, tc.SetupFiles, tc.AssertFile.GoBlock)
 	writePackageLevelConstVars(&buf, tc.SetupFiles, tc.AssertFile.GoBlock)
 	writePackageLevelHelpers(&buf, tc.SetupFiles, tc.AssertFile.GoBlock)
@@ -55,29 +53,7 @@ func AssembleTestSource(tc TreeCase, compileOnly bool, pkgName string, docTestRo
 	buf.WriteString(TestFuncName(tc))
 	buf.WriteString("(t *testing.T) {\n")
 
-	escapedRoot := strings.ReplaceAll(docTestRoot, "`", "`+\"`\"+`")
-	buf.WriteString("\tDOCTEST_ROOT = `")
-	buf.WriteString(escapedRoot)
-	buf.WriteString("`\n")
-	buf.WriteString("\t{\n")
-	buf.WriteString("\t\tsid, ok := syscall.Getenv(\"DOCTEST_SESSION_ID\")\n")
-	buf.WriteString("\t\tif !ok || sid == \"\" {\n")
-	buf.WriteString("\t\t\tt.Fatalf(\"DOCTEST_SESSION_ID not set\")\n")
-	buf.WriteString("\t\t}\n")
-	buf.WriteString("\t\tDOCTEST_SESSION_ID = sid\n")
-	buf.WriteString("\t}\n")
-	buf.WriteString("\t__origWd, __wdErr := os.Getwd()\n")
-	buf.WriteString("\tif __wdErr != nil {\n")
-	buf.WriteString("\t\tt.Fatal(__wdErr)\n")
-	buf.WriteString("\t}\n")
-	buf.WriteString("\tdefer os.Chdir(__origWd)\n")
-	if tc.Path != "" {
-		buf.WriteString(fmt.Sprintf("\tif err := os.Chdir(filepath.Join(DOCTEST_ROOT, %q)); err != nil {\n", tc.Path))
-	} else {
-		buf.WriteString("\tif err := os.Chdir(DOCTEST_ROOT); err != nil {\n")
-	}
-	buf.WriteString("\t\tt.Fatal(err)\n")
-	buf.WriteString("\t}\n\n")
+	writeDoctestDConstruct(&buf, docTestRoot, tc.Path)
 
 	var run *FuncSnippet
 	if len(tc.SetupFiles) > 0 && tc.SetupFiles[0].GoBlock != nil && tc.SetupFiles[0].GoBlock.Run != nil {
@@ -87,12 +63,15 @@ func AssembleTestSource(tc TreeCase, compileOnly bool, pkgName string, docTestRo
 	if run == nil {
 		return "", fmt.Errorf("missing Run(t *testing.T, req *Request) (*Response, error) in setup chain")
 	}
+	run.Params = ensureDoctestParam(run.Params)
 	writeFuncClosure(&buf, "run", *run)
 	buf.WriteString("\tRun := run\n")
 
 	buf.WriteString("\treq := &Request{}\n")
 	writeSetupCalls(&buf, tc.SetupFiles)
-	writeFuncClosure(&buf, "assert", *tc.AssertFile.GoBlock.Assert)
+	assertFn := *tc.AssertFile.GoBlock.Assert
+	assertFn.Params = ensureDoctestParam(assertFn.Params)
+	writeFuncClosure(&buf, "assert", assertFn)
 
 	helperNames := collectHelperNames(tc.SetupFiles, tc.AssertFile.GoBlock)
 	buf.WriteString("\t_ = Run\n")
@@ -102,6 +81,7 @@ func AssembleTestSource(tc TreeCase, compileOnly bool, pkgName string, docTestRo
 
 	if compileOnly {
 		buf.WriteString("\t// compileOnly\n")
+		buf.WriteString("\t_ = d\n")
 		buf.WriteString("\t_ = req\n")
 		buf.WriteString("\t_ = run\n")
 		buf.WriteString("\t_ = assert\n")
@@ -112,10 +92,63 @@ func AssembleTestSource(tc TreeCase, compileOnly bool, pkgName string, docTestRo
 		buf.WriteString("}\n")
 		return buf.String(), nil
 	}
-	buf.WriteString("\tresp, runErr := run(t, req)\n")
-	buf.WriteString("\tassert(t, req, resp, runErr)\n")
+	buf.WriteString("\tresp, runErr := run(t, d, req)\n")
+	buf.WriteString("\tassert(t, d, req, resp, runErr)\n")
 	buf.WriteString("}\n")
 	return buf.String(), nil
+}
+
+// writeDoctestDConstruct emits sid load + d := &session.Doctest{ROOT, CASE, SESSION_ID}.
+// ROOT/CASE are baked absolute paths; SESSION_ID comes from the env at run time.
+// d is declared in the enclosing test function scope for Setup/Run/Assert call sites.
+func writeDoctestDConstruct(buf *strings.Builder, docTestRoot, casePath string) {
+	escapedRoot := escapeRawString(docTestRoot)
+	caseAbs := docTestRoot
+	if casePath != "" {
+		caseAbs = filepath.Join(docTestRoot, casePath)
+	}
+	escapedCase := escapeRawString(caseAbs)
+
+	buf.WriteString("\tvar sid string\n")
+	buf.WriteString("\t{\n")
+	buf.WriteString("\t\ts, ok := syscall.Getenv(\"DOCTEST_SESSION_ID\")\n")
+	buf.WriteString("\t\tif !ok || s == \"\" {\n")
+	buf.WriteString("\t\t\tt.Fatalf(\"DOCTEST_SESSION_ID not set\")\n")
+	buf.WriteString("\t\t}\n")
+	buf.WriteString("\t\tsid = s\n")
+	buf.WriteString("\t}\n")
+	buf.WriteString("\td := &session.Doctest{\n")
+	buf.WriteString("\t\tDOCTEST_ROOT:       `" + escapedRoot + "`,\n")
+	buf.WriteString("\t\tDOCTEST_CASE:       `" + escapedCase + "`,\n")
+	buf.WriteString("\t\tDOCTEST_SESSION_ID: sid,\n")
+	buf.WriteString("\t}\n")
+}
+
+func escapeRawString(s string) string {
+	return strings.ReplaceAll(s, "`", "`+\"`\"+`")
+}
+
+// ensureDoctestParam inserts `_ *session.Doctest` after t when the author omitted it.
+// If a param of type *session.Doctest is already present (any name), params are unchanged.
+func ensureDoctestParam(params string) string {
+	if strings.Contains(params, "*session.Doctest") {
+		return params
+	}
+	trimmed := strings.TrimSpace(params)
+	const tParam = "t *testing.T"
+	if strings.HasPrefix(trimmed, tParam) {
+		rest := strings.TrimSpace(trimmed[len(tParam):])
+		rest = strings.TrimPrefix(rest, ",")
+		rest = strings.TrimSpace(rest)
+		if rest == "" {
+			return tParam + ", _ *session.Doctest"
+		}
+		return tParam + ", _ *session.Doctest, " + rest
+	}
+	if trimmed == "" {
+		return tParam + ", _ *session.Doctest"
+	}
+	return tParam + ", _ *session.Doctest, " + trimmed
 }
 
 func importKey(spec ImportSpec) string {
@@ -524,8 +557,10 @@ func writeSetupCalls(buf *strings.Builder, setupFiles []SetupDocument) {
 			continue
 		}
 		name := fmt.Sprintf("setup%d", i)
-		writeFuncClosure(buf, name, *doc.GoBlock.Setup)
-		buf.WriteString(fmt.Sprintf("\tif err := %s(t, req); err != nil {\n", name))
+		fn := *doc.GoBlock.Setup
+		fn.Params = ensureDoctestParam(fn.Params)
+		writeFuncClosure(buf, name, fn)
+		buf.WriteString(fmt.Sprintf("\tif err := %s(t, d, req); err != nil {\n", name))
 		buf.WriteString(fmt.Sprintf("\t\tt.Fatalf(\"%s failed: %%v\", err)\n", escapeString(doc.Path)))
 		buf.WriteString("\t}\n")
 	}

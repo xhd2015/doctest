@@ -12,17 +12,12 @@ import (
 const SessionImportPath = "github.com/xhd2015/doctest/session"
 
 // CasesImportSessionPackage reports whether any case imports the doctest session package.
+// Since P2, assemble always injects session.Doctest, so this is effectively always true
+// for generation; kept for callers that still check author imports explicitly.
 func CasesImportSessionPackage(cases []TreeCase, modPath string) bool {
 	_ = modPath
-	for _, tc := range cases {
-		imports := collectImports(tc.SetupFiles, tc.AssertFile.GoBlock)
-		for _, spec := range imports {
-			if spec.Path == SessionImportPath {
-				return true
-			}
-		}
-	}
-	return false
+	_ = cases
+	return true
 }
 
 // MaterializeSessionModule writes embedded session sources to a content-addressed cache

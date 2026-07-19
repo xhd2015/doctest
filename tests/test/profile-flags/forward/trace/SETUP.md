@@ -15,19 +15,20 @@ doctest test -v -trace traces/run.out <dir>
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
-	wd := filepath.Join(os.TempDir(), "doctest-profile-flags-"+DOCTEST_SESSION_ID, "trace")
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	wd := filepath.Join(os.TempDir(), "doctest-profile-flags-"+d.DOCTEST_SESSION_ID, "trace")
 	if err := os.MkdirAll(wd, 0o755); err != nil {
 		t.Fatalf("mkdir workdir: %v", err)
 	}
 	req.WorkDir = wd
 
-	exampleDir := filepath.Join(DOCTEST_ROOT, "testdata", "basic-request-runner")
+	exampleDir := filepath.Join(d.DOCTEST_ROOT, "testdata", "basic-request-runner")
 	req.Args = []string{
 		"test", "-v",
 		"-trace", "traces/run.out",

@@ -18,10 +18,12 @@ doctest test <tests> --gen-dir <module>/_gen -> .doctest_run_* compile -> dump t
 2. Run `doctest test <tests> --gen-dir <moduleRoot>/_gen -v`.
 
 ```go
-import "testing"
-
-func Setup(t *testing.T, req *Request) error {
-	createInternalModuleProject(t)
+import (
+"testing"
+"github.com/xhd2015/doctest/session"
+)
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	createInternalModuleProject(t, d)
 	setupModuleEnv(t, req)
 	req.Args = append(req.Args, testDir, "--gen-dir", genDir, "-v")
 	return nil

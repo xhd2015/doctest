@@ -20,6 +20,7 @@ each step -> structured JSON entry -> append to file
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,9 +29,9 @@ import (
 	"github.com/xhd2015/doctest/libdoc/testbin"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Timeout = 60 * time.Second
-	req.Bin = testbin.Ensure(t, filepath.Join(DOCTEST_ROOT, "..", ".."))
+	req.Bin = testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, "..", ".."))
 	req.Env = append(req.Env, "TEST_GROUP=report-progress")
 	return nil
 }

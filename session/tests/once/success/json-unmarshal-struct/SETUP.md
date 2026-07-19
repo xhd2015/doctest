@@ -19,10 +19,12 @@ json.Unmarshal -> struct { Path string `json:"path"` }
 2. Assert unmarshals into a typed struct with that path.
 
 ```go
-import "testing"
-
-func Setup(t *testing.T, req *Request) error {
-	req.SessionID = "once-doctest-unmarshal-" + DOCTEST_SESSION_ID
+import (
+"testing"
+"github.com/xhd2015/doctest/session"
+)
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	req.SessionID = "once-doctest-unmarshal-" + d.DOCTEST_SESSION_ID
 	req.Key = "go-binary"
 	req.Mode = "json-object"
 	req.JSONPayload = `{"path":"/tmp/doctest-session-once-bin"}`

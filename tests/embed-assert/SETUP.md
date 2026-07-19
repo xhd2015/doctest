@@ -36,6 +36,7 @@ internal + assert -> temp -modfile (parent go.mod + assert replace) -> go test -
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
 	"crypto/md5"
 	"fmt"
 	"io"
@@ -78,10 +79,10 @@ func lockCacheTests(t *testing.T) {
 		_ = f.Close()
 	})
 }
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Timeout = 120 * time.Second
 
-	req.Bin = testbin.Ensure(t, filepath.Join(DOCTEST_ROOT, "..", ".."))
+	req.Bin = testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, "..", ".."))
 	return nil
 }
 func doctestGoBlock(code string) string {
@@ -180,21 +181,21 @@ func createPublicModuleProject(t *testing.T, leafSetupGo string, leafAssertGo st
 		t.Fatalf("create doctest leaf: %v", err)
 	}
 }
-func copyFixtureModule(t *testing.T, fixtureRel string) {
+func copyFixtureModule(t *testing.T, d *session.Doctest, fixtureRel string) {
 	t.Helper()
 
-	fixtureSrc := filepath.Join(DOCTEST_ROOT, fixtureRel)
+	fixtureSrc := filepath.Join(d.DOCTEST_ROOT, fixtureRel)
 	moduleRoot = t.TempDir()
 	if err := copyDir(moduleRoot, fixtureSrc); err != nil {
 		t.Fatalf("copy fixture %s: %v", fixtureRel, err)
 	}
 	testDir = filepath.Join(moduleRoot, "tests")
 }
-func createInternalOnlyProject(t *testing.T) {
-	copyFixtureModule(t, "testdata/internal-only-module")
+func createInternalOnlyProject(t *testing.T, d *session.Doctest) {
+	copyFixtureModule(t, d, "testdata/internal-only-module")
 }
-func createInternalAssertProject(t *testing.T) {
-	copyFixtureModule(t, "testdata/internal-assert-module")
+func createInternalAssertProject(t *testing.T, d *session.Doctest) {
+	copyFixtureModule(t, d, "testdata/internal-assert-module")
 }
 func setupModuleEnv(t *testing.T, req *Request) {
 	t.Helper()

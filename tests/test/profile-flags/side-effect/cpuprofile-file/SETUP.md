@@ -15,13 +15,14 @@ doctest test -cpuprofile <session>/cpu.out <fixture>
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
-	dir := filepath.Join(os.TempDir(), "doctest-profile-flags-"+DOCTEST_SESSION_ID, "side-cpu")
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	dir := filepath.Join(os.TempDir(), "doctest-profile-flags-"+d.DOCTEST_SESSION_ID, "side-cpu")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -29,7 +30,7 @@ func Setup(t *testing.T, req *Request) error {
 	// Remove any leftover so Assert only passes if this run writes the file.
 	_ = os.Remove(cpuPath)
 
-	exampleDir := filepath.Join(DOCTEST_ROOT, "testdata", "basic-request-runner")
+	exampleDir := filepath.Join(d.DOCTEST_ROOT, "testdata", "basic-request-runner")
 	req.Args = []string{
 		"test",
 		"-cpuprofile", cpuPath,

@@ -17,10 +17,12 @@ doctest test -v -> .doctest_run_* -> go test -modfile=<tmp> with assert replace
 2. Run `doctest test <tests> -v`.
 
 ```go
-import "testing"
-
-func Setup(t *testing.T, req *Request) error {
-	createInternalAssertProject(t)
+import (
+"testing"
+"github.com/xhd2015/doctest/session"
+)
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	createInternalAssertProject(t, d)
 	setupModuleEnv(t, req)
 	req.Args = []string{"test", testDir, "-v"}
 	return nil

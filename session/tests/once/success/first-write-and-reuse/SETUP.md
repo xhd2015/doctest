@@ -24,10 +24,12 @@ Caller <- identical raw JSON
 3. Assert equal raw bytes and FnCalls == 1.
 
 ```go
-import "testing"
-
-func Setup(t *testing.T, req *Request) error {
-	req.SessionID = "once-doctest-reuse-" + DOCTEST_SESSION_ID
+import (
+"testing"
+"github.com/xhd2015/doctest/session"
+)
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	req.SessionID = "once-doctest-reuse-" + d.DOCTEST_SESSION_ID
 	req.Key = "cli-binary"
 	req.Mode = "json-object"
 	req.JSONPayload = `{"n":1,"label":"once"}`

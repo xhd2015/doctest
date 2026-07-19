@@ -18,13 +18,14 @@ progress dots -> . F | verbose -> go test -v | count -> N tests | timeout -> go 
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
     "os"
     "path/filepath"
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
-    exampleDir := filepath.Join(DOCTEST_ROOT, "testdata", "basic-request-runner")
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+    exampleDir := filepath.Join(d.DOCTEST_ROOT, "testdata", "basic-request-runner")
     if info, err := os.Stat(exampleDir); err != nil {
         t.Fatalf("testdata dir %s not found: %v", exampleDir, err)
     } else if !info.IsDir() {

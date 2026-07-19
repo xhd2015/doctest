@@ -15,15 +15,16 @@ doctest vet --changed -> fail on leaf_b only
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	fx := createVetFlatTwoLeafTree(t)
 	setupPath := filepath.Join(fx.TreeDir, "leaf_b", "SETUP.md")
-	if err := os.WriteFile(setupPath, readAntiPatternSetup(t), 0644); err != nil {
+	if err := os.WriteFile(setupPath, readAntiPatternSetup(t, d), 0644); err != nil {
 		t.Fatal(err)
 	}
 	req.WorkDir = fx.RepoDir

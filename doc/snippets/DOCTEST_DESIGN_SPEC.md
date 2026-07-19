@@ -30,8 +30,8 @@ A nested root must be entirely self-sufficient:
 - It must provide `Setup` or let descendant SETUPs provide `Setup`
 - Any external binaries (e.g., the doctest binary for `req.Bin`) must be built or resolved within that root's own `Setup`
 - The parent root's `Setup` is never executed for leaves under a nested DOCTEST.md
-- Paths like `DOCTEST_ROOT/..` shift — from a deeper root, use `DOCTEST_ROOT/../..` to reach the module root
-- `DOCTEST_SESSION_ID` (injected variable) is shared within one `doctest test` run
+- Paths like `d.DOCTEST_ROOT/..` shift — from a deeper root, use `filepath.Join(d.DOCTEST_ROOT, "..", "..")` to reach the module root
+- `d.DOCTEST_SESSION_ID` is shared within one `doctest test` run (also available to `session.Once` via process env)
 
 ### When to Create a Nested DOCTEST.md
 

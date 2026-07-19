@@ -26,6 +26,7 @@ doctest agent show-status <session-id> -> session state -> stdout
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
 	"bytes"
 	"context"
 	"errors"
@@ -38,10 +39,10 @@ import (
 	"github.com/xhd2015/doctest/libdoc/testbin"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Timeout = 30 * time.Second
 
-	req.Bin = testbin.Ensure(t, filepath.Join(DOCTEST_ROOT, "..", ".."))
+	req.Bin = testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, "..", ".."))
 	return nil
 }
 ```

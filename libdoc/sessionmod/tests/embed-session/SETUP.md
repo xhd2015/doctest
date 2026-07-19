@@ -27,14 +27,15 @@ sessionmod.ContentMD5() / RawSourceCacheKeyMD5() -> core.MaterializeSessionModul
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
 	"path/filepath"
 	"testing"
 )
 
 var runKind string
 
-func Setup(t *testing.T, req *Request) error {
-	req.ModuleRoot = filepath.Join(DOCTEST_ROOT, "..", "..", "..", "..")
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	req.ModuleRoot = filepath.Join(d.DOCTEST_ROOT, "..", "..", "..", "..")
 	return nil
 }
 ```

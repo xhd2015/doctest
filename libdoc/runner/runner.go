@@ -54,6 +54,17 @@ func Test(args []string) error {
 	}
 	opts.Color = runnerbuild.ResolveColorMode(opts.Color, stdoutForColor)
 
+	// Cold-cache: resolve gen root, wipe on startup, force count, isolate GOCACHE.
+	// Applied once per CLI invocation so multi-tree ./... shares GenDir/GOCACHE.
+	var coldCacheNs int64
+	if opts.ColdCache {
+		tCold := time.Now()
+		if err := applyColdCache(&opts); err != nil {
+			return err
+		}
+		coldCacheNs = time.Since(tCold).Nanoseconds()
+	}
+
 	// One session id for the whole CLI invocation so parallel trees share
 	// session.Once / testbin materialization when nested self-tests run.
 	if v, ok := syscall.Getenv(core.DoctestSessionIDEnv); !ok || v == "" {
@@ -103,6 +114,20 @@ func Test(args []string) error {
 		if rec != nil {
 			defer rec.close()
 			_ = rec.writeRunStart(metricDir, opts, defaultSuite)
+			if coldCacheNs > 0 {
+				_ = rec.writePhase("suite", "cold_cache", "", coldCacheNs, nil)
+			}
+			// Nest sink: suite children (nested RunTest) append timing here;
+			// merged into the outer JSONL before run_end (see below).
+			nestSink := rec.path + ".nest"
+			_ = os.Remove(nestSink)
+			_ = os.Setenv(metrics.EnvMetricsNestSink, nestSink)
+			// Stash on recorder for merge before close.
+			rec.nestSink = nestSink
+			defer func() {
+				_ = os.Unsetenv(metrics.EnvMetricsNestSink)
+				_ = os.Remove(nestSink)
+			}()
 		}
 	}
 
@@ -119,23 +144,40 @@ func Test(args []string) error {
 				}
 				cs, _ = core.FilterCasesByLabel(cs, o)
 				cases = cs
-				leafT0 := time.Now()
 				for _, c := range cases {
 					_ = rec.writeLeafStart(c, dir)
 				}
 				s, err := runnerbuild.TestWithStats(dir, o)
-				leafT1 := time.Now()
+				// Tree phase spans (discover/materialize/generate/go_test/…).
+				for _, p := range s.Phases {
+					_ = rec.writePhase("tree", p.Name, dir, p.ElapsedNs, map[string]any{
+						"cases": s.Total,
+					})
+				}
+				// Leaf ends: prefer package-attributed / unified subtest times.
+				timingByPath := map[string]runnerbuild.LeafTiming{}
+				for _, lt := range s.LeafTimings {
+					timingByPath[lt.Path] = lt
+				}
 				passLeft := s.Passed
+				end := time.Now()
 				for _, c := range cases {
 					result := "fail"
 					if passLeft > 0 {
 						result = "pass"
 						passLeft--
 					}
-					_ = rec.writeLeafEnd(c, dir, leafT0, leafT1, result, false)
+					lt, ok := timingByPath[c.Path]
+					var elapsedNs int64
+					cached := false
+					if ok {
+						elapsedNs = lt.ElapsedNs
+						cached = lt.Cached
+					}
+					_ = rec.writeLeafEndNs(c, dir, end, elapsedNs, result, cached)
 				}
 				for _, sk := range s.Skipped {
-					_ = rec.writeLeafEndSkipped(sk, dir, leafT1)
+					_ = rec.writeLeafEndSkipped(sk, dir, end)
 				}
 				statsMu.Lock()
 				stats.Passed += s.Passed
@@ -183,6 +225,7 @@ func Test(args []string) error {
 
 	// Close metrics with run_end after summary.
 	if rec != nil {
+		_ = mergeNestSinkIntoRecorder(rec, rec.nestSink)
 		warns := []string{}
 		if metrics.ShouldWarnDefaultSuiteSlow(defaultSuite, stats.Total, stats.Elapsed, metrics.DefaultSuiteWarnThreshold) {
 			warns = append(warns, "default_suite_slow")
@@ -407,6 +450,7 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 		Bool("--changed", &opts.ChangedOnly).
 		Bool("--label-all", &opts.LabelAll).
 		Bool("--metrics-on", &opts.MetricsOn).
+		Bool("--cold-cache", &opts.ColdCache).
 		String("-cpuprofile", &opts.CPUProfile).
 		String("-memprofile", &opts.MemProfile).
 		Int("-memprofilerate", &opts.MemProfileRate).
@@ -418,6 +462,8 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 		String("-outputdir", &opts.OutputDir).
 		String("-coverprofile", &opts.CoverProfile).
 		Bool("-cover", &opts.Cover).
+		Bool("--experiment-ref-instead-of-inline", &opts.ExperimentRefInsteadOfInline).
+		Bool("--experiment-unified-package-per-doctest-tree", &opts.ExperimentUnifiedPackagePerDoctestTree).
 		Parse(args)
 	if err != nil {
 		return core.Options{}, nil, err
@@ -432,6 +478,10 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 		return core.Options{}, nil, fmt.Errorf("--label-all and --label are mutually exclusive")
 	}
 	opts.LabelExprs = labelExprs
+	// Unified package-per-tree implies ref-instead-of-inline generation.
+	if opts.ExperimentUnifiedPackagePerDoctestTree {
+		opts.ExperimentRefInsteadOfInline = true
+	}
 
 	// Abs-resolve relative profile/cover paths against process cwd at parse time.
 	pathFields := []*string{
@@ -506,6 +556,81 @@ func absProfilePath(p string) (string, error) {
 // Exported for package-level tests (metrics flags, labels, etc.).
 func ParseTestOptions(args []string) (core.Options, []string, error) {
 	return parseTestOptions(args)
+}
+
+// applyColdCache resolves --cold-cache semantics once per CLI invocation:
+// force count=1 when unset, choose/protect gen root, wipe on startup only,
+// isolate GOCACHE, and announce on stderr.
+func applyColdCache(opts *core.Options) error {
+	if opts == nil || !opts.ColdCache {
+		return nil
+	}
+	if opts.Count == 0 {
+		opts.Count = 1
+	}
+
+	cacheHome, err := core.CacheHome()
+	if err != nil {
+		return fmt.Errorf("cold-cache: resolve cache home: %w", err)
+	}
+	warmHome := filepath.Clean(filepath.Join(cacheHome, "doctest", "mapping-gen"))
+	coldHome := filepath.Clean(filepath.Join(cacheHome, "doctest", "mapping-gen-cold"))
+	if abs, absErr := filepath.Abs(warmHome); absErr == nil {
+		warmHome = filepath.Clean(abs)
+	}
+	if abs, absErr := filepath.Abs(coldHome); absErr == nil {
+		coldHome = filepath.Clean(abs)
+	}
+
+	gen := opts.GenDir
+	if gen == "" {
+		gen = coldHome
+	} else {
+		absGen, absErr := filepath.Abs(gen)
+		if absErr != nil {
+			return fmt.Errorf("cold-cache: resolve --gen-dir: %w", absErr)
+		}
+		gen = filepath.Clean(absGen)
+		if pathEqualOrUnder(gen, warmHome) {
+			// Do not wipe warm mapping-gen content on reject.
+			return fmt.Errorf("error: --cold-cache refuses --gen-dir equal to or under warm mapping-gen (%s); cannot use the default warm cache path — choose mapping-gen-cold or another path outside %s", gen, warmHome)
+		}
+	}
+
+	if err := os.RemoveAll(gen); err != nil {
+		return fmt.Errorf("cold-cache: wipe gen dir %s: %w", gen, err)
+	}
+	if err := os.MkdirAll(gen, 0o755); err != nil {
+		return fmt.Errorf("cold-cache: create gen dir %s: %w", gen, err)
+	}
+	opts.GenDir = gen
+
+	gocacheTemp, err := os.MkdirTemp("", "doctest-cold-gocache-*")
+	if err != nil {
+		return fmt.Errorf("cold-cache: create isolated GOCACHE: %w", err)
+	}
+	opts.GoCache = gocacheTemp
+	// So nested child processes that inherit the environment also see cold GOCACHE.
+	_ = os.Setenv("GOCACHE", gocacheTemp)
+
+	w := opts.Stderr
+	if w == nil {
+		w = os.Stderr
+	}
+	fmt.Fprintf(w, "doctest: cold-cache: gen=%s GOCACHE=%s (isolated) count=%d\n", gen, gocacheTemp, opts.Count)
+	return nil
+}
+
+// pathEqualOrUnder reports whether path is equal to root or a path under root.
+// Both paths should already be cleaned absolute paths when possible.
+func pathEqualOrUnder(path, root string) bool {
+	path = filepath.Clean(path)
+	root = filepath.Clean(root)
+	if path == root {
+		return true
+	}
+	sep := string(filepath.Separator)
+	return strings.HasPrefix(path, root+sep)
 }
 
 func parseVetOptions(args []string) (core.Options, []string, error) {

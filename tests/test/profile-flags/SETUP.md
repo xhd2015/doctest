@@ -26,17 +26,18 @@ unset -> omit from go args | set (incl. 0) -> forward exact value
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	// Nested go test + compile; keep headroom like go-test-cache leaves.
 	req.Timeout = 120 * time.Second
 
-	exampleDir := filepath.Join(DOCTEST_ROOT, "testdata", "basic-request-runner")
+	exampleDir := filepath.Join(d.DOCTEST_ROOT, "testdata", "basic-request-runner")
 	if info, err := os.Stat(exampleDir); err != nil {
 		t.Fatalf("testdata dir %s not found: %v", exampleDir, err)
 	} else if !info.IsDir() {

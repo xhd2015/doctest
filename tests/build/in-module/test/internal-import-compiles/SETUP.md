@@ -18,10 +18,12 @@ doctest test <tests> -v -> .doctest_run_* under moduleRoot -> go test -> temp re
 2. Run `doctest test <tests> -v` without `--gen-dir`.
 
 ```go
-import "testing"
-
-func Setup(t *testing.T, req *Request) error {
-	createInternalModuleProject(t)
+import (
+"testing"
+"github.com/xhd2015/doctest/session"
+)
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	createInternalModuleProject(t, d)
 	_ = genDir
 	setupModuleEnv(t, req)
 	req.Args = append(req.Args, testDir, "-v")

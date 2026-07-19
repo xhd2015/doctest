@@ -19,6 +19,7 @@ doctest vet --changed <tree> -> walk changed paths -> skip unchanged siblings an
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,9 +28,9 @@ import (
 	"github.com/xhd2015/doctest/libdoc/testtree"
 )
 
-func readAntiPatternSetup(t *testing.T) []byte {
+func readAntiPatternSetup(t *testing.T, d *session.Doctest) []byte {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(DOCTEST_ROOT, "git-context", "in-git-repo", "vet", "fixture_anti_pattern_setup.md.txt"))
+	data, err := os.ReadFile(filepath.Join(d.DOCTEST_ROOT, "git-context", "in-git-repo", "vet", "fixture_anti_pattern_setup.md.txt"))
 	if err != nil {
 		t.Fatal(err)
 	}

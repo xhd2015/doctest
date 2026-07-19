@@ -21,10 +21,12 @@ Caller -> Once("b") -> fn again -> distinct JSON
 3. Assert both succeed, values differ, FnCalls == 2.
 
 ```go
-import "testing"
-
-func Setup(t *testing.T, req *Request) error {
-	req.SessionID = "once-doctest-keys-" + DOCTEST_SESSION_ID
+import (
+"testing"
+"github.com/xhd2015/doctest/session"
+)
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	req.SessionID = "once-doctest-keys-" + d.DOCTEST_SESSION_ID
 	req.Key = "a"
 	req.SecondKey = "b"
 	req.Mode = "json-object"

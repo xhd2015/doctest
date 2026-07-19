@@ -25,6 +25,7 @@ embed bytes -> ContentMD5() == md5(assert.go on disk)
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
 	"crypto/md5"
 	"fmt"
 	"os"
@@ -38,8 +39,8 @@ import (
 
 var runKind string
 
-func Setup(t *testing.T, req *Request) error {
-	req.ModuleRoot = filepath.Join(DOCTEST_ROOT, "..", "..", "..", "..")
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	req.ModuleRoot = filepath.Join(d.DOCTEST_ROOT, "..", "..", "..", "..")
 	req.AssertDir = filepath.Join(req.ModuleRoot, "assert")
 	return nil
 }

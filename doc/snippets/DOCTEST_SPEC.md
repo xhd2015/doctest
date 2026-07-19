@@ -8,7 +8,7 @@ Prose is primary, code supplementary.
 ```
 <pkg>/tests/<feature>/
 ├── DOCTEST.md          # Overview, ## Version (__DOCTEST_VERSION__), diagram, test index + "## How to Run"; final ```go``` block defines Request/Response types, the Run(t, req) (resp,error) function that actually runs the logic;
-├── SETUP.md            # Optional Root: shared preconditions, func Setup + helper funcs shared by all tests, can use DOCTEST_ROOT to refer root dir and DOCTEST_SESSION_ID for cross-test data sharing or locking
+├── SETUP.md            # Optional Root: shared preconditions, func Setup + helpers; use d *session.Doctest (d.DOCTEST_ROOT, d.DOCTEST_CASE, d.DOCTEST_SESSION_ID) for paths/session — cwd is undetermined
 │                       #   Request, Response, and Run cannot be redefined by any descendant
 ├── <decision-slug>/           # Grouping — no ASSERT.md, must have SETUP.md
 │   └── <leaf-slug>/           # Runnable — has ASSERT.md, must have SETUP.md
@@ -37,7 +37,8 @@ Run `doctest vet <dir>` to validate tree structure before `doctest test` or
 - `ASSERT.md` directories also have `SETUP.md`
 - Anti-patterns in `SETUP.md` / `ASSERT.md` code blocks (embedded Go programs,
   `go test` shell-outs, reading `DOCTEST_SESSION_ID` via `os.Getenv` /
-  `os.LookupEnv` / `syscall.Getenv` instead of the injected variable)
+  `os.LookupEnv` / `syscall.Getenv` instead of `d.DOCTEST_SESSION_ID` on
+  `*session.Doctest`)
 
 See `doctest skill doc-spec --show` and `doctest skill code-spec --show` for the
 full prose and code rules; see the design spec (`doctest skill designer --show`)

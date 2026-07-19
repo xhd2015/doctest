@@ -311,9 +311,8 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 
 func createOnePassTree(t *testing.T) string {
 	t.Helper()
-	tmp := t.TempDir()
-	testtree.WritePassFailTree(t, tmp, 1, 0)
-	return tmp
+	// Process-shared fixture so 5 recording leaves reuse gen/GOCACHE.
+	return testtree.SharedPassFailTree(t, 1, 0)
 }
 
 func listRunJSONL(t *testing.T, metricsRoot string) map[string]struct{} {

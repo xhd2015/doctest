@@ -20,10 +20,12 @@ Once -> read error -> return boom; fn not re-invoked
 2. Assert both errors contain boom; FnCalls == 1.
 
 ```go
-import "testing"
-
-func Setup(t *testing.T, req *Request) error {
-	req.SessionID = "once-doctest-err-" + DOCTEST_SESSION_ID
+import (
+"testing"
+"github.com/xhd2015/doctest/session"
+)
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	req.SessionID = "once-doctest-err-" + d.DOCTEST_SESSION_ID
 	req.Key = "fail"
 	req.Mode = "error"
 	req.CallTwice = true

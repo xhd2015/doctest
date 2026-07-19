@@ -27,6 +27,7 @@ auto gen-dir -> one package per leaf | explicit gen-dir -> user-specified layout
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
 	"bytes"
 	"context"
 	"errors"
@@ -42,10 +43,10 @@ import (
 )
 
 var bt = "`" + "`" + "`"
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Timeout = 120 * time.Second
 
-	req.Bin = testbin.Ensure(t, filepath.Join(DOCTEST_ROOT, "..", ".."))
+	req.Bin = testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, "..", ".."))
 	return nil
 }
 func doctestGoBlock(code string) string {

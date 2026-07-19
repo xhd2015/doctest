@@ -17,6 +17,15 @@ import (
 	"unicode"
 )
 
+// Doctest is the public inject-contract context for a doctest run.
+// Field names match the former free variables of the same names.
+// These are struct fields only (not process environment variables).
+type Doctest struct {
+	DOCTEST_ROOT       string
+	DOCTEST_CASE       string
+	DOCTEST_SESSION_ID string
+}
+
 // DoctestSessionIDEnv is the process env key doctest test sets for child go test
 // processes. Read only via syscall.Getenv so Go's test result cache is not
 // keyed on this value (os.Getenv is recorded in the testlog).

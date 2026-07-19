@@ -20,10 +20,12 @@ Caller <- JSON containing path; disk has probe-write
 2. Assert CacheDir path prefix/shape and marker file exists.
 
 ```go
-import "testing"
-
-func Setup(t *testing.T, req *Request) error {
-	req.SessionID = "once-doctest-layout-" + DOCTEST_SESSION_ID
+import (
+"testing"
+"github.com/xhd2015/doctest/session"
+)
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	req.SessionID = "once-doctest-layout-" + d.DOCTEST_SESSION_ID
 	req.Key = "layout-probe"
 	req.Mode = "cache-probe"
 	req.CallTwice = false

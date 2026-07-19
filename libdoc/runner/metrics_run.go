@@ -30,6 +30,10 @@ func RunTest(dir string, opts core.Options) error {
 	start := time.Now()
 	defaultSuite := !opts.LabelAll && len(opts.LabelExprs) == 0
 
+	// Capture outer nest sink before we may install our own for children.
+	outerNestSink := metrics.NestSinkPath()
+	parentLeaf := metrics.ParentLeaf()
+
 	rec, err := openRunRecorder(dir, opts)
 	if err != nil {
 		// Metrics failures are non-fatal for the suite; log and continue.
@@ -39,6 +43,17 @@ func RunTest(dir string, opts core.Options) error {
 	if rec != nil {
 		defer rec.close()
 		_ = rec.writeRunStart(dir, opts, defaultSuite)
+		// Top-level RunTest with metrics: expose nest sink for suite children.
+		if outerNestSink == "" {
+			ownNestSink := rec.path + ".nest"
+			_ = os.Remove(ownNestSink)
+			_ = os.Setenv(metrics.EnvMetricsNestSink, ownNestSink)
+			rec.nestSink = ownNestSink
+			defer func() {
+				_ = os.Unsetenv(metrics.EnvMetricsNestSink)
+				_ = os.Remove(ownNestSink)
+			}()
+		}
 	}
 
 	// Prefer leaf-level discovery paths for metrics before running.
@@ -50,7 +65,6 @@ func RunTest(dir string, opts core.Options) error {
 		cases, _ = core.FilterCasesByLabel(cases, opts)
 	}
 
-	leafStarts := time.Now()
 	if rec != nil && discoverErr == nil {
 		for _, c := range cases {
 			_ = rec.writeLeafStart(c, dir)
@@ -63,14 +77,28 @@ func RunTest(dir string, opts core.Options) error {
 		stats.Elapsed = elapsed
 	}
 
+	// Nested re-entry (suite leaf → RunTest): emit timing into outer nest sink
+	// even when this invocation uses a temp MetricsRoot for isolation.
+	if outerNestSink != "" && parentLeaf != "" {
+		writeNestPhasesToSink(outerNestSink, parentLeaf, dir, stats)
+	}
+
 	if rec != nil {
+		for _, p := range stats.Phases {
+			_ = rec.writePhase("tree", p.Name, dir, p.ElapsedNs, map[string]any{"cases": stats.Total})
+		}
 		// Map results: pass first stats.Passed cases, fail the rest of Total.
-		// Skipped leaves get leaf_end-only (no prior start when not in cases).
+		// Prefer package-attributed leaf times from go test -json.
+		timingByPath := map[string]build.LeafTiming{}
+		for _, lt := range stats.LeafTimings {
+			timingByPath[lt.Path] = lt
+		}
 		n := stats.Total
 		if n == 0 && len(cases) > 0 {
 			n = len(cases)
 		}
 		passLeft := stats.Passed
+		end := time.Now()
 		for i, c := range cases {
 			if i >= n && n > 0 {
 				break
@@ -80,12 +108,20 @@ func RunTest(dir string, opts core.Options) error {
 				result = "pass"
 				passLeft--
 			}
-			_ = rec.writeLeafEnd(c, dir, leafStarts, time.Now(), result, false)
+			lt, ok := timingByPath[c.Path]
+			var elapsedNs int64
+			cached := false
+			if ok {
+				elapsedNs = lt.ElapsedNs
+				cached = lt.Cached
+			}
+			_ = rec.writeLeafEndNs(c, dir, end, elapsedNs, result, cached)
 		}
 		// Extra skipped (label-filtered) as leaf_end skip only.
 		for _, sk := range stats.Skipped {
-			_ = rec.writeLeafEndSkipped(sk, dir, time.Now())
+			_ = rec.writeLeafEndSkipped(sk, dir, end)
 		}
+		_ = mergeNestSinkIntoRecorder(rec, rec.nestSink)
 		warns := []string{}
 		if metrics.ShouldWarnDefaultSuiteSlow(defaultSuite, stats.Total, stats.Elapsed, metrics.DefaultSuiteWarnThreshold) {
 			warns = append(warns, "default_suite_slow")
@@ -116,10 +152,45 @@ func RunTest(dir string, opts core.Options) error {
 	return nil
 }
 
+// writeNestPhasesToSink appends nest-scoped phase events for a nested RunTest.
+func writeNestPhasesToSink(sink, parentLeaf, tree string, stats build.TestRunStats) {
+	if sink == "" {
+		return
+	}
+	detail := map[string]any{}
+	if stats.Total > 0 {
+		detail["cases"] = stats.Total
+	}
+	for _, p := range stats.Phases {
+		if p.Name == "" {
+			continue
+		}
+		_ = metrics.AppendNestPhase(sink, p.Name, parentLeaf, tree, p.ElapsedNs, detail)
+	}
+}
+
+// mergeNestSinkIntoRecorder copies nest sink JSONL events into the outer writer.
+func mergeNestSinkIntoRecorder(rec *runRecorder, sink string) error {
+	if rec == nil || rec.w == nil || sink == "" {
+		return nil
+	}
+	events, err := metrics.ReadNestSinkEvents(sink)
+	if err != nil {
+		return err
+	}
+	for _, ev := range events {
+		if err := rec.w.Write(ev); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 type runRecorder struct {
-	w      *metrics.Writer
-	path   string
-	closed bool
+	w        *metrics.Writer
+	path     string
+	nestSink string // sidecar for nested phase timing; merged before run_end
+	closed   bool
 }
 
 func openRunRecorder(dir string, opts core.Options) (*runRecorder, error) {
@@ -247,22 +318,56 @@ func (r *runRecorder) writeLeafStart(c core.TreeCase, root string) error {
 }
 
 func (r *runRecorder) writeLeafEnd(c core.TreeCase, root string, start, end time.Time, result string, cached bool) error {
+	return r.writeLeafEndNs(c, root, end, end.Sub(start).Nanoseconds(), result, cached)
+}
+
+// writeLeafEndNs writes leaf_end with an explicit elapsed (package-attributed or 0).
+func (r *runRecorder) writeLeafEndNs(c core.TreeCase, root string, end time.Time, elapsedNs int64, result string, cached bool) error {
 	rel := c.Path
 	if root != "" {
 		if rr, err := filepath.Rel(root, c.Path); err == nil {
 			rel = rr
 		}
 	}
-	return r.w.Write(map[string]any{
+	ev := map[string]any{
 		"type":           "leaf_end",
 		"schema_version": metrics.SchemaVersion,
 		"path":           rel,
-		"ts_start":       start.UTC().Format(time.RFC3339Nano),
 		"ts_end":         end.UTC().Format(time.RFC3339Nano),
-		"elapsed_ns":     end.Sub(start).Nanoseconds(),
+		"elapsed_ns":     elapsedNs,
 		"result":         result,
 		"cached":         cached,
-	})
+	}
+	if elapsedNs > 0 {
+		ev["ts_start"] = end.Add(-time.Duration(elapsedNs)).UTC().Format(time.RFC3339Nano)
+	}
+	return r.w.Write(ev)
+}
+
+// writePhase records a completed pipeline phase span (suite or tree scope).
+func (r *runRecorder) writePhase(scope, phase, tree string, elapsedNs int64, detail map[string]any) error {
+	if r == nil || r.w == nil {
+		return nil
+	}
+	end := time.Now().UTC()
+	ev := map[string]any{
+		"type":           "phase",
+		"schema_version": metrics.SchemaVersion,
+		"scope":          scope,
+		"phase":          phase,
+		"ts_end":         end.Format(time.RFC3339Nano),
+		"elapsed_ns":     elapsedNs,
+	}
+	if elapsedNs > 0 {
+		ev["ts_start"] = end.Add(-time.Duration(elapsedNs)).Format(time.RFC3339Nano)
+	}
+	if tree != "" {
+		ev["tree"] = tree
+	}
+	if detail != nil {
+		ev["detail"] = detail
+	}
+	return r.w.Write(ev)
 }
 
 func (r *runRecorder) writeLeafEndSkipped(sk core.SkippedCase, root string, end time.Time) error {

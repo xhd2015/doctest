@@ -112,6 +112,13 @@ type Options struct {
 	// use os.UserCacheDir() (or DOCTEST_METRICS_ROOT when set by the CLI).
 	MetricsRoot string
 
+	// ColdCache enables doctest test --cold-cache: wipe mapping gen root on
+	// startup, force -count=1 when unset, and isolate GOCACHE for the run.
+	ColdCache bool
+	// GoCache is an isolated GOCACHE directory for go test (set by --cold-cache).
+	// Empty means inherit the process GOCACHE.
+	GoCache string
+
 	// Go test profiling / cover flags (forwarded to go test).
 	// Path fields are abs-resolved at CLI parse time when relative.
 	// Rate fields use *int so zero is distinguishable from unset.
@@ -126,6 +133,18 @@ type Options struct {
 	OutputDir            string
 	CoverProfile         string
 	Cover                bool
+
+	// ExperimentRefInsteadOfInline enables experimental ref-instead-of-inline
+	// generation (CLI: --experiment-ref-instead-of-inline). Default false.
+	// When true: shared root package + thin leaf tests (see assemble_ref.go).
+	// When false: classic AssembleTestSource per leaf (inline).
+	ExperimentRefInsteadOfInline bool
+
+	// ExperimentUnifiedPackagePerDoctestTree enables one go test package/binary
+	// per DOCTEST tree (CLI: --experiment-unified-package-per-doctest-tree).
+	// Default false. When true, forces ExperimentRefInsteadOfInline and generates
+	// __registry + leaf RunTestLeaf packages + __allleaves + suite iterator.
+	ExperimentUnifiedPackagePerDoctestTree bool
 }
 
 type ValidationError struct {

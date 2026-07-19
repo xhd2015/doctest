@@ -91,6 +91,7 @@ doctest test ./tests/doctest-structure/integration/...
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
 	"bytes"
 	"context"
 	"errors"
@@ -159,9 +160,9 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 	return resp, err
 }
 
-func buildDoctestBin(t *testing.T) string {
+func buildDoctestBin(t *testing.T, d *session.Doctest) string {
 	t.Helper()
-	return testbin.Ensure(t, filepath.Join(DOCTEST_ROOT, "..", ".."))
+	return testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, "..", ".."))
 }
 
 var bt = string([]byte{96, 96, 96})

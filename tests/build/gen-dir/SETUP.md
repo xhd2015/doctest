@@ -18,12 +18,13 @@ gen-dir -> per-leaf packages -> file system
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
     "path/filepath"
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
-    exampleDir := filepath.Join(DOCTEST_ROOT, "testdata", "basic-request-runner")
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+    exampleDir := filepath.Join(d.DOCTEST_ROOT, "testdata", "basic-request-runner")
     genDir := filepath.Join(t.TempDir(), "generated")
     req.Args = []string{"build", exampleDir, "--gen-dir", genDir}
     return nil

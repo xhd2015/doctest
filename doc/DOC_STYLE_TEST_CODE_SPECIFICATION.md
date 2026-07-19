@@ -422,10 +422,15 @@ Sets `req.InputDir` to the fixture path using a `func Setup`:
 - Point InputDir to the <fixture-name> fixture
 
 ```go
-import "path/filepath"
+import (
+    "path/filepath"
+    "testing"
 
-func Setup(t *testing.T, req *Request) error {
-    req.InputDir = filepath.Join(DOCTEST_ROOT, "testdata", "<fixture-name>")
+    "github.com/xhd2015/doctest/session"
+)
+
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+    req.InputDir = filepath.Join(d.DOCTEST_ROOT, "testdata", "<fixture-name>")
     return nil
 }
 ```
@@ -452,10 +457,13 @@ version: 3
 ```go
 import (
     "testing"
+
     "github.com/xhd2015/doctest/assert"
+    "github.com/xhd2015/doctest/session"
 )
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
+    _ = d
     if err != nil {
         t.Fatal(err)
     }
@@ -478,7 +486,12 @@ The validation tree's root `SETUP.md` defines the shared harness — the
 the tool under test:
 
 ```go
-import "os/exec"
+import (
+    "os/exec"
+    "testing"
+
+    "github.com/xhd2015/doctest/session"
+)
 
 type Request struct {
     InputDir string
@@ -489,7 +502,8 @@ type Response struct {
     Passed bool
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
+    _ = d
     cmd := exec.Command("doctest", "build", req.InputDir)
     out, _ := cmd.CombinedOutput()
     return &Response{
@@ -500,44 +514,70 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 ```
 
 Each leaf overrides only `req.InputDir` in its `Setup`; the root `Run` handles
-the actual invocation.
+the actual invocation. The second parameter `d *session.Doctest` is optional in
+author source (assembler inserts `_ *session.Doctest` if omitted) but is always
+passed at call sites.
 
-## Working Directory
+## Working directory and inject context
 
-Each generated test function runs with its working directory set to its own
-case directory — the directory containing the leaf's `SETUP.md` and `ASSERT.md`.
+**Process cwd is undetermined.** Generated tests do **not** `os.Chdir` into the
+leaf case directory. Harness code must not assume cwd is the leaf, the tree root,
+or the shell directory where `doctest` was invoked. Use absolute paths from the
+inject object instead.
 
-The test can access `DOCTEST_ROOT` constant defined as the root of all tests, use it to refer to testdata placed at the tree root:
+### `d *session.Doctest`
 
-```go
-req.InputDir = filepath.Join(DOCTEST_ROOT, "testdata", "child-redefines-request")
-```
-
-Each generated test function also defines **`DOCTEST_SESSION_ID`** — a package-level
-string variable unique per `doctest test` invocation. Doctest injects it into
-every generated test (via `syscall.Getenv` in generated boilerplate only). **Harness
-code in `SETUP.md` / `ASSERT.md` must reference `DOCTEST_SESSION_ID` directly** —
-do not call `os.Getenv("DOCTEST_SESSION_ID")` or `os.LookupEnv("DOCTEST_SESSION_ID")`.
-Reading the session id through `os.Getenv` is recorded in Go's test cache key and
-can pin or bust caching; `doctest vet` rejects it.
-
-Use `DOCTEST_SESSION_ID` for session-scoped cache directories, file locks, or other
-cross-package coordination within one `doctest test` run:
+Every generated test constructs a single value and passes it to Setup, Run, and
+Assert (second parameter after `t`):
 
 ```go
-cacheDir := filepath.Join(os.TempDir(), "my-harness-"+DOCTEST_SESSION_ID)
+// package github.com/xhd2015/doctest/session
+type Doctest struct {
+    DOCTEST_ROOT       string // absolute doctest tree root
+    DOCTEST_CASE       string // absolute leaf case directory (SETUP/ASSERT dir)
+    DOCTEST_SESSION_ID string // unique per doctest test invocation
+}
 ```
+
+Field names match the former free variables (immutable inject contract). They are
+**struct fields**, not environment variables.
+
+Author signatures may omit `d`; the assembler still generates a second parameter
+(`_ *session.Doctest`). Prefer declaring `d` when the body needs paths or session id:
+
+```go
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+    req.InputDir = filepath.Join(d.DOCTEST_ROOT, "testdata", "child-redefines-request")
+    return nil
+}
+```
+
+Leaf-local files (next to the case's `SETUP.md` / `ASSERT.md`):
+
+```go
+src := filepath.Join(d.DOCTEST_CASE, "testdata")
+// or: filepath.Join(d.DOCTEST_CASE, "fixture.txt")
+```
+
+Session-scoped cache directories, locks, or other coordination within one
+`doctest test` run:
+
+```go
+cacheDir := filepath.Join(os.TempDir(), "my-harness-"+d.DOCTEST_SESSION_ID)
+```
+
+**Do not** call `os.Getenv("DOCTEST_SESSION_ID")` or `os.LookupEnv("DOCTEST_SESSION_ID")`
+in harness code. Reading the session id through `os.Getenv` is recorded in Go's
+test cache key and can pin or bust caching; `doctest vet` rejects it. Product
+helpers such as `session.Once` still read the process env via `syscall.Getenv`
+internally for cross-process coordination — harness path construction should use
+`d.DOCTEST_SESSION_ID`.
+
+Package-level helpers that need paths or the session id must take
+`d *session.Doctest` (there are no package free vars).
 
 See **Session-scoped shared setup** in the design spec for the file-lock + cache
-pattern used to amortize heavy setup (build binaries once, seed archives once)
-across parallel leaf packages.
-
-To reference testdata placed alongside a test case (under its own directory),
-use a relative path — it resolves against the case directory:
-
-```go
-srcTestData := "./testdata"
-```
+pattern used to amortize heavy setup across parallel leaf packages.
 
 ## Validation
 

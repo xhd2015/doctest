@@ -20,10 +20,12 @@ gen-dir -> per-leaf packages -> file system
 1. Run `doctest test` on the testdata fixture, which compiles with `go test -c`.
 
 ```go
-import "path/filepath"
-
-func Setup(t *testing.T, req *Request) error {
-    req.Args = []string{"test", filepath.Join(DOCTEST_ROOT, "build", "testdata", "helper-shadow")}
+import (
+"path/filepath"
+"github.com/xhd2015/doctest/session"
+)
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+    req.Args = []string{"test", filepath.Join(d.DOCTEST_ROOT, "build", "testdata", "helper-shadow")}
     return nil
 }
 ```

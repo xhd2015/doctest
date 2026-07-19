@@ -1,43 +1,33 @@
 package leaf_tc
 
 import (
-	"os"
-	"path/filepath"
+	"github.com/xhd2015/doctest/session"
 	"syscall"
 	"testing"
-)
-
-var (
-	DOCTEST_ROOT       string
-	DOCTEST_SESSION_ID string
 )
 
 type Request struct{}
 type Response struct{}
 
 func TestGeneratedCaseLeaf(t *testing.T) {
-	DOCTEST_ROOT = `{{DOCTEST_ROOT}}`
+	var sid string
 	{
-		sid, ok := syscall.Getenv("DOCTEST_SESSION_ID")
-		if !ok || sid == "" {
+		s, ok := syscall.Getenv("DOCTEST_SESSION_ID")
+		if !ok || s == "" {
 			t.Fatalf("DOCTEST_SESSION_ID not set")
 		}
-		DOCTEST_SESSION_ID = sid
+		sid = s
 	}
-	__origWd, __wdErr := os.Getwd()
-	if __wdErr != nil {
-		t.Fatal(__wdErr)
+	d := &session.Doctest{
+		DOCTEST_ROOT:       `{{DOCTEST_ROOT}}`,
+		DOCTEST_CASE:       `{{DOCTEST_ROOT}}/leaf`,
+		DOCTEST_SESSION_ID: sid,
 	}
-	defer os.Chdir(__origWd)
-	if err := os.Chdir(filepath.Join(DOCTEST_ROOT, "leaf")); err != nil {
-		t.Fatal(err)
-	}
-
-	run := func(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+	run := func(t *testing.T, _ *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 	Run := run
 	req := &Request{}
-	assert := func(t *testing.T, req *Request, resp *Response, err error) {}
+	assert := func(t *testing.T, _ *session.Doctest, req *Request, resp *Response, err error) {}
 	_ = Run
-	resp, runErr := run(t, req)
-	assert(t, req, resp, runErr)
+	resp, runErr := run(t, d, req)
+	assert(t, d, req, resp, runErr)
 }

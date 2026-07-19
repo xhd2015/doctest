@@ -23,12 +23,13 @@ non-root missing Setup -> build error
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
     "path/filepath"
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
-    fixtureDir := filepath.Join(DOCTEST_ROOT, "testdata", "root-run-used")
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+    fixtureDir := filepath.Join(d.DOCTEST_ROOT, "testdata", "root-run-used")
     req.Args = []string{"test", fixtureDir}
     return nil
 }

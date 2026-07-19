@@ -35,6 +35,7 @@ public imports only -> cache/outside gen-dir -> module testcase + replace
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
 	"bufio"
 	"bytes"
 	"context"
@@ -58,10 +59,10 @@ var (
 	testDir		string
 )
 var bt = string([]byte{96, 96, 96})
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Timeout = 120 * time.Second
 
-	req.Bin = testbin.Ensure(t, filepath.Join(DOCTEST_ROOT, "..", "..", ".."))
+	req.Bin = testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, "..", "..", ".."))
 	return nil
 }
 func runDoctestInterruptedDuringWriteCases(t *testing.T, req *Request) (*Response, error) {
@@ -197,10 +198,10 @@ func copyDir(dst string, src string) error {
 		return os.WriteFile(target, data, 0644)
 	})
 }
-func copyInternalModuleFixture(t *testing.T, fixtureName string) {
+func copyInternalModuleFixture(t *testing.T, d *session.Doctest, fixtureName string) {
 	t.Helper()
 
-	fixtureSrc := filepath.Join(DOCTEST_ROOT, "testdata", fixtureName)
+	fixtureSrc := filepath.Join(d.DOCTEST_ROOT, "testdata", fixtureName)
 	moduleRoot = t.TempDir()
 	if err := copyDir(moduleRoot, fixtureSrc); err != nil {
 		t.Fatalf("copy fixture %s: %v", fixtureName, err)
@@ -208,14 +209,14 @@ func copyInternalModuleFixture(t *testing.T, fixtureName string) {
 	testDir = filepath.Join(moduleRoot, "tests")
 	genDir = filepath.Join(moduleRoot, "_gen")
 }
-func createInternalModuleProject(t *testing.T) {
+func createInternalModuleProject(t *testing.T, d *session.Doctest) {
 	t.Helper()
-	copyInternalModuleFixture(t, "internal-module")
+	copyInternalModuleFixture(t, d, "internal-module")
 }
-func createInternalModuleProjectWithLeaves(t *testing.T) {
+func createInternalModuleProjectWithLeaves(t *testing.T, d *session.Doctest) {
 	t.Helper()
 
-	fixtureSrc := "./testdata"
+	fixtureSrc := filepath.Join(d.DOCTEST_CASE, "testdata")
 	moduleRoot = t.TempDir()
 	if err := copyDir(moduleRoot, fixtureSrc); err != nil {
 		t.Fatalf("copy fixture %s: %v", fixtureSrc, err)

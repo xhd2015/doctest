@@ -20,10 +20,12 @@ Caller <- error empty key (fn not invoked)
 3. Assert error and FnCalls == 0.
 
 ```go
-import "testing"
-
-func Setup(t *testing.T, req *Request) error {
-	req.SessionID = "once-doctest-empty-key-" + DOCTEST_SESSION_ID
+import (
+"testing"
+"github.com/xhd2015/doctest/session"
+)
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	req.SessionID = "once-doctest-empty-key-" + d.DOCTEST_SESSION_ID
 	req.Key = ""
 	req.Mode = "json-object"
 	return nil

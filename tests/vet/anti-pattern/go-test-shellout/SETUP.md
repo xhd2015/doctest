@@ -19,18 +19,19 @@ embedded go block | go test shellout | assert without setup | skipped testdata
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
     "github.com/xhd2015/doctest/libdoc/testtree"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "DOCTEST.md"), []byte(testtree.VetDOCTEST()), 0644); err != nil {
 		t.Fatal(err)
 	}
-	fixture, err := os.ReadFile("fixture_setup.md.txt")
+	fixture, err := os.ReadFile(filepath.Join(d.DOCTEST_CASE, "fixture_setup.md.txt"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -25,11 +25,13 @@ Caller <- same raw JSON on subsequent Once(same key)
   client unmarshaling), not by trivial payload variants.
 
 ```go
-import "testing"
-
-func Setup(t *testing.T, req *Request) error {
+import (
+"testing"
+"github.com/xhd2015/doctest/session"
+)
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	if req.SessionID == "" {
-		req.SessionID = "once-doctest-success-" + DOCTEST_SESSION_ID
+		req.SessionID = "once-doctest-success-" + d.DOCTEST_SESSION_ID
 	}
 	req.Mode = "json-object"
 	return nil

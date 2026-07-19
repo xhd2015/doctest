@@ -30,6 +30,7 @@ runner -> PASS(passed/total) in DURATION | FAIL(passed/total) in DURATION
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
 	"bytes"
 	"context"
 	"errors"
@@ -48,10 +49,10 @@ import (
 var ansiEscape = regexp.MustCompile("\x1b\\[[0-9;]*m")
 var inlineSummaryPlainRe = regexp.MustCompile(`\(\d+ Run, \d+ Pass, \d+ Fail, \d+ Cached\) in (.+)`)
 var finalSummaryPlainRe = regexp.MustCompile(`^(PASS|FAIL) \(\d+/\d+\) in .+$`)
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Timeout = 120 * time.Second
 
-	req.Bin = testbin.Ensure(t, filepath.Join(DOCTEST_ROOT, "..", "..", ".."))
+	req.Bin = testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, "..", "..", ".."))
 	return nil
 }
 func bt(n int) string {
@@ -84,7 +85,7 @@ func createSlowLeafTree(t *testing.T) string {
 	"testing"
 	"time"
 )
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	time.Sleep(time.Second)
 	return nil
 }`

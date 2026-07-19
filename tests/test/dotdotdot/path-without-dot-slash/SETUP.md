@@ -22,11 +22,13 @@ progress dots -> . F | verbose -> go test -v | count -> N tests
 
 ```go
 import (
+"github.com/xhd2015/doctest/session"
+"path/filepath"
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
-    req.WorkDir = "./testdata"
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+    req.WorkDir = filepath.Join(d.DOCTEST_CASE, "testdata")
     req.Args = []string{"test", "-v", "alpha/..."}
     return nil
 }

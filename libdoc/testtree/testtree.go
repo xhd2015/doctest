@@ -4,9 +4,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/xhd2015/doctest/version"
+)
+
+// Process-local shared pass-fail fixtures so nested RunTest reuses gen/GOCACHE.
+var (
+	sharedFixtureMu   sync.Mutex
+	sharedPassFailDirs = map[string]string{} // "pass/fail" -> abs dir
 )
 
 const MinimalDSN = `## DSN (Domain Specific Notion)
@@ -112,6 +119,28 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) { t.Fatal("fo
 		leaves = append(leaves, LeafSpec{Name: "a_pass_0"})
 	}
 	WriteMinimalRunnableTree(t, root, leaves)
+}
+
+// SharedPassFailTree returns a process-local 1-pass (or pass/fail) fixture that
+// survives individual leaf TempDir cleanup. Nested metrics recording reuses
+// the same path so gen/GOCACHE can hit across leaves.
+func SharedPassFailTree(t *testing.T, passCount, failCount int) string {
+	t.Helper()
+	key := itoa(passCount) + "/" + itoa(failCount)
+	sharedFixtureMu.Lock()
+	defer sharedFixtureMu.Unlock()
+	if dir, ok := sharedPassFailDirs[key]; ok {
+		if st, err := os.Stat(dir); err == nil && st.IsDir() {
+			return dir
+		}
+	}
+	dir, err := os.MkdirTemp("", "doctest-shared-passfail-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	WritePassFailTree(t, dir, passCount, failCount)
+	sharedPassFailDirs[key] = dir
+	return dir
 }
 
 func VetDOCTEST() string {
