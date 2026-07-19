@@ -22,8 +22,9 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if strings.Contains(resp.Stderr, "test requires <dir>") {
         t.Fatalf("verbose flag after dir was treated as an extra positional arg:\n%s", resp.Stderr)
     }
-    if !strings.Contains(resp.Stdout, "TestGeneratedCaseHappyPath") {
-        t.Fatalf("expected verbose test output to include generated test name, stdout:\n%s", resp.Stdout)
+    // Unified suite: verbose go test shows TestDoctestSuite (and leaf subtests).
+    if !strings.Contains(resp.Stdout, "TestDoctestSuite") {
+        t.Fatalf("expected verbose test output to include TestDoctestSuite, stdout:\n%s", resp.Stdout)
     }
 }
 ```

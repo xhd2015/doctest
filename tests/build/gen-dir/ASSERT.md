@@ -31,17 +31,28 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         }
         return nil
     })
-    for _, name := range []string{"happy_path_test.go", "expected_error_test.go", "override_run_test.go"} {
-        ok := false
-        for _, f := range found {
-            if f == name {
-                ok = true
-                break
-            }
+    // Unified layout: non-test leaf.go per leaf + suite_test.go + droot.go.
+    leafGo := 0
+    hasSuite := false
+    hasDroot := false
+    for _, f := range found {
+        switch f {
+        case "leaf.go":
+            leafGo++
+        case "suite_test.go":
+            hasSuite = true
+        case "droot.go":
+            hasDroot = true
         }
-        if !ok {
-            t.Fatalf("generated file %s missing; found: %v\nstderr:\n%s", name, found, resp.Stderr)
-        }
+    }
+    if leafGo < 3 {
+        t.Fatalf("expected ≥3 leaf.go files, found %d; all: %v\nstderr:\n%s", leafGo, found, resp.Stderr)
+    }
+    if !hasSuite {
+        t.Fatalf("expected suite_test.go; found: %v\nstderr:\n%s", found, resp.Stderr)
+    }
+    if !hasDroot {
+        t.Fatalf("expected droot.go; found: %v\nstderr:\n%s", found, resp.Stderr)
     }
 }
 ```

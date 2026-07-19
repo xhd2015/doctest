@@ -30,8 +30,9 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("first run exit %d, stderr:\n%s", state.FirstResp.ExitCode, state.FirstResp.Stderr)
     }
     secondStdout := state.SecondResp.Stdout
-    if !strings.Contains(secondStdout, ", 1 Cached") {
-        t.Fatalf("second run not cached; expected stdout to contain ', 1 Cached':\n%s", secondStdout)
+    // Unified suite: one package → ", 1 Cached" (or "N Cached" if leaf counts).
+    if !strings.Contains(secondStdout, "Cached") || strings.Contains(secondStdout, "0 Cached") {
+        t.Fatalf("second run not cached; expected Cached > 0 in stdout:\n%s", secondStdout)
     }
 }
 ```

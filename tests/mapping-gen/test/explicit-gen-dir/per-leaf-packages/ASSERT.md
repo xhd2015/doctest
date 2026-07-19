@@ -32,8 +32,9 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	leafA := filepath.Join(genDir, "tests", "category", "leaf_a")
 	leafB := filepath.Join(genDir, "tests", "category", "leaf_b")
 
-	assertFileExists(t, filepath.Join(leafA, "leaf_a_test.go"))
-	assertFileExists(t, filepath.Join(leafB, "leaf_b_test.go"))
+	// Unified mode: non-test leaf packages (leaf.go), not classic *_test.go.
+	assertFileExists(t, filepath.Join(leafA, "leaf.go"))
+	assertFileExists(t, filepath.Join(leafB, "leaf.go"))
 
 	// Each leaf dir should NOT have its own go.mod — go.mod is shared at project root
 	assertFileNotExists(t, filepath.Join(leafA, "go.mod"))

@@ -38,13 +38,13 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("second run expected 1 test case, stderr:\n%s", isoState.SecondRun.Stderr)
     }
 
-    if strings.Contains(secondStdout, "TestGeneratedCaseLeaf1") {
+    if strings.Contains(secondStdout, "leaf-1") {
         t.Fatalf("second run expected leaf-1 NOT to run, stdout:\n%s", secondStdout)
     }
-    if strings.Contains(secondStdout, "TestGeneratedCaseLeaf2") {
+    if strings.Contains(secondStdout, "leaf-2") {
         t.Fatalf("second run expected leaf-2 NOT to run, stdout:\n%s", secondStdout)
     }
-    if !strings.Contains(secondStdout, "TestGeneratedCaseLeaf3") {
+    if !strings.Contains(secondStdout, "leaf-3") {
         t.Fatalf("second run expected leaf-3 to run, stdout:\n%s", secondStdout)
     }
 }

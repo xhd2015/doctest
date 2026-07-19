@@ -38,14 +38,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("second run expected 3 test cases, stderr:\n%s", isoState.SecondRun.Stderr)
     }
 
-    if !strings.Contains(secondStdout, "TestGeneratedCaseLeaf1") {
-        t.Fatalf("second run expected leaf-1 to run, stdout:\n%s", secondStdout)
-    }
-    if !strings.Contains(secondStdout, "TestGeneratedCaseLeaf2") {
-        t.Fatalf("second run expected leaf-2 to run, stdout:\n%s", secondStdout)
-    }
-    if !strings.Contains(secondStdout, "TestGeneratedCaseLeaf3") {
-        t.Fatalf("second run expected leaf-3 to run, stdout:\n%s", secondStdout)
+    // Unified suite subtest names use leaf paths (slashes encoded as __).
+    for _, leaf := range []string{"leaf-1", "leaf-2", "leaf-3"} {
+        if !strings.Contains(secondStdout, leaf) {
+            t.Fatalf("second run expected %s to appear in stdout:\n%s", leaf, secondStdout)
+        }
     }
 }
 ```

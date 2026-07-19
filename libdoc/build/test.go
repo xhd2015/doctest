@@ -317,7 +317,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 const UnifiedSuiteTestName = "TestDoctestSuite"
 
 // leafTimingsFromSubtests attributes go test -json subtest Elapsed under the
-// unified suite (t.Run(leafPath, …) → TestDoctestSuite/<leafPath>).
+// unified suite (t.Run(encodedPath, …) → TestDoctestSuite/<path with / → __>).
 // When unmappable, elapsed stays 0 (do not clone suite wall onto every leaf).
 func leafTimingsFromSubtests(cases []core.TreeCase, result goTestJSONResult, goTestWall time.Duration) []LeafTiming {
 	out := make([]LeafTiming, 0, len(cases))
@@ -331,6 +331,8 @@ func leafTimingsFromSubtests(cases []core.TreeCase, result goTestJSONResult, goT
 		if rel == "" {
 			continue
 		}
+		// Decode suite subtest encoding: "/" was replaced with "__".
+		rel = strings.ReplaceAll(rel, "__", "/")
 		// Prefer the deepest subtest elapsed (leaf path); keep max if duplicates.
 		if ns > byRel[rel] {
 			byRel[rel] = ns
@@ -686,9 +688,23 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache stri
 		// one suite binary still reports one result per leaf (not 1 package).
 		suiteLeafPass := 0
 		suiteLeafFail := 0
+		// Dedup suite leaf names: go test -json can emit more than one terminal
+		// event per subtest name in edge cases; count each leaf at most once.
+		suiteLeafSeen := make(map[string]bool)
 		testKey := func(pkg, test string) string { return pkg + "\x00" + test }
 		isSuiteLeafSubtest := func(test string) bool {
 			return strings.HasPrefix(test, UnifiedSuiteTestName+"/")
+		}
+		countSuiteLeaf := func(test string, failed bool) {
+			if suiteLeafSeen[test] {
+				return
+			}
+			suiteLeafSeen[test] = true
+			if failed {
+				suiteLeafFail++
+			} else {
+				suiteLeafPass++
+			}
 		}
 		flushTestOutput := func(key string) {
 			if failedTests[key] {
@@ -764,8 +780,11 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache stri
 					recordTest(ev.Test, ev.Elapsed)
 					delete(testOutputs, testKey(ev.Package, ev.Test))
 					if isSuiteLeafSubtest(ev.Test) {
-						suiteLeafPass++
-						stdout.Write([]byte("."))
+						before := suiteLeafPass + suiteLeafFail
+						countSuiteLeaf(ev.Test, false)
+						if suiteLeafPass+suiteLeafFail > before {
+							stdout.Write([]byte("."))
+						}
 					}
 					continue
 				}
@@ -783,8 +802,11 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache stri
 					key := testKey(ev.Package, ev.Test)
 					flushTestOutput(key)
 					if isSuiteLeafSubtest(ev.Test) {
-						suiteLeafFail++
-						fmt.Fprint(stdout, style.red("."))
+						before := suiteLeafPass + suiteLeafFail
+						countSuiteLeaf(ev.Test, true)
+						if suiteLeafPass+suiteLeafFail > before {
+							fmt.Fprint(stdout, style.red("."))
+						}
 					}
 					continue
 				}

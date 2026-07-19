@@ -29,9 +29,12 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
-    cfg.TestDir = createTempTestProject(t, "mytest")
-    cfg.ModifyFile = "simple/SETUP.md"
-    cfg.ModifyContent = doctestGoBlock("import \"testing\"\n\nfunc Setup(t *testing.T, req *Request) error { req.WorkDir = \"modified-leaf-setup\"; return nil }")
+    // Fully specify cfg (unified suite shares package vars across leaves).
+    cfg = multiRunCfg{
+        TestDir:       createTempTestProject(t, "mytest"),
+        ModifyFile:    "simple/SETUP.md",
+        ModifyContent: doctestGoBlock("import \"testing\"\n\nfunc Setup(t *testing.T, req *Request) error { req.WorkDir = \"modified-leaf-setup\"; return nil }"),
+    }
     doMultiRun(t, req)
     return nil
 }

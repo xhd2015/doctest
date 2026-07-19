@@ -378,10 +378,11 @@ func resolveRefAncestorChain(dir string, intermediateByDir map[string]RefInterme
 	return up
 }
 
-// collectRootSymbolRenames maps unexported root package symbols to exported
-// names so leaf packages can reference them as droot.ExportedName.
-// Exported symbols map to themselves. Types Request/Response are excluded
-// (already qualified separately as droot.Request).
+// collectRootSymbolRenames maps package-level symbols (helpers, vars, consts,
+// types, methods) from unexported → exported so cross-package leaves can use
+// them. Exported symbols map to themselves. Request/Response are excluded
+// (qualified separately as droot.Request). Struct field names are NOT included
+// here — see collectFieldRenames / collectAllExportRenames.
 func collectRootSymbolRenames(rootDocs []SetupDocument) map[string]string {
 	renames := make(map[string]string)
 	add := func(name string) {
@@ -406,9 +407,7 @@ func collectRootSymbolRenames(rootDocs []SetupDocument) map[string]string {
 		for _, h := range doc.GoBlock.Helpers {
 			add(h.Name)
 		}
-		// Methods stay package-local on root types; still export name if leaf needed (rare).
 		for _, m := range doc.GoBlock.Methods {
-			// Method name only; receiver type stays in droot.
 			add(m.Name)
 		}
 		for _, decl := range doc.GoBlock.VarDecls {
@@ -421,8 +420,112 @@ func collectRootSymbolRenames(rootDocs []SetupDocument) map[string]string {
 				add(n)
 			}
 		}
+		// Type names must be exported for hierarchical packages.
+		for name := range doc.GoBlock.Types {
+			add(name)
+		}
+		for _, decl := range doc.GoBlock.TypeDecls {
+			// Type names only here (fields via collectFieldRenames).
+			fset := token.NewFileSet()
+			f, err := parser.ParseFile(fset, "", "package p\n"+decl, 0)
+			if err != nil {
+				continue
+			}
+			for _, d := range f.Decls {
+				gd, ok := d.(*ast.GenDecl)
+				if !ok || gd.Tok != token.TYPE {
+					continue
+				}
+				for _, spec := range gd.Specs {
+					ts, ok := spec.(*ast.TypeSpec)
+					if !ok {
+						continue
+					}
+					add(ts.Name.Name)
+				}
+			}
+		}
 	}
 	return renames
+}
+
+// collectHelperRenames maps only helper function names (not vars/types).
+// Used so qualifyRootSymbols only rewrites helper names when they appear as
+// calls (next token '('), leaving local variables with the same name alone
+// (e.g. sessionsDir := sessionsDir()).
+func collectHelperRenames(docs []SetupDocument) map[string]string {
+	renames := make(map[string]string)
+	for _, doc := range docs {
+		if doc.GoBlock == nil {
+			continue
+		}
+		for _, h := range doc.GoBlock.Helpers {
+			name := h.Name
+			if name == "" || name == "_" ||
+				name == "Request" || name == "Response" || name == "Setup" || name == "Run" || name == "Assert" {
+				continue
+			}
+			if name == "err" || name == "ok" || name == "t" || name == "req" || name == "resp" {
+				continue
+			}
+			if token.IsExported(name) {
+				renames[name] = name
+			} else {
+				renames[name] = exportIdent(name)
+			}
+		}
+	}
+	return renames
+}
+
+// collectNonHelperPackageRenames is package renames minus helpers (vars, consts,
+// types, methods). Helpers are handled with call-only qualification.
+func collectNonHelperPackageRenames(docs []SetupDocument) map[string]string {
+	all := collectRootSymbolRenames(docs)
+	helpers := collectHelperRenames(docs)
+	out := make(map[string]string, len(all))
+	for old, neu := range all {
+		if _, isHelper := helpers[old]; isHelper {
+			continue
+		}
+		out[old] = neu
+	}
+	return out
+}
+
+// collectFieldRenames maps unexported struct/interface field names → exported.
+func collectFieldRenames(docs []SetupDocument) map[string]string {
+	fields := make(map[string]string)
+	for _, doc := range docs {
+		if doc.GoBlock == nil {
+			continue
+		}
+		for _, decl := range doc.GoBlock.TypeDecls {
+			for _, n := range typeDeclFieldNames(decl) {
+				if n == "" || n == "_" {
+					continue
+				}
+				if token.IsExported(n) {
+					fields[n] = n
+				} else {
+					fields[n] = exportIdent(n)
+				}
+			}
+		}
+	}
+	return fields
+}
+
+// collectAllExportRenames merges package-level and field renames for same-
+// package rewriteBareIdents (type decls need field names exported too).
+func collectAllExportRenames(docs []SetupDocument) map[string]string {
+	out := collectRootSymbolRenames(docs)
+	for old, neu := range collectFieldRenames(docs) {
+		if _, ok := out[old]; !ok {
+			out[old] = neu
+		}
+	}
+	return out
 }
 
 func exportIdent(name string) string {
@@ -458,17 +561,94 @@ func declIdentNames(decl string) []string {
 	return names
 }
 
-// rewriteBareIdents renames bare identifiers according to renames (old→new).
-// Uses go/scanner so string/rune/comment contents are left untouched (critical:
-// fixture generators embed Go source in string literals).
+// typeDeclIdentNames returns type names and struct field names from a type decl.
+func typeDeclIdentNames(decl string) []string {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "", "package p\n"+decl, 0)
+	if err != nil {
+		return nil
+	}
+	var names []string
+	for _, d := range f.Decls {
+		gd, ok := d.(*ast.GenDecl)
+		if !ok || gd.Tok != token.TYPE {
+			continue
+		}
+		for _, spec := range gd.Specs {
+			ts, ok := spec.(*ast.TypeSpec)
+			if !ok {
+				continue
+			}
+			names = append(names, ts.Name.Name)
+			names = append(names, collectStructFieldNames(ts.Type)...)
+		}
+	}
+	return names
+}
+
+// typeDeclFieldNames returns only struct/interface field names from a type decl.
+func typeDeclFieldNames(decl string) []string {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "", "package p\n"+decl, 0)
+	if err != nil {
+		return nil
+	}
+	var names []string
+	for _, d := range f.Decls {
+		gd, ok := d.(*ast.GenDecl)
+		if !ok || gd.Tok != token.TYPE {
+			continue
+		}
+		for _, spec := range gd.Specs {
+			ts, ok := spec.(*ast.TypeSpec)
+			if !ok {
+				continue
+			}
+			names = append(names, collectStructFieldNames(ts.Type)...)
+		}
+	}
+	return names
+}
+
+func collectStructFieldNames(expr ast.Expr) []string {
+	var names []string
+	switch t := expr.(type) {
+	case *ast.StructType:
+		if t.Fields == nil {
+			return nil
+		}
+		for _, f := range t.Fields.List {
+			for _, id := range f.Names {
+				names = append(names, id.Name)
+			}
+		}
+	case *ast.InterfaceType:
+		if t.Methods == nil {
+			return nil
+		}
+		for _, f := range t.Methods.List {
+			for _, id := range f.Names {
+				names = append(names, id.Name)
+			}
+		}
+	case *ast.StarExpr:
+		return collectStructFieldNames(t.X)
+	case *ast.ParenExpr:
+		return collectStructFieldNames(t.X)
+	}
+	return names
+}
+
+// rewriteBareIdents renames identifiers according to renames (old→new), both
+// bare and after '.' (struct fields / methods). Uses go/scanner so string/rune/
+// comment contents are left untouched (critical: fixture generators embed Go
+// source in string literals).
 func rewriteBareIdents(src string, renames map[string]string) string {
 	if len(renames) == 0 || src == "" {
 		return src
 	}
 	return scanReplaceIdents(src, func(name string, afterDot bool) string {
-		if afterDot {
-			return name
-		}
+		_ = afterDot
 		if neu, ok := renames[name]; ok {
 			return neu
 		}
@@ -476,28 +656,167 @@ func rewriteBareIdents(src string, renames map[string]string) string {
 	})
 }
 
-// qualifyRootSymbols prefixes bare root symbols with alias.ExportedName
-// (e.g. runType → droot.RunType). Skips string/comment content.
+// qualifyRootSymbols prefixes bare package-level symbols with alias.ExportedName
+// (e.g. runType → droot.RunType). Prefer qualifyDocsSymbols for full helper/
+// field handling.
 func qualifyRootSymbols(src, alias string, renames map[string]string) string {
-	if (len(renames) == 0 && alias == "") || src == "" {
+	return qualifyRootSymbolsWithFields(src, alias, renames, nil, nil)
+}
+
+// qualifyDocsSymbols qualifies all package symbols from docs under alias.
+func qualifyDocsSymbols(src, alias string, docs []SetupDocument) string {
+	return qualifyRootSymbolsWithFields(src, alias,
+		collectNonHelperPackageRenames(docs),
+		collectFieldRenames(docs),
+		collectHelperRenames(docs),
+	)
+}
+
+// qualifyRootSymbolsWithFields is the full form with field and helper renames.
+// Helpers are rewritten only when the next token is '(' (call site), so
+// locals like `sessionsDir := sessionsDir()` keep the LHS local name.
+func qualifyRootSymbolsWithFields(src, alias string, pkgRenames, fieldRenames, helperRenames map[string]string) string {
+	if src == "" {
 		return src
 	}
-	// Map both bare and already-exported forms to the exported form.
-	lookup := map[string]string{}
-	for old, neu := range renames {
-		lookup[old] = neu
-		lookup[neu] = neu
+	if len(pkgRenames) == 0 && len(fieldRenames) == 0 && len(helperRenames) == 0 {
+		return src
 	}
-	return scanReplaceIdents(src, func(name string, afterDot bool) string {
-		if afterDot || name == "_" || name == "" {
+	return scanReplaceIdentsNext(src, func(name string, afterDot bool, next token.Token) string {
+		if name == "_" || name == "" {
 			return name
 		}
-		exported, ok := lookup[name]
-		if !ok {
+		if afterDot {
+			// Field/method selector: export only, never package-qualify.
+			if neu, ok := fieldRenames[name]; ok {
+				return neu
+			}
+			if neu, ok := pkgRenames[name]; ok {
+				return neu // methods live in pkgRenames
+			}
+			if neu, ok := helperRenames[name]; ok {
+				return neu
+			}
 			return name
 		}
-		return alias + "." + exported
+		// Helper calls only (next token '(').
+		if neu, ok := helperRenames[name]; ok && next == token.LPAREN {
+			if alias == "" {
+				return neu
+			}
+			return alias + "." + neu
+		}
+		// Bare package-level (vars/types/consts): always alias-qualify.
+		if neu, ok := pkgRenames[name]; ok {
+			if alias == "" {
+				return neu
+			}
+			return alias + "." + neu
+		}
+		// Bare field key in composite literal: export without alias.
+		if neu, ok := fieldRenames[name]; ok {
+			return neu
+		}
+		return name
 	})
+}
+
+// scanReplaceIdentsNext is like scanReplaceIdents but also reports the next
+// non-comment token (or token.ILLEGAL at EOF).
+func scanReplaceIdentsNext(src string, repl func(name string, afterDot bool, next token.Token) string) string {
+	type tok struct {
+		off int
+		tok token.Token
+		lit string
+	}
+	fset := token.NewFileSet()
+	file := fset.AddFile("", fset.Base(), len(src))
+	var s scanner.Scanner
+	s.Init(file, []byte(src), nil, scanner.ScanComments)
+	var toks []tok
+	for {
+		pos, t, lit := s.Scan()
+		if t == token.EOF {
+			break
+		}
+		if t == token.SEMICOLON && lit == "\n" {
+			continue
+		}
+		toks = append(toks, tok{off: fset.File(pos).Offset(pos), tok: t, lit: lit})
+	}
+	var out strings.Builder
+	out.Grow(len(src) + 64)
+	prevDot := false
+	lastEnd := 0
+	for i, tk := range toks {
+		if tk.off > lastEnd {
+			out.WriteString(src[lastEnd:tk.off])
+		}
+		switch tk.tok {
+		case token.IDENT:
+			next := token.ILLEGAL
+			for j := i + 1; j < len(toks); j++ {
+				if toks[j].tok == token.COMMENT {
+					continue
+				}
+				next = toks[j].tok
+				break
+			}
+			neu := repl(tk.lit, prevDot, next)
+			out.WriteString(neu)
+			lastEnd = tk.off + len(tk.lit)
+			prevDot = false
+		case token.PERIOD:
+			out.WriteByte('.')
+			lastEnd = tk.off + 1
+			prevDot = true
+		default:
+			// Copy exact source bytes for this token.
+			tokEnd := tk.off + 1
+			if tk.lit != "" {
+				tokEnd = tk.off + len(tk.lit)
+			} else {
+				// operator tokens: use next token start or single byte
+				if i+1 < len(toks) {
+					tokEnd = toks[i+1].off
+					// only the operator itself — re-scan length from source
+					// Prefer single-byte for most ops; multi-byte ops have lit empty
+					// but span to next — don't include whitespace: use fixed lengths.
+				}
+				// Fall back to scanning common multi-char tokens from source.
+				switch tk.tok {
+				case token.SHL, token.SHR, token.AND_NOT, token.LAND, token.LOR,
+					token.ARROW, token.DEFINE, token.ELLIPSIS,
+					token.EQL, token.NEQ, token.LEQ, token.GEQ,
+					token.ADD_ASSIGN, token.SUB_ASSIGN, token.MUL_ASSIGN,
+					token.QUO_ASSIGN, token.REM_ASSIGN, token.AND_ASSIGN,
+					token.OR_ASSIGN, token.XOR_ASSIGN, token.SHL_ASSIGN,
+					token.SHR_ASSIGN, token.AND_NOT_ASSIGN, token.INC, token.DEC:
+					// multi-byte — take until next token or estimate
+					if i+1 < len(toks) {
+						// write only non-space run from tk.off
+						end := toks[i+1].off
+						for end > tk.off && (src[end-1] == ' ' || src[end-1] == '\t' || src[end-1] == '\n') {
+							end--
+						}
+						tokEnd = end
+					}
+				default:
+					tokEnd = tk.off + 1
+				}
+			}
+			if tokEnd > len(src) {
+				tokEnd = len(src)
+			}
+			out.WriteString(src[tk.off:tokEnd])
+			lastEnd = tokEnd
+			prevDot = false
+		}
+	}
+	if lastEnd < len(src) {
+		out.WriteString(src[lastEnd:])
+	}
+	return out.String()
 }
 
 // scanReplaceIdents rewrites IDENT tokens via repl, skipping strings/comments.
@@ -602,7 +921,7 @@ func AssembleRefRootSource(rootDocs []SetupDocument, pkgName string) (string, er
 		return "", fmt.Errorf("missing Run(t *testing.T, req *Request) (*Response, error) in root setup chain")
 	}
 
-	renames := collectRootSymbolRenames(rootDocs)
+	renames := collectAllExportRenames(rootDocs)
 
 	var buf strings.Builder
 	buf.WriteString("package ")
@@ -644,7 +963,7 @@ func AssembleRefRootSource(rootDocs []SetupDocument, pkgName string) (string, er
 	writePackageFunc(&body, *run)
 	body.WriteString("\n")
 
-	// Export unexported package-level symbols (vars/helpers) and rewrite refs.
+	// Export unexported package-level symbols, types, and fields; rewrite refs.
 	bodyStr := rewriteBareIdents(body.String(), renames)
 	buf.WriteString(bodyStr)
 	return buf.String(), nil
@@ -675,9 +994,8 @@ func AssembleRefIntermediateSource(
 		rootAlias = RefRootPkgName
 	}
 
-	rootRenames := collectRootSymbolRenames(rootDocs)
 	rootTypes := rootTypeNamesForQualify(rootDocs)
-	ownRenames := collectRootSymbolRenames(docs)
+	ownRenames := collectAllExportRenames(docs)
 
 	var buf strings.Builder
 	buf.WriteString("package ")
@@ -729,10 +1047,10 @@ func AssembleRefIntermediateSource(
 	// Request/Response (those live on droot).
 	for _, g := range ancestors {
 		alias := RefIntermediateAlias(g.Dir)
-		bodyStr = qualifyRootSymbols(bodyStr, alias, collectRootSymbolRenames(g.Docs))
+		bodyStr = qualifyDocsSymbols(bodyStr, alias, g.Docs)
 		bodyStr = qualifyRootTypes(bodyStr, alias, collectRootTypeNames(g.Docs))
 	}
-	bodyStr = qualifyRootSymbols(bodyStr, rootAlias, rootRenames)
+	bodyStr = qualifyDocsSymbols(bodyStr, rootAlias, rootDocs)
 	bodyStr = qualifyRootTypes(bodyStr, rootAlias, rootTypes)
 	buf.WriteString(bodyStr)
 	return buf.String(), nil
@@ -740,18 +1058,18 @@ func AssembleRefIntermediateSource(
 
 // qualifyAncestorSymbols rewrites bare symbols/types from each intermediate
 // ancestor and from root into alias-qualified form (for leaf-local code).
-func qualifyAncestorSymbols(src string, part RefSetupPartition, rootAlias string, rootRenames map[string]string, rootTypes []string) string {
+func qualifyAncestorSymbols(src string, part RefSetupPartition, rootAlias string, rootDocs []SetupDocument) string {
 	if src == "" {
 		return src
 	}
 	// Parents first is fine; helper names are unique across the chain.
 	for _, g := range part.Intermediate {
 		alias := RefIntermediateAlias(g.Dir)
-		src = qualifyRootSymbols(src, alias, collectRootSymbolRenames(g.Docs))
+		src = qualifyDocsSymbols(src, alias, g.Docs)
 		src = qualifyRootTypes(src, alias, collectRootTypeNames(g.Docs))
 	}
-	src = qualifyRootSymbols(src, rootAlias, rootRenames)
-	src = qualifyRootTypes(src, rootAlias, rootTypes)
+	src = qualifyDocsSymbols(src, rootAlias, rootDocs)
+	src = qualifyRootTypes(src, rootAlias, rootTypeNamesForQualify(rootDocs))
 	return src
 }
 
@@ -772,8 +1090,6 @@ func AssembleRefLeafTestSource(tc TreeCase, compileOnly bool, pkgName, docTestRo
 	part := PartitionRefSetupDocs(tc)
 	rootDocs := part.RootDocs
 	leafDocs := part.LeafDocs
-	renames := collectRootSymbolRenames(rootDocs)
-	rootTypes := rootTypeNamesForQualify(rootDocs)
 
 	var buf strings.Builder
 	buf.WriteString("package ")
@@ -799,7 +1115,7 @@ func AssembleRefLeafTestSource(tc TreeCase, compileOnly bool, pkgName, docTestRo
 	writePackageLevelTypesAndMethods(&leafBlob, leafDocs, tc.AssertFile.GoBlock)
 	writePackageLevelConstVars(&leafBlob, leafDocs, tc.AssertFile.GoBlock)
 	writePackageLevelHelpers(&leafBlob, leafDocs, tc.AssertFile.GoBlock)
-	leafTop := qualifyAncestorSymbols(leafBlob.String(), part, rootAlias, renames, rootTypes)
+	leafTop := qualifyAncestorSymbols(leafBlob.String(), part, rootAlias, rootDocs)
 	buf.WriteString(leafTop)
 
 	buf.WriteString("func ")
@@ -851,11 +1167,11 @@ func AssembleRefLeafTestSource(tc TreeCase, compileOnly bool, pkgName, docTestRo
 		}
 		name := fmt.Sprintf("setup%d", i)
 		fn := *doc.GoBlock.Setup
-		fn.Params = qualifyAncestorSymbols(fn.Params, part, rootAlias, renames, rootTypes)
-		fn.Results = qualifyAncestorSymbols(fn.Results, part, rootAlias, renames, rootTypes)
-		fn.ResultTypes = qualifyAncestorSymbols(fn.ResultTypes, part, rootAlias, renames, rootTypes)
-		fn.ClosureResults = qualifyAncestorSymbols(fn.ClosureResults, part, rootAlias, renames, rootTypes)
-		fn.Body = qualifyAncestorSymbols(fn.Body, part, rootAlias, renames, rootTypes)
+		fn.Params = qualifyAncestorSymbols(fn.Params, part, rootAlias, rootDocs)
+		fn.Results = qualifyAncestorSymbols(fn.Results, part, rootAlias, rootDocs)
+		fn.ResultTypes = qualifyAncestorSymbols(fn.ResultTypes, part, rootAlias, rootDocs)
+		fn.ClosureResults = qualifyAncestorSymbols(fn.ClosureResults, part, rootAlias, rootDocs)
+		fn.Body = qualifyAncestorSymbols(fn.Body, part, rootAlias, rootDocs)
 		fn.Params = ensureDoctestParam(fn.Params)
 		writeFuncClosure(&buf, name, fn)
 		buf.WriteString(fmt.Sprintf("\tif err := %s(t, d, req); err != nil {\n", name))
@@ -864,11 +1180,11 @@ func AssembleRefLeafTestSource(tc TreeCase, compileOnly bool, pkgName, docTestRo
 	}
 
 	assertFn := *tc.AssertFile.GoBlock.Assert
-	assertFn.Params = qualifyAncestorSymbols(assertFn.Params, part, rootAlias, renames, rootTypes)
-	assertFn.Results = qualifyAncestorSymbols(assertFn.Results, part, rootAlias, renames, rootTypes)
-	assertFn.ResultTypes = qualifyAncestorSymbols(assertFn.ResultTypes, part, rootAlias, renames, rootTypes)
-	assertFn.ClosureResults = qualifyAncestorSymbols(assertFn.ClosureResults, part, rootAlias, renames, rootTypes)
-	assertFn.Body = qualifyAncestorSymbols(assertFn.Body, part, rootAlias, renames, rootTypes)
+	assertFn.Params = qualifyAncestorSymbols(assertFn.Params, part, rootAlias, rootDocs)
+	assertFn.Results = qualifyAncestorSymbols(assertFn.Results, part, rootAlias, rootDocs)
+	assertFn.ResultTypes = qualifyAncestorSymbols(assertFn.ResultTypes, part, rootAlias, rootDocs)
+	assertFn.ClosureResults = qualifyAncestorSymbols(assertFn.ClosureResults, part, rootAlias, rootDocs)
+	assertFn.Body = qualifyAncestorSymbols(assertFn.Body, part, rootAlias, rootDocs)
 	assertFn.Params = ensureDoctestParam(assertFn.Params)
 	writeFuncClosure(&buf, "assert", assertFn)
 
@@ -942,24 +1258,37 @@ func collectRootTypeNames(rootDocs []SetupDocument) []string {
 	return names
 }
 
-// qualifyRootTypes rewrites bare type identifiers in rootTypeNames to alias.X.
-// An empty rootTypeNames means no rewrites (callers must pass Request/Response
-// explicitly for root — do not default here, or intermediate packages with no
-// local types would steal Request/Response onto the wrong alias).
+// qualifyRootTypes rewrites bare type identifiers in rootTypeNames to alias.X
+// (exported form). An empty rootTypeNames means no rewrites (callers must pass
+// Request/Response explicitly for root — do not default here, or intermediate
+// packages with no local types would steal Request/Response onto the wrong alias).
 // Skips string/comment content so fixture generators keep raw `*Request` text.
 func qualifyRootTypes(s, rootAlias string, rootTypeNames []string) string {
 	if s == "" || len(rootTypeNames) == 0 {
 		return s
 	}
-	typeSet := map[string]bool{}
+	// Map both original and exported forms so rewrites are stable if a prior
+	// pass already exported the type name.
+	typeSet := map[string]string{} // bare name → alias.Exported
 	for _, t := range rootTypeNames {
-		typeSet[t] = true
+		if t == "" {
+			continue
+		}
+		exported := t
+		if !token.IsExported(t) {
+			exported = exportIdent(t)
+		}
+		typeSet[t] = rootAlias + "." + exported
+		typeSet[exported] = rootAlias + "." + exported
 	}
 	return scanReplaceIdents(s, func(name string, afterDot bool) string {
-		if afterDot || !typeSet[name] {
+		if afterDot {
 			return name
 		}
-		return rootAlias + "." + name
+		if q, ok := typeSet[name]; ok {
+			return q
+		}
+		return name
 	})
 }
 

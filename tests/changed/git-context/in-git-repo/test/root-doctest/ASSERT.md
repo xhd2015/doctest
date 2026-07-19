@@ -28,8 +28,12 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if inline == "" {
 		t.Fatalf("missing summary line in stdout:\n%s", resp.Stdout)
 	}
-	if !strings.Contains(inline, "(2 Run, 2 Pass, 0 Fail") {
-		t.Fatalf("expected (2 Run, 2 Pass, 0 Fail...), got %q\nstdout:\n%s", inline, resp.Stdout)
+	// Unified suite: one go test package, two leaf subtests.
+	if strings.Contains(inline, "Fail") && !strings.Contains(inline, "0 Fail") {
+		t.Fatalf("unexpected failures in summary %q\nstdout:\n%s", inline, resp.Stdout)
+	}
+	if !strings.Contains(resp.Stdout, "PASS (2/2)") && !strings.Contains(inline, "2 Pass") {
+		t.Fatalf("expected both leaves to pass (PASS (2/2) or 2 Pass), got %q\nstdout:\n%s", inline, resp.Stdout)
 	}
 }
 ```

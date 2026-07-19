@@ -38,13 +38,14 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("second run expected 2 test cases, stderr:\n%s", isoState.SecondRun.Stderr)
     }
 
-    if !strings.Contains(secondStdout, "TestGeneratedCaseLeaf1") {
+    // Unified: subtests named by path; group-a has leaf-1/leaf-2 only.
+    if !strings.Contains(secondStdout, "leaf-1") {
         t.Fatalf("second run expected leaf-1 to run, stdout:\n%s", secondStdout)
     }
-    if !strings.Contains(secondStdout, "TestGeneratedCaseLeaf2") {
+    if !strings.Contains(secondStdout, "leaf-2") {
         t.Fatalf("second run expected leaf-2 to run, stdout:\n%s", secondStdout)
     }
-    if strings.Contains(secondStdout, "TestGeneratedCaseLeaf3") {
+    if strings.Contains(secondStdout, "leaf-3") {
         t.Fatalf("second run expected leaf-3 NOT to run, stdout:\n%s", secondStdout)
     }
 }

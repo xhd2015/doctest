@@ -57,20 +57,21 @@ type multiRunState struct {
 var state multiRunState
 
 func Setup(t *testing.T, req *Request) error {
-    state.GenDir = ""
-    state.FirstResp = nil
-    state.SecondResp = nil
+    // Reset shared package state every leaf — unified suite runs all leaves in
+    // one package; stale cfg.ModifyFile from a prior leaf would poison cache tests.
+    cfg = multiRunCfg{}
+    state = multiRunState{}
     req.Args = []string{}
     return nil
 }
 
-func doRun(t *testing.T, bin string, args []string) *Response {
+func doRun(t *testing.T, bin string, args []string, extraEnv ...string) *Response {
     t.Helper()
     ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
     defer cancel()
 
     cmd := exec.CommandContext(ctx, bin, args...)
-    cmd.Env = os.Environ()
+    cmd.Env = append(os.Environ(), extraEnv...)
 
     var stdoutBuf bytes.Buffer
     var stderrBuf bytes.Buffer
@@ -132,12 +133,21 @@ func doMultiRun(t *testing.T, req *Request) {
 
     baseArgs := []string{"test", testDir}
 
-    // Two warmups: first generation may force -count=1 (gen rewrite), so a
-    // second warm stores the result for the "1 Cached" first measured run.
-    doRun(t, req.Bin, baseArgs)
-    doRun(t, req.Bin, baseArgs)
+    // Isolate GOCACHE + fix session id across warmup/measured runs so concurrent
+    // outer-suite noise cannot race the shared machine cache, and nested go test
+    // result-cache keys stay stable.
+    goCache := t.TempDir()
+    stableEnv := []string{
+        "GOCACHE=" + goCache,
+        "DOCTEST_SESSION_ID=multi-run-stable-session",
+    }
 
-    resp1 := doRun(t, req.Bin, baseArgs)
+    // Two warmups: first generation may rewrite mapping-gen; second stores the
+    // go test result for measured runs to hit as cached.
+    doRun(t, req.Bin, baseArgs, stableEnv...)
+    doRun(t, req.Bin, baseArgs, stableEnv...)
+
+    resp1 := doRun(t, req.Bin, baseArgs, stableEnv...)
     state.FirstResp = resp1
 
     parseGenDir(resp1.Stderr)
@@ -157,7 +167,7 @@ func doMultiRun(t *testing.T, req *Request) {
         args2 = append([]string{"test", testDir, "-count=2"})
     }
 
-    resp2 := doRun(t, req.Bin, args2)
+    resp2 := doRun(t, req.Bin, args2, stableEnv...)
     state.SecondResp = resp2
 }
 ```

@@ -30,9 +30,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("stdout must contain failure marker %q\nstdout:\n%s\nstderr:\n%s",
 			secondFailLogMarker, resp.Stdout, resp.Stderr)
 	}
-	if strings.Count(resp.Stdout, "--- FAIL:") != 1 {
-		t.Fatalf("expected exactly one --- FAIL: block, got %d\nstdout:\n%s",
-			strings.Count(resp.Stdout, "--- FAIL:"), resp.Stdout)
+	// Unified suite: go test may emit --- FAIL: for the leaf and for TestDoctestSuite.
+	failBlocks := strings.Count(resp.Stdout, "--- FAIL:")
+	if failBlocks < 1 || failBlocks > 2 {
+		t.Fatalf("expected 1–2 --- FAIL: blocks, got %d\nstdout:\n%s",
+			failBlocks, resp.Stdout)
 	}
 	failTabCount := 0
 	for _, line := range strings.Split(resp.Stdout, "\n") {

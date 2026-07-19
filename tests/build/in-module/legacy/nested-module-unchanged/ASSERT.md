@@ -6,7 +6,7 @@ label: heavy
 
 - `doctest test` exits 0 with public import only.
 - Nested `go.mod` under outside gen-dir contains `module testcase` and `replace`.
-- Generated test imports `example.com/app/pkg/greet`.
+- Generated tree imports `example.com/app/pkg/greet` (in root package under unified layout).
 - No `.doctest_run_*` temp dirs (legacy path does not use internal import scan).
 
 ## Exit Code
@@ -16,6 +16,7 @@ label: heavy
 ```go
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -32,12 +33,25 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 
 	genTest := generatedLeafTestPath(outsideGenDir)
 	assertFileExists(t, genTest)
-	testData, readErr := os.ReadFile(genTest)
-	if readErr != nil {
-		t.Fatalf("read generated test: %v", readErr)
-	}
-	if !strings.Contains(string(testData), modPath+"/pkg/greet") {
-		t.Fatalf("expected generated test to import pkg/greet, got:\n%s", string(testData))
+
+	// Unified: Run (and its imports) live in __droot; leaf is thin.
+	wantImport := modPath + "/pkg/greet"
+	found := false
+	filepath.Walk(outsideGenDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") {
+			return err
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return nil
+		}
+		if strings.Contains(string(data), wantImport) {
+			found = true
+		}
+		return nil
+	})
+	if !found {
+		t.Fatalf("expected generated tree to import %s under %s", wantImport, outsideGenDir)
 	}
 
 	assertNoDoctestRunDirs(t, moduleRoot)

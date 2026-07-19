@@ -31,13 +31,14 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	case1 := filepath.Join(genDir, "tests", "feature", "case1")
 	case2 := filepath.Join(genDir, "tests", "feature", "case2")
 
-	assertFileExists(t, filepath.Join(case1, "case1_test.go"))
-	assertFileExists(t, filepath.Join(case2, "case2_test.go"))
+	// Unified mode: non-test leaf packages (leaf.go), not classic *_test.go.
+	assertFileExists(t, filepath.Join(case1, "leaf.go"))
+	assertFileExists(t, filepath.Join(case2, "leaf.go"))
 
 	// Verify compile-only stubs: generated files should contain compileOnly usage
-	data, err := os.ReadFile(filepath.Join(case1, "case1_test.go"))
+	data, err := os.ReadFile(filepath.Join(case1, "leaf.go"))
 	if err != nil {
-		t.Fatalf("read case1_test.go: %v", err)
+		t.Fatalf("read leaf.go: %v", err)
 	}
 	if !strings.Contains(string(data), "compileOnly") {
 		t.Fatalf("expected compileOnly in generated build test source:\n%s", string(data))

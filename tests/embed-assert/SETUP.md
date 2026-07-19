@@ -215,6 +215,11 @@ func assertFileNotExists(t *testing.T, path string) {
 	}
 }
 func generatedLeafTestPath(genRoot string) string {
+	// Unified default: leaf.go; internal-compile dump still uses leaf_test.go.
+	p := filepath.Join(genRoot, "tests", "leaf", "leaf.go")
+	if _, err := os.Stat(p); err == nil {
+		return p
+	}
 	return filepath.Join(genRoot, "tests", "leaf", "leaf_test.go")
 }
 func findDoctestRunDirs(root string) ([]string, error) {

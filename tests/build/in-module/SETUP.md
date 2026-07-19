@@ -299,6 +299,12 @@ func assertNestedGoMod(t *testing.T, dir string) {
 	}
 }
 func generatedLeafTestPath(genRoot string) string {
+	// Unified default: non-test leaf package. Internal-compile still uses
+	// leaf_test.go — callers that dump internal-compile check that path separately.
+	p := filepath.Join(genRoot, "tests", "leaf", "leaf.go")
+	if _, err := os.Stat(p); err == nil {
+		return p
+	}
 	return filepath.Join(genRoot, "tests", "leaf", "leaf_test.go")
 }
 func findDoctestRunDirs(root string) ([]string, error) {

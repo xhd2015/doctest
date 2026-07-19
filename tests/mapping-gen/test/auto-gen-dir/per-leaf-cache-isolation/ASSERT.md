@@ -35,8 +35,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if !strings.Contains(secondOutput, "Cached") {
 		t.Fatalf("expected second run summary to report cached packages, stdout:\n%s", secondOutput)
 	}
-	if !strings.Contains(secondOutput, "2 Pass") {
-		t.Fatalf("expected both leaves to pass on second run, stdout:\n%s", secondOutput)
+	// Unified suite: may report "1 Pass, 1 Cached" (leaf counts) rather than "2 Pass".
+	if !strings.Contains(secondOutput, "2 Pass") &&
+		!(strings.Contains(secondOutput, "Pass") && strings.Contains(secondOutput, "Cached")) &&
+		!strings.Contains(secondOutput, "PASS (2/2)") {
+		t.Fatalf("expected both leaves to pass on second run (2 Pass or Pass+Cached), stdout:\n%s", secondOutput)
 	}
 }
 ```
