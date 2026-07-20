@@ -88,7 +88,7 @@ List, print, or install a registered doctest skill.
 
 Registered skills:
   doc-spec, code-spec, tdd, tdd-cli-agent, tdd-lite,
-  reproduce, review, review-perf, output-assert, implementer, designer
+  reproduce, review, review-perf, analyse-perf, output-assert, implementer, designer
 
 Both flag orders are valid (--show/--install before or after <name>).
 
@@ -630,6 +630,7 @@ func runSkill(args []string) error {
 			"reproduce",
 			"review",
 			"review-perf",
+			"analyse-perf",
 			"output-assert",
 			"implementer",
 			"designer",
