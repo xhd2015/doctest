@@ -290,6 +290,44 @@ func TestWriteGoModSkipsAssertSubmoduleReplaceForDoctestModule(t *testing.T) {
 	}
 }
 
+// Multi-tree ./... prepare calls WriteGoMod with different per-tree assert flags.
+// For the doctest module those flags do not affect go.mod content; fingerprint
+// and content-stable writes must not rewrite go.mod or drop tidy-done (mtime
+// of gen root is a go testcache input via package-dir chdir/stat).
+func TestWriteGoModDoctestModuleIgnoresIneffectiveAssertFlags(t *testing.T) {
+	modRoot := t.TempDir()
+	genDir := filepath.Join(t.TempDir(), "gen")
+	if err := os.WriteFile(filepath.Join(modRoot, "go.mod"), []byte("module github.com/xhd2015/doctest\n\ngo 1.21\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteGoMod(genDir, modRoot, "github.com/xhd2015/doctest", true, false, "", false, ""); err != nil {
+		t.Fatalf("first WriteGoMod: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(genDir, "doctest.tidy-done"), []byte("done"), 0644); err != nil {
+		t.Fatalf("write tidy marker: %v", err)
+	}
+	modPath := filepath.Join(genDir, "go.mod")
+	before, err := os.Stat(modPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Second call as if another tree needs assert import — ineffective for doctest.
+	if err := WriteGoMod(genDir, modRoot, "github.com/xhd2015/doctest", true, true, "/tmp/assert-cache-"+t.Name(), true, "/tmp/session-cache"); err != nil {
+		t.Fatalf("second WriteGoMod: %v", err)
+	}
+	after, err := os.Stat(modPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !before.ModTime().Equal(after.ModTime()) {
+		t.Fatalf("go.mod mtime changed under ineffective assert/session flags: %v -> %v", before.ModTime(), after.ModTime())
+	}
+	if _, err := os.Stat(filepath.Join(genDir, "doctest.tidy-done")); err != nil {
+		t.Fatalf("expected tidy marker retained: %v", err)
+	}
+}
+
 func readFileString(t *testing.T, path string) string {
 	t.Helper()
 	data, err := os.ReadFile(path)

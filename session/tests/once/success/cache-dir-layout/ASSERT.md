@@ -1,14 +1,13 @@
 ## Expected
 
 - Once succeeds.
-- `CacheDir` is non-empty and contains path segments `doctest/sessions` and `once-`.
-- `CacheDir` is under the user cache sessions root.
+- `CacheDir` is non-empty and contains path segments `session-once` (under test temp).
 - Marker file `probe-write` exists inside CacheDir (writable).
 - Returned value is valid JSON.
 
 ## Side Effects
 
-- Disk layout includes the once directory used by fn.
+- Disk layout includes the once directory used by fn (under t.TempDir).
 
 ```go
 import (
@@ -30,16 +29,13 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatal("expected non-empty cacheDir passed to fn")
 	}
 	cd := filepath.Clean(resp.CacheDir)
-	if !strings.Contains(cd, filepath.Join("doctest", "sessions")) {
-		t.Fatalf("cacheDir should be under doctest/sessions, got %q", cd)
+	// Temp layout: .../session-once/<slug>/ (not UserCacheDir/doctest/sessions).
+	if !strings.Contains(cd, "session-once") {
+		t.Fatalf("cacheDir should contain session-once (t.TempDir layout), got %q", cd)
 	}
 	base := filepath.Base(cd)
-	if !strings.HasPrefix(base, "once-") {
-		t.Fatalf("cacheDir base should be once-<slug>, got %q", base)
-	}
-	root := userCacheSessionsRoot(t)
-	if !strings.HasPrefix(cd, filepath.Clean(root)) {
-		t.Fatalf("cacheDir %q not under sessions root %q", cd, root)
+	if base == "" || base == "." || base == "session-once" {
+		t.Fatalf("cacheDir should end with slug under session-once, got %q", cd)
 	}
 	marker := filepath.Join(cd, "probe-write")
 	if _, err := os.Stat(marker); err != nil {

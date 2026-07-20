@@ -52,17 +52,23 @@ var (
 	errEmptySlug      = errors.New("session.Once: key slugifies to empty string")
 )
 
-// processMemo avoids re-reading disk within one process after a successful Once.
-var processMemo sync.Map // memoKey -> json.RawMessage
+type onceMemo struct {
+	raw json.RawMessage
+	err string // non-empty => remembered failure
+}
 
-// Once runs fn at most once per (DOCTEST_SESSION_ID, key) on this machine.
+// processMemo avoids re-running fn within one process after a successful or
+// failed Once for the same (session id, key).
+var processMemo sync.Map // memoKey -> onceMemo
+
+// Once runs fn at most once per (DOCTEST_SESSION_ID, key) within this process
+// (processMemo). Optional on-disk lock/value under t.TempDir() so concurrent
+// first callers can serialize without writing outside the test temporary tree
+// (keeps go test package cache warm across CLI runs with different session ids).
 //
 // cacheDir passed to fn is:
 //
-//	${DOCTEST_CACHE_HOME|UserCacheDir}/doctest/sessions/<session-id>/once-<slug(key)>/
-//
-// The returned json.RawMessage is written to cacheDir/value as raw JSON bytes
-// and returned to every subsequent caller with the same session and key.
+//	t.TempDir()/session-once/<slug(key)>/
 //
 // Session id is read with syscall.Getenv only (never os.Getenv).
 func Once(t testing.TB, key string, fn func(t testing.TB, cacheDir string) (json.RawMessage, error)) (json.RawMessage, error) {
@@ -81,13 +87,12 @@ func Once(t testing.TB, key string, fn func(t testing.TB, cacheDir string) (json
 
 	memoKey := sid + "\x00" + key
 	if v, ok := processMemo.Load(memoKey); ok {
-		return append(json.RawMessage(nil), v.(json.RawMessage)...), nil
+		return memoResult(v.(onceMemo))
 	}
 
-	cacheDir, err := onceDir(sid, slug)
-	if err != nil {
-		return nil, err
-	}
+	// TempDir is excluded from go testcache inputs; do not use UserCacheDir
+	// sessions/<sid>/ (that path changes every CLI session and busts cache).
+	cacheDir := filepath.Join(t.TempDir(), "session-once", slug)
 	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 		return nil, fmt.Errorf("session.Once: mkdir: %w", err)
 	}
@@ -103,19 +108,25 @@ func Once(t testing.TB, key string, fn func(t testing.TB, cacheDir string) (json
 	}
 	defer func() { _ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN) }()
 
+	// Another caller may have filled processMemo while we waited on the lock.
+	if v, ok := processMemo.Load(memoKey); ok {
+		return memoResult(v.(onceMemo))
+	}
+
 	valuePath := filepath.Join(cacheDir, "value")
 	errorPath := filepath.Join(cacheDir, "error")
 
 	if b, err := os.ReadFile(valuePath); err == nil && len(b) > 0 && json.Valid(b) {
 		raw := json.RawMessage(append([]byte(nil), b...))
-		processMemo.Store(memoKey, raw)
+		processMemo.Store(memoKey, onceMemo{raw: raw})
 		return append(json.RawMessage(nil), raw...), nil
 	}
 	if b, err := os.ReadFile(errorPath); err == nil && len(b) > 0 {
-		return nil, errors.New(strings.TrimSpace(string(b)))
+		msg := strings.TrimSpace(string(b))
+		processMemo.Store(memoKey, onceMemo{err: msg})
+		return nil, errors.New(msg)
 	}
 
-	// Starter (or retry after incomplete previous attempt with no value file).
 	if fn == nil {
 		return nil, errors.New("session.Once: fn is nil")
 	}
@@ -123,53 +134,42 @@ func Once(t testing.TB, key string, fn func(t testing.TB, cacheDir string) (json
 	if err != nil {
 		_ = os.WriteFile(errorPath, []byte(err.Error()+"\n"), 0o644)
 		_ = os.Remove(valuePath)
+		processMemo.Store(memoKey, onceMemo{err: err.Error()})
 		return nil, err
 	}
 	if len(raw) == 0 {
 		err := errors.New("session.Once: fn returned empty json.RawMessage")
 		_ = os.WriteFile(errorPath, []byte(err.Error()+"\n"), 0o644)
+		processMemo.Store(memoKey, onceMemo{err: err.Error()})
 		return nil, err
 	}
 	if !json.Valid(raw) {
 		err := errors.New("session.Once: fn returned invalid JSON")
 		_ = os.WriteFile(errorPath, []byte(err.Error()+"\n"), 0o644)
+		processMemo.Store(memoKey, onceMemo{err: err.Error()})
 		return nil, err
 	}
-	// Persist raw JSON bytes exactly (no trailing newline injection).
 	stored := append([]byte(nil), raw...)
 	if err := writeFileAtomic(valuePath, stored); err != nil {
 		return nil, fmt.Errorf("session.Once: write value: %w", err)
 	}
 	_ = os.Remove(errorPath)
 	out := json.RawMessage(stored)
-	processMemo.Store(memoKey, out)
+	processMemo.Store(memoKey, onceMemo{raw: out})
 	return append(json.RawMessage(nil), out...), nil
 }
 
-// DoctestCacheHomeEnv overrides the root for session Once cache dirs when set.
-// Same name as core.DoctestCacheHomeEnv (kept here so package session has no
-// dependency on libdoc/core).
+func memoResult(m onceMemo) (json.RawMessage, error) {
+	if m.err != "" {
+		return nil, errors.New(m.err)
+	}
+	return append(json.RawMessage(nil), m.raw...), nil
+}
+
+// DoctestCacheHomeEnv overrides durable cache roots when set.
+// Once no longer stores under this path (uses t.TempDir); kept for API
+// compatibility with callers that still reference the name.
 const DoctestCacheHomeEnv = "DOCTEST_CACHE_HOME"
-
-func cacheHome() (string, error) {
-	if v := os.Getenv(DoctestCacheHomeEnv); v != "" {
-		return filepath.Abs(v)
-	}
-	return os.UserCacheDir()
-}
-
-func onceDir(sessionID, slug string) (string, error) {
-	base, err := cacheHome()
-	if err != nil {
-		base = os.TempDir()
-	}
-	// Session id is UUID-like; still scrub path separators.
-	sid := slugify(sessionID)
-	if sid == "" {
-		return "", errors.New("session.Once: session id slugifies to empty")
-	}
-	return filepath.Join(base, "doctest", "sessions", sid, "once-"+slug), nil
-}
 
 // slugify keeps [a-zA-Z0-9._-], maps other runes to '-', collapses repeats.
 func slugify(s string) string {

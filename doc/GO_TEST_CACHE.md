@@ -97,17 +97,23 @@ etc.) lives in top-level package `github.com/xhd2015/doctest/session`:
 
 ```go
 raw, err := session.Once(t, "my-key", func(t testing.TB, cacheDir string) (json.RawMessage, error) {
-    // use cacheDir under UserCacheDir/doctest/sessions/<sid>/once-<slug>/
+    // cacheDir is under t.TempDir()/session-once/<slug>/ (not UserCacheDir)
+    // so opens do not bust go package testcache when session id changes.
     return json.Marshal(struct{ Path string `json:"path"` }{Path: handlePathOrURL})
 })
 ```
 
-Layout: `${UserCacheDir}/doctest/sessions/<session-id>/once-<slugify(key)>/{lock,value,error,…}`.  
-Session id is read with **`syscall.Getenv("DOCTEST_SESSION_ID")` only** (same
-rule as below). The return value is **`json.RawMessage`** (raw JSON bytes on disk).
+Layout: `t.TempDir()/session-once/<slugify(key)>/{lock,value,error,…}` (test
+temp only). In-process reuse is via `processMemo` keyed by session id + key.
+**Do not** store under `UserCacheDir/doctest/sessions/<sid>/` — those paths
+change every CLI run and invalidate the whole package test result cache.
 
-`libdoc/testbin.Ensure` is implemented on top of `session.Once` (value shape
-`{"path":"..."}`).
+Session id is read with **`syscall.Getenv("DOCTEST_SESSION_ID")` only** (same
+rule as below). Durable artifacts (e.g. selftest binary) should live outside
+Once’s temp `cacheDir` (see `libdoc/testbin`).
+
+`libdoc/testbin.Ensure` uses `session.Once` for serialization (value shape
+`{"path":"..."}`); the binary path is under a module-hash durable dir.
 
 ## Session ID: injected variable, not harness env read
 
@@ -226,6 +232,19 @@ Look for:
 
 Consecutive `doctest test` runs showed a **different input ID every time**, so
 every rerun was a cache miss regardless of session id.
+
+### Gen-root `go.mod` mtime (workspace `./...`)
+
+Package testlog records `chdir`/`stat` of the gen module root (and
+`__workspace/suite`). Go rehashes those paths with **mtime**. Multi-tree
+`./...` prepare used to call `WriteGoMod` once per tree with different raw
+assert/session flags; the fingerprint included ineffective flags, so `go.mod`
+was rewritten every CLI run (same bytes, new mtime) and `doctest.tidy-done`
+was dropped → full package re-exec.
+
+**Fix:** fingerprint only **effective** replace policy (`gomod-policy=4`), and
+`writeFileIfChanged` for `go.mod` / `go.sum` / marker so identical content keeps
+mtime; only real module-file changes invalidate tidy.
 
 ### Step 4 — Capture the testlog (`-test.testlogfile`)
 

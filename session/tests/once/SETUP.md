@@ -6,16 +6,16 @@
 # caller invokes Once with session env and key
 Caller -> session.Once(t, key, fn)
 session.Once -> syscall.Getenv(DOCTEST_SESSION_ID)
-session.Once -> $UserCacheDir/doctest/sessions/<sid>/once-<slug>/
+session.Once -> t.TempDir()/session-once/<slug>/  (not UserCacheDir; keeps go testcache warm)
 
 # success path
 fn(cacheDir) -> json.RawMessage
-session.Once -> write value (raw JSON bytes) under lock
-Caller <- same json.RawMessage on later Once same key
+session.Once -> processMemo + optional temp value file under lock
+Caller <- same json.RawMessage on later Once same key (in-process)
 
 # error path
 fn -> error
-session.Once -> write error file; later Once returns error without re-running fn
+session.Once -> processMemo error; later Once returns error without re-running fn
 ```
 
 ## Preconditions
@@ -24,11 +24,11 @@ session.Once -> write error file; later Once returns error without re-running fn
 - API under test:
   `func Once(t testing.TB, key string, fn func(t testing.TB, cacheDir string) (json.RawMessage, error)) (json.RawMessage, error)`.
 - Session id is read only via `syscall.Getenv("DOCTEST_SESSION_ID")`.
-- On-disk layout:
-  `$UserCacheDir/doctest/sessions/<slug(session)>/once-<slug(key)>/{lock,value,error}`.
+- On-disk scratch (optional):
+  `t.TempDir()/session-once/<slug(key)>/{lock,value,error}` — under test temp so
+  opens are not go testcache inputs.
+- Cross-call reuse in one process is primarily `processMemo` (session id + key).
 - `value` stores **raw JSON bytes** (not a plain string path).
-- Classic TDD: this tree is expected **RED** until the top-level package replaces
-  `libdoc/session` (string return).
 
 ## Steps
 
@@ -61,13 +61,6 @@ func Setup(t *testing.T, req *Request) error {
 	return nil
 }
 
-// userCacheSessionsRoot is the expected parent of session once dirs.
-func userCacheSessionsRoot(t *testing.T) string {
-	t.Helper()
-	base, err := os.UserCacheDir()
-	if err != nil {
-		base = os.TempDir()
-	}
-	return filepath.Join(base, "doctest", "sessions")
-}
+// sessionOnceSegment is the path segment under t.TempDir() used by Once.
+const sessionOnceSegment = "session-once"
 ```

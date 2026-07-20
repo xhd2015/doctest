@@ -14,9 +14,10 @@
 - **Session environment** — process env `DOCTEST_SESSION_ID`, read only via
   `syscall.Getenv` (never `os.Getenv`, so Go's test result cache is not keyed
   on the session id).
-- **Disk cache** — under
-  `$UserCacheDir/doctest/sessions/<slug(sid)>/once-<slug(key)>/` with files
-  `lock`, `value` (raw JSON bytes), and `error` (persisted error text).
+- **Disk scratch** — under `t.TempDir()/session-once/<slug(key)>/` (not
+  UserCacheDir) so opens do not bust go package testcache when session id
+  changes; files `lock`, `value`, `error` as needed.
+- **processMemo** — in-process reuse of success/error for `(session, key)`.
 - **Fn** — user callback `func(t testing.TB, cacheDir string) (json.RawMessage, error)`
   that receives a writable `cacheDir` and returns JSON bytes on success.
 
@@ -24,12 +25,11 @@
 
 - Missing or empty `DOCTEST_SESSION_ID` → error; `fn` is not run.
 - Empty `key` → error; `fn` is not run.
-- First success for `(session, key)` runs `fn` once, writes `value` as raw JSON,
-  returns the same bytes to every later caller with the same pair.
-- Different keys under the same session are independent (separate dirs, separate
-  `fn` invocations).
-- If `fn` returns an error, that error text is persisted under `error`; a second
-  `Once` with the same key returns the error **without** re-running `fn`.
+- First success for `(session, key)` runs `fn` once, memos the JSON, returns
+  the same bytes to every later caller with the same pair **in this process**.
+- Different keys under the same session are independent (separate `fn` invocations).
+- If `fn` returns an error, that error is memoized; a second `Once` with the
+  same key returns the error **without** re-running `fn`.
 - Returned `json.RawMessage` is valid JSON the client can `json.Unmarshal` into
   a struct (e.g. `{"path":"..."}` for binary paths).
 
@@ -57,7 +57,7 @@ once/
 | `validation/empty-key` | V2 — empty key → error, fn not called |
 | `success/first-write-and-reuse` | S1 — first writes JSON object; second same key: fn once, raw equal |
 | `success/different-keys-independent` | S2 — different keys each invoke fn once with distinct values |
-| `success/cache-dir-layout` | S3 — cacheDir is under `sessions/.../once-...` and writable |
+| `success/cache-dir-layout` | S3 — cacheDir is under `session-once/...` (temp) and writable |
 | `success/json-unmarshal-struct` | S4 — returned bytes `json.Unmarshal` into a typed struct |
 | `error/error-persisted` | E1 — fn error persisted; second Once returns error without success |
 
@@ -114,12 +114,23 @@ type Response struct {
 
 func Run(t *testing.T, req *Request) (*Response, error) {
 	t.Helper()
-	// Control product session id via t.Setenv (product reads syscall.Getenv only).
+	// Control product session id via syscall.Setenv (not t.Setenv/os.Setenv).
+	// t.Setenv uses os.LookupEnv which is recorded in go's testlog and would
+	// pin the whole workspace package cache to the outer DOCTEST_SESSION_ID.
+	// Product Once reads via syscall.Getenv only.
+	prev, had := syscall.Getenv(session.DoctestSessionIDEnv)
 	if req.SessionID == "" {
-		t.Setenv(session.DoctestSessionIDEnv, "")
+		_ = syscall.Unsetenv(session.DoctestSessionIDEnv)
 	} else {
-		t.Setenv(session.DoctestSessionIDEnv, req.SessionID)
+		_ = syscall.Setenv(session.DoctestSessionIDEnv, req.SessionID)
 	}
+	t.Cleanup(func() {
+		if had {
+			_ = syscall.Setenv(session.DoctestSessionIDEnv, prev)
+		} else {
+			_ = syscall.Unsetenv(session.DoctestSessionIDEnv)
+		}
+	})
 
 	resp := &Response{}
 	var calls atomic.Int32

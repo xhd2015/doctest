@@ -1416,7 +1416,10 @@ func WriteRefLeafCase(leafDir string, tc TreeCase, compileOnly bool, pkgName, do
 	return testPath, nil
 }
 
-// WriteFormattedGo formats src with imports.Process and writes atomically when changed.
+// WriteFormattedGo formats src with imports.Process and writes atomically when
+// changed. When path sits under a gen root that already has doctest.gen-manifest
+// (typically after WriteGoMod), the final formatted bytes are recorded via the
+// unified content-hash index so warm identical rewrites are skipped.
 func WriteFormattedGo(path, src string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
@@ -1425,6 +1428,11 @@ func WriteFormattedGo(path, src string) error {
 	if err != nil {
 		_ = os.WriteFile(path, []byte(src), 0644)
 		return fmt.Errorf("format imports for %s: %w", path, err)
+	}
+	// Prefer unified manifest skip/record when gen bookkeeping exists.
+	if genRoot, rel, ok := findGenRootWithManifest(path); ok {
+		_, werr := WriteIfChanged(genRoot, rel, res)
+		return werr
 	}
 	existing, _ := os.ReadFile(path)
 	if string(existing) == string(res) {

@@ -1,8 +1,6 @@
 package core
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -17,8 +15,6 @@ import (
 	"github.com/xhd2015/doctest/libdoc/rules"
 	"golang.org/x/tools/imports"
 )
-
-const goModFingerprintFile = "doctest.gomod-fp"
 
 func DiscoverTreeCases(root string) ([]TreeCase, error) {
 	return discoverTreeCasesInternal(root, nil)
@@ -413,55 +409,36 @@ func CopyGeneratedTree(src, dst string) error {
 	})
 }
 
-func goModSourceFingerprint(modRoot, modPath string, hasMod bool, withAssertReplace bool, assertCacheDir string, withSessionReplace bool, sessionCacheDir string) (string, error) {
-	h := sha256.New()
-	effectiveAssertReplace := withAssertReplace && assertCacheDir != "" && modPath != "github.com/xhd2015/doctest"
-	effectiveSessionReplace := withSessionReplace && sessionCacheDir != "" && modPath != "github.com/xhd2015/doctest"
-	if _, err := fmt.Fprintf(h, "gomod-policy=3\nhasMod=%t\nmodPath=%s\nmodRoot=%s\nwithAssertReplace=%t\neffectiveAssertReplace=%t\nassertCacheDir=%s\nwithSessionReplace=%t\neffectiveSessionReplace=%t\nsessionCacheDir=%s\n", hasMod, modPath, modRoot, withAssertReplace, effectiveAssertReplace, assertCacheDir, withSessionReplace, effectiveSessionReplace, sessionCacheDir); err != nil {
-		return "", err
-	}
-	goModPath := filepath.Join(modRoot, "go.mod")
-	if data, err := os.ReadFile(goModPath); err == nil {
-		if _, err := h.Write(data); err != nil {
-			return "", err
-		}
-	} else if !os.IsNotExist(err) {
-		return "", err
-	}
-	if _, err := h.Write([]byte{0}); err != nil {
-		return "", err
-	}
-	goSumPath := filepath.Join(modRoot, "go.sum")
-	if data, err := os.ReadFile(goSumPath); err == nil {
-		if _, err := h.Write(data); err != nil {
-			return "", err
-		}
-	} else if !os.IsNotExist(err) {
-		return "", err
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
-// genModMu serializes WriteGoMod / CondTidyGoMod so parallel ./... trees that
-// share one gen root (e.g. --cold-cache mapping-gen-cold) do not race on
-// go.mod / go.sum / tidy markers.
+// genModMu serializes WriteGoMod / CondTidyGoMod / gen-manifest flush so
+// parallel ./... trees that share one gen root (e.g. --cold-cache
+// mapping-gen-cold) do not race on go.mod / go.sum / tidy markers / manifest.
 var genModMu sync.Mutex
 
+// writeFileIfChanged writes data only when content differs, preserving mtime
+// when unchanged (critical for go test package cache inputs under gen root).
+func writeFileIfChanged(path string, data []byte, perm os.FileMode) (wrote bool, err error) {
+	existing, err := os.ReadFile(path)
+	if err == nil && string(existing) == string(data) {
+		return false, nil
+	}
+	if err != nil && !os.IsNotExist(err) {
+		return false, err
+	}
+	if err := os.WriteFile(path, data, perm); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// WriteGoMod builds nested go.mod / go.sum under genDir. Skip key is the
+// content hash of the desired final bytes in doctest.gen-manifest (not
+// doctest.gomod-fp). tidy-done is invalidated only when go.mod/go.sum actually wrote.
+// Assert/session replaces are omitted for the doctest self-module so multi-tree
+// ./... prepare with differing ineffective flags does not churn mtimes.
 func WriteGoMod(genDir, modRoot, modPath string, hasMod bool, withAssertReplace bool, assertCacheDir string, withSessionReplace bool, sessionCacheDir string) error {
 	genModMu.Lock()
 	defer genModMu.Unlock()
 
-	fp, err := goModSourceFingerprint(modRoot, modPath, hasMod, withAssertReplace, assertCacheDir, withSessionReplace, sessionCacheDir)
-	if err != nil {
-		return err
-	}
-	modFile := filepath.Join(genDir, "go.mod")
-	markerFile := filepath.Join(genDir, goModFingerprintFile)
-	if old, err := os.ReadFile(markerFile); err == nil && string(old) == fp {
-		if _, err := os.Stat(modFile); err == nil {
-			return nil
-		}
-	}
 	if err := os.MkdirAll(genDir, 0755); err != nil {
 		return err
 	}
@@ -477,29 +454,55 @@ func WriteGoMod(genDir, modRoot, modPath string, hasMod bool, withAssertReplace 
 			content += extraReplaces
 		}
 	}
+	// Effective-only: raw flags that do not affect content (doctest self-module)
+	// must not produce different desired bytes — multi-tree ./... prepare calls
+	// WriteGoMod with different per-tree flags.
 	if withAssertReplace && assertCacheDir != "" && modPath != "github.com/xhd2015/doctest" {
 		content += fmt.Sprintf("replace %s => %s\n", AssertImportPath, assertCacheDir)
 	}
 	if withSessionReplace && sessionCacheDir != "" && modPath != "github.com/xhd2015/doctest" {
 		content += fmt.Sprintf("replace %s => %s\n", SessionImportPath, sessionCacheDir)
 	}
-	if err := os.WriteFile(modFile, []byte(content), 0644); err != nil {
+
+	man, err := loadGenManifest(genDir)
+	if err != nil {
 		return err
 	}
+
+	modWrote, err := man.writeRelIfChanged(genDir, "go.mod", []byte(content))
+	if err != nil {
+		return err
+	}
+
+	sumWrote := false
 	if hasMod {
 		srcGoSum := filepath.Join(modRoot, "go.sum")
 		if data, err := os.ReadFile(srcGoSum); err == nil {
-			if err := os.WriteFile(filepath.Join(genDir, "go.sum"), data, 0644); err != nil {
-				return err
+			w, werr := man.writeRelIfChanged(genDir, "go.sum", data)
+			if werr != nil {
+				return werr
 			}
+			sumWrote = w
+		} else if os.IsNotExist(err) {
+			sumPath := filepath.Join(genDir, "go.sum")
+			if _, serr := os.Stat(sumPath); serr == nil {
+				if rerr := os.Remove(sumPath); rerr != nil && !os.IsNotExist(rerr) {
+					return rerr
+				}
+				sumWrote = true
+			}
+			man.deleteHash("go.sum")
 		} else {
-			os.Remove(filepath.Join(genDir, "go.sum"))
+			return err
 		}
 	}
-	if err := os.WriteFile(markerFile, []byte(fp), 0644); err != nil {
+
+	if err := man.flush(genDir); err != nil {
 		return err
 	}
-	os.Remove(filepath.Join(genDir, "doctest.tidy-done"))
+	if modWrote || sumWrote {
+		os.Remove(filepath.Join(genDir, "doctest.tidy-done"))
+	}
 	return nil
 }
 

@@ -1,33 +1,23 @@
 # Scenario
 
-**Feature**: cacheDir passed to fn is under sessions/.../once-... and is writable
+**Feature**: cacheDir passed to fn is under t.TempDir()/session-once/... and is writable
 
 ```
-# Once allocates cacheDir
-session.Once -> cacheDir = $UserCacheDir/doctest/sessions/<sid>/once-<slug>/
+# Once allocates cacheDir under test temp (not UserCacheDir)
+session.Once -> cacheDir = t.TempDir()/session-once/<slug>/
 fn writes probe file into cacheDir
 Caller <- JSON containing path; disk has probe-write
 ```
 
-## Preconditions
-
-- Mode `cache-probe` writes a marker file inside cacheDir.
-- Session id and key produce a stable slug path.
-
 ## Steps
 
-1. Call Once once with cache-probe mode.
-2. Assert CacheDir path prefix/shape and marker file exists.
+1. Mode `cache-probe` writes a marker file inside cacheDir.
 
 ```go
-import (
-"testing"
-"github.com/xhd2015/doctest/session"
-)
-func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-	req.SessionID = "once-doctest-layout-" + d.DOCTEST_SESSION_ID
-	req.Key = "layout-probe"
+func Setup(t *testing.T, req *Request) error {
 	req.Mode = "cache-probe"
+	req.Key = "layout-key"
+	req.SessionID = "once-doctest-layout-" + t.Name()
 	req.CallTwice = false
 	return nil
 }
