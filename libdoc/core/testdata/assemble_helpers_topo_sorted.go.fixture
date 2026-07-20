@@ -25,10 +25,15 @@ func TestGeneratedCaseLeaf(t *testing.T) {
 		}
 		sid = s
 	}
+	nestSink, _ := syscall.Getenv("DOCTEST_METRICS_NEST_SINK")
 	d := &session.Doctest{
 		DOCTEST_ROOT:       `{{DOCTEST_ROOT}}`,
 		DOCTEST_CASE:       `{{DOCTEST_ROOT}}/leaf`,
 		DOCTEST_SESSION_ID: sid,
+		Metrics: session.Metrics{
+			ParentLeaf: `leaf`,
+			NestSink:   nestSink,
+		},
 	}
 	run := func(t *testing.T, _ *session.Doctest, req *Request) (*Response, error) {
 	return &Response{}, nil

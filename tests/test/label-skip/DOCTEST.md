@@ -20,7 +20,7 @@
 - **`--label-all`** — discovery runs labeled leaves too (full suite); mutually exclusive with `--label`.
 - **Explicit leaf** — concrete leaf directory or `ASSERT.md` path runs labeled tests.
 - **Explanation-only** — frontmatter with `explanation:` but no `label:` never skips.
-- **Skip summary** — lists skipped path, label, and explanation before PASS/FAIL.
+- **Skip summary** — compact by label set (counts); paths/explanations with `-v`.
 - **All skipped** — exit 0 when every discovered leaf is labeled.
 - **Build all** — `doctest build` compiles labeled leaves even when `doctest test` would skip them.
 - **Edit leaf** — add label/explanation; reject `...` patterns.

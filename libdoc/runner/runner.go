@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -117,15 +118,12 @@ func Test(args []string) error {
 			if coldCacheNs > 0 {
 				_ = rec.writePhase("suite", "cold_cache", "", coldCacheNs, nil)
 			}
-			// Nest sink: suite children (nested RunTest) append timing here;
-			// merged into the outer JSONL before run_end (see below).
+			// Nest sink for go test children via Options → goTestEnv (cmd.Env only).
 			nestSink := rec.path + ".nest"
 			_ = os.Remove(nestSink)
-			_ = os.Setenv(metrics.EnvMetricsNestSink, nestSink)
-			// Stash on recorder for merge before close.
+			opts.MetricsNestSink = nestSink
 			rec.nestSink = nestSink
 			defer func() {
-				_ = os.Unsetenv(metrics.EnvMetricsNestSink)
 				_ = os.Remove(nestSink)
 			}()
 		}
@@ -209,14 +207,18 @@ func Test(args []string) error {
 	}
 
 	var runErr error
-	if len(remainArgs) == 1 {
+	if len(remainArgs) == 1 && path_resolve.IsDotDotDotPattern(remainArgs[0]) {
+		// Multi-root: generate all unified trees, then one go test on
+		// __workspace/suite (workspace registry + per-tree __wreg).
+		runErr = testDotDotDotWorkspace(remainArgs[0], opts, rec, &stats, &statsMu)
+	} else if len(remainArgs) == 1 {
 		runErr = processSingleArg(remainArgs[0], opts, runFn)
 	} else {
 		runErr = processMultiArg(remainArgs, opts, runFn)
 	}
 
 	if len(stats.Skipped) > 0 {
-		runnerbuild.PrintSkippedSummary(stats.Skipped)
+		runnerbuild.PrintSkippedSummary(stats.Skipped, opts.Verbose)
 	}
 	if stats.Total > 0 {
 		stats.Elapsed = time.Since(start)
@@ -281,11 +283,214 @@ func processArgs(args []string, cmdName string, parseFn func([]string) (core.Opt
 	return processMultiArg(remainArgs, opts, processDirFn)
 }
 
+// testDotDotDotWorkspace prepares every DOCTEST root under a ./... pattern,
+// fans unified trees into one workspace suite, and runs a single go test.
+// Internal-compile trees (non-unified) still run per-root.
+func testDotDotDotWorkspace(arg string, opts core.Options, rec *runRecorder, stats *runnerbuild.TestRunStats, statsMu *sync.Mutex) error {
+	base := path_resolve.ExtractBasePath(arg)
+	dirs, err := path_resolve.FindDotDotDotDirs(base)
+	if err != nil {
+		return err
+	}
+	if len(dirs) == 0 {
+		return ErrNoTestsFound
+	}
+
+	// Resolve roots (DOCTEST.md directory).
+	roots := make([]string, 0, len(dirs))
+	for _, d := range dirs {
+		root, ok := path_resolve.ResolveRoot(d)
+		if !ok || root == "" {
+			root = d
+		}
+		roots = append(roots, root)
+	}
+
+	// Parallel prepare (generate-only), same light/heavy scheduling as RunForDirs.
+	type prepResult struct {
+		prep runnerbuild.TreePrep
+		err  error
+		dir  string
+	}
+	results := make([]prepResult, len(roots))
+	var wg sync.WaitGroup
+	// Bound concurrency similar to defaultTreeWorkers.
+	workers := 4
+	sem := make(chan struct{}, workers)
+	for i, root := range roots {
+		wg.Add(1)
+		go func(i int, root string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			o := opts
+			o.SubDir = root
+			o.ExplicitLeaf = false
+			o.MetricsOn = false
+			o.SuppressResultSummary = true
+			// Isolate noisy per-tree headers into buffers; workspace run prints once.
+			var outBuf, errBuf bytes.Buffer
+			o.Stdout = &outBuf
+			o.Stderr = &errBuf
+			prep, err := runnerbuild.PrepareTree(root, o)
+			results[i] = prepResult{prep: prep, err: err, dir: root}
+			// Drop generate chatter unless verbose (user sees workspace go test line).
+			if opts.Verbose {
+				stderrBase := opts.Stderr
+				if stderrBase == nil {
+					stderrBase = os.Stderr
+				}
+				stdoutBase := opts.Stdout
+				if stdoutBase == nil {
+					stdoutBase = os.Stdout
+				}
+				_, _ = io.Copy(stderrBase, &errBuf)
+				_, _ = io.Copy(stdoutBase, &outBuf)
+			}
+		}(i, root)
+	}
+	wg.Wait()
+
+	var (
+		unified []runnerbuild.TreePrep
+		legacy  []prepResult
+		errs    []string
+	)
+	for _, r := range results {
+		if r.err != nil {
+			if errors.Is(r.err, ErrNoTestsFound) || strings.Contains(r.err.Error(), "no runnable test cases found") {
+				// Skipped-only trees still contribute skipped stats.
+				if len(r.prep.Skipped) > 0 {
+					statsMu.Lock()
+					stats.Skipped = append(stats.Skipped, r.prep.Skipped...)
+					statsMu.Unlock()
+				}
+				continue
+			}
+			if r.prep.Stats.NoTestsChanged {
+				statsMu.Lock()
+				stats.NoTestsChanged = true
+				statsMu.Unlock()
+				continue
+			}
+			errs = append(errs, r.dir+": "+r.err.Error())
+			continue
+		}
+		if r.prep.Stats.NoTestsChanged {
+			statsMu.Lock()
+			stats.NoTestsChanged = true
+			statsMu.Unlock()
+			continue
+		}
+		if r.prep.Stats.Total == 0 {
+			if len(r.prep.Skipped) > 0 {
+				statsMu.Lock()
+				stats.Skipped = append(stats.Skipped, r.prep.Skipped...)
+				statsMu.Unlock()
+			}
+			continue
+		}
+		if r.prep.Unified {
+			unified = append(unified, r.prep)
+		} else {
+			legacy = append(legacy, r)
+		}
+	}
+
+	// Metrics: leaf_start for all unified cases before the single go test.
+	if rec != nil {
+		for _, p := range unified {
+			for _, c := range p.Cases {
+				_ = rec.writeLeafStart(c, p.AbsRoot)
+			}
+			for _, ph := range p.Stats.Phases {
+				_ = rec.writePhase("tree", ph.Name, p.AbsRoot, ph.ElapsedNs, map[string]any{
+					"cases": p.Stats.Total,
+				})
+			}
+		}
+	}
+
+	if len(unified) > 0 {
+		wsOpts := opts
+		wsOpts.MetricsOn = false
+		wsOpts.SuppressResultSummary = true
+		s, wsErr := runnerbuild.RunWorkspace(unified, wsOpts)
+		statsMu.Lock()
+		stats.Passed += s.Passed
+		stats.Total += s.Total
+		stats.Skipped = append(stats.Skipped, s.Skipped...)
+		statsMu.Unlock()
+		if rec != nil {
+			for _, ph := range s.Phases {
+				if ph.Name == "go_test" {
+					_ = rec.writePhase("suite", "go_test", "", ph.ElapsedNs, map[string]any{
+						"trees": len(unified),
+						"cases": s.Total,
+					})
+				}
+			}
+			// Attribute leaf ends; timings may be sparse when paths collide across trees.
+			timingByPath := map[string]runnerbuild.LeafTiming{}
+			for _, lt := range s.LeafTimings {
+				timingByPath[lt.Path] = lt
+			}
+			end := time.Now()
+			// Parallel trees make per-leaf pass/fail ordering unreliable; mark
+			// pass when the workspace go test succeeded.
+			for _, p := range unified {
+				for _, c := range p.Cases {
+					result := "fail"
+					if wsErr == nil {
+						result = "pass"
+					}
+					lt := timingByPath[c.Path]
+					_ = rec.writeLeafEndNs(c, p.AbsRoot, end, lt.ElapsedNs, result, lt.Cached)
+				}
+				for _, sk := range p.Skipped {
+					_ = rec.writeLeafEndSkipped(sk, p.AbsRoot, end)
+				}
+			}
+		}
+		if wsErr != nil {
+			errs = append(errs, wsErr.Error())
+		}
+	}
+
+	// Non-unified (internal-compile) trees: legacy per-root go test.
+	for _, r := range legacy {
+		o := opts
+		o.SubDir = r.dir
+		o.ExplicitLeaf = false
+		o.MetricsOn = false
+		o.SuppressResultSummary = true
+		s, err := runnerbuild.TestWithStats(r.dir, o)
+		statsMu.Lock()
+		stats.Passed += s.Passed
+		stats.Total += s.Total
+		stats.Skipped = append(stats.Skipped, s.Skipped...)
+		statsMu.Unlock()
+		if err != nil && !strings.Contains(err.Error(), "no runnable test cases found") {
+			errs = append(errs, r.dir+": "+err.Error())
+		}
+	}
+
+	if len(errs) > 0 {
+		sort.Strings(errs)
+		return fmt.Errorf("test failures:\n%s", strings.Join(errs, "\n"))
+	}
+	if stats.Total == 0 && len(stats.Skipped) == 0 && !stats.NoTestsChanged {
+		return ErrNoTestsFound
+	}
+	return nil
+}
+
 func processSingleArg(arg string, opts core.Options, fn func(string, core.Options) error) error {
 	if arg == "..." {
 		return fmt.Errorf("bare '...' pattern is not supported; use './...' or 'path/...' instead")
 	}
 	if path_resolve.IsDotDotDotPattern(arg) {
+		// Fallback multi-tree path (build/vet, or if testDotDotDot not used).
 		// Parallel trees: buffer each tree's streams so progress lines do not interleave.
 		var printMu sync.Mutex
 		stdoutBase := opts.Stdout

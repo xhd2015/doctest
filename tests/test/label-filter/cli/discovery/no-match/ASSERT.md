@@ -4,7 +4,7 @@ label: heavy
 
 ## Expected
 
-- Exit 0; all five leaves skipped; no PASS/FAIL summary.
+- Exit 0; all five leaves in compact label-filter skip; no PASS line.
 
 ```go
 import "testing"
@@ -14,17 +14,15 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatal(err)
 	}
 	if resp.ExitCode != 0 {
-		t.Fatalf("exit=%d\n%s", resp.ExitCode, resp.Stdout)
+		t.Fatalf("exit=%d stdout:\n%s stderr:\n%s", resp.ExitCode, resp.Stdout, resp.Stderr)
 	}
-	mod := req.Args[1]
-	want := wantLabelFilterSkipBlockMulti(5,
-		wantLabelFilterSkipEntry(mod, "both", "slow, ui-automation", "slow ui combo", false),
-		wantLabelFilterSkipEntry(mod, "fast", "", "", true),
-		wantLabelFilterSkipEntry(mod, "heavy", "heavy", "heavy profile", false),
-		wantLabelFilterSkipEntry(mod, "slow", "slow", "slow profile", false),
-		wantLabelFilterSkipEntry(mod, "ui", "ui-automation", "browser ui", false),
-	)
-	assertSkipBlockExact(t, resp.Stdout, want)
+	assertLabelFilterSkipCompact(t, resp.Stdout, 5, map[string]int{
+		"(unlabeled)":        1,
+		"heavy":              1,
+		"slow":               1,
+		"slow,ui-automation": 1,
+		"ui-automation":      1,
+	})
 	assertNoResultSummary(t, resp.Stdout)
 }
 ```

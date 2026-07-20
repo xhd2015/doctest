@@ -30,9 +30,16 @@ func RunTest(dir string, opts core.Options) error {
 	start := time.Now()
 	defaultSuite := !opts.LabelAll && len(opts.LabelExprs) == 0
 
-	// Capture outer nest sink before we may install our own for children.
-	outerNestSink := metrics.NestSinkPath()
-	parentLeaf := metrics.ParentLeaf()
+	// Nest attribution: prefer explicit Options (parallel-safe); fall back to
+	// process-lifetime inherit (suite go test cmd.Env) / in-process SetParentLeaf.
+	outerNestSink := opts.MetricsNestSink
+	if outerNestSink == "" {
+		outerNestSink = metrics.NestSinkPath()
+	}
+	parentLeaf := opts.MetricsParentLeaf
+	if parentLeaf == "" {
+		parentLeaf = metrics.ParentLeaf()
+	}
 
 	rec, err := openRunRecorder(dir, opts)
 	if err != nil {
@@ -43,16 +50,20 @@ func RunTest(dir string, opts core.Options) error {
 	if rec != nil {
 		defer rec.close()
 		_ = rec.writeRunStart(dir, opts, defaultSuite)
-		// Top-level RunTest with metrics: expose nest sink for suite children.
+		// Top-level RunTest with metrics: nest sink for go test children via opts
+		// (threaded into goTestEnv) — no mid-run process Setenv.
 		if outerNestSink == "" {
 			ownNestSink := rec.path + ".nest"
 			_ = os.Remove(ownNestSink)
-			_ = os.Setenv(metrics.EnvMetricsNestSink, ownNestSink)
+			opts.MetricsNestSink = ownNestSink
+			outerNestSink = ownNestSink
 			rec.nestSink = ownNestSink
 			defer func() {
-				_ = os.Unsetenv(metrics.EnvMetricsNestSink)
 				_ = os.Remove(ownNestSink)
 			}()
+		} else {
+			opts.MetricsNestSink = outerNestSink
+			rec.nestSink = outerNestSink
 		}
 	}
 

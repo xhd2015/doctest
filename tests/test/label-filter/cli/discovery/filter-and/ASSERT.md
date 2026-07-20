@@ -4,7 +4,7 @@ label: heavy
 
 ## Expected
 
-- PASS(1/1); four other leaves skipped.
+- PASS(1/1); four compact skip buckets.
 
 ```go
 import "testing"
@@ -14,16 +14,14 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatal(err)
 	}
 	if resp.ExitCode != 0 {
-		t.Fatalf("exit=%d\n%s", resp.ExitCode, resp.Stdout)
+		t.Fatalf("exit=%d stdout:\n%s stderr:\n%s", resp.ExitCode, resp.Stdout, resp.Stderr)
 	}
-	mod := req.Args[1]
-	want := wantLabelFilterSkipBlockMulti(4,
-		wantLabelFilterSkipEntry(mod, "fast", "", "", true),
-		wantLabelFilterSkipEntry(mod, "heavy", "heavy", "heavy profile", false),
-		wantLabelFilterSkipEntry(mod, "slow", "slow", "slow profile", false),
-		wantLabelFilterSkipEntry(mod, "ui", "ui-automation", "browser ui", false),
-	)
-	assertSkipBlockExact(t, resp.Stdout, want)
+	assertLabelFilterSkipCompact(t, resp.Stdout, 4, map[string]int{
+		"(unlabeled)":   1,
+		"heavy":         1,
+		"slow":          1,
+		"ui-automation": 1,
+	})
 	assertResultSummary(t, resp.Stdout, 1, 1)
 }
 ```

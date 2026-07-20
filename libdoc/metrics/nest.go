@@ -14,16 +14,16 @@ import (
 // Set by the outer recorder process; inherited by suite go test children.
 const EnvMetricsNestSink = "DOCTEST_METRICS_NEST_SINK"
 
-// EnvMetricsParentLeaf is set by the unified suite wrapper around each leaf
-// (stdlib os.Setenv only — suite must not import this package).
+// EnvMetricsParentLeaf is deprecated: parent leaf lives on session.Doctest.Metrics
+// and core.Options.MetricsParentLeaf. Kept for name stability in docs/tests only.
 const EnvMetricsParentLeaf = "DOCTEST_METRICS_PARENT_LEAF"
 
-// parentLeaf holds an optional in-process parent leaf (tests / non-suite callers).
+// parentLeaf holds an optional in-process parent leaf (unit tests / explicit SetParentLeaf).
+// Not used by generated suite (parallel-unsafe if shared across leaves).
 var parentLeaf atomic.Pointer[string]
 
-// SetParentLeaf records which leaf is running (in-process). Prefer env
-// DOCTEST_METRICS_PARENT_LEAF from the unified suite wrapper for nest timing.
-// Clear with ClearParentLeaf in a defer.
+// SetParentLeaf records which leaf is running (in-process unit tests only).
+// Suite leaves use d.Metrics.ParentLeaf / Options.MetricsParentLeaf instead.
 func SetParentLeaf(path string) {
 	if path == "" {
 		parentLeaf.Store(nil)
@@ -38,13 +38,10 @@ func ClearParentLeaf() {
 	parentLeaf.Store(nil)
 }
 
-// ParentLeaf returns the current suite leaf path, or "" if unset.
-// Prefers DOCTEST_METRICS_PARENT_LEAF env (set by generated suite), then
-// in-process SetParentLeaf.
+// ParentLeaf returns an in-process parent leaf from SetParentLeaf, or "".
+// Does not read process env (env mutation is parallel-unsafe). Callers that
+// nest should pass core.Options.MetricsParentLeaf explicitly.
 func ParentLeaf() string {
-	if v := os.Getenv(EnvMetricsParentLeaf); v != "" {
-		return v
-	}
 	p := parentLeaf.Load()
 	if p == nil {
 		return ""
@@ -52,7 +49,8 @@ func ParentLeaf() string {
 	return *p
 }
 
-// NestSinkPath returns DOCTEST_METRICS_NEST_SINK, or "".
+// NestSinkPath returns DOCTEST_METRICS_NEST_SINK when the suite process was
+// started with that env (spawn-time inherit only). Prefer Options.MetricsNestSink.
 func NestSinkPath() string {
 	return os.Getenv(EnvMetricsNestSink)
 }

@@ -4,11 +4,10 @@ label: heavy
 
 ## Expected
 
-- Skip block lists five leaves; each entry has `reason: label filter`.
+- Compact skip header indicates label filter; five leaves bucketed by label set.
 
 ```go
 import (
-	"strings"
 	"testing"
 )
 
@@ -19,13 +18,13 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if resp.ExitCode != 0 {
 		t.Fatalf("exit=%d\n%s", resp.ExitCode, resp.Stdout)
 	}
-	block := skipBlock(resp.Stdout)
-	if block == "" {
-		t.Fatal("missing skip block")
-	}
-	if strings.Count(block, "reason: label filter") != 5 {
-		t.Fatalf("expected 5 reason lines, block:\n%s", block)
-	}
+	assertLabelFilterSkipCompact(t, resp.Stdout, 5, map[string]int{
+		"(unlabeled)":        1,
+		"heavy":              1,
+		"slow":               1,
+		"slow,ui-automation": 1,
+		"ui-automation":      1,
+	})
 	assertNoResultSummary(t, resp.Stdout)
 }
 ```

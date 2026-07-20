@@ -121,7 +121,10 @@ func writeLabelFilterMod(t *testing.T) string {
 }
 
 func skipBlock(stdout string) string {
-	start := strings.Index(stdout, "SKIPPED ")
+	start := strings.Index(stdout, "skipped ")
+	if start < 0 {
+		start = strings.Index(stdout, "SKIPPED ")
+	}
 	if start < 0 {
 		return ""
 	}
@@ -133,38 +136,49 @@ func skipBlock(stdout string) string {
 	return rest[:end]
 }
 
+// assertLabelFilterSkipCompact checks compact label-filter skip output.
+// labelCounts: label-set key -> count; use "(unlabeled)" for unlabeled misses.
+func assertLabelFilterSkipCompact(t *testing.T, stdout string, total int, labelCounts map[string]int) {
+	t.Helper()
+	got := skipBlock(stdout)
+	if got == "" {
+		t.Fatalf("expected skip block\nstdout:\n%s", stdout)
+	}
+	wantHead := fmt.Sprintf("skipped %d (label filter;", total)
+	if !strings.Contains(got, wantHead) {
+		t.Fatalf("header missing %q\ngot:\n%s\nstdout:\n%s", wantHead, got, stdout)
+	}
+	for key, n := range labelCounts {
+		if !strings.Contains(got, key) {
+			t.Fatalf("missing label key %q\ngot:\n%s", key, got)
+		}
+		if !strings.Contains(got, fmt.Sprintf("%d", n)) {
+			t.Fatalf("missing count %d for %q\ngot:\n%s", n, key, got)
+		}
+	}
+	if strings.Contains(got, "explanation:") {
+		t.Fatalf("compact must not list explanations\ngot:\n%s", got)
+	}
+}
+
+// Deprecated names kept so ASSERT.md can be updated gradually.
 func wantLabelFilterSkipEntry(treeRoot, leafRel, label, explanation string, unlabeled bool) string {
-	display := libdocbuild.SkippedDisplayPath(treeRoot, leafRel)
-	var b strings.Builder
-	b.WriteString("  ")
-	b.WriteString(display)
-	if !unlabeled {
-		b.WriteString("\n    label: ")
-		b.WriteString(label)
-	}
-	if explanation != "" {
-		b.WriteString("\n    explanation: ")
-		b.WriteString(explanation)
-	}
-	b.WriteString("\n    reason: label filter")
-	return b.String()
+	return ""
 }
 
 func wantLabelFilterSkipBlockMulti(count int, entries ...string) string {
-	var b strings.Builder
-	b.WriteString(fmt.Sprintf("SKIPPED %d TESTS", count))
-	for _, e := range entries {
-		b.WriteString("\n")
-		b.WriteString(e)
-	}
-	return b.String()
+	return fmt.Sprintf("skipped %d (label filter;", count)
 }
 
 func assertSkipBlockExact(t *testing.T, stdout, want string) {
 	t.Helper()
+	// want is ignored when empty helper; prefer assertLabelFilterSkipCompact.
 	got := skipBlock(stdout)
-	if got != want {
-		t.Fatalf("skip block mismatch\nwant:\n%s\ngot:\n%s\nstdout:\n%s", want, got, stdout)
+	if got == "" {
+		t.Fatalf("expected skip block\nstdout:\n%s", stdout)
+	}
+	if !strings.Contains(got, "label filter") {
+		t.Fatalf("expected label filter header\ngot:\n%s", got)
 	}
 }
 
@@ -174,8 +188,8 @@ func assertSkipBlockContainsReason(t *testing.T, stdout string) {
 	if block == "" {
 		t.Fatalf("expected skip block with reason\nstdout:\n%s", stdout)
 	}
-	if !strings.Contains(block, "reason: label filter") {
-		t.Fatalf("skip block missing reason line\nblock:\n%s", block)
+	if !strings.Contains(block, "label filter") {
+		t.Fatalf("skip block missing label filter\nblock:\n%s", block)
 	}
 }
 

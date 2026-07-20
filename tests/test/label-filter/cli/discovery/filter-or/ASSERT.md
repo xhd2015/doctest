@@ -4,7 +4,7 @@ label: heavy
 
 ## Expected
 
-- PASS(3/3); skips fast and ui.
+- PASS(3/3); compact skips for fast + ui.
 
 ```go
 import "testing"
@@ -14,14 +14,12 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatal(err)
 	}
 	if resp.ExitCode != 0 {
-		t.Fatalf("exit=%d\n%s", resp.ExitCode, resp.Stdout)
+		t.Fatalf("exit=%d stdout:\n%s stderr:\n%s", resp.ExitCode, resp.Stdout, resp.Stderr)
 	}
-	mod := req.Args[1]
-	want := wantLabelFilterSkipBlockMulti(2,
-		wantLabelFilterSkipEntry(mod, "fast", "", "", true),
-		wantLabelFilterSkipEntry(mod, "ui", "ui-automation", "browser ui", false),
-	)
-	assertSkipBlockExact(t, resp.Stdout, want)
+	assertLabelFilterSkipCompact(t, resp.Stdout, 2, map[string]int{
+		"(unlabeled)":   1,
+		"ui-automation": 1,
+	})
 	assertResultSummary(t, resp.Stdout, 3, 3)
 }
 ```

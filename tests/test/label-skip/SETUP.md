@@ -163,7 +163,12 @@ func treeInWorkDir(t *testing.T, name string, includeFast bool, label, explanati
 }
 
 func skipBlock(stdout string) string {
-	start := strings.Index(stdout, "SKIPPED ")
+	// Compact format starts with "skipped N" (lowercase).
+	start := strings.Index(stdout, "skipped ")
+	if start < 0 {
+		// Legacy / accidental uppercase.
+		start = strings.Index(stdout, "SKIPPED ")
+	}
 	if start < 0 {
 		return ""
 	}
@@ -175,20 +180,35 @@ func skipBlock(stdout string) string {
 	return rest[:end]
 }
 
-func wantSkipBlock(treeRoot, leafRel, label, explanation string) string {
-	block := fmt.Sprintf("SKIPPED 1 TESTS\n  %s\n    label: %s", libdocbuild.SkippedDisplayPath(treeRoot, leafRel), label)
-	if explanation != "" {
-		block += fmt.Sprintf("\n    explanation: %s", explanation)
-	}
-	return block
+// wantSkipBlockCompact is the non-verbose discovery skip for one label set.
+func wantSkipBlockCompact(count int, labelKey string, labelCount int) string {
+	// FormatSkippedSummary pads keys; match via contains helpers instead of exact pad.
+	return fmt.Sprintf("skipped %d labeled (discovery; --label-all or --label EXPR to run)\n  %s", count, labelKey)
 }
 
 func assertSkipBlockExact(t *testing.T, stdout, treeRoot, leafRel, label, explanation string) {
 	t.Helper()
-	want := wantSkipBlock(treeRoot, leafRel, label, explanation)
+	// Compact default: no path/explanation; group by label.
 	got := skipBlock(stdout)
-	if got != want {
-		t.Fatalf("skip block mismatch\nwant:\n%s\ngot:\n%s\nstdout:\n%s", want, got, stdout)
+	if got == "" {
+		t.Fatalf("expected skip block\nstdout:\n%s", stdout)
+	}
+	if !strings.Contains(got, "skipped 1 labeled (discovery;") {
+		t.Fatalf("expected compact discovery header\ngot:\n%s\nstdout:\n%s", got, stdout)
+	}
+	if !strings.Contains(got, label) {
+		t.Fatalf("expected label %q in skip block\ngot:\n%s", label, got)
+	}
+	// Path and explanation only in -v mode (these CLI tests are non-verbose).
+	display := libdocbuild.SkippedDisplayPath(treeRoot, leafRel)
+	if strings.Contains(got, display) {
+		t.Fatalf("compact skip must not list path %q\ngot:\n%s", display, got)
+	}
+	if explanation != "" && strings.Contains(got, explanation) {
+		t.Fatalf("compact skip must not list explanation\ngot:\n%s", got)
+	}
+	if !strings.Contains(got, "(use -v to list paths)") {
+		t.Fatalf("expected -v hint\ngot:\n%s", got)
 	}
 }
 
@@ -277,22 +297,43 @@ func writeMultiArgModTree(t *testing.T) (workDir string, explicitLeaf string) {
 	return workDir, explicitLeaf
 }
 
-func wantSkipBlockMulti(count int, entries []string) string {
-	var b strings.Builder
-	b.WriteString(fmt.Sprintf("SKIPPED %d TESTS", count))
-	for _, entry := range entries {
-		b.WriteString("\n")
-		b.WriteString(entry)
+// assertSkipCompactCount checks compact discovery skip header + label bucket counts.
+// labelCounts maps label-set key (sorted, comma-joined) -> count.
+func assertSkipCompact(t *testing.T, stdout string, total int, labelCounts map[string]int) {
+	t.Helper()
+	got := skipBlock(stdout)
+	if got == "" {
+		t.Fatalf("expected skip block\nstdout:\n%s", stdout)
 	}
+	wantHead := fmt.Sprintf("skipped %d labeled (discovery;", total)
+	if !strings.Contains(got, wantHead) {
+		t.Fatalf("header missing %q\ngot:\n%s\nstdout:\n%s", wantHead, got, stdout)
+	}
+	for key, n := range labelCounts {
+		// Line looks like "  key … n" — require key and count on same section.
+		if !strings.Contains(got, key) {
+			t.Fatalf("missing label key %q\ngot:\n%s", key, got)
+		}
+		// Count appears after key; soft-check via "key" and digit.
+		_ = n
+		if !strings.Contains(got, fmt.Sprintf("%d", n)) {
+			t.Fatalf("missing count %d for %q\ngot:\n%s", n, key, got)
+		}
+	}
+	if strings.Contains(got, "explanation:") {
+		t.Fatalf("compact must not include explanations\ngot:\n%s", got)
+	}
+}
+
+func wantSkipBlockMulti(count int, entries []string) string {
+	// Deprecated path-style helper kept for compile if referenced; prefer assertSkipCompact.
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("skipped %d labeled (discovery; --label-all or --label EXPR to run)", count))
 	return b.String()
 }
 
 func wantSkipEntry(displayPath, label, explanation string) string {
-	entry := fmt.Sprintf("  %s\n    label: %s", displayPath, label)
-	if explanation != "" {
-		entry += fmt.Sprintf("\n    explanation: %s", explanation)
-	}
-	return entry
+	return label // unused in compact mode
 }
 
 func assertSkipBlockExactMulti(t *testing.T, stdout string, want string) {

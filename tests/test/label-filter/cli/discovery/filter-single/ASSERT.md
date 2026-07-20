@@ -4,7 +4,7 @@ label: heavy
 
 ## Expected
 
-- PASS(2/2); skips fast, ui, heavy with label-filter reason.
+- PASS(2/2); compact skip buckets for non-matching leaves.
 
 ```go
 import "testing"
@@ -16,13 +16,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if resp.ExitCode != 0 {
 		t.Fatalf("exit=%d stdout:\n%s stderr:\n%s", resp.ExitCode, resp.Stdout, resp.Stderr)
 	}
-	mod := req.Args[1]
-	want := wantLabelFilterSkipBlockMulti(3,
-		wantLabelFilterSkipEntry(mod, "fast", "", "", true),
-		wantLabelFilterSkipEntry(mod, "heavy", "heavy", "heavy profile", false),
-		wantLabelFilterSkipEntry(mod, "ui", "ui-automation", "browser ui", false),
-	)
-	assertSkipBlockExact(t, resp.Stdout, want)
+	assertLabelFilterSkipCompact(t, resp.Stdout, 3, map[string]int{
+		"(unlabeled)":   1,
+		"heavy":         1,
+		"ui-automation": 1,
+	})
 	assertResultSummary(t, resp.Stdout, 2, 2)
 }
 ```

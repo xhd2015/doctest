@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -113,6 +114,13 @@ type TestRunStats struct {
 	Phases []PhaseTiming
 	// LeafTimings map leaf paths to go-test package elapsed when available.
 	LeafTimings []LeafTiming
+
+	// Filled when GenerateOnly: shared gen module path and tree scope.
+	GenRoot string
+	TreeRel string
+	// Unified is true when hierarchical suite gen was used (not internal-compile).
+	Unified bool
+	AbsRoot string
 }
 
 func formatDisplayDuration(d time.Duration) string {
@@ -174,24 +182,147 @@ func formatResultSummary(style colorStyle, passed, total int, elapsed time.Durat
 	return token + suffix
 }
 
-func PrintSkippedSummary(skipped []core.SkippedCase) {
-	if len(skipped) == 0 {
+// PrintSkippedSummary writes a compact skip report grouped by label set.
+// Paths and explanations appear only when verbose is true.
+func PrintSkippedSummary(skipped []core.SkippedCase, verbose bool) {
+	s := FormatSkippedSummary(skipped, verbose)
+	if s == "" {
 		return
 	}
-	fmt.Printf("SKIPPED %d TESTS\n", len(skipped))
+	fmt.Print(s)
+}
+
+// FormatSkippedSummary returns the compact skip block (trailing newline included).
+//
+// Default (verbose=false):
+//
+//	skipped N labeled (discovery; --label-all or --label EXPR to run)
+//	  heavy              12
+//	  slow                3
+//	  (use -v to list paths)
+//
+// Verbose: each bucket lists DisplayPath (+ explanation under path).
+func FormatSkippedSummary(skipped []core.SkippedCase, verbose bool) string {
+	if len(skipped) == 0 {
+		return ""
+	}
+
+	type bucket struct {
+		key   string
+		count int
+		items []core.SkippedCase
+	}
+	byKey := map[string]*bucket{}
 	for _, s := range skipped {
-		fmt.Printf("  %s\n", s.DisplayPath)
-		if len(s.Labels) > 0 {
-			fmt.Printf("    label: %s\n", strings.Join(s.Labels, ", "))
+		key := labelSetKey(s.Labels)
+		b := byKey[key]
+		if b == nil {
+			b = &bucket{key: key}
+			byKey[key] = b
 		}
-		if s.Explanation != "" {
-			fmt.Printf("    explanation: %s\n", s.Explanation)
-		}
-		if s.Reason != "" {
-			fmt.Printf("    reason: %s\n", s.Reason)
+		b.count++
+		if verbose {
+			b.items = append(b.items, s)
 		}
 	}
-	fmt.Println()
+	keys := make([]string, 0, len(byKey))
+	for k := range byKey {
+		keys = append(keys, k)
+	}
+	// Count desc, then key asc.
+	sort.Slice(keys, func(i, j int) bool {
+		bi, bj := byKey[keys[i]], byKey[keys[j]]
+		if bi.count != bj.count {
+			return bi.count > bj.count
+		}
+		return bi.key < bj.key
+	})
+
+	var b strings.Builder
+	b.WriteString(skippedSummaryHeader(skipped))
+	b.WriteByte('\n')
+
+	// Align counts to a readable column.
+	maxKey := 0
+	for _, k := range keys {
+		if n := len(k); n > maxKey {
+			maxKey = n
+		}
+	}
+	if maxKey < 8 {
+		maxKey = 8
+	}
+	if maxKey > 40 {
+		maxKey = 40
+	}
+
+	for _, k := range keys {
+		bk := byKey[k]
+		if verbose {
+			fmt.Fprintf(&b, "  %s (%d)\n", bk.key, bk.count)
+			// Stable path order within bucket.
+			items := append([]core.SkippedCase(nil), bk.items...)
+			sort.Slice(items, func(i, j int) bool {
+				pi, pj := items[i].DisplayPath, items[j].DisplayPath
+				if pi == "" {
+					pi = items[i].Path
+				}
+				if pj == "" {
+					pj = items[j].Path
+				}
+				return pi < pj
+			})
+			for _, it := range items {
+				path := it.DisplayPath
+				if path == "" {
+					path = it.Path
+				}
+				fmt.Fprintf(&b, "    %s\n", path)
+				if it.Explanation != "" {
+					fmt.Fprintf(&b, "      explanation: %s\n", it.Explanation)
+				}
+				if it.Reason != "" {
+					fmt.Fprintf(&b, "      reason: %s\n", it.Reason)
+				}
+			}
+			continue
+		}
+		// Pad key for column alignment (truncate long keys).
+		key := bk.key
+		if len(key) > maxKey {
+			key = key[:maxKey-1] + "…"
+		}
+		fmt.Fprintf(&b, "  %-*s %d\n", maxKey, key, bk.count)
+	}
+	if !verbose {
+		b.WriteString("  (use -v to list paths)\n")
+	}
+	b.WriteByte('\n')
+	return b.String()
+}
+
+func labelSetKey(labels []string) string {
+	if len(labels) == 0 {
+		return "(unlabeled)"
+	}
+	cp := append([]string(nil), labels...)
+	sort.Strings(cp)
+	return strings.Join(cp, ",")
+}
+
+func skippedSummaryHeader(skipped []core.SkippedCase) string {
+	n := len(skipped)
+	allFilter := true
+	for _, s := range skipped {
+		if s.Reason != "label filter" {
+			allFilter = false
+			break
+		}
+	}
+	if allFilter {
+		return fmt.Sprintf("skipped %d (label filter; --label-all or adjust --label EXPR)", n)
+	}
+	return fmt.Sprintf("skipped %d labeled (discovery; --label-all or --label EXPR to run)", n)
 }
 
 func PrintResultSummary(opts core.Options, stats TestRunStats) {

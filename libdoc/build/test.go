@@ -72,7 +72,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		if len(skipped) > 0 {
 			stats := TestRunStats{Skipped: skipped, Phases: phases}
 			if !opts.SuppressResultSummary {
-				PrintSkippedSummary(skipped)
+				PrintSkippedSummary(skipped, opts.Verbose)
 			}
 			return stats, nil
 		}
@@ -115,6 +115,17 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		stats.Phases = phases
 		return stats, err
 	}
+	track("generate", tGen)
+
+	// Multi-root workspace prep: generate only; caller runs __workspace/suite.
+	if opts.GenerateOnly {
+		stats.Phases = phases
+		stats.GenRoot = ctx.genRoot
+		stats.TreeRel = ctx.treeRel()
+		stats.Unified = ctx.unifiedMode
+		stats.AbsRoot = absRoot
+		return stats, nil
+	}
 
 	runDir, isSingleLeaf := ctx.runDir(absRoot, opts, cases)
 
@@ -125,7 +136,6 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		var pkgErr error
 		packageArgs, pkgErr = ctx.packageArgsForCases(runDir, absRoot, cases)
 		if pkgErr != nil {
-			track("generate", tGen)
 			stats.Phases = phases
 			return stats, pkgErr
 		}
@@ -136,12 +146,10 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		var pkgErr error
 		packageArgs, pkgErr = ctx.packageArgsForCases(runDir, absRoot, cases)
 		if pkgErr != nil {
-			track("generate", tGen)
 			stats.Phases = phases
 			return stats, pkgErr
 		}
 	}
-	track("generate", tGen)
 
 	// Flags only — packages are appended per go-test invocation (and per shard).
 	flagArgs := []string{"test", "-mod=mod"}
@@ -201,6 +209,12 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 
 	sessionID := core.DoctestSessionIDForRun()
 	goCache := opts.GoCache
+	// Prefer explicit nest sink on opts; else inherit process (suite child).
+	if opts.MetricsNestSink == "" {
+		if v := os.Getenv(envMetricsNestSink); v != "" {
+			opts.MetricsNestSink = v
+		}
+	}
 
 	stdout := opts.Stdout
 	if stdout == nil {
@@ -222,7 +236,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 				execArgs := append(append([]string(nil), flagArgs...), pkg)
 				goTestCmd := exec.Command("go", execArgs...)
 				goTestCmd.Dir = runDir
-				goTestCmd.Env = goTestEnv(sessionID, goCache)
+				goTestCmd.Env = goTestEnvFull(sessionID, goCache, opts.MetricsNestSink)
 				pkgOut, pkgErr := goTestCmd.CombinedOutput()
 				out = append(out, pkgOut...)
 				if pkgErr != nil && err == nil {
@@ -233,7 +247,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 			execArgs := append(append([]string(nil), flagArgs...), packageArgs...)
 			goTestCmd := exec.Command("go", execArgs...)
 			goTestCmd.Dir = runDir
-			goTestCmd.Env = goTestEnv(sessionID, goCache)
+			goTestCmd.Env = goTestEnvFull(sessionID, goCache, opts.MetricsNestSink)
 			out, err = goTestCmd.CombinedOutput()
 		}
 		goTestElapsed = time.Since(tGo)
@@ -246,7 +260,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		}
 		if !opts.SuppressResultSummary {
 			stats.Elapsed = goTestElapsed
-			PrintSkippedSummary(stats.Skipped)
+			PrintSkippedSummary(stats.Skipped, opts.Verbose)
 			PrintResultSummary(opts, stats)
 		}
 		if err != nil {
@@ -258,9 +272,9 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		var result goTestJSONResult
 		var err error
 		if singlePkgInvocations {
-			result, err = runGoTestJSONPerPackage(runDir, flagArgs, packageArgs, sessionID, goCache, stdout, style)
+			result, err = runGoTestJSONPerPackage(runDir, flagArgs, packageArgs, sessionID, goCache, opts.MetricsNestSink, stdout, style)
 		} else {
-			result, err = runGoTestJSONShards(runDir, flagArgs, packageArgs, sessionID, goCache, stdout, style)
+			result, err = runGoTestJSONShards(runDir, flagArgs, packageArgs, sessionID, goCache, opts.MetricsNestSink, stdout, style)
 		}
 		goTestElapsed = time.Since(tGo)
 		track("go_test", tGo)
@@ -275,7 +289,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 
 		if !opts.SuppressResultSummary {
 			stats.Elapsed = goTestElapsed
-			PrintSkippedSummary(stats.Skipped)
+			PrintSkippedSummary(stats.Skipped, opts.Verbose)
 			PrintResultSummary(opts, stats)
 		}
 
@@ -316,6 +330,8 @@ const UnifiedSuiteTestName = "TestDoctestSuite"
 
 // leafTimingsFromSubtests attributes go test -json subtest Elapsed under the
 // unified suite (t.Run(encodedPath, …) → TestDoctestSuite/<path with / → __>).
+// Workspace nested names are TestDoctestSuite/<tree>/<leaf>; the leaf segment
+// (after the last "/") is used to match tree-relative case paths.
 // When unmappable, elapsed stays 0 (do not clone suite wall onto every leaf).
 func leafTimingsFromSubtests(cases []core.TreeCase, result goTestJSONResult, goTestWall time.Duration) []LeafTiming {
 	out := make([]LeafTiming, 0, len(cases))
@@ -328,6 +344,10 @@ func leafTimingsFromSubtests(cases []core.TreeCase, result goTestJSONResult, goT
 		rel := test[len(prefix):]
 		if rel == "" {
 			continue
+		}
+		// Workspace: tree/leaf → keep leaf segment for case.Path match.
+		if i := strings.LastIndex(rel, "/"); i >= 0 {
+			rel = rel[i+1:]
 		}
 		// Decode suite subtest encoding: "/" was replaced with "__".
 		rel = strings.ReplaceAll(rel, "__", "/")
@@ -523,24 +543,44 @@ func profileFlagsNeedSinglePackage(opts core.Options) bool {
 		opts.OutputDir != ""
 }
 
+// envMetricsNestSink matches metrics.EnvMetricsNestSink (avoid build→metrics import).
+const envMetricsNestSink = "DOCTEST_METRICS_NEST_SINK"
+
 // goTestEnv builds the environment for a child `go test` process, including
-// DOCTEST_SESSION_ID and an optional isolated GOCACHE (cold-cache mode).
+// DOCTEST_SESSION_ID, optional isolated GOCACHE, and nest sink when present.
+// Nest sink is process-lifetime for the suite binary (leaves copy into
+// d.Metrics.NestSink via read-only getenv); prefer opts.MetricsNestSink +
+// goTestEnvWithOpts over mid-suite os.Setenv.
 func goTestEnv(sessionID, goCache string) []string {
+	return goTestEnvFull(sessionID, goCache, "")
+}
+
+func goTestEnvFull(sessionID, goCache, nestSink string) []string {
 	env := append(os.Environ(), core.DoctestSessionIDEnv+"="+sessionID)
 	if goCache != "" {
 		env = append(env, "GOCACHE="+goCache)
 	}
+	if nestSink != "" {
+		env = append(env, envMetricsNestSink+"="+nestSink)
+	} else if v := os.Getenv(envMetricsNestSink); v != "" {
+		// Inherit outer nest sink for nested go test (read-only).
+		env = append(env, envMetricsNestSink+"="+v)
+	}
 	return env
+}
+
+func goTestEnvFromOpts(sessionID string, opts core.Options) []string {
+	return goTestEnvFull(sessionID, opts.GoCache, opts.MetricsNestSink)
 }
 
 // runGoTestJSONPerPackage runs one go test process per package (serial) so
 // profile flags that go rejects with multi-package lists still work.
-func runGoTestJSONPerPackage(runDir string, flagArgs, packageArgs []string, sessionID, goCache string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
+func runGoTestJSONPerPackage(runDir string, flagArgs, packageArgs []string, sessionID, goCache, nestSink string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
 	var merged goTestJSONResult
 	var firstErr error
 	for _, pkg := range packageArgs {
 		args := append(append([]string(nil), flagArgs...), pkg)
-		res, err := runGoTestJSONOnce(runDir, args, sessionID, goCache, stdout, style)
+		res, err := runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, stdout, style)
 		mergeGoTestJSONResult(&merged, res)
 		if err != nil && firstErr == nil {
 			firstErr = err
@@ -580,7 +620,7 @@ func lockGoTestModule(runDir string) func() {
 	return mu.Unlock
 }
 
-func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionID, goCache string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
+func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionID, goCache, nestSink string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
 	// Single go test process per tree. Package sharding multiplies nested
 	// self-test fan-out and has raced go.mod; wall cut is tree concurrency +
 	// heavy/light scheduling in path_resolve.
@@ -588,7 +628,7 @@ func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionI
 	shards := packageTestShards(packageArgs, workers)
 	if len(shards) <= 1 {
 		args := append(append([]string(nil), flagArgs...), packageArgs...)
-		return runGoTestJSONOnce(runDir, args, sessionID, goCache, stdout, style)
+		return runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, stdout, style)
 	}
 
 	// Multi-shard: readonly module mode so concurrent go tests share genDir safely.
@@ -614,7 +654,7 @@ func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionI
 			defer wg.Done()
 			args := append(append([]string(nil), shardFlags...), shard...)
 			// Locked stdout keeps progress dots incremental and non-interleaved by byte.
-			res, err := runGoTestJSONOnce(runDir, args, sessionID, goCache, &lockedWriter{w: stdout, mu: &mu}, style)
+			res, err := runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, &lockedWriter{w: stdout, mu: &mu}, style)
 			mu.Lock()
 			defer mu.Unlock()
 			mergeGoTestJSONResult(&merged, res)
@@ -638,7 +678,7 @@ func (l *lockedWriter) Write(p []byte) (int, error) {
 	return l.w.Write(p)
 }
 
-func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
+func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nestSink string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
 	goTestSlots <- struct{}{}
 	defer func() { <-goTestSlots }()
 
@@ -648,7 +688,7 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache stri
 	execArgs := append(append([]string(nil), testArgs...), "-json")
 	goTestCmd := exec.Command("go", execArgs...)
 	goTestCmd.Dir = runDir
-	goTestCmd.Env = goTestEnv(sessionID, goCache)
+	goTestCmd.Env = goTestEnvFull(sessionID, goCache, nestSink)
 
 	stdoutPipe, err := goTestCmd.StdoutPipe()
 	if err != nil {
@@ -690,8 +730,22 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache stri
 		// event per subtest name in edge cases; count each leaf at most once.
 		suiteLeafSeen := make(map[string]bool)
 		testKey := func(pkg, test string) string { return pkg + "\x00" + test }
-		isSuiteLeafSubtest := func(test string) bool {
-			return strings.HasPrefix(test, UnifiedSuiteTestName+"/")
+		// Suite leaf progress: per-tree suite uses flat TestDoctestSuite/<leaf>.
+		// Workspace suite nests TestDoctestSuite/<tree>/<leaf> — count only leaves
+		// (two+ segments), not the tree parallel parent.
+		isCountableSuiteLeaf := func(pkg, test string) bool {
+			prefix := UnifiedSuiteTestName + "/"
+			if !strings.HasPrefix(test, prefix) {
+				return false
+			}
+			rest := test[len(prefix):]
+			if rest == "" {
+				return false
+			}
+			if strings.Contains(pkg, "/"+core.WorkspaceDirName+"/") || strings.HasSuffix(pkg, "/"+core.WorkspaceDirName+"/"+core.WorkspaceSuiteDirName) || strings.Contains(pkg, core.WorkspaceDirName+"/"+core.WorkspaceSuitePkgName) || strings.Contains(pkg, "__workspace") {
+				return strings.Contains(rest, "/")
+			}
+			return true
 		}
 		countSuiteLeaf := func(test string, failed bool) {
 			if suiteLeafSeen[test] {
@@ -777,7 +831,7 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache stri
 				if ev.Test != "" {
 					recordTest(ev.Test, ev.Elapsed)
 					delete(testOutputs, testKey(ev.Package, ev.Test))
-					if isSuiteLeafSubtest(ev.Test) {
+					if isCountableSuiteLeaf(ev.Package, ev.Test) {
 						before := suiteLeafPass + suiteLeafFail
 						countSuiteLeaf(ev.Test, false)
 						if suiteLeafPass+suiteLeafFail > before {
@@ -799,7 +853,7 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache stri
 					recordTest(ev.Test, ev.Elapsed)
 					key := testKey(ev.Package, ev.Test)
 					flushTestOutput(key)
-					if isSuiteLeafSubtest(ev.Test) {
+					if isCountableSuiteLeaf(ev.Package, ev.Test) {
 						before := suiteLeafPass + suiteLeafFail
 						countSuiteLeaf(ev.Test, true)
 						if suiteLeafPass+suiteLeafFail > before {

@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/xhd2015/doctest/libdoc/core"
@@ -156,7 +157,16 @@ func (ctx *generateContext) announceRoots() {
 	fmt.Fprintf(ctx.w, "→ %s\n\n", pathfmt.Short(ctx.genRoot))
 }
 
+// genRootWriteMu serializes multi-tree generate into a shared mapping-gen root
+// (go.mod tidy + concurrent package writes from ./... prepare).
+var genRootWriteMu sync.Mutex
+
 func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) error {
+	if !ctx.internalCompile {
+		genRootWriteMu.Lock()
+		defer genRootWriteMu.Unlock()
+	}
+
 	pkgName := "testcase"
 	srcDir, origPkg, hasPkgUnderTest := core.ResolvePkgUnderTest(ctx.absRoot)
 	if hasPkgUnderTest {
@@ -314,10 +324,17 @@ func (ctx *generateContext) writeUnifiedCases(cases []core.TreeCase, compileOnly
 	if err := core.WriteUnifiedTreeExtras(ctx.genRoot, treeRel, leafImports); err != nil {
 		return err
 	}
+	// Workspace registration plane: each tree's __wreg registers into
+	// __workspace/__registry (fan-in rewritten when multi-root runs).
+	heavy := pathLooksHeavySelftestTree(ctx.absRoot)
+	if err := core.WriteTreeWreg(ctx.genRoot, treeRel, heavy); err != nil {
+		return fmt.Errorf("write tree wreg: %w", err)
+	}
 	if ctx.verbose && ctx.w != nil {
 		fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(core.UnifiedRegistryDirForTree(ctx.genRoot, treeRel)))
 		fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(core.UnifiedAllLeavesDirForTree(ctx.genRoot, treeRel)))
 		fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(core.UnifiedSuiteDirForTree(ctx.genRoot, treeRel)))
+		fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(core.TreeWregDirForTree(ctx.genRoot, treeRel)))
 	}
 
 	if ctx.hasMod && !ctx.internalCompile {
@@ -326,6 +343,18 @@ func (ctx *generateContext) writeUnifiedCases(cases []core.TreeCase, compileOnly
 		}
 	}
 	return nil
+}
+
+// pathLooksHeavySelftestTree mirrors path_resolve heavy trees (…/doctest/tests/…)
+// without importing path_resolve (avoid cycles). Used for TreeEntry.Heavy.
+func pathLooksHeavySelftestTree(absRoot string) bool {
+	abs, err := filepath.Abs(absRoot)
+	if err != nil {
+		return false
+	}
+	sep := string(filepath.Separator)
+	marker := sep + "doctest" + sep + "tests"
+	return strings.HasSuffix(abs, marker) || strings.Contains(abs, marker+sep)
 }
 
 func (ctx *generateContext) syncDump() error {

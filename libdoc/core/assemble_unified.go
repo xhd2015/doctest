@@ -151,7 +151,6 @@ func AssembleUnifiedSuiteTestSource(registryImport, allLeavesImport string) stri
 	buf.WriteString(UnifiedSuitePkgName)
 	buf.WriteString("\n\n")
 	buf.WriteString("import (\n")
-	buf.WriteString("\t\"os\"\n")
 	buf.WriteString("\t\"strings\"\n")
 	buf.WriteString("\t\"testing\"\n\n")
 	buf.WriteString("\t")
@@ -163,8 +162,8 @@ func AssembleUnifiedSuiteTestSource(registryImport, allLeavesImport string) stri
 	buf.WriteString(allLeavesImport)
 	buf.WriteString("\"\n")
 	buf.WriteString(")\n\n")
-	// Parent leaf via env (stdlib only) so nest timing can attribute nested RunTest
-	// without importing libdoc/metrics into the generated suite module.
+	// Nest parent leaf is on d.Metrics.ParentLeaf inside each RunTestLeaf
+	// (no process env — parallel-safe).
 	//
 	// Subtest names use "__" instead of "/" so go test -json does not invent
 	// intermediate path nodes (t.Run("a/b") creates TestDoctestSuite/a and
@@ -175,8 +174,7 @@ func AssembleUnifiedSuiteTestSource(registryImport, allLeavesImport string) stri
 	buf.WriteString("\t\t// Encode \"/\" as \"__\" so go test does not nest path segments.\n")
 	buf.WriteString("\t\tname := strings.ReplaceAll(e.Path, \"/\", \"__\")\n")
 	buf.WriteString("\t\tt.Run(name, func(t *testing.T) {\n")
-	buf.WriteString("\t\t\t_ = os.Setenv(\"DOCTEST_METRICS_PARENT_LEAF\", e.Path)\n")
-	buf.WriteString("\t\t\tdefer os.Unsetenv(\"DOCTEST_METRICS_PARENT_LEAF\")\n")
+	// Nest parent leaf lives on d.Metrics.ParentLeaf (set in RunTestLeaf) — no process env.
 	buf.WriteString("\t\t\te.Fn(t)\n")
 	buf.WriteString("\t\t})\n")
 	buf.WriteString("\t}\n")

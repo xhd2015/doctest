@@ -100,11 +100,8 @@ func buildDoctest(absRoot string) (string, error) {
 	}
 	defer syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
 
-	// Another process may have finished while we waited.
-	if st, err := os.Stat(bin); err == nil && !st.IsDir() && st.Size() > 0 {
-		return bin, nil
-	}
-
+	// Always invoke go build so the toolchain rebuilds when sources change.
+	// (A mere Stat on the -o path would pin a stale binary forever.)
 	args := []string{"build", "-o", bin}
 	if build.NeedsBuildVCSFlag(absRoot) {
 		args = append(args, "-buildvcs=false")
@@ -114,6 +111,9 @@ func buildDoctest(absRoot string) (string, error) {
 	cmd.Dir = absRoot
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return "", fmt.Errorf("go %v: %w\n%s", args, err, out)
+	}
+	if st, err := os.Stat(bin); err != nil || st.IsDir() || st.Size() == 0 {
+		return "", fmt.Errorf("go build produced no binary at %s", bin)
 	}
 	return bin, nil
 }

@@ -17,7 +17,7 @@
 ### Behaviors
 
 - **No `--label`** — unchanged discovery skip / explicit-leaf semantics (covered by `label-skip` tree).
-- **With `--label`** — only labeled leaves matching EXPR run; all others skipped with `reason: label filter`.
+- **With `--label`** — only labeled leaves matching EXPR run; others skipped in a compact label-filter summary (paths with `-v`).
 - **Invalid EXPR** — non-zero exit and parse error on stderr before any leaf runs.
 - **Help** — `doctest test --help` documents `--label`.
 - **Matcher** — `core.EvalLabelExpr(expr, labels)` returns match bool or parse error (library contract).

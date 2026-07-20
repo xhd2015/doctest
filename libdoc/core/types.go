@@ -111,6 +111,17 @@ type Options struct {
 	// ($MetricsRoot/doctest/metrics/<project_id>/runs/*.jsonl). Empty means
 	// use os.UserCacheDir() (or DOCTEST_METRICS_ROOT when set by the CLI).
 	MetricsRoot string
+	// MetricsNestSink is the nest JSONL path for this invocation (optional).
+	// When set, nested RunTest writes phases here and go test children inherit
+	// DOCTEST_METRICS_NEST_SINK via cmd.Env (no mid-run process Setenv).
+	MetricsNestSink string
+	// MetricsParentLeaf attributes nested phases to this outer leaf path.
+	// Prefer explicit Options over process env (parallel-safe).
+	MetricsParentLeaf string
+
+	// GenerateOnly stops after writing generated packages (no go test).
+	// Used to prepare trees for a multi-root workspace suite run.
+	GenerateOnly bool
 
 	// ColdCache enables doctest test --cold-cache: wipe mapping gen root on
 	// startup, force -count=1 when unset, and isolate GOCACHE for the run.

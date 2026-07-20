@@ -20,7 +20,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("exit code = %d\nstdout:\n%s\nstderr:\n%s", resp.ExitCode, resp.Stdout, resp.Stderr)
 	}
 	combined := resp.Stdout + resp.Stderr
-	if strings.Contains(combined, "SKIPPED ") {
+	if strings.Contains(combined, "SKIPPED ") || strings.Contains(combined, "skipped ") {
 		t.Fatalf("build must not print skip summary\ngot:\n%s", combined)
 	}
 	if strings.Contains(combined, "PASS (") {

@@ -10,6 +10,53 @@ import (
 	"github.com/xhd2015/doctest/libdoc/core"
 )
 
+func TestFormatSkippedSummaryCompact(t *testing.T) {
+	skipped := []core.SkippedCase{
+		{DisplayPath: "a/heavy1", Labels: []string{"heavy"}},
+		{DisplayPath: "a/heavy2", Labels: []string{"heavy"}},
+		{DisplayPath: "b/slow", Labels: []string{"slow"}, Explanation: "takes time"},
+		{DisplayPath: "c/both", Labels: []string{"slow", "heavy"}},
+	}
+	got := FormatSkippedSummary(skipped, false)
+	if !strings.Contains(got, "skipped 4 labeled (discovery;") {
+		t.Fatalf("header:\n%s", got)
+	}
+	if !strings.Contains(got, "heavy") || !strings.Contains(got, "2") {
+		t.Fatalf("expected heavy bucket count 2:\n%s", got)
+	}
+	if !strings.Contains(got, "heavy,slow") {
+		t.Fatalf("expected sorted multi-label key heavy,slow:\n%s", got)
+	}
+	if strings.Contains(got, "a/heavy1") {
+		t.Fatalf("compact mode must not list paths:\n%s", got)
+	}
+	if !strings.Contains(got, "(use -v to list paths)") {
+		t.Fatalf("expected -v hint:\n%s", got)
+	}
+	// Verbose lists paths + explanation.
+	v := FormatSkippedSummary(skipped, true)
+	if !strings.Contains(v, "a/heavy1") || !strings.Contains(v, "explanation: takes time") {
+		t.Fatalf("verbose:\n%s", v)
+	}
+	if strings.Contains(v, "(use -v to list paths)") {
+		t.Fatalf("verbose should not show -v hint:\n%s", v)
+	}
+}
+
+func TestFormatSkippedSummaryLabelFilterHeader(t *testing.T) {
+	skipped := []core.SkippedCase{
+		{DisplayPath: "x", Labels: []string{"slow"}, Reason: "label filter"},
+		{DisplayPath: "y", Labels: nil, Reason: "label filter"},
+	}
+	got := FormatSkippedSummary(skipped, false)
+	if !strings.Contains(got, "skipped 2 (label filter;") {
+		t.Fatalf("filter header:\n%s", got)
+	}
+	if !strings.Contains(got, "(unlabeled)") {
+		t.Fatalf("unlabeled bucket:\n%s", got)
+	}
+}
+
 func TestFormatDisplayDuration(t *testing.T) {
 	tests := []struct {
 		name string

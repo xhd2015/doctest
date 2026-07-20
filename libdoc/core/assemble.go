@@ -98,8 +98,12 @@ func AssembleTestSource(tc TreeCase, compileOnly bool, pkgName string, docTestRo
 	return buf.String(), nil
 }
 
-// writeDoctestDConstruct emits sid load + d := &session.Doctest{ROOT, CASE, SESSION_ID}.
-// ROOT/CASE are baked absolute paths; SESSION_ID comes from the env at run time.
+// writeDoctestDConstruct emits sid load + d := &session.Doctest{...}.
+// ROOT/CASE are baked absolute paths; SESSION_ID comes from the env at run time
+// (process-lifetime, set once when spawning go test — not mutated per leaf).
+// Metrics.ParentLeaf is the tree-relative leaf path (explicit, not process env).
+// Metrics.NestSink is copied once from process env if the suite was started with
+// DOCTEST_METRICS_NEST_SINK (read-only inherit; no Setenv in the leaf).
 // d is declared in the enclosing test function scope for Setup/Run/Assert call sites.
 func writeDoctestDConstruct(buf *strings.Builder, docTestRoot, casePath string) {
 	escapedRoot := escapeRawString(docTestRoot)
@@ -108,6 +112,12 @@ func writeDoctestDConstruct(buf *strings.Builder, docTestRoot, casePath string) 
 		caseAbs = filepath.Join(docTestRoot, casePath)
 	}
 	escapedCase := escapeRawString(caseAbs)
+	// ParentLeaf: tree-relative path for nest attribution (stable, parallel-safe on d).
+	parentLeaf := casePath
+	if parentLeaf == "" {
+		parentLeaf = "."
+	}
+	escapedParent := escapeRawString(parentLeaf)
 
 	buf.WriteString("\tvar sid string\n")
 	buf.WriteString("\t{\n")
@@ -117,10 +127,16 @@ func writeDoctestDConstruct(buf *strings.Builder, docTestRoot, casePath string) 
 	buf.WriteString("\t\t}\n")
 	buf.WriteString("\t\tsid = s\n")
 	buf.WriteString("\t}\n")
+	// Nest sink: read-only inherit from suite process (set via go test cmd.Env).
+	buf.WriteString("\tnestSink, _ := syscall.Getenv(\"DOCTEST_METRICS_NEST_SINK\")\n")
 	buf.WriteString("\td := &session.Doctest{\n")
 	buf.WriteString("\t\tDOCTEST_ROOT:       `" + escapedRoot + "`,\n")
 	buf.WriteString("\t\tDOCTEST_CASE:       `" + escapedCase + "`,\n")
 	buf.WriteString("\t\tDOCTEST_SESSION_ID: sid,\n")
+	buf.WriteString("\t\tMetrics: session.Metrics{\n")
+	buf.WriteString("\t\t\tParentLeaf: `" + escapedParent + "`,\n")
+	buf.WriteString("\t\t\tNestSink:   nestSink,\n")
+	buf.WriteString("\t\t},\n")
 	buf.WriteString("\t}\n")
 }
 

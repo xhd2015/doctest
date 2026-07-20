@@ -79,10 +79,12 @@ type Response struct {
 	Err		error
 }
 func Run(t *testing.T, req *Request) (*Response, error) {
+	// t.Setenv restores env when this test ends (required under workspace suite:
+	// os.Setenv(PATH=tmpdir) would poison later trees in the same process).
 	for _, e := range req.Env {
 		parts := strings.SplitN(e, "=", 2)
 		if len(parts) == 2 {
-			os.Setenv(parts[0], parts[1])
+			t.Setenv(parts[0], parts[1])
 		}
 	}
 
@@ -92,6 +94,7 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 		return nil, err
 	}
 	os.Stdout = wOut
+	defer func() { os.Stdout = oldStdout }()
 
 	oldStderr := os.Stderr
 	rErr, wErr, err := os.Pipe()
@@ -101,6 +104,7 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 		return nil, err
 	}
 	os.Stderr = wErr
+	defer func() { os.Stderr = oldStderr }()
 
 	cliErr := cli.Run(req.Args)
 
