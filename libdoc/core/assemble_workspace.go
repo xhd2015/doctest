@@ -118,6 +118,7 @@ func AssembleTreeWregSource(treeRelSlash string, heavy bool, treeRegistryImport,
 	buf.WriteString("\n\n")
 	buf.WriteString("import (\n")
 	buf.WriteString("\t\"strings\"\n")
+	buf.WriteString("\t\"syscall\"\n")
 	buf.WriteString("\t\"testing\"\n\n")
 	buf.WriteString("\ttreereg \"")
 	buf.WriteString(treeRegistryImport)
@@ -138,12 +139,25 @@ func AssembleTreeWregSource(treeRelSlash string, heavy bool, treeRegistryImport,
 		buf.WriteString("\t\tHeavy: true,\n")
 	}
 	// Leaf nest parent is d.Metrics.ParentLeaf inside RunTestLeaf — no process env.
+	// Warm leaf-cache skips use DOCTEST_LEAF_CACHE_SKIP_PATHS (same as tree suite RunAll).
 	buf.WriteString("\t\tRun: func(t *testing.T) {\n")
+	buf.WriteString("\t\t\tskip := map[string]struct{}{}\n")
+	buf.WriteString("\t\t\tif s, ok := syscall.Getenv(\"DOCTEST_LEAF_CACHE_SKIP_PATHS\"); ok && s != \"\" {\n")
+	buf.WriteString("\t\t\t\tfor _, p := range strings.Split(s, \"\\n\") {\n")
+	buf.WriteString("\t\t\t\t\tp = strings.TrimSpace(p)\n")
+	buf.WriteString("\t\t\t\t\tif p != \"\" {\n")
+	buf.WriteString("\t\t\t\t\t\tskip[p] = struct{}{}\n")
+	buf.WriteString("\t\t\t\t\t}\n")
+	buf.WriteString("\t\t\t\t}\n")
+	buf.WriteString("\t\t\t}\n")
 	buf.WriteString("\t\t\tfor _, e := range treereg.All() {\n")
 	buf.WriteString("\t\t\t\te := e\n")
 	buf.WriteString("\t\t\t\t// Encode \"/\" as \"__\" so go test does not nest path segments.\n")
 	buf.WriteString("\t\t\t\tname := strings.ReplaceAll(e.Path, \"/\", \"__\")\n")
 	buf.WriteString("\t\t\t\tt.Run(name, func(t *testing.T) {\n")
+	buf.WriteString("\t\t\t\t\tif _, hit := skip[e.Path]; hit {\n")
+	buf.WriteString("\t\t\t\t\t\treturn\n")
+	buf.WriteString("\t\t\t\t\t}\n")
 	buf.WriteString("\t\t\t\t\te.Fn(t)\n")
 	buf.WriteString("\t\t\t\t})\n")
 	buf.WriteString("\t\t\t}\n")
@@ -178,13 +192,11 @@ func AssembleWorkspaceAllTreesSource(wregImports []string) string {
 	return buf.String()
 }
 
-// AssembleWorkspaceSuiteTestSource emits __workspace/suite/suite_test.go.
-// It only knows the workspace registry + alltrees fan-in (same pattern as tree suite).
-//
+// AssembleWorkspaceRunAllSource emits __workspace/suite/runall.go (importable).
 // Trees run serially in v1. t.Parallel on light trees is deferred: many nested
 // selftests hijack os.Stdout / process env and are not process-safe concurrently.
 // TreeEntry.Heavy is still registered for a future parallel policy.
-func AssembleWorkspaceSuiteTestSource(workspaceRegistryImport, allTreesImport string) string {
+func AssembleWorkspaceRunAllSource(workspaceRegistryImport, allTreesImport string) string {
 	var buf strings.Builder
 	buf.WriteString("package ")
 	buf.WriteString(WorkspaceSuitePkgName)
@@ -201,7 +213,8 @@ func AssembleWorkspaceSuiteTestSource(workspaceRegistryImport, allTreesImport st
 	buf.WriteString(allTreesImport)
 	buf.WriteString("\"\n")
 	buf.WriteString(")\n\n")
-	buf.WriteString("func TestDoctestSuite(t *testing.T) {\n")
+	buf.WriteString("// RunAll runs every registered tree (importable from a multi-module hub).\n")
+	buf.WriteString("func RunAll(t *testing.T) {\n")
 	buf.WriteString("\tfor _, tr := range registry.All() {\n")
 	buf.WriteString("\t\ttr := tr\n")
 	buf.WriteString("\t\t// Encode \"/\" as \"__\" so go test does not invent intermediate nodes.\n")
@@ -212,6 +225,21 @@ func AssembleWorkspaceSuiteTestSource(workspaceRegistryImport, allTreesImport st
 	buf.WriteString("\t\t\ttr.Run(t)\n")
 	buf.WriteString("\t\t})\n")
 	buf.WriteString("\t}\n")
+	buf.WriteString("}\n")
+	return buf.String()
+}
+
+// AssembleWorkspaceSuiteTestSource emits __workspace/suite/suite_test.go → RunAll.
+func AssembleWorkspaceSuiteTestSource(workspaceRegistryImport, allTreesImport string) string {
+	_ = workspaceRegistryImport
+	_ = allTreesImport
+	var buf strings.Builder
+	buf.WriteString("package ")
+	buf.WriteString(WorkspaceSuitePkgName)
+	buf.WriteString("\n\n")
+	buf.WriteString("import \"testing\"\n\n")
+	buf.WriteString("func TestDoctestSuite(t *testing.T) {\n")
+	buf.WriteString("\tRunAll(t)\n")
 	buf.WriteString("}\n")
 	return buf.String()
 }
@@ -268,11 +296,13 @@ func WriteWorkspaceExtras(genRoot string, treeRels []string) error {
 	if err := os.MkdirAll(WorkspaceSuiteDir(genRoot), 0755); err != nil {
 		return err
 	}
-	suiteSrc := AssembleWorkspaceSuiteTestSource(
-		WorkspaceRegistryImport(),
-		WorkspaceAllTreesImport(),
-	)
-	if err := WriteFormattedGo(filepath.Join(WorkspaceSuiteDir(genRoot), "suite_test.go"), suiteSrc); err != nil {
+	regImp := WorkspaceRegistryImport()
+	allImp := WorkspaceAllTreesImport()
+	suiteDir := WorkspaceSuiteDir(genRoot)
+	if err := WriteFormattedGo(filepath.Join(suiteDir, "runall.go"), AssembleWorkspaceRunAllSource(regImp, allImp)); err != nil {
+		return fmt.Errorf("write workspace RunAll: %w", err)
+	}
+	if err := WriteFormattedGo(filepath.Join(suiteDir, "suite_test.go"), AssembleWorkspaceSuiteTestSource(regImp, allImp)); err != nil {
 		return fmt.Errorf("write workspace suite: %w", err)
 	}
 	return nil

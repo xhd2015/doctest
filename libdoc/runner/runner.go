@@ -649,6 +649,8 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 		Bool("--rm", &opts.RemoveTemp).
 		String("--gen-dir", &opts.GenDir).
 		Int("-count", &opts.Count).
+		Bool("-a", &opts.ForceWithFlagA).
+		Bool("--no-leaf-cache", &opts.NoLeafCache).
 		Duration("--timeout", &opts.Timeout).
 		Bool("--color", &colorFlag).
 		Bool("--no-color", &noColorFlag).

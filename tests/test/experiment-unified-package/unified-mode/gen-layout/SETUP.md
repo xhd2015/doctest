@@ -4,7 +4,7 @@
 
 ```
 RunTest(2-leaf, GenDir=tmp)
-  -> __droot, __registry, __allleaves, suite
+  -> __droot, __registry, __allleaves, suite (runall.go + suite_test.go)
   -> leaf non-test RunTestLeaf; no leaf *_test.go
 ```
 

@@ -48,19 +48,23 @@ func TestAssembleWorkspaceRegistryAndSuite(t *testing.T) {
 		t.Fatalf("heavy wreg should set Heavy:\n%s", heavy)
 	}
 
-	suite := AssembleWorkspaceSuiteTestSource(WorkspaceRegistryImport(), WorkspaceAllTreesImport())
-	if !strings.Contains(suite, "registry.All()") {
-		t.Fatalf("suite must use workspace All:\n%s", suite)
+	runAll := AssembleWorkspaceRunAllSource(WorkspaceRegistryImport(), WorkspaceAllTreesImport())
+	if !strings.Contains(runAll, "registry.All()") {
+		t.Fatalf("RunAll must use workspace All:\n%s", runAll)
 	}
 	// v1: serial trees (no t.Parallel) — nested selftests are not process-safe.
-	if strings.Contains(suite, "t.Parallel()") {
-		t.Fatalf("v1 suite must not Parallel trees:\n%s", suite)
+	if strings.Contains(runAll, "t.Parallel()") {
+		t.Fatalf("v1 RunAll must not Parallel trees:\n%s", runAll)
 	}
-	if !strings.Contains(suite, "tr.Heavy") {
-		t.Fatalf("suite should reference Heavy for future parallel policy:\n%s", suite)
+	if !strings.Contains(runAll, "tr.Heavy") {
+		t.Fatalf("RunAll should reference Heavy for future parallel policy:\n%s", runAll)
 	}
-	if !strings.Contains(suite, WorkspaceAllTreesImport()) {
-		t.Fatalf("suite must blank-import alltrees:\n%s", suite)
+	if !strings.Contains(runAll, WorkspaceAllTreesImport()) {
+		t.Fatalf("RunAll must blank-import alltrees:\n%s", runAll)
+	}
+	suite := AssembleWorkspaceSuiteTestSource(WorkspaceRegistryImport(), WorkspaceAllTreesImport())
+	if !strings.Contains(suite, "RunAll(t)") {
+		t.Fatalf("suite_test must call RunAll:\n%s", suite)
 	}
 }
 

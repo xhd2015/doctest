@@ -153,7 +153,7 @@ Examples:
   doctest edit ./tests/feature/ui-leaf/ASSERT.md --add-label manual
 `
 
-const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [--timeout DURATION] [--color] [--no-color] [--changed] [--label EXPR]... [--label-all] [--metrics-on] [--cold-cache] [-cpuprofile FILE] [-memprofile FILE] [-memprofilerate N] [-blockprofile FILE] [-blockprofilerate N] [-mutexprofile FILE] [-mutexprofilefraction N] [-trace FILE] [-outputdir DIR] [-coverprofile FILE] [-cover] <dir>
+const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [-a] [--no-leaf-cache] [--timeout DURATION] [--color] [--no-color] [--changed] [--label EXPR]... [--label-all] [--metrics-on] [--cold-cache] [-cpuprofile FILE] [-memprofile FILE] [-memprofilerate N] [-blockprofile FILE] [-blockprofilerate N] [-mutexprofile FILE] [-mutexprofilefraction N] [-trace FILE] [-outputdir DIR] [-coverprofile FILE] [-cover] <dir>
 
 Run executable Go snippets from a doc-style test directory, allow ./... patterns like go test.
 
@@ -161,7 +161,11 @@ Options:
   -v, --verbose     Show generated test names and runner output
   --rm              Remove the temporary generated test directory
   --gen-dir DIR     Write generated Go test files to DIR
-  -count=N          Forward Go test count option to generated test binary
+  -count=N          Forward Go test count option to generated test binary;
+                    also disables programmatic leaf-cache skip for this run
+  -a                Forward -a to go test (force rebuild packages); also
+                    disable programmatic leaf-cache skip for this run
+  --no-leaf-cache   Disable programmatic leaf-cache skip for this run
   --timeout DURATION
                     Forward Go test timeout to generated test binary
                     (e.g. 30s, 5m, 1h); omitted uses go test default (10m)
@@ -195,6 +199,10 @@ Options:
                     Forward cover profile path to go test (relative paths abs-resolved)
   -cover            Enable coverage analysis (forward -cover to go test)
   -h, --help        Show help
+
+Env:
+  DOCTEST_CACHE_HOME  Base cache home (default store: $CacheHome/doctest/leaf-cache/v1)
+  DOCTEST_LEAF_CACHE  Override leaf pass-store root
 
 Examples:
   doctest test -v ./

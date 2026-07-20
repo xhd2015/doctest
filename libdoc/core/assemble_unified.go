@@ -138,20 +138,22 @@ func AssembleUnifiedAllLeavesSource(leafImports []string) string {
 	return buf.String()
 }
 
-// AssembleUnifiedSuiteTestSource emits suite/suite_test.go that iterates All().
+// AssembleUnifiedRunAllSource emits suite/runall.go — importable RunAll used by
+// suite_test.go and by multi-module hub suites (Option C).
 // Explicit aliases are required: path basenames are __registry/__allleaves while
 // package names are registry/allleaves — bare imports get dropped by goimports.
 //
-// Cache invalidation relies on go test's built-in testcache (link action ID +
-// binary content ID). No suite-level source fingerprint is injected: unused
-// Setup deltas may stay (cached) when DCE leaves the linked binary unchanged.
-func AssembleUnifiedSuiteTestSource(registryImport, allLeavesImport string) string {
+// Warm leaf-cache hits are passed from the outer doctest process via
+// DOCTEST_LEAF_CACHE_SKIP_PATHS (newline-separated tree-relative paths). Those
+// leaves return immediately as pass without calling the leaf body.
+func AssembleUnifiedRunAllSource(registryImport, allLeavesImport string) string {
 	var buf strings.Builder
 	buf.WriteString("package ")
 	buf.WriteString(UnifiedSuitePkgName)
 	buf.WriteString("\n\n")
 	buf.WriteString("import (\n")
 	buf.WriteString("\t\"strings\"\n")
+	buf.WriteString("\t\"syscall\"\n")
 	buf.WriteString("\t\"testing\"\n\n")
 	buf.WriteString("\t")
 	buf.WriteString(UnifiedRegistryPkgName)
@@ -168,16 +170,49 @@ func AssembleUnifiedSuiteTestSource(registryImport, allLeavesImport string) stri
 	// Subtest names use "__" instead of "/" so go test -json does not invent
 	// intermediate path nodes (t.Run("a/b") creates TestDoctestSuite/a and
 	// …/a/b, which double-counts and breaks multi-leaf summaries).
-	buf.WriteString("func TestDoctestSuite(t *testing.T) {\n")
+	buf.WriteString("// RunAll runs every registered leaf for this tree (importable from a hub).\n")
+	buf.WriteString("func RunAll(t *testing.T) {\n")
+	buf.WriteString("\tskip := map[string]struct{}{}\n")
+	buf.WriteString("\tif s, ok := syscall.Getenv(\"DOCTEST_LEAF_CACHE_SKIP_PATHS\"); ok && s != \"\" {\n")
+	buf.WriteString("\t\tfor _, p := range strings.Split(s, \"\\n\") {\n")
+	buf.WriteString("\t\t\tp = strings.TrimSpace(p)\n")
+	buf.WriteString("\t\t\tif p != \"\" {\n")
+	buf.WriteString("\t\t\t\tskip[p] = struct{}{}\n")
+	buf.WriteString("\t\t\t}\n")
+	buf.WriteString("\t\t}\n")
+	buf.WriteString("\t}\n")
 	buf.WriteString("\tfor _, e := range registry.All() {\n")
 	buf.WriteString("\t\te := e\n")
 	buf.WriteString("\t\t// Encode \"/\" as \"__\" so go test does not nest path segments.\n")
 	buf.WriteString("\t\tname := strings.ReplaceAll(e.Path, \"/\", \"__\")\n")
 	buf.WriteString("\t\tt.Run(name, func(t *testing.T) {\n")
-	// Nest parent leaf lives on d.Metrics.ParentLeaf (set in RunTestLeaf) — no process env.
+	buf.WriteString("\t\t\tif _, hit := skip[e.Path]; hit {\n")
+	buf.WriteString("\t\t\t\t// Warm leaf-cache hit: count as pass; outer process counts Cached.\n")
+	buf.WriteString("\t\t\t\treturn\n")
+	buf.WriteString("\t\t\t}\n")
 	buf.WriteString("\t\t\te.Fn(t)\n")
 	buf.WriteString("\t\t})\n")
 	buf.WriteString("\t}\n")
+	buf.WriteString("}\n")
+	return buf.String()
+}
+
+// AssembleUnifiedSuiteTestSource emits suite/suite_test.go that calls RunAll.
+//
+// Cache invalidation relies on go test's built-in testcache (link action ID +
+// binary content ID). No suite-level source fingerprint is injected: unused
+// Setup deltas may stay (cached) when DCE leaves the linked binary unchanged.
+func AssembleUnifiedSuiteTestSource(registryImport, allLeavesImport string) string {
+	// registryImport / allLeavesImport unused here — RunAll carries those imports.
+	_ = registryImport
+	_ = allLeavesImport
+	var buf strings.Builder
+	buf.WriteString("package ")
+	buf.WriteString(UnifiedSuitePkgName)
+	buf.WriteString("\n\n")
+	buf.WriteString("import \"testing\"\n\n")
+	buf.WriteString("func TestDoctestSuite(t *testing.T) {\n")
+	buf.WriteString("\tRunAll(t)\n")
 	buf.WriteString("}\n")
 	return buf.String()
 }
@@ -463,11 +498,12 @@ func WriteUnifiedTreeExtras(genRoot, treeRel string, leafImports []string) error
 	if err := os.MkdirAll(suiteDir, 0755); err != nil {
 		return err
 	}
-	suiteSrc := AssembleUnifiedSuiteTestSource(
-		UnifiedRegistryImportForTree(treeRel),
-		UnifiedAllLeavesImportForTree(treeRel),
-	)
-	if err := WriteFormattedGo(filepath.Join(suiteDir, "suite_test.go"), suiteSrc); err != nil {
+	regImp := UnifiedRegistryImportForTree(treeRel)
+	allImp := UnifiedAllLeavesImportForTree(treeRel)
+	if err := WriteFormattedGo(filepath.Join(suiteDir, "runall.go"), AssembleUnifiedRunAllSource(regImp, allImp)); err != nil {
+		return fmt.Errorf("write unified RunAll: %w", err)
+	}
+	if err := WriteFormattedGo(filepath.Join(suiteDir, "suite_test.go"), AssembleUnifiedSuiteTestSource(regImp, allImp)); err != nil {
 		return fmt.Errorf("write unified suite: %w", err)
 	}
 	return nil

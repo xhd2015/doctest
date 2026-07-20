@@ -1,7 +1,7 @@
 # Default: hierarchical unified package per DOCTEST tree
 
 ## Version
-0.0.3
+0.0.4
 
 Default generation produces **one go test package/binary per DOCTEST tree**
 using hierarchical ref packages (no experiment flags).
@@ -11,10 +11,13 @@ Per DOCTEST.md root, generate:
 1. `__droot/` — shared types/Run (ref)
 2. `__registry/` — tree-local `Register` / `All`
 3. leaf packages as **non-`_test`** sources with **`RunTestLeaf(t *testing.T)`** + `init()` registration
-4. `__allleaves/` — blank-imports every leaf package (suite only imports this + registry)
-5. `suite/suite_test.go` — thin iterator: `t.Run(path, fn)` over registry
+4. `__allleaves/` — blank-imports every leaf package
+5. `suite/` — package with importable `RunAll` (`runall.go`: registry + blank
+   `__allleaves`) and thin `suite_test.go` (`TestDoctestSuite` → `RunAll`; stdlib only)
 
 **`go test` only the suite package** → **one test binary** per tree.
+Suite **package** non-stdlib imports are only `__registry` + `__allleaves`
+(fan-in lives in `runall.go`, not necessarily in `*_test.go`).
 
 # DSN (Domain Specific Notion)
 
@@ -23,7 +26,7 @@ Per DOCTEST.md root, generate:
 - **Caller** — `doctest test` CLI (or package entry).
 - **Unified generator** — hierarchical ref + leaf **non-test** packages with
   `RunTestLeaf`; `__registry` + `__allleaves` fan-in; single `suite` package
-  iterates registered leaves via `t.Run`.
+  with `RunAll` + thin `TestDoctestSuite` (hub-importable).
 - **Gen root** — explicit `--gen-dir` / `Options.GenDir` under `t.TempDir()` so
   layout is inspectable.
 
@@ -41,7 +44,7 @@ Per DOCTEST.md root, generate:
 
 ```
 doctest test [--gen-dir DIR] <tree>
-  -> hierarchical unified gen: __droot + __registry + leaf RunTestLeaf + __allleaves + suite
+  -> hierarchical unified gen: __droot + __registry + leaf RunTestLeaf + __allleaves + suite (runall + suite_test)
   -> go test ./…/suite   (one package / one binary)
 ```
 
@@ -61,7 +64,7 @@ tests/test/experiment-unified-package/
 | Leaf | Expected |
 |------|----------|
 | `unified-mode/two-leaves-pass` | 2-leaf fixture passes under default gen |
-| `unified-mode/gen-layout` | `__droot`, `__registry`, `__allleaves`, `suite`; leaf `RunTestLeaf`; no leaf `*_test.go` |
+| `unified-mode/gen-layout` | dirs + leaf `RunTestLeaf`; suite package imports only registry/allleaves (`runall` + thin test) |
 | `unified-mode/suite-only-go-test` | displayed `go test` has one package containing `suite` (not `./a ./b`) |
 
 ## How to Run
@@ -112,8 +115,9 @@ type Response struct {
 	HasRegistry        bool
 	HasAllLeaves       bool
 	HasSuite           bool
-	SuiteTestFiles     []string // *suite*_test.go or under …/suite/
-	SuiteImportLines   []string // imports from first suite test file
+	SuiteTestFiles     []string // *_test.go under …/suite/
+	SuiteNonTestFiles  []string // non-_test .go under …/suite/ (e.g. runall.go)
+	SuiteImportLines   []string // imports from all suite package .go files
 	LeafNonTestGoFiles []string // non-_test .go under leaf a/ or b/
 	LeafHasRunTestLeaf []bool   // parallel to LeafNonTestGoFiles
 	LeafTestGoFiles    []string // *_test.go under leaf a/ or b/ (want empty when unified)
@@ -272,13 +276,17 @@ func fillUnifiedGenLayout(t *testing.T, resp *Response) {
 		body := string(data)
 
 		isSuite := strings.Contains(relSlash, "/suite/") || strings.HasPrefix(relSlash, "suite/") ||
-			base == "suite_test.go"
-		if isSuite && strings.HasSuffix(base, "_test.go") {
+			base == "suite_test.go" || base == "runall.go"
+		if isSuite && strings.HasSuffix(base, ".go") {
 			resp.HasSuite = true
-			resp.SuiteTestFiles = append(resp.SuiteTestFiles, path)
-			if len(resp.SuiteImportLines) == 0 {
-				resp.SuiteImportLines = importLines(body)
+			if strings.HasSuffix(base, "_test.go") {
+				resp.SuiteTestFiles = append(resp.SuiteTestFiles, path)
+			} else {
+				resp.SuiteNonTestFiles = append(resp.SuiteNonTestFiles, path)
 			}
+			// Package-level: merge imports from runall.go + suite_test.go (Option C /
+			// hub layout — fan-in lives in RunAll, not only in *_test.go).
+			resp.SuiteImportLines = append(resp.SuiteImportLines, importLines(body)...)
 		}
 
 		// Fixture leaves a/ and b/ only (not suite/registry/allleaves/droot).

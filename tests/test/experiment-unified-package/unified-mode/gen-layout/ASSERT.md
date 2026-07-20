@@ -6,8 +6,9 @@
 - Fixture leaves `a`/`b` have **no** `*_test.go` under gen.
 - At least two leaf non-test `.go` files exist under `a`/`b` paths.
 - Each such leaf non-test file defines `func RunTestLeaf`.
-- Suite test imports only non-stdlib packages under `__registry` and `__allleaves`
-  (plus stdlib such as `testing` / `os` for parent-leaf nest timing env).
+- Suite **package** (all `suite/*.go`: `runall.go` + thin `suite_test.go`) imports
+  only non-stdlib packages under `__registry` and `__allleaves` (plus stdlib).
+  Fan-in may live in `runall.go`; `suite_test.go` may import only `testing`.
 
 ```go
 import (
@@ -53,9 +54,13 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 			t.Fatalf("leaf non-test %s missing func RunTestLeaf", filepath.ToSlash(leaf))
 		}
 	}
+	if len(resp.SuiteNonTestFiles) < 1 {
+		t.Fatalf("expected ≥1 suite non-test .go (runall.go), got test=%v non-test=%v",
+			basenames(resp.SuiteTestFiles), basenames(resp.SuiteNonTestFiles))
+	}
 	if !suiteImportsOnlyRegistryAndAllLeaves(resp.SuiteImportLines) {
-		t.Fatalf("suite must import only __registry + __allleaves (plus stdlib); imports=%v suite=%v",
-			resp.SuiteImportLines, basenames(resp.SuiteTestFiles))
+		t.Fatalf("suite package must import only __registry + __allleaves (plus stdlib); imports=%v suite test=%v non-test=%v",
+			resp.SuiteImportLines, basenames(resp.SuiteTestFiles), basenames(resp.SuiteNonTestFiles))
 	}
 }
 

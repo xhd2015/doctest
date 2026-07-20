@@ -32,6 +32,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -59,7 +60,10 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, rpBin, req.Args...)
-	cmd.Env = append(os.Environ(), req.Env...)
+	// Do not inherit ambient PROGRESS_FILE / DOCTEST_PROGRESS_FILE. Leaves that
+	// need them set it explicitly in req.Env. Otherwise shell/agent pollution
+	// breaks errors-without-env-var (and any "unset" scenario).
+	cmd.Env = append(filterOutEnvKeys(os.Environ(), "PROGRESS_FILE", "DOCTEST_PROGRESS_FILE"), req.Env...)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -83,5 +87,25 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 		return resp, ctx.Err()
 	}
 	return resp, err
+}
+
+// filterOutEnvKeys drops KEY=... entries for the given keys (exact name match).
+func filterOutEnvKeys(env []string, keys ...string) []string {
+	drop := make(map[string]bool, len(keys))
+	for _, k := range keys {
+		drop[k] = true
+	}
+	out := make([]string, 0, len(env))
+	for _, e := range env {
+		key := e
+		if i := strings.IndexByte(e, '='); i >= 0 {
+			key = e[:i]
+		}
+		if drop[key] {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
 }
 ```

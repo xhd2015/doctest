@@ -9,11 +9,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/xhd2015/doctest/libdoc/core"
+	"github.com/xhd2015/doctest/libdoc/leafcache"
 	"github.com/xhd2015/dot-pkgs/go-pkgs/pathfmt"
 )
 
@@ -163,6 +166,10 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	if opts.Count > 0 {
 		flagArgs = append(flagArgs, fmt.Sprintf("-count=%d", opts.Count))
 	}
+	if opts.ForceWithFlagA {
+		// go build/test -a: force rebuilding packages that are already up-to-date.
+		flagArgs = append(flagArgs, "-a")
+	}
 	if opts.Timeout > 0 {
 		flagArgs = append(flagArgs, fmt.Sprintf("-timeout=%s", opts.Timeout))
 	}
@@ -216,6 +223,10 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		}
 	}
 
+	// Programmatic leaf-cache: warm GetPass hits skip leaf bodies via suite env.
+	leafKeys, skipPaths := prepareLeafCache(absRoot, cases, opts)
+	leafSkipEnv := leafcache.FormatSkipPaths(skipPaths)
+
 	stdout := opts.Stdout
 	if stdout == nil {
 		stdout = os.Stdout
@@ -236,7 +247,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 				execArgs := append(append([]string(nil), flagArgs...), pkg)
 				goTestCmd := exec.Command("go", execArgs...)
 				goTestCmd.Dir = runDir
-				goTestCmd.Env = goTestEnvFull(sessionID, goCache, opts.MetricsNestSink)
+				goTestCmd.Env = goTestEnvFull(sessionID, goCache, opts.MetricsNestSink, "", leafSkipEnv)
 				pkgOut, pkgErr := goTestCmd.CombinedOutput()
 				out = append(out, pkgOut...)
 				if pkgErr != nil && err == nil {
@@ -247,7 +258,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 			execArgs := append(append([]string(nil), flagArgs...), packageArgs...)
 			goTestCmd := exec.Command("go", execArgs...)
 			goTestCmd.Dir = runDir
-			goTestCmd.Env = goTestEnvFull(sessionID, goCache, opts.MetricsNestSink)
+			goTestCmd.Env = goTestEnvFull(sessionID, goCache, opts.MetricsNestSink, "", leafSkipEnv)
 			out, err = goTestCmd.CombinedOutput()
 		}
 		goTestElapsed = time.Since(tGo)
@@ -257,6 +268,10 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		// Verbose path: no package Elapsed; single-leaf gets full go_test wall.
 		if len(cases) == 1 {
 			stats.LeafTimings = []LeafTiming{{Path: cases[0].Path, ElapsedNs: goTestElapsed.Nanoseconds()}}
+		}
+		// Best-effort PutPass: verbose mode lacks per-leaf fail map — store only on full success.
+		if err == nil {
+			recordLeafCachePasses(leafKeys, nil, true)
 		}
 		if !opts.SuppressResultSummary {
 			stats.Elapsed = goTestElapsed
@@ -272,9 +287,9 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		var result goTestJSONResult
 		var err error
 		if singlePkgInvocations {
-			result, err = runGoTestJSONPerPackage(runDir, flagArgs, packageArgs, sessionID, goCache, opts.MetricsNestSink, stdout, style)
+			result, err = runGoTestJSONPerPackage(runDir, flagArgs, packageArgs, sessionID, goCache, opts.MetricsNestSink, leafSkipEnv, stdout, style)
 		} else {
-			result, err = runGoTestJSONShards(runDir, flagArgs, packageArgs, sessionID, goCache, opts.MetricsNestSink, stdout, style)
+			result, err = runGoTestJSONShards(runDir, flagArgs, packageArgs, sessionID, goCache, opts.MetricsNestSink, leafSkipEnv, stdout, style)
 		}
 		goTestElapsed = time.Since(tGo)
 		track("go_test", tGo)
@@ -284,6 +299,13 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		} else {
 			stats.LeafTimings = leafTimingsFromPackages(cases, packageArgs, isSingleLeaf, result, goTestElapsed)
 		}
+
+		// Programmatic leaf-cache skips count toward summary Cached when the
+		// go test package itself was not (cached).
+		if !result.anyPackageCached() {
+			result.cachedCount += len(skipPaths)
+		}
+		recordLeafCachePasses(leafKeys, result.suiteLeafFailed, err == nil && result.failCount == 0)
 
 		fmt.Fprintln(stdout, formatSummary(style, result.passCount+result.failCount, result.passCount, result.failCount, result.cachedCount, goTestElapsed))
 
@@ -471,6 +493,17 @@ type goTestJSONResult struct {
 	pkgElapsedNs  map[string]int64 // import path -> package-level Elapsed from -json
 	pkgCached     map[string]bool
 	testElapsedNs map[string]int64 // full test name (incl. subtests) -> Elapsed
+	// suiteLeafFailed maps tree-relative leaf paths (slash form) that failed.
+	suiteLeafFailed map[string]bool
+}
+
+func (r goTestJSONResult) anyPackageCached() bool {
+	for _, c := range r.pkgCached {
+		if c {
+			return true
+		}
+	}
+	return false
 }
 
 func mergeGoTestJSONResult(dst *goTestJSONResult, src goTestJSONResult) {
@@ -494,6 +527,16 @@ func mergeGoTestJSONResult(dst *goTestJSONResult, src goTestJSONResult) {
 		}
 		for k, v := range src.pkgCached {
 			dst.pkgCached[k] = v
+		}
+	}
+	if src.suiteLeafFailed != nil {
+		if dst.suiteLeafFailed == nil {
+			dst.suiteLeafFailed = make(map[string]bool)
+		}
+		for k, v := range src.suiteLeafFailed {
+			if v {
+				dst.suiteLeafFailed[k] = true
+			}
 		}
 	}
 	if src.testElapsedNs != nil {
@@ -552,10 +595,10 @@ const envMetricsNestSink = "DOCTEST_METRICS_NEST_SINK"
 // d.Metrics.NestSink via read-only getenv); prefer opts.MetricsNestSink +
 // goTestEnvWithOpts over mid-suite os.Setenv.
 func goTestEnv(sessionID, goCache string) []string {
-	return goTestEnvFull(sessionID, goCache, "")
+	return goTestEnvFull(sessionID, goCache, "", "", "")
 }
 
-func goTestEnvFull(sessionID, goCache, nestSink string) []string {
+func goTestEnvFull(sessionID, goCache, nestSink, goWork, leafSkipPaths string) []string {
 	env := append(os.Environ(), core.DoctestSessionIDEnv+"="+sessionID)
 	if goCache != "" {
 		env = append(env, "GOCACHE="+goCache)
@@ -566,21 +609,28 @@ func goTestEnvFull(sessionID, goCache, nestSink string) []string {
 		// Inherit outer nest sink for nested go test (read-only).
 		env = append(env, envMetricsNestSink+"="+v)
 	}
+	if goWork != "" {
+		// Multi-module workspace hub (go.work). Empty means use process default / off.
+		env = append(env, "GOWORK="+goWork)
+	}
+	if leafSkipPaths != "" {
+		env = append(env, leafcache.EnvSkipPaths+"="+leafSkipPaths)
+	}
 	return env
 }
 
 func goTestEnvFromOpts(sessionID string, opts core.Options) []string {
-	return goTestEnvFull(sessionID, opts.GoCache, opts.MetricsNestSink)
+	return goTestEnvFull(sessionID, opts.GoCache, opts.MetricsNestSink, "", "")
 }
 
 // runGoTestJSONPerPackage runs one go test process per package (serial) so
 // profile flags that go rejects with multi-package lists still work.
-func runGoTestJSONPerPackage(runDir string, flagArgs, packageArgs []string, sessionID, goCache, nestSink string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
+func runGoTestJSONPerPackage(runDir string, flagArgs, packageArgs []string, sessionID, goCache, nestSink, leafSkipPaths string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
 	var merged goTestJSONResult
 	var firstErr error
 	for _, pkg := range packageArgs {
 		args := append(append([]string(nil), flagArgs...), pkg)
-		res, err := runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, stdout, style)
+		res, err := runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, stdout, style)
 		mergeGoTestJSONResult(&merged, res)
 		if err != nil && firstErr == nil {
 			firstErr = err
@@ -620,7 +670,7 @@ func lockGoTestModule(runDir string) func() {
 	return mu.Unlock
 }
 
-func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionID, goCache, nestSink string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
+func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionID, goCache, nestSink, leafSkipPaths string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
 	// Single go test process per tree. Package sharding multiplies nested
 	// self-test fan-out and has raced go.mod; wall cut is tree concurrency +
 	// heavy/light scheduling in path_resolve.
@@ -628,7 +678,7 @@ func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionI
 	shards := packageTestShards(packageArgs, workers)
 	if len(shards) <= 1 {
 		args := append(append([]string(nil), flagArgs...), packageArgs...)
-		return runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, stdout, style)
+		return runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, stdout, style)
 	}
 
 	// Multi-shard: readonly module mode so concurrent go tests share genDir safely.
@@ -654,7 +704,7 @@ func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionI
 			defer wg.Done()
 			args := append(append([]string(nil), shardFlags...), shard...)
 			// Locked stdout keeps progress dots incremental and non-interleaved by byte.
-			res, err := runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, &lockedWriter{w: stdout, mu: &mu}, style)
+			res, err := runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, &lockedWriter{w: stdout, mu: &mu}, style)
 			mu.Lock()
 			defer mu.Unlock()
 			mergeGoTestJSONResult(&merged, res)
@@ -678,7 +728,7 @@ func (l *lockedWriter) Write(p []byte) (int, error) {
 	return l.w.Write(p)
 }
 
-func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nestSink string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
+func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nestSink, goWork, leafSkipPaths string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
 	goTestSlots <- struct{}{}
 	defer func() { <-goTestSlots }()
 
@@ -688,7 +738,7 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 	execArgs := append(append([]string(nil), testArgs...), "-json")
 	goTestCmd := exec.Command("go", execArgs...)
 	goTestCmd.Dir = runDir
-	goTestCmd.Env = goTestEnvFull(sessionID, goCache, nestSink)
+	goTestCmd.Env = goTestEnvFull(sessionID, goCache, nestSink, goWork, leafSkipPaths)
 
 	stdoutPipe, err := goTestCmd.StdoutPipe()
 	if err != nil {
@@ -706,6 +756,7 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 	res.pkgElapsedNs = make(map[string]int64)
 	res.pkgCached = make(map[string]bool)
 	res.testElapsedNs = make(map[string]int64)
+	res.suiteLeafFailed = make(map[string]bool)
 	var stdoutWg sync.WaitGroup
 	stdoutWg.Add(1)
 	go func() {
@@ -726,8 +777,9 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 		// one suite binary still reports one result per leaf (not 1 package).
 		suiteLeafPass := 0
 		suiteLeafFail := 0
-		// Dedup suite leaf names: go test -json can emit more than one terminal
-		// event per subtest name in edge cases; count each leaf at most once.
+		// Dedup suite leaves by package+name: multi-module go.work runs multiple
+		// suite packages that often share leaf subtest names (e.g. "simple").
+		// Keying only on test name collapsed those to one count.
 		suiteLeafSeen := make(map[string]bool)
 		testKey := func(pkg, test string) string { return pkg + "\x00" + test }
 		// Suite leaf progress: per-tree suite uses flat TestDoctestSuite/<leaf>.
@@ -742,18 +794,30 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 			if rest == "" {
 				return false
 			}
-			if strings.Contains(pkg, "/"+core.WorkspaceDirName+"/") || strings.HasSuffix(pkg, "/"+core.WorkspaceDirName+"/"+core.WorkspaceSuiteDirName) || strings.Contains(pkg, core.WorkspaceDirName+"/"+core.WorkspaceSuitePkgName) || strings.Contains(pkg, "__workspace") {
+			// Nested suites (workspace multi-tree or multi-mod hub): only count
+			// leaves (TestDoctestSuite/<tree>/<leaf>), not the tree parent node.
+			if strings.Contains(pkg, "/"+core.WorkspaceDirName+"/") ||
+				strings.HasSuffix(pkg, "/"+core.WorkspaceDirName+"/"+core.WorkspaceSuiteDirName) ||
+				strings.Contains(pkg, core.WorkspaceDirName+"/"+core.WorkspaceSuitePkgName) ||
+				strings.Contains(pkg, "__workspace") ||
+				strings.Contains(pkg, "/"+HubDirName+"/") ||
+				strings.HasPrefix(pkg, hubModulePath+"/") ||
+				pkg == hubModulePath+"/suite" {
 				return strings.Contains(rest, "/")
 			}
 			return true
 		}
-		countSuiteLeaf := func(test string, failed bool) {
-			if suiteLeafSeen[test] {
+		countSuiteLeaf := func(pkg, test string, failed bool) {
+			key := testKey(pkg, test)
+			if suiteLeafSeen[key] {
 				return
 			}
-			suiteLeafSeen[test] = true
+			suiteLeafSeen[key] = true
 			if failed {
 				suiteLeafFail++
+				if rel := suiteLeafRelPath(test); rel != "" {
+					res.suiteLeafFailed[rel] = true
+				}
 			} else {
 				suiteLeafPass++
 			}
@@ -833,7 +897,7 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 					delete(testOutputs, testKey(ev.Package, ev.Test))
 					if isCountableSuiteLeaf(ev.Package, ev.Test) {
 						before := suiteLeafPass + suiteLeafFail
-						countSuiteLeaf(ev.Test, false)
+						countSuiteLeaf(ev.Package, ev.Test, false)
 						if suiteLeafPass+suiteLeafFail > before {
 							stdout.Write([]byte("."))
 						}
@@ -855,7 +919,7 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 					flushTestOutput(key)
 					if isCountableSuiteLeaf(ev.Package, ev.Test) {
 						before := suiteLeafPass + suiteLeafFail
-						countSuiteLeaf(ev.Test, true)
+						countSuiteLeaf(ev.Package, ev.Test, true)
 						if suiteLeafPass+suiteLeafFail > before {
 							fmt.Fprint(stdout, style.red("."))
 						}
@@ -897,6 +961,96 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 		return res, err
 	}
 	return res, nil
+}
+
+// suiteLeafRelPath decodes a go test -json Test name under TestDoctestSuite/
+// into a tree-relative leaf path (reversing RunAll's "/" → "__" encoding).
+// Workspace nests as TestDoctestSuite/<tree>/<leaf>; the leaf segment is returned
+// when multiple segments are present (tree-relative leaf path only).
+func suiteLeafRelPath(test string) string {
+	prefix := UnifiedSuiteTestName + "/"
+	if !strings.HasPrefix(test, prefix) {
+		return ""
+	}
+	rest := test[len(prefix):]
+	if rest == "" {
+		return ""
+	}
+	// Workspace: tree/leaf (real slash from nested t.Run) — keep leaf segment.
+	if i := strings.LastIndex(rest, "/"); i >= 0 {
+		rest = rest[i+1:]
+	}
+	return strings.ReplaceAll(rest, "__", "/")
+}
+
+// prepareLeafCache computes leaf keys and warm skip paths for this tree run.
+// Store I/O errors are ignored (best-effort; suite continues).
+func prepareLeafCache(treeRoot string, cases []core.TreeCase, opts core.Options) (keys map[string]string, skipPaths []string) {
+	keys = make(map[string]string, len(cases))
+	if len(cases) == 0 {
+		return keys, nil
+	}
+	storeRoot, err := leafcache.ResolveStoreRoot()
+	if err != nil {
+		return keys, nil
+	}
+	store, err := leafcache.NewStore(storeRoot)
+	if err != nil {
+		return keys, nil
+	}
+	goVer := runtime.Version()
+	enabled := leafcache.SkipEnabled(opts.Count, opts.ForceWithFlagA, opts.NoLeafCache)
+	for _, tc := range cases {
+		in, err := leafcache.KeyForLeaf(treeRoot, tc.Path, goVer)
+		if err != nil {
+			continue
+		}
+		key, err := leafcache.ComputeLeafKey(in)
+		if err != nil {
+			continue
+		}
+		keys[tc.Path] = key
+		if !enabled {
+			continue
+		}
+		hit, err := store.GetPass(key)
+		if err != nil || !hit {
+			continue
+		}
+		skipPaths = append(skipPaths, tc.Path)
+	}
+	sort.Strings(skipPaths)
+	return keys, skipPaths
+}
+
+// recordLeafCachePasses writes PutPass for leaves that passed.
+// When allPassed is true, every key is stored. Otherwise failed paths are skipped.
+// Errors are ignored (best-effort).
+func recordLeafCachePasses(keys map[string]string, failed map[string]bool, allPassed bool) {
+	if len(keys) == 0 {
+		return
+	}
+	storeRoot, err := leafcache.ResolveStoreRoot()
+	if err != nil {
+		return
+	}
+	store, err := leafcache.NewStore(storeRoot)
+	if err != nil {
+		return
+	}
+	for path, key := range keys {
+		if !allPassed {
+			if failed != nil && failed[path] {
+				continue
+			}
+			// Partial fail without per-leaf map: only store when allPassed or known non-fail.
+			// When failed map is nil and !allPassed, skip all to avoid storing fails.
+			if failed == nil {
+				continue
+			}
+		}
+		_ = store.PutPass(key)
+	}
 }
 
 func countFailuresFromGoTestOutput(out []byte) int {

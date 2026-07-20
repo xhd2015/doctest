@@ -130,6 +130,13 @@ type Options struct {
 	// Empty means inherit the process GOCACHE.
 	GoCache string
 
+	// ForceWithFlagA is CLI -a: disable programmatic leaf-cache skip and forward -a
+	// to go test (force rebuild of packages that are already up-to-date).
+	ForceWithFlagA bool
+	// NoLeafCache disables programmatic leaf-cache skip (CLI: --no-leaf-cache).
+	// Pass recording (PutPass on success) still occurs.
+	NoLeafCache bool
+
 	// Go test profiling / cover flags (forwarded to go test).
 	// Path fields are abs-resolved at CLI parse time when relative.
 	// Rate fields use *int so zero is distinguishable from unset.

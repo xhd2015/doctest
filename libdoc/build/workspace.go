@@ -67,37 +67,56 @@ func PrepareTree(dir string, opts core.Options) (TreePrep, error) {
 }
 
 // RunWorkspace writes __workspace fan-in for the given unified preps and runs
-// a single go test on __workspace/suite.
+// a single go test. Same gen root → classic __workspace suite. Mixed gen roots
+// (multi-module ./...) → toplevel/__hub go.mod + suite calling each RunAll.
 func RunWorkspace(preps []TreePrep, opts core.Options) (TestRunStats, error) {
 	var stats TestRunStats
 	if len(preps) == 0 {
 		return stats, fmt.Errorf("workspace: no trees to run")
 	}
-	genRoot := preps[0].GenRoot
-	if genRoot == "" {
-		return stats, fmt.Errorf("workspace: empty gen root")
-	}
+
+	active := make([]TreePrep, 0, len(preps))
 	for _, p := range preps {
 		if !p.Unified {
 			return stats, fmt.Errorf("workspace: tree %s is not unified", p.AbsRoot)
 		}
-		if p.GenRoot != "" && filepath.Clean(p.GenRoot) != filepath.Clean(genRoot) {
-			return stats, fmt.Errorf("workspace: mixed gen roots %s vs %s", genRoot, p.GenRoot)
+		if p.GenRoot == "" {
+			return stats, fmt.Errorf("workspace: empty gen root for %s", p.AbsRoot)
 		}
-		stats.Total += p.Stats.Total
 		stats.Skipped = append(stats.Skipped, p.Skipped...)
 		stats.Phases = append(stats.Phases, p.Stats.Phases...)
+		if p.Stats.Total == 0 {
+			continue
+		}
+		active = append(active, p)
+		stats.Total += p.Stats.Total
 	}
 	if stats.Total == 0 {
 		return stats, nil
 	}
 
+	// Group by gen root.
+	byGen := map[string][]TreePrep{}
+	var genOrder []string
+	for _, p := range active {
+		g := filepath.Clean(p.GenRoot)
+		if _, ok := byGen[g]; !ok {
+			genOrder = append(genOrder, g)
+		}
+		byGen[g] = append(byGen[g], p)
+	}
+	sort.Strings(genOrder)
+
+	if len(genOrder) == 1 {
+		return runWorkspaceSingleGen(active, genOrder[0], stats, opts)
+	}
+	return runWorkspaceMultiModHub(active, byGen, genOrder, stats, opts)
+}
+
+func runWorkspaceSingleGen(preps []TreePrep, genRoot string, stats TestRunStats, opts core.Options) (TestRunStats, error) {
 	treeRels := make([]string, 0, len(preps))
 	seen := map[string]bool{}
 	for _, p := range preps {
-		if p.Stats.Total == 0 {
-			continue
-		}
 		tr := p.TreeRel
 		if tr == "" {
 			tr = "."
@@ -119,15 +138,6 @@ func RunWorkspace(preps []TreePrep, opts core.Options) (TestRunStats, error) {
 		return stats, err
 	}
 
-	w := opts.Stderr
-	if w == nil {
-		w = os.Stderr
-	}
-	stdout := opts.Stdout
-	if stdout == nil {
-		stdout = os.Stdout
-	}
-
 	suiteDir := core.WorkspaceSuiteDir(genRoot)
 	rel, err := filepath.Rel(genRoot, suiteDir)
 	if err != nil {
@@ -138,15 +148,109 @@ func RunWorkspace(preps []TreePrep, opts core.Options) (TestRunStats, error) {
 		packageArgs = []string{"./" + filepath.ToSlash(rel)}
 	}
 
+	return finishWorkspaceGoTest(preps, genRoot, genRoot, packageArgs, len(treeRels), stats, opts)
+}
+
+func runWorkspaceMultiModHub(preps []TreePrep, byGen map[string][]TreePrep, genOrder []string, stats TestRunStats, opts core.Options) (TestRunStats, error) {
+	// Per gen root: optional multi-tree workspace extras, unique module path, suite import.
+	replaceByMod := map[string]string{} // module path → gen root abs
+	var members []memberSuite
+	usedAlias := map[string]bool{}
+
+	for _, genRoot := range genOrder {
+		group := byGen[genRoot]
+		treeRels := make([]string, 0, len(group))
+		seen := map[string]bool{}
+		for _, p := range group {
+			tr := p.TreeRel
+			if tr == "" {
+				tr = "."
+			}
+			if seen[tr] {
+				continue
+			}
+			seen[tr] = true
+			treeRels = append(treeRels, tr)
+		}
+		sort.Slice(treeRels, func(i, j int) bool {
+			return filepath.ToSlash(treeRels[i]) < filepath.ToSlash(treeRels[j])
+		})
+		multiTree := len(treeRels) > 1
+		if multiTree {
+			if err := core.WriteWorkspaceExtras(genRoot, treeRels); err != nil {
+				return stats, err
+			}
+		}
+		if err := core.CondTidyGoMod(genRoot); err != nil {
+			return stats, err
+		}
+		unique := uniqueWorkModulePath(genRoot)
+		if err := ensureWorkModulePath(genRoot, unique); err != nil {
+			return stats, fmt.Errorf("workspace multi-mod: module path for %s: %w", genRoot, err)
+		}
+		replaceByMod[unique] = genRoot
+
+		// One RunAll entry per gen root (workspace suite if multi-tree).
+		var suiteImp, subName string
+		if multiTree {
+			suiteImp = suiteImportForPrep(unique, ".", true)
+			subName = filepath.Base(genRoot)
+		} else {
+			tr := treeRels[0]
+			suiteImp = suiteImportForPrep(unique, tr, false)
+			subName = tr
+			if subName == "." {
+				subName = filepath.Base(genRoot)
+			}
+		}
+		subName = filepath.ToSlash(subName)
+		subName = strings.ReplaceAll(subName, "/", "__")
+		members = append(members, memberSuite{
+			Alias: aliasForImportPath(suiteImp, usedAlias),
+			Path:  suiteImp,
+			Name:  subName,
+		})
+	}
+
+	toplevel := pickToplevelGenRoot(genOrder)
+	if toplevel == "" {
+		return stats, fmt.Errorf("workspace multi-mod: empty toplevel gen root")
+	}
+	// If toplevel is only a common parent without go.mod, still OK — hub lives under it.
+	hubDir, err := writeMultiModHub(toplevel, members, replaceByMod)
+	if err != nil {
+		return stats, fmt.Errorf("workspace multi-mod hub: %w", err)
+	}
+
+	return finishWorkspaceGoTest(preps, hubDir, hubDir, []string{"./suite"}, len(preps), stats, opts)
+}
+
+// finishWorkspaceGoTest runs go test for workspace (single-gen or multi-mod hub).
+// runDir is the process cwd (gen root or __hub).
+func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packageArgs []string, treeCount int, stats TestRunStats, opts core.Options) (TestRunStats, error) {
+	w := opts.Stderr
+	if w == nil {
+		w = os.Stderr
+	}
+	stdout := opts.Stdout
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+
 	flagArgs := []string{"test", "-mod=mod"}
 	if opts.Verbose {
 		flagArgs = append(flagArgs, "-v")
 	}
-	if NeedsBuildVCSFlag(genRoot) {
+	// buildvcs: check first gen root from preps
+	checkRoot := preps[0].GenRoot
+	if NeedsBuildVCSFlag(checkRoot) {
 		flagArgs = append(flagArgs, "-buildvcs=false")
 	}
 	if opts.Count > 0 {
 		flagArgs = append(flagArgs, fmt.Sprintf("-count=%d", opts.Count))
+	}
+	if opts.ForceWithFlagA {
+		flagArgs = append(flagArgs, "-a")
 	}
 	if opts.Timeout > 0 {
 		flagArgs = append(flagArgs, fmt.Sprintf("-timeout=%s", opts.Timeout))
@@ -187,10 +291,14 @@ func RunWorkspace(preps []TreePrep, opts core.Options) (TestRunStats, error) {
 
 	displayArgs := displayGoArgs(append(append([]string(nil), flagArgs...), packageArgs...))
 	if opts.Verbose {
-		fmt.Fprintf(w, "cd %s && go %s\n\n", pathfmt.Short(genRoot), strings.Join(displayArgs, " "))
+		fmt.Fprintf(w, "cd %s && go %s\n\n", pathfmt.Short(runDir), strings.Join(displayArgs, " "))
 	} else {
-		fmt.Fprintf(w, "doctest: workspace (%d trees, %d tests)\n", len(treeRels), stats.Total)
-		fmt.Fprintf(w, "cd %s && go %s\n", pathfmt.Short(genRoot), strings.Join(displayArgs, " "))
+		label := "workspace"
+		if strings.Contains(runDir, HubDirName) {
+			label = "workspace hub"
+		}
+		fmt.Fprintf(w, "doctest: %s (%d trees, %d tests)\n", label, treeCount, stats.Total)
+		fmt.Fprintf(w, "cd %s && go %s\n", pathfmt.Short(runDir), strings.Join(displayArgs, " "))
 	}
 
 	sessionID := core.DoctestSessionIDForRun()
@@ -202,14 +310,14 @@ func RunWorkspace(preps []TreePrep, opts core.Options) (TestRunStats, error) {
 	if opts.Verbose {
 		execArgs := append(append([]string(nil), flagArgs...), packageArgs...)
 		goTestCmd := exec.Command("go", execArgs...)
-		goTestCmd.Dir = genRoot
-		goTestCmd.Env = goTestEnvFull(sessionID, goCache, opts.MetricsNestSink)
+		goTestCmd.Dir = runDir
+		goTestCmd.Env = goTestEnvFull(sessionID, goCache, opts.MetricsNestSink, "", "")
 		out, err := goTestCmd.CombinedOutput()
 		stdout.Write(out)
 		runErr = err
 		stats.Passed = passedCases(stats.Total, countFailuresFromGoTestOutput(out))
 	} else {
-		result, err := runGoTestJSONOnce(genRoot, append(append([]string(nil), flagArgs...), packageArgs...), sessionID, goCache, opts.MetricsNestSink, stdout, style)
+		result, err := runGoTestJSONOnce(runDir, append(append([]string(nil), flagArgs...), packageArgs...), sessionID, goCache, opts.MetricsNestSink, "", "", stdout, style)
 		runErr = err
 		goTestElapsed := time.Since(tGo)
 		stats.Phases = append(stats.Phases, PhaseTiming{Name: "go_test", ElapsedNs: goTestElapsed.Nanoseconds()})
@@ -242,7 +350,7 @@ func RunWorkspace(preps []TreePrep, opts core.Options) (TestRunStats, error) {
 		fmt.Fprintln(w)
 	}
 	stats.Elapsed = time.Since(tGo)
-	stats.GenRoot = genRoot
+	stats.GenRoot = genRootLabel
 	stats.Unified = true
 
 	if runErr != nil {
