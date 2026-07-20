@@ -21,14 +21,13 @@ progress dots -> . F | verbose -> go test -v | count -> N tests
 ## Steps
 1. Define shared configuration and state for multi-run test leaves.
 2. Provide a multi-run `Run` function that orchestrates a silent warmup run followed by two captured executions.
-3. Each leaf sets cfg flags to control behavior.
+3. Each leaf sets cfg flags to control behavior (edit path, mtime-only, identical rewrite).
 
 ```go
 import (
     "bytes"
     "context"
     "errors"
-    "fmt"
     "os"
     "os/exec"
     "path/filepath"
@@ -40,10 +39,12 @@ import (
 )
 
 type multiRunCfg struct {
-    TestDir        string
-    ModifyFile     string
-    ModifyContent  string
-    UseCountTwo    bool
+    TestDir           string
+    ModifyFile        string
+    ModifyContent     string
+    UseCountTwo       bool
+    TouchMtimeOnly    bool // chtimes ModifyFile only; no content rewrite
+    RewriteIdentical  bool // rewrite ModifyFile with its current bytes
 }
 
 var cfg multiRunCfg
@@ -121,6 +122,11 @@ func parseGenDir(stderr string) {
     }
 }
 
+// stdoutHasPositiveCached reports Cached count > 0 in a summary line.
+func stdoutHasPositiveCached(stdout string) bool {
+    return strings.Contains(stdout, "Cached") && !strings.Contains(stdout, "0 Cached")
+}
+
 func doMultiRun(t *testing.T, req *Request) {
     if req.Bin == "" {
         t.Fatalf("req.Bin is not set")
@@ -152,13 +158,29 @@ func doMultiRun(t *testing.T, req *Request) {
 
     parseGenDir(resp1.Stderr)
 
-    if cfg.ModifyFile != "" && cfg.ModifyContent != "" {
+    if cfg.ModifyFile != "" {
         targetPath := filepath.Join(testDir, cfg.ModifyFile)
-        if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-            t.Fatalf("mkdir for modify: %v", err)
-        }
-        if err := os.WriteFile(targetPath, []byte(cfg.ModifyContent), 0644); err != nil {
-            t.Fatalf("modify file: %v", err)
+        switch {
+        case cfg.TouchMtimeOnly:
+            now := time.Now().Add(2 * time.Second)
+            if err := os.Chtimes(targetPath, now, now); err != nil {
+                t.Fatalf("chtimes %s: %v", targetPath, err)
+            }
+        case cfg.RewriteIdentical:
+            data, err := os.ReadFile(targetPath)
+            if err != nil {
+                t.Fatalf("read for identical rewrite: %v", err)
+            }
+            if err := os.WriteFile(targetPath, data, 0644); err != nil {
+                t.Fatalf("identical rewrite: %v", err)
+            }
+        case cfg.ModifyContent != "":
+            if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+                t.Fatalf("mkdir for modify: %v", err)
+            }
+            if err := os.WriteFile(targetPath, []byte(cfg.ModifyContent), 0644); err != nil {
+                t.Fatalf("modify file: %v", err)
+            }
         }
     }
 

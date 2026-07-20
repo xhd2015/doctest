@@ -272,7 +272,7 @@ func (ctx *generateContext) writeUnifiedCases(cases []core.TreeCase, compileOnly
 	}
 
 	// Intermediate packages once (parents first), shared across leaves — same as ref.
-	if err := core.WriteRefIntermediatePackages(ctx.genRoot, treeRel, rootImport, rootDocs, cases); err != nil {
+	if _, err := core.WriteRefIntermediatePackages(ctx.genRoot, treeRel, rootImport, rootDocs, cases); err != nil {
 		return err
 	}
 	if ctx.verbose && ctx.w != nil {
@@ -283,7 +283,6 @@ func (ctx *generateContext) writeUnifiedCases(cases []core.TreeCase, compileOnly
 	}
 
 	leafImports := make([]string, 0, len(cases))
-	leafSources := make(map[string]string, len(cases))
 	for _, tc := range cases {
 		absLeafDir := filepath.Join(ctx.absRoot, tc.Path)
 		leafDir, err := core.GenDirForLeaf(ctx.genRoot, ctx.absModRoot, absLeafDir)
@@ -297,7 +296,7 @@ func (ctx *generateContext) writeUnifiedCases(cases []core.TreeCase, compileOnly
 			}
 		}
 
-		leafPath, src, err := core.WriteUnifiedLeafCase(leafDir, tc, compileOnly, pkgName, ctx.absRoot, rootImport, registryImport)
+		leafPath, _, err := core.WriteUnifiedLeafCase(leafDir, tc, compileOnly, pkgName, ctx.absRoot, rootImport, registryImport)
 		if err != nil {
 			return err
 		}
@@ -309,12 +308,10 @@ func (ctx *generateContext) writeUnifiedCases(cases []core.TreeCase, compileOnly
 		if relErr != nil {
 			return fmt.Errorf("leaf import path for %s: %w", tc.Path, relErr)
 		}
-		imp := core.LeafImportForTree(leafRel)
-		leafImports = append(leafImports, imp)
-		leafSources[imp] = src
+		leafImports = append(leafImports, core.LeafImportForTree(leafRel))
 	}
 
-	if err := core.WriteUnifiedTreeExtras(ctx.genRoot, treeRel, leafImports, leafSources); err != nil {
+	if err := core.WriteUnifiedTreeExtras(ctx.genRoot, treeRel, leafImports); err != nil {
 		return err
 	}
 	if ctx.verbose && ctx.w != nil {

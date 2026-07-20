@@ -1344,7 +1344,7 @@ func WriteRefTree(genRoot string, cases []TreeCase, docTestRoot string, compileO
 		return fmt.Errorf("write ref root package: %w", err)
 	}
 
-	if err := WriteRefIntermediatePackages(genRoot, ".", rootImport, rootDocs, cases); err != nil {
+	if _, err := WriteRefIntermediatePackages(genRoot, ".", rootImport, rootDocs, cases); err != nil {
 		return err
 	}
 
@@ -1362,7 +1362,9 @@ func WriteRefTree(genRoot string, cases []TreeCase, docTestRoot string, compileO
 
 // WriteRefIntermediatePackages writes each unique intermediate package once under
 // genRoot (tree-scoped when treeRel is not ".").
-func WriteRefIntermediatePackages(genRoot, treeRel, rootImport string, rootDocs []SetupDocument, cases []TreeCase) error {
+// Returns import-path → source (callers may ignore the map).
+func WriteRefIntermediatePackages(genRoot, treeRel, rootImport string, rootDocs []SetupDocument, cases []TreeCase) (map[string]string, error) {
+	sources := make(map[string]string)
 	if rootImport == "" {
 		rootImport = RefRootImportPath
 	}
@@ -1380,18 +1382,19 @@ func WriteRefIntermediatePackages(genRoot, treeRel, rootImport string, rootDocs 
 			ancestors,
 		)
 		if err != nil {
-			return fmt.Errorf("assemble intermediate %s: %w", g.Dir, err)
+			return nil, fmt.Errorf("assemble intermediate %s: %w", g.Dir, err)
 		}
 		dir := RefIntermediateDirForTree(genRoot, treeRel, g.Dir)
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			return err
+			return nil, err
 		}
 		path := filepath.Join(dir, RefIntermediateFileName)
 		if err := WriteFormattedGo(path, src); err != nil {
-			return fmt.Errorf("write intermediate package %s: %w", g.Dir, err)
+			return nil, fmt.Errorf("write intermediate package %s: %w", g.Dir, err)
 		}
+		sources[RefIntermediateImport(rootImport, g.Dir)] = src
 	}
-	return nil
+	return sources, nil
 }
 
 // WriteRefLeafCase writes a thin leaf test file under leafDir.

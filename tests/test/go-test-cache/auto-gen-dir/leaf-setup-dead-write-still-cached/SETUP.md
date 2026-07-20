@@ -1,6 +1,6 @@
 # Scenario
 
-**Feature**: a first run has completed successfully
+**Feature**: unread leaf SETUP WorkDir write may stay cached (DCE)
 
 ```
 # build and run test binary, report results
@@ -8,11 +8,11 @@ doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
 ```
 
 ## Preconditions
-- Flat tree with leaf Setup setting WorkDir; ASSERT observes non-empty WorkDir (live code).
+- Leaf Setup sets WorkDir; ASSERT empty.
 - Multi-run harness from parent.
 
 ## Steps
-1. Edit leaf `simple/SETUP.md` WorkDir tag between runs (meaningful → cache miss).
+1. Edit leaf SETUP WorkDir tag; expect **still cached**.
 
 ```go
 import (
@@ -21,9 +21,9 @@ import (
 
 func Setup(t *testing.T, req *Request) error {
     cfg = multiRunCfg{
-        TestDir:       createTempTestProjectObserveWorkDir(t, "mytest"),
+        TestDir:       createTempTestProjectLeafWorkDirDead(t, "mytest"),
         ModifyFile:    "simple/SETUP.md",
-        ModifyContent: modifiedSetupContent("modified-leaf-setup"),
+        ModifyContent: modifiedSetupContent("leaf-dead-v2"),
     }
     doMultiRun(t, req)
     return nil
