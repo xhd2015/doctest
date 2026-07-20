@@ -202,8 +202,6 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	sessionID := core.DoctestSessionIDForRun()
 	goCache := opts.GoCache
 
-	// DIG: genWrote -count=1 removed for investigation
-
 	stdout := opts.Stdout
 	if stdout == nil {
 		stdout = os.Stdout

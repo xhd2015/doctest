@@ -25,11 +25,6 @@ func TestGeneratedCaseLeaf(t *testing.T) {
 		DOCTEST_CASE:       `{{DOCTEST_ROOT}}/leaf`,
 		DOCTEST_SESSION_ID: sid,
 	}
-	_, _ = os.Stat(d.DOCTEST_CASE)
-	_, _ = os.Stat(filepath.Join(d.DOCTEST_CASE, "SETUP.md"))
-	_, _ = os.Stat(filepath.Join(d.DOCTEST_CASE, "ASSERT.md"))
-	_, _ = os.Stat(filepath.Join(d.DOCTEST_ROOT, "SETUP.md"))
-	_, _ = os.Stat(filepath.Join(d.DOCTEST_ROOT, "DOCTEST.md"))
 	run := func(t *testing.T, _ *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 	Run := run
 	req := &Request{}

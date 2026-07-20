@@ -35,11 +35,7 @@ type generateContext struct {
 	// Always true for normal generation; false only for internal-compile trees
 	// (module-internal import path layout still uses classic AssembleTestSource).
 	unifiedMode bool
-	// genWrote is true if any generated Go file content changed this run.
-	// Callers force go test -count=1 so result cache cannot report a false hit
-	// after a rewrite (go sometimes still reports (cached) without Chdir).
-	genWrote  bool
-	closeOnce sync.Once
+	closeOnce   sync.Once
 }
 
 func newGenerateContext(dir string, opts core.Options, cases []core.TreeCase, w io.Writer, forBuild bool, verbose bool) (*generateContext, error) {
@@ -203,12 +199,9 @@ func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) 
 			}
 		}
 
-		testPath, wrote, err := core.WriteGeneratedCase(leafDir, tc, compileOnly, pkgName, ctx.absRoot)
+		testPath, _, err := core.WriteGeneratedCase(leafDir, tc, compileOnly, pkgName, ctx.absRoot)
 		if err != nil {
 			return err
-		}
-		if wrote {
-			ctx.genWrote = true
 		}
 		if ctx.verbose && ctx.w != nil {
 			if compileOnly {
