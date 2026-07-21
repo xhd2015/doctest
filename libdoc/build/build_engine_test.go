@@ -469,17 +469,24 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 	if !strings.Contains(goMod, "module testcase") {
 		t.Fatalf("expected module testcase, got %q", goMod)
 	}
-	// No source-module replace when the tree has no go.mod. Session inject still
-	// adds replace github.com/xhd2015/doctest/session => <session-mod cache>.
+	// No source-module replace when the tree has no go.mod. Harness inject still
+	// adds assert-mod + session-mod replaces (always-on for shared gen-root stability).
+	if !strings.Contains(goMod, "replace github.com/xhd2015/doctest/session =>") {
+		t.Fatalf("expected session replace, got %q", goMod)
+	}
+	if !strings.Contains(goMod, "replace github.com/xhd2015/doctest/assert =>") {
+		t.Fatalf("expected assert replace, got %q", goMod)
+	}
 	for _, line := range strings.Split(goMod, "\n") {
 		line = strings.TrimSpace(line)
 		if !strings.HasPrefix(line, "replace ") {
 			continue
 		}
-		if strings.Contains(line, "github.com/xhd2015/doctest/session") {
+		if strings.Contains(line, "github.com/xhd2015/doctest/session") ||
+			strings.Contains(line, "github.com/xhd2015/doctest/assert") {
 			continue
 		}
-		t.Fatalf("expected only session replace when no source module, got %q", goMod)
+		t.Fatalf("expected only assert/session replaces when no source module, got %q", goMod)
 	}
 }
 

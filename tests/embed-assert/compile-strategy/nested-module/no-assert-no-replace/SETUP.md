@@ -1,15 +1,17 @@
 # Scenario
 
-**Feature**: leaf without assert import does not add assert replace to nested go.mod
+**Feature**: leaf without author assert import still gets assert replace in nested go.mod
 
 ```
-# no assert import in SETUP/ASSERT
-doctest test --gen-dir outside -> nested go.mod without assert replace
+# no assert import in SETUP/ASSERT author code
+# always-on assertImport + sessionImport for external modules
+doctest test --gen-dir outside -> nested go.mod with assert (+ session) replace
 ```
 
 ## Preconditions
 
 - Leaf ASSERT does not import `github.com/xhd2015/doctest/assert`.
+- Outside gen-dir triggers nested testcase module generation (`WriteGoMod`).
 
 ## Steps
 

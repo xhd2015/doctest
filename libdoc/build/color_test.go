@@ -105,6 +105,25 @@ func TestFormatDisplayDuration(t *testing.T) {
 	}
 }
 
+func TestFormatResultSummaryForceFail(t *testing.T) {
+	style := colorStyle{enabled: false}
+	elapsed := 2 * time.Second
+
+	pass := formatResultSummary(style, 10, 10, elapsed, false)
+	if !strings.HasPrefix(pass, "PASS (10/10)") {
+		t.Fatalf("expected PASS when all ok, got %q", pass)
+	}
+	// Survivors all passed but another tree failed prepare: must not look green.
+	forced := formatResultSummary(style, 10, 10, elapsed, true)
+	if !strings.HasPrefix(forced, "FAIL (10/10)") {
+		t.Fatalf("expected FAIL when forceFail, got %q", forced)
+	}
+	partial := formatResultSummary(style, 8, 10, elapsed, false)
+	if !strings.HasPrefix(partial, "FAIL (8/10)") {
+		t.Fatalf("expected FAIL on partial pass, got %q", partial)
+	}
+}
+
 func TestResolveColorMode(t *testing.T) {
 	t.Run("always and never unchanged", func(t *testing.T) {
 		var buf bytes.Buffer

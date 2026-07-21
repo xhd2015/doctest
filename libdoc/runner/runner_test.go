@@ -227,3 +227,96 @@ func TestParseTestOptionsLabelAllConflictsWithLabel(t *testing.T) {
 		t.Fatalf("err=%v", err)
 	}
 }
+
+func TestFormatClassifiedErrors(t *testing.T) {
+	if err := formatClassifiedErrors(nil, nil); err != nil {
+		t.Fatalf("empty: %v", err)
+	}
+	prepOnly := formatClassifiedErrors([]string{"/t/bad: go mod tidy: exit 1"}, nil)
+	if prepOnly == nil || !strings.HasPrefix(prepOnly.Error(), "prepare failed:\n") {
+		t.Fatalf("prepare-only: %v", prepOnly)
+	}
+	if !strings.Contains(prepOnly.Error(), "/t/bad:") {
+		t.Fatalf("prepare-only body: %v", prepOnly)
+	}
+	runOnly := formatClassifiedErrors(nil, []string{"workspace: build failed"})
+	if runOnly == nil || !strings.HasPrefix(runOnly.Error(), "test failures:\n") {
+		t.Fatalf("run-only: %v", runOnly)
+	}
+	mixed := formatClassifiedErrors([]string{"a: prep"}, []string{"b: run"})
+	if mixed == nil || !strings.HasPrefix(mixed.Error(), "errors:\n") {
+		t.Fatalf("mixed: %v", mixed)
+	}
+	if !strings.Contains(mixed.Error(), "a: prep") || !strings.Contains(mixed.Error(), "b: run") {
+		t.Fatalf("mixed body: %v", mixed)
+	}
+}
+
+// TestDotDotDotPrepareFailNoPASS: one tree fails prepare, sibling runs and
+// passes — overall must not print PASS (honest FAIL) and error is prepare failed.
+func TestDotDotDotPrepareFailNoPASS(t *testing.T) {
+	mod := t.TempDir()
+	if err := os.WriteFile(filepath.Join(mod, "go.mod"), []byte("module example.com/prepfail\n\ngo 1.22\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	good := filepath.Join(mod, "good")
+	createValidTestTree(t, good)
+
+	bad := filepath.Join(mod, "bad")
+	// Invalid Go in DOCTEST.md so generate/prepare fails.
+	writeTreeFile(t, bad, "DOCTEST.md", doctestDoc(`
+type Request struct{}
+type Response struct{}
+func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil
+// missing closing brace — syntax error
+`))
+	writeTreeFile(t, bad, "leaf/SETUP.md", setupDoc(`
+func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+`))
+	writeTreeFile(t, bad, "leaf/ASSERT.md", assertDoc(`
+func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+`))
+
+	genDir := filepath.Join(t.TempDir(), "gen")
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(mod); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(oldWd) }()
+
+	// Capture stdout (summary) and leave stderr free for noise.
+	rOut, wOut, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldStdout := os.Stdout
+	os.Stdout = wOut
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Test([]string{"--gen-dir", genDir, "--no-color", "./..."})
+	}()
+	runErr := <-errCh
+	_ = wOut.Close()
+	os.Stdout = oldStdout
+	var outBuf bytes.Buffer
+	_, _ = outBuf.ReadFrom(rOut)
+	_ = rOut.Close()
+	out := outBuf.String()
+
+	if runErr == nil {
+		t.Fatal("expected non-nil error when one tree fails prepare")
+	}
+	if !strings.Contains(runErr.Error(), "prepare failed:") {
+		t.Fatalf("expected prepare failed label, got: %v", runErr)
+	}
+	if strings.Contains(out, "PASS (") {
+		t.Fatalf("must not print PASS when prepare failed:\n%s", out)
+	}
+	// Good tree ran one case — summary must be honest FAIL, not silent.
+	if !strings.Contains(out, "FAIL (") {
+		t.Fatalf("expected FAIL summary when survivors ran:\nstdout=%q\nerr=%v", out, runErr)
+	}
+}

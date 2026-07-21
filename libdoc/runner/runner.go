@@ -246,7 +246,11 @@ func Test(args []string) error {
 	}
 	if stats.Total > 0 {
 		stats.Elapsed = time.Since(start)
-		runnerbuild.PrintResultSummary(opts, stats)
+		// Soft "no tests" is not an overall failure for the summary line.
+		// Any other runErr (prepare, go test, multi-tree) must not print PASS
+		// even when survivor cases all passed.
+		overallOK := runErr == nil || errors.Is(runErr, ErrNoTestsFound)
+		runnerbuild.PrintResultSummaryOverall(opts, stats, overallOK)
 	}
 
 	// Close metrics with run_end after summary.
@@ -385,9 +389,10 @@ func testDotDotDotWorkspace(arg string, opts core.Options, rec *runRecorder, sta
 	wg.Wait()
 
 	var (
-		unified []runnerbuild.TreePrep
-		legacy  []prepResult
-		errs    []string
+		unified  []runnerbuild.TreePrep
+		legacy   []prepResult
+		prepErrs []string
+		runErrs  []string
 	)
 	for _, r := range results {
 		if r.err != nil {
@@ -406,7 +411,7 @@ func testDotDotDotWorkspace(arg string, opts core.Options, rec *runRecorder, sta
 				statsMu.Unlock()
 				continue
 			}
-			errs = append(errs, r.dir+": "+r.err.Error())
+			prepErrs = append(prepErrs, r.dir+": "+r.err.Error())
 			continue
 		}
 		if r.prep.Stats.NoTestsChanged {
@@ -495,7 +500,7 @@ func testDotDotDotWorkspace(arg string, opts core.Options, rec *runRecorder, sta
 			}
 		}
 		if wsErr != nil {
-			errs = append(errs, wsErr.Error())
+			runErrs = append(runErrs, wsErr.Error())
 		}
 	}
 
@@ -516,18 +521,37 @@ func testDotDotDotWorkspace(arg string, opts core.Options, rec *runRecorder, sta
 		}
 		statsMu.Unlock()
 		if err != nil && !strings.Contains(err.Error(), "no runnable test cases found") {
-			errs = append(errs, r.dir+": "+err.Error())
+			runErrs = append(runErrs, r.dir+": "+err.Error())
 		}
 	}
 
-	if len(errs) > 0 {
-		sort.Strings(errs)
-		return fmt.Errorf("test failures:\n%s", strings.Join(errs, "\n"))
+	if err := formatClassifiedErrors(prepErrs, runErrs); err != nil {
+		return err
 	}
 	if stats.Total == 0 && len(stats.Skipped) == 0 && !stats.NoTestsChanged {
 		return ErrNoTestsFound
 	}
 	return nil
+}
+
+// formatClassifiedErrors builds multi-tree failure text with honest labels:
+// prepare-only → "prepare failed:", go-test/workspace-only → "test failures:",
+// both → "errors:".
+func formatClassifiedErrors(prepErrs, runErrs []string) error {
+	if len(prepErrs) == 0 && len(runErrs) == 0 {
+		return nil
+	}
+	sort.Strings(prepErrs)
+	sort.Strings(runErrs)
+	switch {
+	case len(prepErrs) > 0 && len(runErrs) > 0:
+		all := append(append([]string(nil), prepErrs...), runErrs...)
+		return fmt.Errorf("errors:\n%s", strings.Join(all, "\n"))
+	case len(prepErrs) > 0:
+		return fmt.Errorf("prepare failed:\n%s", strings.Join(prepErrs, "\n"))
+	default:
+		return fmt.Errorf("test failures:\n%s", strings.Join(runErrs, "\n"))
+	}
 }
 
 func processSingleArg(arg string, opts core.Options, fn func(string, core.Options) error) error {

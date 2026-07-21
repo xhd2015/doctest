@@ -46,9 +46,13 @@ func newGenerateContext(dir string, opts core.Options, cases []core.TreeCase, w 
 	}
 	modRoot, modPath, hasMod := core.FindModuleRoot(absRoot)
 	absModRoot, _ := core.MappingGenRoot(absRoot)
-	assertImport := core.CasesImportAssertPackage(cases, modPath)
-	// Assemble always injects d *session.Doctest, so every gen tree needs the
-	// session module replace (not only trees whose author harness imports it).
+	// Always materialize assert-mod + session-mod replaces for external modules.
+	// Multi-tree ./... shares one mapping-gen root per module; per-tree
+	// assertImport=false would strip the assert replace and leave session
+	// replace only — tidy then resolves assert via github.com/xhd2015/doctest@vX
+	// (parent module also has session/) and fails with ambiguous session import.
+	// Session is always required: assemble injects d *session.Doctest.
+	assertImport := true
 	sessionImport := true
 
 	// Default generation is hierarchical unified (ref packages + suite).

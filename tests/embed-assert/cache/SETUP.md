@@ -3,11 +3,11 @@
 **Feature**: assert-mod cache materialization is content-addressed and write-once
 
 ```
-# assert import triggers MaterializeAssertModule
+# always-on for external modules: MaterializeAssertModule before generation
 first run -> $DOCTEST_CACHE_HOME|UserCacheDir/doctest/assert-mod/<md5>/{assert.go,go.mod}
 
-# no assert import
-skip materialization entirely
+# no author assert import still materializes (shared gen-root replace hygiene)
+no author import -> still write assert-mod cache entry
 ```
 
 ## Preconditions

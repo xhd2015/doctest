@@ -7,25 +7,31 @@
 
 **Participants**
 
-- **Doctest CLI** — discovers doctest leaves, assembles generated Go, detects
-  `github.com/xhd2015/doctest/assert` imports, and chooses compile strategy.
+- **Doctest CLI** — discovers doctest leaves, assembles generated Go, and chooses
+  compile strategy for external vs internal consumer modules.
 - **Embedded assert source** — single concatenated `assert.go` bytes shipped
   inside the doctest binary (`libdoc/assertmod`).
 - **Assert cache** — content-addressed directory under
   `$CACHE/doctest/assert-mod/<md5>/` holding `assert.go` + standalone `go.mod`.
 - **Nested testcase module** — legacy path when no parent `internal/` imports:
-  generated `module testcase` `go.mod` with `replace` for parent module and assert.
+  generated `module testcase` `go.mod` with `replace` for parent module, assert,
+  and session (always-on for external modules).
 - **Internal-compile temp** — `.doctest_run_*` under parent module root with
-  `-modfile` copy of parent `go.mod` plus assert `replace` when needed.
+  `-modfile` copy of parent `go.mod` plus assert/session replaces (always-on).
 - **Gen-dir dump** — optional review copy; never receives nested `go.mod` on
   internal-compile paths.
 
 **Behaviors**
 
-- Assert import detected → materialize cache (write-once) before code generation.
-- No assert import → skip cache materialization; existing go.mod/modfile behavior.
-- Legacy nested module + assert → append `replace assert => <cache>` to testcase go.mod.
-- Internal compile + assert → temp modfile = parent go.mod + assert replace; `-modfile` on go command.
+- For **external** consumer modules, generation **always** materializes
+  assert-mod (and session-mod) and writes `replace .../assert => <cache>` plus
+  session replace into the nested gen `go.mod` — even when author SETUP/ASSERT
+  do not import assert (shared gen-root / CondTidy hygiene across multi-tree).
+- Doctest self-module still omits assert/session submodule replaces
+  (`WriteGoMod` special-case).
+- Legacy nested module → assert replace points at cache under outside `--gen-dir`.
+- Internal compile → temp modfile = parent go.mod + assert/session replaces;
+  `-modfile` on go command when always-on flags apply.
 - Import paths in generated code stay `github.com/xhd2015/doctest/assert` (no rewrite).
 
 ## Decision Tree
@@ -37,15 +43,15 @@ embed-assert/
 │   │   ├── replace-in-gomod/                 C1: assert replace in generated go.mod
 │   │   ├── assert-output-passes/             C2: assert.Output/Match compile and pass
 │   │   ├── import-alias-preserved/           C4: aliased assert import survives assembly
-│   │   └── no-assert-no-replace/             C3: no assert import → no assert replace
+│   │   └── no-assert-no-replace/             C3: no author assert → still assert replace
 │   └── internal-compile/                     [temp .doctest_run_* + -modfile]
 │       ├── internal-and-assert-modfile/      D1: internal + assert via -modfile
 │       ├── no-nested-gomod-in-dump/          D2: --gen-dir dump has no nested go.mod
-│       └── internal-only-no-assert-replace/  D3: internal only, no assert replace
+│       └── internal-only-no-assert-replace/  D3: internal only, still -modfile (always-on)
 ├── cache/                                    [assert-mod materialization lifecycle]
 │   ├── first-run-materializes/               B1: creates cache dir with assert.go + go.mod
 │   ├── second-run-idempotent/                B2: second run does not rewrite cache
-│   └── no-import-skips/                      B3: no assert import → no new cache entry
+│   └── no-import-skips/                      B3: no author assert → still materialize
 └── operation/
     └── build/
         └── assert-import-compiles/           E1: doctest build succeeds with assert
@@ -58,20 +64,20 @@ embed-assert/
 | `compile-strategy/nested-module/replace-in-gomod` | C1 — nested go.mod contains assert replace pointing at cache |
 | `compile-strategy/nested-module/assert-output-passes` | C2 — subprocess `doctest test` passes with assert.Output |
 | `compile-strategy/nested-module/import-alias-preserved` | C4 — `outputassert` alias preserved in generated test |
-| `compile-strategy/nested-module/no-assert-no-replace` | C3 — no assert import, no assert replace in go.mod |
+| `compile-strategy/nested-module/no-assert-no-replace` | C3 — no author assert import, nested go.mod still has assert replace |
 | `compile-strategy/internal-compile/internal-and-assert-modfile` | D1 — internal + assert compiles via `-modfile` |
 | `compile-strategy/internal-compile/no-nested-gomod-in-dump` | D2 — gen-dir dump has test files, no go.mod |
-| `compile-strategy/internal-compile/internal-only-no-assert-replace` | D3 — internal only, modfile has no assert replace |
+| `compile-strategy/internal-compile/internal-only-no-assert-replace` | D3 — internal only, still uses `-modfile` (always-on assert+session) |
 | `cache/first-run-materializes` | B1 — first run creates `$CACHE/doctest/assert-mod/<md5>/` |
 | `cache/second-run-idempotent` | B2 — second run leaves cache bytes/mtimes unchanged |
-| `cache/no-import-skips` | B3 — run without assert import does not create assert-mod entry |
+| `cache/no-import-skips` | B3 — run without author assert import still creates assert-mod |
 | `operation/build/assert-import-compiles` | E1 — `doctest build` succeeds with assert replace |
 
 ## How to Run
 
 ```sh
 doctest vet ./tests/embed-assert/
-doctest test ./tests/embed-assert/          # expect RED before implementation
+doctest test ./tests/embed-assert/
 doctest test ./tests/embed-assert/compile-strategy/...
 doctest test ./tests/embed-assert/cache/...
 doctest test ./tests/embed-assert/operation/build/...

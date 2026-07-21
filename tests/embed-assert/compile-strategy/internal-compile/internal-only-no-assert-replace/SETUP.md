@@ -1,15 +1,17 @@
 # Scenario
 
-**Feature**: internal-only leaf does not add assert replace to temp modfile
+**Feature**: internal-only leaf (no author assert) still uses -modfile for always-on assert+session
 
 ```
-# internal import only, no assert
-doctest test -v -> -modfile without assert replace
+# internal import only, no author assert import
+# always-on assertImport + sessionImport → WriteInternalModfile + -modfile=
+doctest test -v -> temp -modfile (parent go.mod + assert/session replaces)
 ```
 
 ## Preconditions
 
 - Fixture `internal-only-module` has no assert import.
+- Always-on assert/session still wires a temp modfile for internal-compile.
 
 ## Steps
 

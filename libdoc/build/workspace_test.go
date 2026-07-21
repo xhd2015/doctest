@@ -86,6 +86,57 @@ func TestPrepareAndRunWorkspaceTwoTrees(t *testing.T) {
 	}
 }
 
+// TestSharedGenRootAlwaysAssertReplace ensures multi-tree prepare under one
+// external module always writes assert-mod replace (not only when a tree
+// imports assert). Otherwise a tree without assert strips the replace and
+// tidy resolves assert via github.com/xhd2015/doctest@vX → ambiguous session.
+func TestSharedGenRootAlwaysAssertReplace(t *testing.T) {
+	mod := t.TempDir()
+	if err := os.WriteFile(filepath.Join(mod, "go.mod"), []byte("module example.com/assertfix\n\ngo 1.22\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// Minimal trees: harness does not import github.com/xhd2015/doctest/assert.
+	treeA := filepath.Join(mod, "tree-a")
+	treeB := filepath.Join(mod, "tree-b")
+	testtree.WriteMinimalRunnableTree(t, treeA, []testtree.LeafSpec{
+		{Name: "a1", Steps: "a1", Expected: "ok"},
+	})
+	testtree.WriteMinimalRunnableTree(t, treeB, []testtree.LeafSpec{
+		{Name: "b1", Steps: "b1", Expected: "ok"},
+	})
+	genDir := filepath.Join(t.TempDir(), "gen")
+	opts := core.Options{
+		GenDir:                genDir,
+		Count:                 1,
+		SuppressResultSummary: true,
+		Stderr:                ioDiscard{},
+	}
+	if _, err := PrepareTree(treeA, opts); err != nil {
+		t.Fatalf("PrepareTree A: %v", err)
+	}
+	if _, err := PrepareTree(treeB, opts); err != nil {
+		t.Fatalf("PrepareTree B: %v", err)
+	}
+	goModData, err := os.ReadFile(filepath.Join(genDir, "go.mod"))
+	if err != nil {
+		t.Fatalf("read go.mod: %v", err)
+	}
+	goMod := string(goModData)
+	if !strings.Contains(goMod, "replace github.com/xhd2015/doctest/assert =>") {
+		t.Fatalf("expected always-on assert replace after trees without assert import:\n%s", goMod)
+	}
+	if !strings.Contains(goMod, "replace github.com/xhd2015/doctest/session =>") {
+		t.Fatalf("expected session replace:\n%s", goMod)
+	}
+	if !strings.Contains(goMod, "replace example.com/assertfix =>") {
+		t.Fatalf("expected parent module replace:\n%s", goMod)
+	}
+	// Tidy must not hit ambiguous session (would if assert resolved via doctest@vX).
+	if err := core.CondTidyGoMod(genDir); err != nil {
+		t.Fatalf("CondTidyGoMod: %v", err)
+	}
+}
+
 // TestPrepareTreeParallelSharedGenRoot stress-tests concurrent writeCases into
 // one gen root (P3: no global writeCases lock; genModMu only on shared files).
 func TestPrepareTreeParallelSharedGenRoot(t *testing.T) {

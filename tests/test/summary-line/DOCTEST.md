@@ -28,8 +28,12 @@ summary printed after `doctest test` completes.
 - **Progress** — non-verbose mode prints dots then per-suite `(N Run, N Pass, N Fail, N Cached)`.
 - **Failure detail** — `FAIL\t...` lines and go-test failure blocks print
   before the final summary when cases fail.
+- **Prepare failure (multi-tree)** — when `./...` has a tree that fails prepare
+  and a sibling that runs, overall summary is **`FAIL(p/t)`** (never `PASS`
+  when prepare failed); process error is labeled **`prepare failed:`**.
 - **Summarize** — after all per-dir output, print one line: `PASS(p/t)` or
-  `FAIL(p/t)` on stdout; or `no tests` on stderr when `Total == 0`.
+  `FAIL(p/t)` on stdout; or `no tests` on stderr when `Total == 0`. Any
+  non-nil run error (including prepare-only) forces FAIL summary when cases ran.
 - **Color** — when enabled, wrap the entire summary token in green (pass) or
   red (fail); `no tests` is never colored.
 
@@ -45,7 +49,8 @@ summary-line
 │   ├── color-pass ──────────── --color → green PASS(...)
 │   ├── color-fail ──────────── --color + 1 fail → red FAIL(...)
 │   ├── color-disabled ──────── --no-color → plain PASS/FAIL, no ANSI
-│   └── multi-dir-aggregate ─── two dirs (2+1) → single PASS(3/3) at end
+│   ├── multi-dir-aggregate ─── two dirs (2+1) → single PASS(3/3) at end
+│   └── multi-tree-prepare-fail  good+bad under ./... → FAIL + prepare failed:
 └── no-cases (zero runnable leaves)
     └── no-cases ────────────── stderr "no tests", no stdout summary
 ```
@@ -63,6 +68,7 @@ summary-line
 | `color-fail` | red-wrapped `FAIL(0/1)` with `--color` |
 | `color-disabled` | plain `PASS(1/1)` with `--no-color` |
 | `multi-dir-aggregate` | single `PASS(3/3)` after two dir runs |
+| `multi-tree-prepare-fail` | `FAIL(p/t)` + stderr `prepare failed:` (never PASS) |
 
 ## How to Run
 

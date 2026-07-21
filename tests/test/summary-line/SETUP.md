@@ -29,6 +29,7 @@ runner -> stderr "no tests" (exit 0)
 - Non-verbose runs include per-suite `(N Run, N Pass, N Fail, N Cached)` after dots.
 - The aggregated `PASS(x/y)` or `FAIL(x/y)` line is the last non-empty stdout line when cases exist.
 - Color tests use `--color` or `--no-color` CLI flags.
+- Multi-tree prepare failures use `createPrepareFailMultiTree` + `./...` from module root.
 
 ```go
 import (
@@ -73,6 +74,43 @@ func createPassFailTree(t *testing.T, passCount int, failCount int) string {
 	testtree.WritePassFailTree(t, tmp, passCount, failCount)
 	return tmp
 }
+
+// createPrepareFailMultiTree builds one module with a good 1-pass tree and a
+// sibling tree whose DOCTEST.md has invalid Go so prepare fails. Caller runs
+// from the returned module root with `doctest test ./...`.
+func createPrepareFailMultiTree(t *testing.T) string {
+	t.Helper()
+	mod := t.TempDir()
+	if err := os.WriteFile(
+		filepath.Join(mod, "go.mod"),
+		[]byte("module example.com/prepfail\n\ngo 1.22\n"),
+		0644,
+	); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	good := filepath.Join(mod, "good")
+	testtree.WritePassFailTree(t, good, 1, 0)
+
+	bad := filepath.Join(mod, "bad")
+	// Invalid Go in DOCTEST.md so generate/prepare fails (syntax error).
+	testtree.WriteFile(t, bad, "DOCTEST.md", testtree.MinimalDOCTEST(`
+type Request struct{}
+type Response struct{}
+func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil
+// missing closing brace — syntax error
+`))
+	fence := bt(3)
+	setupBody := `import "testing"
+
+func Setup(t *testing.T, req *Request) error { _ = req; return nil }`
+	assertBody := `func Assert(t *testing.T, req *Request, resp *Response, err error) {}`
+	testtree.WriteFile(t, bad, "leaf/SETUP.md",
+		"## Steps\n1. bad leaf\n\n"+fence+"go\n"+setupBody+"\n"+fence+"\n")
+	testtree.WriteFile(t, bad, "leaf/ASSERT.md",
+		"## Expected\n- n/a\n\n"+fence+"go\n"+assertBody+"\n"+fence+"\n")
+	return mod
+}
+
 func createEmptyDir(t *testing.T) string {
 	t.Helper()
 	tmp := t.TempDir()

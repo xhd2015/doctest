@@ -1,9 +1,10 @@
 # Scenario
 
-**Feature**: legacy nested testcase module wires assert via replace in generated go.mod
+**Feature**: legacy nested testcase module always wires assert via replace in generated go.mod
 
 ```
 # public imports only, gen-dir outside module
+# always-on assertImport for external modules (with or without author assert import)
 doctest test --gen-dir <outside> -> module testcase -> replace assert => cache
 ```
 

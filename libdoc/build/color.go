@@ -174,9 +174,12 @@ func formatSummary(style colorStyle, runCount, passCount, failCount, cachedCount
 	return fmt.Sprintf("  (%s, %s, %s, %s) in %s", runSeg, passSeg, failSeg, cachedSeg, durSeg)
 }
 
-func formatResultSummary(style colorStyle, passed, total int, elapsed time.Duration) string {
+// formatResultSummary builds the end-of-run PASS/FAIL line.
+// When forceFail is true (e.g. a sibling tree failed prepare while survivors
+// all passed), always print FAIL so the summary matches non-zero exit.
+func formatResultSummary(style colorStyle, passed, total int, elapsed time.Duration, forceFail bool) string {
 	suffix := fmt.Sprintf(" in %s", formatDisplayDuration(elapsed))
-	if passed == total {
+	if passed == total && !forceFail {
 		token := fmt.Sprintf("PASS (%d/%d)", passed, total)
 		if style.enabled {
 			return style.green(token) + suffix
@@ -333,7 +336,16 @@ func skippedSummaryHeader(skipped []core.SkippedCase) string {
 	return fmt.Sprintf("skipped %d labeled (discovery; --label-all or --label EXPR to run)", n)
 }
 
+// PrintResultSummary prints the end-of-run summary for a fully successful
+// overall invocation (no prepare/run errors outside the pass counts).
 func PrintResultSummary(opts core.Options, stats TestRunStats) {
+	PrintResultSummaryOverall(opts, stats, true)
+}
+
+// PrintResultSummaryOverall prints PASS/FAIL. When overallOK is false, always
+// uses FAIL even if passed==total (partial multi-tree: survivors passed but
+// another tree failed prepare, or workspace error with odd counts).
+func PrintResultSummaryOverall(opts core.Options, stats TestRunStats, overallOK bool) {
 	if stats.Total == 0 && !stats.GoTestBypassed {
 		return
 	}
@@ -342,7 +354,7 @@ func PrintResultSummary(opts core.Options, stats TestRunStats) {
 		fmt.Println(formatBypassResultSummary(style, stats.Total, stats.Elapsed))
 		return
 	}
-	fmt.Println(formatResultSummary(style, stats.Passed, stats.Total, stats.Elapsed))
+	fmt.Println(formatResultSummary(style, stats.Passed, stats.Total, stats.Elapsed, !overallOK))
 }
 
 // formatBypassResultSummary is the honest end line when go test was skipped.

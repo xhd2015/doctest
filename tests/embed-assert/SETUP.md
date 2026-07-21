@@ -3,14 +3,15 @@
 **Feature**: doctest materializes embedded assert as a cached local module at test/build time
 
 ```
-# assert import detected in SETUP/ASSERT Go blocks
-doctest test/build <tree> -> CasesImportAssertPackage -> MaterializeAssertModule -> cache
+# always-on for external modules (shared gen-root replace hygiene)
+doctest test/build <tree> -> MaterializeAssertModule -> assert-mod cache
+  -> WriteGoMod replace assert (+ session) even without author assert import
 
 # legacy nested module (no internal/)
-assert import -> replace github.com/xhd2015/doctest/assert => <cache> in testcase go.mod
+nested go.mod always has replace github.com/xhd2015/doctest/assert => <cache>
 
 # internal compile path
-internal + assert -> temp -modfile (parent go.mod + assert replace) -> go test -modfile=...
+internal -> temp -modfile (parent go.mod + assert/session replaces) -> go test -modfile=...
 ```
 
 ## Preconditions
