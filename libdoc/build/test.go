@@ -192,8 +192,9 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		// go build/test -a: force rebuilding packages that are already up-to-date.
 		flagArgs = append(flagArgs, "-a")
 	}
-	if opts.Timeout > 0 {
-		flagArgs = append(flagArgs, fmt.Sprintf("-timeout=%s", opts.Timeout))
+	// nil = omit (go default 10m); non-nil including 0 = pass -timeout=…
+	if opts.Timeout != nil {
+		flagArgs = append(flagArgs, fmt.Sprintf("-timeout=%s", *opts.Timeout))
 	}
 	if opts.CPUProfile != "" {
 		flagArgs = append(flagArgs, fmt.Sprintf("-cpuprofile=%s", opts.CPUProfile))
@@ -301,6 +302,10 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 			PrintResultSummary(opts, stats)
 		}
 		if err != nil {
+			// Surface timeout clearly even when verbose already dumps the panic.
+			if msg := goTestTimeoutErrorLine(string(out)); msg != "" {
+				fmt.Fprintln(w, msg)
+			}
 			stats.Phases = phases
 			return stats, fmt.Errorf("go test failed: %v", err)
 		}
@@ -322,11 +327,14 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 			stats.LeafTimings = leafTimingsFromPackages(cases, packageArgs, isSingleLeaf, result, goTestElapsed)
 		}
 
-		// Programmatic leaf-cache skips count toward summary Cached when the
-		// go test package itself was not (cached).
-		if !result.anyPackageCached() {
-			result.cachedCount += len(skipPaths)
-		}
+		// Summary Cached is leaf-cache-only:
+		//   - Cached = number of warm leaf-cache skips (GetPass hits used for skip)
+		//   - full go package (cached) expands to N only when every leaf key also
+		//     hits (otherwise go DCE/testcache can stay warm while spine text
+		//     changed and leaf keys miss — product wants 0 Cached then)
+		//   - leaf-cache bypass (-count / -a / --no-leaf-cache): always 0
+		result.cachedCount = leafCachedSummary(len(cases), skipPaths, result.anyPackageCached(),
+			leafcache.SkipEnabled(opts.Count, opts.ForceWithFlagA, opts.NoLeafCache))
 		recordLeafCachePasses(leafKeys, result.suiteLeafFailed, err == nil && result.failCount == 0)
 
 		fmt.Fprintln(stdout, formatSummary(style, result.passCount+result.failCount, result.passCount, result.failCount, result.cachedCount, goTestElapsed))
@@ -346,6 +354,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		if len(result.stderrData) > 0 {
 			stdout.Write(result.stderrData)
 		}
+		printGoTestTimeoutError(w, stdout, result)
 
 		if err != nil {
 			stats.Phases = phases
@@ -506,12 +515,16 @@ func packageMatchesLeaf(pkg, leafSlash string) bool {
 }
 
 type goTestJSONResult struct {
-	passCount     int
-	failCount     int
-	cachedCount   int
-	failLines     []string
-	detailLines   []string
-	stderrData    []byte
+	passCount   int
+	failCount   int
+	cachedCount int
+	failLines   []string
+	detailLines []string
+	stderrData  []byte
+	// timeoutError is a clear user-facing line when go test panics with
+	// "test timed out after <d>" (JSON Output events are otherwise buffered
+	// under the test name and dropped because timeout emits no per-test fail).
+	timeoutError  string
 	pkgElapsedNs  map[string]int64 // import path -> package-level Elapsed from -json
 	pkgCached     map[string]bool
 	testElapsedNs map[string]int64 // full test name (incl. subtests) -> Elapsed
@@ -535,6 +548,9 @@ func mergeGoTestJSONResult(dst *goTestJSONResult, src goTestJSONResult) {
 	dst.failLines = append(dst.failLines, src.failLines...)
 	dst.detailLines = append(dst.detailLines, src.detailLines...)
 	dst.stderrData = append(dst.stderrData, src.stderrData...)
+	if dst.timeoutError == "" && src.timeoutError != "" {
+		dst.timeoutError = src.timeoutError
+	}
 	if src.pkgElapsedNs != nil {
 		if dst.pkgElapsedNs == nil {
 			dst.pkgElapsedNs = make(map[string]int64)
@@ -887,6 +903,14 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 			}
 			switch ev.Action {
 			case "output":
+				// Timeout panics are Output events under a Test name; go test then
+				// only emits package-level fail (no per-test fail), so buffered
+				// lines would be dropped — capture a clear Error line here.
+				if res.timeoutError == "" {
+					if msg := goTestTimeoutErrorLine(ev.Output); msg != "" {
+						res.timeoutError = msg
+					}
+				}
 				trimmed := strings.TrimSpace(ev.Output)
 				if ev.Test == "" && (strings.HasPrefix(trimmed, "ok ") || strings.HasPrefix(trimmed, "ok\t")) {
 					if strings.Contains(ev.Output, "(cached)") {
@@ -979,10 +1003,59 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 	stdoutWg.Wait()
 	err = goTestCmd.Wait()
 	res.stderrData = stderrData
+	// go test may also print the panic only on stderr in edge cases.
+	if res.timeoutError == "" {
+		if msg := goTestTimeoutErrorLine(string(stderrData)); msg != "" {
+			res.timeoutError = msg
+		}
+	}
 	if err != nil {
 		return res, err
 	}
 	return res, nil
+}
+
+// goTestTimeoutErrorLine returns a clear user-facing timeout message when s
+// contains go test's "test timed out after <duration>" panic phrase.
+// Example:
+//
+//	Error: go test timed out after 2s
+//	hint: increase with -timeout=DURATION (e.g. -timeout=30m; -timeout=0 disables)
+func goTestTimeoutErrorLine(s string) string {
+	const marker = "test timed out after "
+	idx := strings.Index(s, marker)
+	if idx < 0 {
+		return ""
+	}
+	rest := strings.TrimSpace(s[idx+len(marker):])
+	if rest == "" {
+		return ""
+	}
+	dur := rest
+	if i := strings.IndexAny(rest, " \t\r\n"); i >= 0 {
+		dur = rest[:i]
+	}
+	if dur == "" {
+		return ""
+	}
+	return "Error: go test timed out after " + dur +
+		"\nhint: increase with -timeout=DURATION (e.g. -timeout=30m; -timeout=0 disables)"
+}
+
+// printGoTestTimeoutError writes the surfaced timeout Error line (if any).
+// Prefer stderr (w); fall back to stdout so the line is always visible in
+// combined process output.
+func printGoTestTimeoutError(w, stdout io.Writer, result goTestJSONResult) {
+	if result.timeoutError == "" {
+		return
+	}
+	if w != nil {
+		fmt.Fprintln(w, result.timeoutError)
+		return
+	}
+	if stdout != nil {
+		fmt.Fprintln(stdout, result.timeoutError)
+	}
 }
 
 // suiteLeafRelPath decodes a go test -json Test name under TestDoctestSuite/
@@ -1003,6 +1076,21 @@ func suiteLeafRelPath(test string) string {
 		rest = rest[i+1:]
 	}
 	return strings.ReplaceAll(rest, "__", "/")
+}
+
+// leafCachedSummary computes summary Cached for the leaf-cache product.
+// When skip is disabled (-count / -a / --no-leaf-cache), always 0.
+// Otherwise Cached is the leaf-skip count; full go package (cached) expands to
+// all N leaves only when every leaf is also a warm GetPass hit.
+func leafCachedSummary(nCases int, skipPaths []string, anyPkgCached, skipEnabled bool) int {
+	if !skipEnabled {
+		return 0
+	}
+	nSkip := len(skipPaths)
+	if anyPkgCached && nCases > 0 && nSkip == nCases {
+		return nCases
+	}
+	return nSkip
 }
 
 // prepareLeafCache computes leaf keys and warm skip paths for this tree run.

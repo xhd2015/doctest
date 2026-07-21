@@ -12,7 +12,7 @@ doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
 - Multi-run harness from parent.
 
 ## Steps
-1. Edit shared `mid-a/SETUP.md` (meaningful → suite cache miss).
+1. Edit shared `mid-a/SETUP.md` (on both leaves' spines → both keys miss → 0 Cached).
 
 ```go
 import (

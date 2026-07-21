@@ -1,13 +1,14 @@
 # Scenario
 
-**Feature**: generated leaf reads `DOCTEST_SESSION_ID` via `syscall.Getenv`
+**Feature**: leaf Setup reads `DOCTEST_CACHE_ENV_PROBE` via `syscall.Getenv` — env not in key
 
 ## Preconditions
-- Parent `env-getenv` harness runs warmup + two captured runs.
+- Parent `env-getenv` harness runs warmup + two captured runs (probe A then B).
+- Leaf-cache key is spine-only for all read APIs (including syscall).
 
 ## Steps
-1. Configure leaf Setup to call `syscall.Getenv("DOCTEST_SESSION_ID")`.
-2. Run the env-cache proof sequence.
+1. Configure leaf Setup to call `syscall.Getenv("DOCTEST_CACHE_ENV_PROBE")`.
+2. Run the env-cache sequence; both measured runs should stay Cached.
 
 ```go
 import (
@@ -21,7 +22,7 @@ func Setup(t *testing.T, req *Request) error {
 )
 
 func Setup(t *testing.T, req *Request) error {
-    _, _ = syscall.Getenv("DOCTEST_SESSION_ID")
+    _, _ = syscall.Getenv("DOCTEST_CACHE_ENV_PROBE")
     return nil
 }`
     doEnvCacheRun(t, req)

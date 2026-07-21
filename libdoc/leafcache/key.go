@@ -20,13 +20,15 @@ import (
 //
 // Hashed: AlgoVersion, GoVersion, absolute cleaned TreeRoot (tree identity so
 // identical relative content under different roots cannot share a key), module
-// go.mod (+ go.sum if present), spine Go blocks (root DOCTEST, ancestor SETUPs,
-// leaf SETUP, leaf ASSERT), local package sources in the import closure under
+// go.mod (+ go.sum if present), spine Go blocks only (root DOCTEST, ancestor
+// SETUPs on the path to the leaf, leaf SETUP, leaf ASSERT — sibling-branch
+// SETUPs are not mixed in), local package sources in the import closure under
 // ModuleRoot and local replace modules, and those local replace modules'
 // go.mod/go.sum.
 //
 // Not hashed: remote module source trees (they contribute only via
-// go.mod/go.sum identity).
+// go.mod/go.sum identity); process env values (os.Getenv/os.LookupEnv are not
+// special-cased); non-spine SETUP.md under the tree.
 func ComputeLeafKey(in KeyInput) (string, error) {
 	if err := validateKeyInput(in); err != nil {
 		return "", err
@@ -86,13 +88,15 @@ func ComputeLeafKey(in KeyInput) (string, error) {
 		}
 	}
 
-	// Spine Go blocks.
+	// Spine Go blocks only (no tree-wide SETUP walk, no osenv value mixing).
+	// Trim surrounding whitespace so prose-only SETUP rewrites that only differ
+	// by a trailing newline inside the fence stay key-stable.
 	spineCodes, err := collectSpine(treeRoot, leafDir)
 	if err != nil {
 		return "", err
 	}
 	for _, sb := range spineCodes {
-		writeField(h, "spine:"+sb.rel, sb.code)
+		writeField(h, "spine:"+sb.rel, strings.TrimSpace(sb.code))
 	}
 
 	// Local import closure from spine (current module + local replace pkgs).

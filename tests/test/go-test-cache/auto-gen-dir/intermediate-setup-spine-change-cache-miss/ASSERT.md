@@ -4,14 +4,16 @@ label: heavy
 
 ## Expected
 - Both runs exit 0.
-- First and second captured runs are cache-hits after Run Stdout string swap
-  when ASSERT only checks non-empty (DCE / same binary content ID).
+- First captured run is cache-hit.
+- Second run is `0 Cached` after intermediate SETUP Go edit (spine hash),
+  even when WorkDir is unread by ASSERT.
 
 ## Exit Code
 - Exit code 0.
 
 ```go
 import (
+    "strings"
     "testing"
 )
 
@@ -28,8 +30,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if !stdoutHasPositiveCached(state.FirstResp.Stdout) {
         t.Fatalf("first run was not cached; stdout:\n%s", state.FirstResp.Stdout)
     }
-    if !stdoutHasPositiveCached(state.SecondResp.Stdout) {
-        t.Fatalf("second run lost cache after dead Stdout string swap; expected Cached > 0:\n%s", state.SecondResp.Stdout)
+    if !strings.Contains(state.SecondResp.Stdout, ", 0 Cached") {
+        t.Fatalf("second run was cached after intermediate SETUP spine edit; expected ', 0 Cached':\n%s", state.SecondResp.Stdout)
     }
 }
 ```

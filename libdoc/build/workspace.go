@@ -256,8 +256,9 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	if opts.ForceWithFlagA {
 		flagArgs = append(flagArgs, "-a")
 	}
-	if opts.Timeout > 0 {
-		flagArgs = append(flagArgs, fmt.Sprintf("-timeout=%s", opts.Timeout))
+	// nil = omit (go default 10m); non-nil including 0 = pass -timeout=…
+	if opts.Timeout != nil {
+		flagArgs = append(flagArgs, fmt.Sprintf("-timeout=%s", *opts.Timeout))
 	}
 	if opts.CPUProfile != "" {
 		flagArgs = append(flagArgs, fmt.Sprintf("-cpuprofile=%s", opts.CPUProfile))
@@ -320,6 +321,11 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 		stdout.Write(out)
 		runErr = err
 		stats.Passed = passedCases(stats.Total, countFailuresFromGoTestOutput(out))
+		if err != nil {
+			if msg := goTestTimeoutErrorLine(string(out)); msg != "" {
+				fmt.Fprintln(w, msg)
+			}
+		}
 	} else {
 		result, err := runGoTestJSONOnce(runDir, append(append([]string(nil), flagArgs...), packageArgs...), sessionID, goCache, opts.MetricsNestSink, "", "", stdout, style)
 		runErr = err
@@ -343,6 +349,7 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 		if len(result.stderrData) > 0 {
 			stdout.Write(result.stderrData)
 		}
+		printGoTestTimeoutError(w, stdout, result)
 		var allCases []core.TreeCase
 		for _, p := range preps {
 			allCases = append(allCases, p.Cases...)

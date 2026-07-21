@@ -16,11 +16,18 @@ progress dots -> . F | verbose -> go test -v | count -> N tests
 ## Preconditions
 - The doctest binary is built by the root Setup.
 - Tests run with an extended timeout to allow for Go compilation (first run is slow).
+- **Product under test (leaf-cache Cached)**:
+  - Summary `Cached` counts **leaf-cache skips** when the go package actually runs.
+  - If the **whole** go package is `(cached)`, report **N Cached** for all N leaves.
+  - Leaf key is **spine-only**: DOCTEST + ancestor SETUPs + leaf SETUP/ASSERT (+ module/import/treeRoot).
+  - Env values and tree-wide non-spine SETUP are **not** mixed into the key.
+  - Sibling SETUP/ASSERT does **not** bust a peer leaf's key; parent/spine edit does.
+  - Any `-count` (incl. `-count=1`) or `-a` → no leaf-cache skip → `0 Cached`.
 
 ## Steps
 1. Set a generous timeout (120s) for tests that compile Go code.
 2. Provide shared helpers for temp doctest trees.
-3. Distinguish **observed** Setup/Run effects (go testcache miss) vs **unread** writes (may stay cached).
+3. Build fixtures so spine Go edits miss leaf-cache; prose/mtime-only/identical rewrite stay warm.
 
 ```go
 import (
@@ -326,7 +333,8 @@ func createL2Project(t *testing.T, dirName string) string {
     )
 }
 
-// Dead (unread WorkDir) trees — Setup writes; ASSERT empty → go may keep (cached).
+// Dead (unread WorkDir) trees — Setup writes; ASSERT empty.
+// Under leaf-cache product, spine Go text still changes the key (not go DCE).
 func createL1ProjectDead(t *testing.T, dirName string) string {
     t.Helper()
     return createTempCustomProjectOpts(t, dirName, treeOpts{ObserveWorkDir: false},
@@ -335,7 +343,7 @@ func createL1ProjectDead(t *testing.T, dirName string) string {
     )
 }
 
-// createL1ProjectDeadDiscard: mid Setup only `_ = "tag"` (DCE-friendly).
+// createL1ProjectDeadDiscard: mid Setup only `_ = "tag"` (spine text still hashed).
 func createL1ProjectDeadDiscard(t *testing.T, dirName string) string {
     t.Helper()
     return createTempCustomProjectOpts(t, dirName, treeOpts{MidDiscardString: true},
@@ -382,6 +390,12 @@ func createTempTestProjectRootWorkDirDead(t *testing.T, dirName, tag string) str
         ObserveWorkDir: false,
         RootWorkDirTag: tag,
     })
+}
+
+// stdoutHasPositiveCached reports Cached count > 0 in a summary line.
+// Shared by auto-gen-dir multi-run leaves and env-getenv env-not-in-key leaves.
+func stdoutHasPositiveCached(stdout string) bool {
+    return strings.Contains(stdout, "Cached") && !strings.Contains(stdout, "0 Cached")
 }
 
 func modifiedSetupContent(tag string) string {

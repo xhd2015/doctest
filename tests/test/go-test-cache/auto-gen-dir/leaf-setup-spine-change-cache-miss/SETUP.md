@@ -1,18 +1,20 @@
 # Scenario
 
-**Feature**: unread leaf SETUP WorkDir write may stay cached (DCE)
+**Feature**: leaf SETUP Go change busts leaf-cache (spine content hash)
 
 ```
-# build and run test binary, report results
-doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
+# leaf SETUP is on the spine
+# even unread WorkDir writes change the spine hash -> miss
+doctest test <fixture> after leaf SETUP edit -> 0 Cached
 ```
 
 ## Preconditions
 - Leaf Setup sets WorkDir; ASSERT empty.
+- Leaf-cache keys spine Go text (not go DCE).
 - Multi-run harness from parent.
 
 ## Steps
-1. Edit leaf SETUP WorkDir tag; expect **still cached**.
+1. Edit leaf SETUP WorkDir tag; expect **0 Cached**.
 
 ```go
 import (

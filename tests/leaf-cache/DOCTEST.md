@@ -113,6 +113,9 @@ tests/leaf-cache/
 │   └── fail-path/fail-not-stored/
 ├── key/tree-identity/                        [P3 key tree identity]
 │   └── different-abs-roots/                  same content, different TreeRoot → keys≠
+├── partial-package-deps/                     [partial leaf-cache across packages]
+│   ├── edit-alone-d-two-cached/              edit alone/d → 2 Cached (shared leaves warm)
+│   └── edit-shared-a-one-cached/             edit shared/a → 1 Cached (leaf-d warm)
 └── polish/                                   [P3 runtime polish]
     ├── selective/
     │   ├── sibling-stays-cached/             edit leaf_a ASSERT → sibling still Cached
@@ -160,6 +163,8 @@ tests/leaf-cache/
 | `key/tree-identity/different-abs-roots` | Identical content under two abs TreeRoots → distinct keys | **RED** — keys currently collide (no abs TreeRoot in hash) |
 | `polish/selective/sibling-stays-cached` | 2-pass tree; warm both; edit leaf_a; re-run → Cached == 1 | **GREEN** (backfill) |
 | `polish/selective/local-dep-invalidates` | Pass leaf imports local pkg; warm; edit pkg; re-run → 0 Cached | **GREEN** (backfill) |
+| `partial-package-deps/edit-alone-d-two-cached` | 3 leaves / 4 pkgs; run1 `-count=1`; edit alone/d; run2 → **2 Cached** | partial DAG |
+| `partial-package-deps/edit-shared-a-one-cached` | same fixture; edit shared/a; run2 → **1 Cached** | multi-leaf bust |
 | `polish/isolation/same-relpath-two-trees` | Warm treeA; first run treeB same relpath → 0 Cached | **RED** — treeB incorrectly Cached (same root cause) |
 | `polish/docs/test-help-mentions-flags` | `doctest test --help` mentions `-a` and `--no-leaf-cache` |
 
@@ -220,7 +225,7 @@ type Request struct {
 	LeafDir    string
 	GoVersion  string
 	GoVersionB string
-	Mutation   string // leaf_assert | ancestor_setup | local_imported | local_unrelated | replace_lib_src | replace_lib_gomod | remote_proxy_file | polish_edit_leaf_a | polish_edit_local_dep
+	Mutation   string // leaf_assert | … | polish_edit_leaf_a | polish_edit_local_dep | polish_edit_alone_d | polish_edit_shared_a
 	Flavor     string // base | replace | remote
 	StoreRoot  string
 	StoreRootB string

@@ -5,7 +5,8 @@ label: heavy
 ## Expected
 - Both runs exit 0.
 - First captured run is cache-hit.
-- Second run remains cache-hit: prose-only SETUP.md change does not change generated Go.
+- Second run remains cache-hit: prose-only SETUP.md change does not change spine Go
+  (leaf-cache key extracts Go blocks only).
 
 ## Exit Code
 - Exit code 0.

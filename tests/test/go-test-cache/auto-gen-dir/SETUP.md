@@ -1,27 +1,27 @@
 # Scenario
 
-**Feature**: the root Setup has built the doctest binary and set req.Bin
+**Feature**: multi-run harness for leaf-cache Cached product under auto-gen-dir
 
 ```
-# build and run test binary, report results
-doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
+# warmup stores leaf-cache pass markers (+ may warm go package cache)
+doctest test <fixture> -> leaf pass -> PutPass(key)
 
-# path patterns
-.../ -> walk tree | subdir -> run subtree | multi-dir -> aggregate results
-
-# output
-progress dots -> . F | verbose -> go test -v | count -> N tests
+# measured run 1: spine unchanged -> leaf-cache skip -> Cached > 0
+# measured run 2: optional spine edit / -count / -a -> hit or miss per product
+doctest test <fixture> [flags] -> summary (N Run, N Pass, N Fail, N Cached)
 ```
 
 ## Preconditions
 - The root Setup has built the doctest binary and set req.Bin.
 - The go-test-cache root has set a 120s timeout.
-- A warmup run populates the cache before the two captured runs.
+- Warmup runs populate leaf-cache (and go cache) before the two captured runs.
+- **Cached** means leaf-cache skips when the package runs; whole-package go
+  `(cached)` expands to N Cached for all N leaves.
 
 ## Steps
 1. Define shared configuration and state for multi-run test leaves.
-2. Provide a multi-run `Run` function that orchestrates a silent warmup run followed by two captured executions.
-3. Each leaf sets cfg flags to control behavior (edit path, mtime-only, identical rewrite).
+2. Provide a multi-run helper that orchestrates silent warmups then two captured executions.
+3. Each leaf sets cfg flags (edit path, mtime-only, identical rewrite, SecondFlags).
 
 ```go
 import (
@@ -42,7 +42,9 @@ type multiRunCfg struct {
     TestDir           string
     ModifyFile        string
     ModifyContent     string
-    UseCountTwo       bool
+    // SecondFlags are appended to `doctest test <dir>` on the second measured run
+    // (e.g. "-count=1", "-a"). Any -count or -a must bypass leaf-cache → 0 Cached.
+    SecondFlags       []string
     TouchMtimeOnly    bool // chtimes ModifyFile only; no content rewrite
     RewriteIdentical  bool // rewrite ModifyFile with its current bytes
 }
@@ -122,10 +124,7 @@ func parseGenDir(stderr string) {
     }
 }
 
-// stdoutHasPositiveCached reports Cached count > 0 in a summary line.
-func stdoutHasPositiveCached(stdout string) bool {
-    return strings.Contains(stdout, "Cached") && !strings.Contains(stdout, "0 Cached")
-}
+// stdoutHasPositiveCached is defined on the go-test-cache root SETUP.
 
 func doMultiRun(t *testing.T, req *Request) {
     if req.Bin == "" {
@@ -139,12 +138,13 @@ func doMultiRun(t *testing.T, req *Request) {
 
     baseArgs := []string{"test", testDir}
 
-    // Isolate GOCACHE + fix session id across warmup/measured runs so concurrent
-    // outer-suite noise cannot race the shared machine cache, and nested go test
-    // result-cache keys stay stable.
+    // Isolate GOCACHE + leaf-cache store + fix session id across warmup/measured
+    // runs so concurrent outer-suite noise cannot race shared machine caches.
     goCache := t.TempDir()
+    leafCache := t.TempDir()
     stableEnv := []string{
         "GOCACHE=" + goCache,
+        "DOCTEST_LEAF_CACHE=" + leafCache,
         "DOCTEST_SESSION_ID=multi-run-stable-session",
     }
 
@@ -185,8 +185,8 @@ func doMultiRun(t *testing.T, req *Request) {
     }
 
     args2 := baseArgs
-    if cfg.UseCountTwo {
-        args2 = append([]string{"test", testDir, "-count=2"})
+    if len(cfg.SecondFlags) > 0 {
+        args2 = append([]string{"test", testDir}, cfg.SecondFlags...)
     }
 
     resp2 := doRun(t, req.Bin, args2, stableEnv...)

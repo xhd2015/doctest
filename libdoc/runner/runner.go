@@ -714,13 +714,16 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 
 	opts := core.Options{Stderr: os.Stderr, RemoveTemp: false, Color: core.ColorAuto}
 	var colorFlag, noColorFlag bool
+	// **time.Duration: nil = -timeout omitted (go default 10m); non-nil 0 = disable.
+	// Primary form is -timeout (go test style); --timeout kept as alias.
+	var timeout *time.Duration
 	remainArgs, err := lessflags.Bool("-v,--verbose", &opts.Verbose).
 		Bool("--rm", &opts.RemoveTemp).
 		String("--gen-dir", &opts.GenDir).
 		Int("-count", &opts.Count).
 		Bool("-a", &opts.ForceWithFlagA).
 		Bool("--no-leaf-cache", &opts.NoLeafCache).
-		Duration("--timeout", &opts.Timeout).
+		Duration("-timeout,--timeout", &timeout).
 		Bool("--color", &colorFlag).
 		Bool("--no-color", &noColorFlag).
 		Bool("--changed", &opts.ChangedOnly).
@@ -748,6 +751,7 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 	if noColorFlag {
 		opts.Color = core.ColorNever
 	}
+	opts.Timeout = timeout
 	if opts.LabelAll && len(labelExprs) > 0 {
 		return core.Options{}, nil, fmt.Errorf("--label-all and --label are mutually exclusive")
 	}

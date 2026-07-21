@@ -1,18 +1,18 @@
 # Scenario
 
-**Feature**: DOCTEST Run body change uses t.Log (live side effect) → cache miss
+**Feature**: DOCTEST Run body change busts leaf-cache (spine hash)
 
 ```
-# build and run test binary, report results
-doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
+# root DOCTEST Run Go is on the leaf spine
+doctest test <fixture> after Run edit -> 0 Cached
 ```
 
 ## Preconditions
-- Run calls `t.Log(tag)` so the string is not DCE'd from the binary.
+- Run calls `t.Log(tag)`; tag change is a spine Go edit.
 - Multi-run harness from parent.
 
 ## Steps
-1. Start with `t.Log("run-v1")`; edit to `t.Log("run-edited")` (meaningful → cache miss).
+1. Start with `t.Log("run-v1")`; edit to `t.Log("run-edited")` (spine miss).
 
 ```go
 import (

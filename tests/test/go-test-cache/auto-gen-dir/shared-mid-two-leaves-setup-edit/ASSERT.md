@@ -4,8 +4,9 @@ label: heavy
 
 ## Expected
 - Both runs exit 0.
-- First captured run is cache-hit (both leaves under one suite package).
-- Second run is `0 Cached` after shared intermediate SETUP.md change.
+- First captured run is cache-hit (both leaves warm).
+- Second run is `0 Cached` after shared intermediate SETUP.md change
+  (spine ancestor of both leaves → both leaf keys miss).
 
 ## Exit Code
 - Exit code 0.

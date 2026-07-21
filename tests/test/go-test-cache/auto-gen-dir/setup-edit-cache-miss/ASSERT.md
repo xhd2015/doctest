@@ -4,8 +4,8 @@ label: heavy
 
 ## Expected
 - Both runs exit 0.
-- Second run stdout contains ", 0 Cached" because the leaf SETUP.md changed
-  (regenerated `_test.go` / binary hash differs).
+- Second run stdout contains ", 0 Cached" because the leaf SETUP Go changed
+  (leaf-cache spine key differs).
 
 ## Exit Code
 - Exit code 0.

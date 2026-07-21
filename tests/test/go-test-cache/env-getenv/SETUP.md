@@ -1,25 +1,27 @@
 # Scenario
 
-**Feature**: prove which environment-variable reads affect Go test result caching
+**Feature**: process env values are not part of the leaf-cache key
 
 ```
-# warmup + two captured doctest test runs against a tiny generated leaf
-run A (env=session-a) -> cached
-run B (env=session-b) -> cache hit or miss depends on how env was read
+# leaf Setup may read DOCTEST_CACHE_ENV_PROBE via os.Getenv / LookupEnv / syscall.Getenv
+# leaf-cache key is spine-only — env values are NOT mixed in
 
-# os.Getenv / os.LookupEnv -> testlog records getenv -> cache miss on B
-# syscall.Getenv       -> no testlog entry      -> cache hit on B
+run A (probe=session-a) -> warm PutPass
+run B (probe=session-a) -> Cached hit
+run C (probe=session-b) -> still Cached hit (env not in key)
 ```
 
 ## Preconditions
 - The go-test-cache root has built the doctest binary and provides tree helpers.
-- Each leaf configures how the generated test reads `DOCTEST_SESSION_ID`.
+- Each leaf configures how the generated test reads `DOCTEST_CACHE_ENV_PROBE`.
+- Product: no osenv value hashing; no go-testlog getenv special-case for Cached.
+- Probe var is **not** `DOCTEST_SESSION_ID` so session harness stays stable across A/B.
 
 ## Steps
-1. Build a one-leaf doctest project whose Setup reads `DOCTEST_SESSION_ID`.
-2. Warm the go-test cache with env value A.
-3. Run again with env value A (expect `1 Cached`).
-4. Run again with env value B; cache behavior depends on the read API.
+1. Build a one-leaf doctest project whose Setup reads `DOCTEST_CACHE_ENV_PROBE`.
+2. Warm the leaf-cache with probe value A.
+3. Run again with probe value A (expect Cached > 0).
+4. Run again with probe value B; still expect Cached > 0 (env not in key).
 
 ```go
 import (
@@ -35,7 +37,7 @@ import (
     "github.com/xhd2015/doctest/libdoc/testtree"
 )
 
-const envCacheProbeVar = "DOCTEST_SESSION_ID"
+const envCacheProbeVar = "DOCTEST_CACHE_ENV_PROBE"
 
 type envCacheCfg struct {
     TestDir      string
@@ -105,13 +107,14 @@ func createEnvProbeTestProject(t *testing.T, dirName string) string {
     return testDir
 }
 
-func doRunWithEnv(t *testing.T, bin string, args []string, envValue string) *Response {
+func doRunWithEnv(t *testing.T, bin string, args []string, envValue string, extraEnv ...string) *Response {
     t.Helper()
     ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
     defer cancel()
 
     cmd := exec.CommandContext(ctx, bin, args...)
-    cmd.Env = append(os.Environ(), envCacheProbeVar+"="+envValue)
+    cmd.Env = append(os.Environ(), extraEnv...)
+    cmd.Env = append(cmd.Env, envCacheProbeVar+"="+envValue)
 
     var stdoutBuf bytes.Buffer
     var stderrBuf bytes.Buffer
@@ -147,12 +150,21 @@ func doEnvCacheRun(t *testing.T, req *Request) {
 
     baseArgs := []string{"test", testDir}
 
-    // Two warmups with env A: first gen rewrite may use -count=1; second stores
-    // a cache entry for the "1 Cached" first measured run.
-    doRunWithEnv(t, req.Bin, baseArgs, envCfg.EnvValueA)
-    doRunWithEnv(t, req.Bin, baseArgs, envCfg.EnvValueA)
+    // Stable GOCACHE + leaf-cache store across warmups and measured runs so
+    // only the env probe var differs between A and B.
+    goCache := t.TempDir()
+    leafCache := t.TempDir()
+    stableEnv := []string{
+        "GOCACHE=" + goCache,
+        "DOCTEST_LEAF_CACHE=" + leafCache,
+        "DOCTEST_SESSION_ID=env-probe-stable-session",
+    }
 
-    envState.FirstResp = doRunWithEnv(t, req.Bin, baseArgs, envCfg.EnvValueA)
-    envState.SecondResp = doRunWithEnv(t, req.Bin, baseArgs, envCfg.EnvValueB)
+    // Two warmups with env A, then measured hit with A, then B (still hit).
+    doRunWithEnv(t, req.Bin, baseArgs, envCfg.EnvValueA, stableEnv...)
+    doRunWithEnv(t, req.Bin, baseArgs, envCfg.EnvValueA, stableEnv...)
+
+    envState.FirstResp = doRunWithEnv(t, req.Bin, baseArgs, envCfg.EnvValueA, stableEnv...)
+    envState.SecondResp = doRunWithEnv(t, req.Bin, baseArgs, envCfg.EnvValueB, stableEnv...)
 }
 ```

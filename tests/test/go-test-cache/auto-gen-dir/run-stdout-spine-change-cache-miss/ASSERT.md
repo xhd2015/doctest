@@ -4,7 +4,9 @@ label: heavy
 
 ## Expected
 - Both runs exit 0.
-- Second run stdout contains ", 0 Cached" because `-count=2` bypasses the cache.
+- First captured run is cache-hit.
+- Second run is `0 Cached` after DOCTEST Run Stdout string change (spine hash),
+  even when ASSERT only checks non-empty Stdout.
 
 ## Exit Code
 - Exit code 0.
@@ -25,13 +27,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if state.FirstResp == nil || state.SecondResp == nil {
         t.Fatal("multi-run state not set")
     }
-    firstStdout := state.FirstResp.Stdout
-    if !strings.Contains(firstStdout, ", 1 Cached") {
-        t.Fatalf("first run (count=1) was not cached; expected stdout to contain ', 1 Cached':\n%s", firstStdout)
+    if !stdoutHasPositiveCached(state.FirstResp.Stdout) {
+        t.Fatalf("first run was not cached; stdout:\n%s", state.FirstResp.Stdout)
     }
-    secondStdout := state.SecondResp.Stdout
-    if !strings.Contains(secondStdout, ", 0 Cached") {
-        t.Fatalf("second run was cached with -count=2; expected ', 0 Cached':\n%s", secondStdout)
+    if !strings.Contains(state.SecondResp.Stdout, ", 0 Cached") {
+        t.Fatalf("second run was cached after Run spine edit; expected ', 0 Cached':\n%s", state.SecondResp.Stdout)
     }
 }
 ```

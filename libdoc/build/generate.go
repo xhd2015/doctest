@@ -37,6 +37,11 @@ type generateContext struct {
 	// (module-internal import path layout still uses classic AssembleTestSource).
 	unifiedMode bool
 	closeOnce   sync.Once
+	// lifecycleMu serializes gen writes against interrupt cleanup. The SIGINT
+	// handler acquires it and holds it through os.Exit so writeCases cannot
+	// recreate .doctest_run_* / temp roots after RemoveAll.
+	lifecycleMu sync.Mutex
+	closed      bool
 }
 
 func newGenerateContext(dir string, opts core.Options, cases []core.TreeCase, w io.Writer, forBuild bool, verbose bool) (*generateContext, error) {
@@ -126,18 +131,37 @@ func newGenerateContext(dir string, opts core.Options, cases []core.TreeCase, w 
 	return ctx, nil
 }
 
+// removeTempsLocked deletes interrupt-scoped temps. Caller must hold lifecycleMu.
+func (ctx *generateContext) removeTempsLocked() {
+	if ctx.modfilePath != "" {
+		os.Remove(ctx.modfilePath)
+	}
+	if ctx.compileRoot != "" {
+		os.RemoveAll(ctx.compileRoot)
+	}
+	if ctx.removeLegacyTmp && ctx.dumpDir == "" {
+		os.RemoveAll(ctx.genRoot)
+	}
+}
+
 func (ctx *generateContext) Close() {
 	ctx.closeOnce.Do(func() {
-		if ctx.modfilePath != "" {
-			os.Remove(ctx.modfilePath)
-		}
-		if ctx.compileRoot != "" {
-			os.RemoveAll(ctx.compileRoot)
-		}
-		if ctx.removeLegacyTmp && ctx.dumpDir == "" {
-			os.RemoveAll(ctx.genRoot)
-		}
+		ctx.lifecycleMu.Lock()
+		defer ctx.lifecycleMu.Unlock()
+		ctx.closed = true
+		ctx.removeTempsLocked()
 	})
+}
+
+// withGenLock runs fn while holding lifecycleMu. Returns an error if generation
+// was already closed (e.g. SIGINT cleanup started).
+func (ctx *generateContext) withGenLock(fn func() error) error {
+	ctx.lifecycleMu.Lock()
+	defer ctx.lifecycleMu.Unlock()
+	if ctx.closed {
+		return fmt.Errorf("doctest: interrupted")
+	}
+	return fn()
 }
 
 func (ctx *generateContext) installInterruptCleanup() {
@@ -148,7 +172,15 @@ func (ctx *generateContext) installInterruptCleanup() {
 	signal.Notify(ch, os.Interrupt)
 	go func() {
 		<-ch
-		ctx.Close()
+		// Hold lifecycleMu until process exit so concurrent writeCases cannot
+		// MkdirAll/WriteFile a removed compile temp back into existence.
+		ctx.lifecycleMu.Lock()
+		ctx.closeOnce.Do(func() {
+			ctx.closed = true
+			ctx.removeTempsLocked()
+		})
+		// Re-remove even if Close already ran without this lock held for exit.
+		ctx.removeTempsLocked()
 		os.Exit(130)
 	}()
 }
@@ -165,6 +197,9 @@ func (ctx *generateContext) announceRoots() {
 // (go.mod, tidy-done, doctest.gen-manifest) is serialized inside core via
 // genModMu; tree-local package dirs may be written in parallel by multi-tree
 // ./... prepare (no global writeCases lock).
+//
+// Ephemeral compile/build temps are written under lifecycleMu so SIGINT cleanup
+// can RemoveAll without racing recreating writers.
 func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) error {
 	pkgName := "testcase"
 	srcDir, origPkg, hasPkgUnderTest := core.ResolvePkgUnderTest(ctx.absRoot)
@@ -172,64 +207,80 @@ func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) 
 		pkgName = origPkg + "_tc"
 	}
 
-	if !ctx.internalCompile {
-		if err := core.WriteGoMod(ctx.genRoot, ctx.absModRoot, ctx.modPath, ctx.hasMod, ctx.assertImport, ctx.assertCacheDir, ctx.sessionImport, ctx.sessionCacheDir); err != nil {
-			return err
+	if err := ctx.withGenLock(func() error {
+		if !ctx.internalCompile {
+			if err := core.WriteGoMod(ctx.genRoot, ctx.absModRoot, ctx.modPath, ctx.hasMod, ctx.assertImport, ctx.assertCacheDir, ctx.sessionImport, ctx.sessionCacheDir); err != nil {
+				return err
+			}
+			if ctx.verbose && ctx.w != nil {
+				fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(filepath.Join(ctx.genRoot, "go.mod")))
+			}
+		} else if ctx.assertImport || ctx.sessionImport {
+			modfilePath, err := core.WriteInternalModfile(ctx.modRoot, ctx.assertCacheDir, ctx.sessionCacheDir)
+			if err != nil {
+				return err
+			}
+			ctx.modfilePath = modfilePath
+			if ctx.verbose && ctx.w != nil {
+				fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(modfilePath))
+			}
 		}
-		if ctx.verbose && ctx.w != nil {
-			fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(filepath.Join(ctx.genRoot, "go.mod")))
-		}
-	} else if ctx.assertImport || ctx.sessionImport {
-		modfilePath, err := core.WriteInternalModfile(ctx.modRoot, ctx.assertCacheDir, ctx.sessionCacheDir)
-		if err != nil {
-			return err
-		}
-		ctx.modfilePath = modfilePath
-		if ctx.verbose && ctx.w != nil {
-			fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(modfilePath))
-		}
+		return nil
+	}); err != nil {
+		return err
 	}
 
 	if ctx.unifiedMode {
-		if err := ctx.writeUnifiedCases(cases, compileOnly, pkgName, hasPkgUnderTest, srcDir, origPkg); err != nil {
-			return err
-		}
-		return core.FlushGenManifest(ctx.genRoot)
+		return ctx.withGenLock(func() error {
+			if err := ctx.writeUnifiedCases(cases, compileOnly, pkgName, hasPkgUnderTest, srcDir, origPkg); err != nil {
+				return err
+			}
+			return core.FlushGenManifest(ctx.genRoot)
+		})
 	}
 
 	// Internal-compile only: classic full-inline AssembleTestSource per leaf.
+	// Per-leaf lock so SIGINT can clean up between leaves (and after a leaf finishes).
 	for _, tc := range cases {
-		absLeafDir := filepath.Join(ctx.absRoot, tc.Path)
-		leafDir, err := core.GenDirForLeaf(ctx.genRoot, ctx.absModRoot, absLeafDir)
-		if err != nil {
-			return fmt.Errorf("gen dir for leaf %s: %w", tc.Path, err)
-		}
-
-		if hasPkgUnderTest {
-			if _, err := core.CopySourceFiles(leafDir, srcDir, origPkg); err != nil {
-				return fmt.Errorf("copy source files to %s: %w", leafDir, err)
+		tc := tc
+		if err := ctx.withGenLock(func() error {
+			absLeafDir := filepath.Join(ctx.absRoot, tc.Path)
+			leafDir, err := core.GenDirForLeaf(ctx.genRoot, ctx.absModRoot, absLeafDir)
+			if err != nil {
+				return fmt.Errorf("gen dir for leaf %s: %w", tc.Path, err)
 			}
-		}
 
-		testPath, _, err := core.WriteGeneratedCase(leafDir, tc, compileOnly, pkgName, ctx.absRoot)
-		if err != nil {
+			if hasPkgUnderTest {
+				if _, err := core.CopySourceFiles(leafDir, srcDir, origPkg); err != nil {
+					return fmt.Errorf("copy source files to %s: %w", leafDir, err)
+				}
+			}
+
+			testPath, _, err := core.WriteGeneratedCase(leafDir, tc, compileOnly, pkgName, ctx.absRoot)
+			if err != nil {
+				return err
+			}
+			if ctx.verbose && ctx.w != nil {
+				if compileOnly {
+					fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(leafDir))
+				} else {
+					fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(testPath))
+				}
+			}
+			return nil
+		}); err != nil {
 			return err
-		}
-		if ctx.verbose && ctx.w != nil {
-			if compileOnly {
-				fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(leafDir))
-			} else {
-				fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(testPath))
-			}
 		}
 	}
 
-	if ctx.hasMod && !ctx.internalCompile {
-		if err := core.CondTidyGoMod(ctx.genRoot); err != nil {
-			return err
+	return ctx.withGenLock(func() error {
+		if ctx.hasMod && !ctx.internalCompile {
+			if err := core.CondTidyGoMod(ctx.genRoot); err != nil {
+				return err
+			}
 		}
-	}
-	return core.FlushGenManifest(ctx.genRoot)
+		return core.FlushGenManifest(ctx.genRoot)
+	})
 }
 
 // treeRel is the doctest root path relative to the module root (or ".").

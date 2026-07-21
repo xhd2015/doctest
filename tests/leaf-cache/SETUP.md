@@ -102,6 +102,7 @@ and a non-local fake tree `remote-src/example.com/remote@v1.0.0/*.go` that is
 ### P3 polish helpers (see `polish/` + `key/tree-identity/`)
 
 - `prepareTwoSiblingPassLeaves`, `prepareLocalDepPassFixture`, `prepareTwinTrees`
+- `preparePartialPackageDepsFixture` — 4 pkgs + 3 leaves (shared a/b/c vs alone/d)
 - `applyPolishMutation` / `MutateAfterRun` for mid-sequence edits
 - `compute_two_inputs`, `runtime_once` ops
 
@@ -514,6 +515,95 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	req.ModuleRootB = treeB
 }
 
+// preparePartialPackageDepsFixture builds 4 packages + 3 leaves:
+//   shared/{a,b,c} used by leaf-ab-1 and leaf-ab-2; alone/d used only by leaf-d.
+// TreeRoot is app/tests/feature. Leaves call Version() so packages are in the key DAG.
+func preparePartialPackageDepsFixture(t *testing.T, req *Request) string {
+	t.Helper()
+	work := t.TempDir()
+	app := filepath.Join(work, "app")
+	tree := filepath.Join(app, "tests", "feature")
+	writePkg := func(rel, pkg, version string) {
+		dir := filepath.Join(app, filepath.FromSlash(rel))
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		body := fmt.Sprintf("package %s\n\nfunc Version() string { return %q }\n", pkg, version)
+		if err := os.WriteFile(filepath.Join(dir, pkg+".go"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writePkg("shared/a", "a", "A")
+	writePkg("shared/b", "b", "B")
+	writePkg("shared/c", "c", "C")
+	writePkg("alone/d", "d", "D")
+	if err := os.WriteFile(filepath.Join(app, "go.mod"), []byte("module example.com/partialcache\n\ngo 1.22\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(tree, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	doctestBody := testtree.MinimalDOCTEST(testtree.MinimalRunGo())
+	if err := os.WriteFile(filepath.Join(tree, "DOCTEST.md"), []byte(doctestBody), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeLeaf := func(name, assertGo string) {
+		leaf := filepath.Join(tree, name)
+		if err := os.MkdirAll(leaf, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		setupBody := "## Steps\n1. leaf\n\n" + goFenceOpen() +
+			"import \"testing\"\n\nfunc Setup(t *testing.T, req *Request) error { return nil }\n" + fenceClose()
+		if err := os.WriteFile(filepath.Join(leaf, "SETUP.md"), []byte(setupBody), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		assertBody := "## Expected\n- versions\n\n" + goFenceOpen() + assertGo + fenceClose()
+		if err := os.WriteFile(filepath.Join(leaf, "ASSERT.md"), []byte(assertBody), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A/B share a,b,c; C uses alone/d only. Non-empty Version checks keep imports live.
+	abAssert := `import (
+	"testing"
+	"example.com/partialcache/shared/a"
+	"example.com/partialcache/shared/b"
+	"example.com/partialcache/shared/c"
+)
+
+func Assert(t *testing.T, req *Request, resp *Response, err error) {
+	if a.Version() == "" || b.Version() == "" || c.Version() == "" {
+		t.Fatal("empty shared version")
+	}
+	_ = req
+	_ = resp
+	_ = err
+}
+`
+	// Alias alone package: bare "d" collides with injected d *session.Doctest.
+	dAssert := `import (
+	"testing"
+	aloned "example.com/partialcache/alone/d"
+)
+
+func Assert(t *testing.T, req *Request, resp *Response, err error) {
+	if aloned.Version() == "" {
+		t.Fatal("empty alone version")
+	}
+	_ = req
+	_ = resp
+	_ = err
+}
+`
+	writeLeaf("leaf-ab-1", abAssert)
+	writeLeaf("leaf-ab-2", abAssert)
+	writeLeaf("leaf-d", dAssert)
+	req.WorkDir = work
+	req.ModuleRoot = app
+	req.TreeRoot = tree
+	req.FixtureDir = tree
+	return tree
+}
+
 // applyPolishMutation applies P3 runtime mid-run mutations.
 func applyPolishMutation(t *testing.T, req *Request) error {
 	t.Helper()
@@ -524,6 +614,12 @@ func applyPolishMutation(t *testing.T, req *Request) error {
 	case "polish_edit_local_dep":
 		p := filepath.Join(req.ModuleRoot, "pkg", "helper", "helper.go")
 		return os.WriteFile(p, []byte("package helper\n\nfunc Answer() int { return 99 }\n"), 0o644)
+	case "polish_edit_alone_d":
+		p := filepath.Join(req.ModuleRoot, "alone", "d", "d.go")
+		return os.WriteFile(p, []byte("package d\n\nfunc Version() string { return \"D2\" }\n"), 0o644)
+	case "polish_edit_shared_a":
+		p := filepath.Join(req.ModuleRoot, "shared", "a", "a.go")
+		return os.WriteFile(p, []byte("package a\n\nfunc Version() string { return \"A2\" }\n"), 0o644)
 	case "":
 		return fmt.Errorf("polish Mutation is empty")
 	default:

@@ -12,7 +12,7 @@ doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
 - Multi-run harness from parent.
 
 ## Steps
-1. Edit only `mid-a/SETUP.md` WorkDir tag (meaningful → cache miss).
+1. Edit only `mid-a/SETUP.md` WorkDir tag (spine ancestor → leaf-cache miss).
 
 ```go
 import (

@@ -186,11 +186,11 @@ func TestParseTestOptionsRemoveTempFlag(t *testing.T) {
 }
 
 func TestParseTestOptionsTimeoutFlag(t *testing.T) {
-	opts, remain, err := parseTestOptions([]string{"--timeout", "45s", "somedir"})
+	opts, remain, err := parseTestOptions([]string{"-timeout", "45s", "somedir"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if opts.Timeout != 45*time.Second {
+	if opts.Timeout == nil || *opts.Timeout != 45*time.Second {
 		t.Fatalf("expected Timeout=45s, got %v", opts.Timeout)
 	}
 	if len(remain) != 1 || remain[0] != "somedir" {
@@ -198,10 +198,43 @@ func TestParseTestOptionsTimeoutFlag(t *testing.T) {
 	}
 }
 
+func TestParseTestOptionsTimeoutLongAlias(t *testing.T) {
+	opts, _, err := parseTestOptions([]string{"--timeout=45s", "somedir"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.Timeout == nil || *opts.Timeout != 45*time.Second {
+		t.Fatalf("expected --timeout alias Timeout=45s, got %v", opts.Timeout)
+	}
+}
+
+func TestParseTestOptionsTimeoutZeroDisables(t *testing.T) {
+	opts, _, err := parseTestOptions([]string{"-timeout", "0", "somedir"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.Timeout == nil {
+		t.Fatal("expected Timeout non-nil for -timeout=0 (disable), got nil")
+	}
+	if *opts.Timeout != 0 {
+		t.Fatalf("expected Timeout=0, got %v", *opts.Timeout)
+	}
+}
+
+func TestParseTestOptionsTimeoutOmitted(t *testing.T) {
+	opts, _, err := parseTestOptions([]string{"somedir"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.Timeout != nil {
+		t.Fatalf("expected Timeout nil when -timeout omitted, got %v", opts.Timeout)
+	}
+}
+
 func TestParseTestOptionsTimeoutInvalid(t *testing.T) {
-	_, _, err := parseTestOptions([]string{"--timeout", "bogus", "somedir"})
+	_, _, err := parseTestOptions([]string{"-timeout", "bogus", "somedir"})
 	if err == nil {
-		t.Fatal("expected error for invalid --timeout value")
+		t.Fatal("expected error for invalid -timeout value")
 	}
 }
 

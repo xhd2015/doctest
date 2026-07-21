@@ -4,9 +4,9 @@ label: heavy
 
 ## Expected
 - Both runs exit 0.
-- First captured run is cache-hit.
-- Second run is `0 Cached` after sibling-branch intermediate SETUP edit
-  (unified suite is package-scoped).
+- First captured run is cache-hit (`Cached` > 0).
+- Second run is `0 Cached` after root SETUP Go change (spine hash), even if
+  WorkDir is unread by ASSERT (no DCE / go-testlog special case).
 
 ## Exit Code
 - Exit code 0.
@@ -31,7 +31,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("first run was not cached; stdout:\n%s", state.FirstResp.Stdout)
     }
     if !strings.Contains(state.SecondResp.Stdout, ", 0 Cached") {
-        t.Fatalf("second run was cached after sibling branch SETUP edit; expected ', 0 Cached':\n%s", state.SecondResp.Stdout)
+        t.Fatalf("second run was cached after root SETUP spine edit; expected ', 0 Cached':\n%s", state.SecondResp.Stdout)
     }
 }
 ```

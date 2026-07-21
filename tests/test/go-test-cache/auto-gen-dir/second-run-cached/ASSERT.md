@@ -4,15 +4,14 @@ label: heavy
 
 ## Expected
 - Both runs exit 0.
-- Second run stdout (summary line) contains ", 1 Cached".
-- Second run completes faster than first (under 5 seconds total).
+- Second run stdout (summary line) has `Cached` > 0 via leaf-cache skip
+  (or whole-package go `(cached)` expanded to N Cached for all N leaves).
 
 ## Exit Code
 - Exit code 0.
 
 ```go
 import (
-    "strings"
     "testing"
 )
 
@@ -30,9 +29,9 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("first run exit %d, stderr:\n%s", state.FirstResp.ExitCode, state.FirstResp.Stderr)
     }
     secondStdout := state.SecondResp.Stdout
-    // Unified suite: one package → ", 1 Cached" (or "N Cached" if leaf counts).
-    if !strings.Contains(secondStdout, "Cached") || strings.Contains(secondStdout, "0 Cached") {
-        t.Fatalf("second run not cached; expected Cached > 0 in stdout:\n%s", secondStdout)
+    // Leaf-cache product: warm second run must show Cached > 0.
+    if !stdoutHasPositiveCached(secondStdout) {
+        t.Fatalf("second run not leaf-cached; expected Cached > 0 in stdout:\n%s", secondStdout)
     }
 }
 ```

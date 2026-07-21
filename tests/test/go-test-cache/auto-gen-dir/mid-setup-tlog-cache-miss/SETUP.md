@@ -1,14 +1,14 @@
 # Scenario
 
-**Feature**: intermediate Setup t.Log tag change is live → cache miss
+**Feature**: intermediate Setup t.Log tag change busts leaf-cache (spine hash)
 
 ```
-# build and run test binary, report results
-doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
+# mid SETUP Go is on the leaf spine; tag string is part of spine text
+doctest test <fixture> after t.Log tag edit -> 0 Cached
 ```
 
 ## Preconditions
-- mid-a Setup uses t.Log("…"); ASSERT empty is fine (Log is a side effect).
+- mid-a Setup uses t.Log("…"); spine content hashing includes the tag.
 - Multi-run harness from parent.
 
 ## Steps

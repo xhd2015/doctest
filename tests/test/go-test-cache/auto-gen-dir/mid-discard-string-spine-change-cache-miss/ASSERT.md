@@ -4,13 +4,15 @@ label: heavy
 
 ## Expected
 - Both runs exit 0.
-- First and second runs are cache-hits after discarded-string SETUP edit.
+- First captured run is cache-hit.
+- Second run is `0 Cached` after discarded-string SETUP tag change (spine hash).
 
 ## Exit Code
 - Exit code 0.
 
 ```go
 import (
+    "strings"
     "testing"
 )
 
@@ -27,8 +29,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if !stdoutHasPositiveCached(state.FirstResp.Stdout) {
         t.Fatalf("first run was not cached; stdout:\n%s", state.FirstResp.Stdout)
     }
-    if !stdoutHasPositiveCached(state.SecondResp.Stdout) {
-        t.Fatalf("second run lost cache after discard-string SETUP edit; expected Cached > 0:\n%s", state.SecondResp.Stdout)
+    if !strings.Contains(state.SecondResp.Stdout, ", 0 Cached") {
+        t.Fatalf("second run was cached after discard-string spine edit; expected ', 0 Cached':\n%s", state.SecondResp.Stdout)
     }
 }
 ```

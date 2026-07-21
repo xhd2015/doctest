@@ -1,19 +1,20 @@
 # Scenario
 
-**Feature**: Run Stdout string swap with only non-empty ASSERT may stay cached (DCE)
+**Feature**: DOCTEST Run Go change busts leaf-cache (spine content hash)
 
 ```
-# build and run test binary, report results
-doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
+# Run is part of root DOCTEST Go on the spine
+# Stdout string swap changes spine hash even if ASSERT only checks non-empty
+doctest test <fixture> after DOCTEST Run edit -> 0 Cached
 ```
 
 ## Preconditions
 - Run returns Stdout "run-v1"; ASSERT only checks Stdout != "".
-- Go can DCE specific string constants when only emptiness is observed.
+- Leaf-cache keys spine Go text (not go DCE of string constants).
 - Multi-run harness from parent.
 
 ## Steps
-1. Edit DOCTEST Run Stdout to "run-edited"; expect **still cached**.
+1. Edit DOCTEST Run Stdout to "run-edited"; expect **0 Cached**.
 
 ```go
 import (

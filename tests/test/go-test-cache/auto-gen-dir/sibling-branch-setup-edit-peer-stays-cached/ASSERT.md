@@ -4,7 +4,9 @@ label: heavy
 
 ## Expected
 - Both runs exit 0.
-- First and second runs are cache-hits after unread leaf SETUP WorkDir edit.
+- First captured run is cache-hit (`Cached` > 0).
+- After sibling-branch intermediate SETUP edit, second run still has `Cached` > 0
+  because the peer leaf's spine is unchanged (leaf-cache key is spine-only).
 
 ## Exit Code
 - Exit code 0.
@@ -28,7 +30,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("first run was not cached; stdout:\n%s", state.FirstResp.Stdout)
     }
     if !stdoutHasPositiveCached(state.SecondResp.Stdout) {
-        t.Fatalf("second run lost cache after unread leaf SETUP edit; expected Cached > 0:\n%s", state.SecondResp.Stdout)
+        t.Fatalf("second run lost all cache after sibling branch SETUP edit; peer leaf should stay leaf-cached (Cached > 0):\n%s", state.SecondResp.Stdout)
     }
 }
 ```

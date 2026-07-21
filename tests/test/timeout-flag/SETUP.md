@@ -14,7 +14,7 @@ progress dots -> . F | verbose -> go test -v | count -> N tests | timeout -> go 
 - The test data directory exists at `DOCTEST_ROOT/testdata/basic-request-runner`.
 
 ## Steps
-1. Run `doctest test` with `--timeout` and check the printed go test command line.
+1. Run `doctest test` with `-timeout` and check the printed go test command line.
 
 ```go
 import (

@@ -1,6 +1,6 @@
 # Scenario
 
-**Feature**: `--timeout` is forwarded to the generated `go test` command
+**Feature**: `-timeout` is forwarded to the generated `go test` command
 
 ```
 # build and run test binary, report results
@@ -11,7 +11,7 @@ doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
 - A valid doc-style test tree exists in the repository.
 
 ## Steps
-1. Run `doctest test -v --timeout 45s <dir>`.
+1. Run `doctest test -v -timeout 45s <dir>`.
 
 ```go
 import (
@@ -22,7 +22,7 @@ import (
 
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     exampleDir := filepath.Join(d.DOCTEST_ROOT, "testdata", "basic-request-runner")
-    req.Args = []string{"test", "-v", "--timeout", "45s", exampleDir}
+    req.Args = []string{"test", "-v", "-timeout", "45s", exampleDir}
     return nil
 }
 ```

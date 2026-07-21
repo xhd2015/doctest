@@ -1,18 +1,20 @@
 # Scenario
 
-**Feature**: intermediate Setup `_ = "tag"` only may stay cached (DCE)
+**Feature**: intermediate `_ = "tag"` string change busts leaf-cache (spine hash)
 
 ```
-# build and run test binary, report results
-doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
+# discarded string constants still appear in SETUP Go text
+# leaf-cache hashes spine content -> tag v1→v2 misses
+doctest test <fixture> after discard-tag edit -> 0 Cached
 ```
 
 ## Preconditions
 - mid-a Setup only discards a string constant; ASSERT empty.
+- Spine content hashing (not go DCE) decides leaf-cache hits.
 - Multi-run harness from parent.
 
 ## Steps
-1. Edit mid-a SETUP discard tag v1→v2; expect **still cached**.
+1. Edit mid-a SETUP discard tag v1→v2; expect **0 Cached**.
 
 ```go
 import (

@@ -5,14 +5,15 @@ label: heavy
 ## Expected
 - Both runs exit 0.
 - First captured run is cache-hit.
-- Second run **remains** cache-hit after unread intermediate SETUP WorkDir edit
-  (Go testcache: linked binary content ID unchanged after DCE).
+- Second run is `0 Cached` after leaf SETUP Go edit (spine hash),
+  even when WorkDir is unread by ASSERT.
 
 ## Exit Code
 - Exit code 0.
 
 ```go
 import (
+    "strings"
     "testing"
 )
 
@@ -29,8 +30,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if !stdoutHasPositiveCached(state.FirstResp.Stdout) {
         t.Fatalf("first run was not cached; stdout:\n%s", state.FirstResp.Stdout)
     }
-    if !stdoutHasPositiveCached(state.SecondResp.Stdout) {
-        t.Fatalf("second run lost cache after unread intermediate SETUP edit; expected Cached > 0:\n%s", state.SecondResp.Stdout)
+    if !strings.Contains(state.SecondResp.Stdout, ", 0 Cached") {
+        t.Fatalf("second run was cached after leaf SETUP spine edit; expected ', 0 Cached':\n%s", state.SecondResp.Stdout)
     }
 }
 ```

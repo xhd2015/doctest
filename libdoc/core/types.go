@@ -92,9 +92,12 @@ type Options struct {
 	Stderr                io.Writer
 	Stdout                io.Writer
 	RemoveTemp            bool
-	Count                 int
-	Timeout               time.Duration
-	SubDir                string
+	Count int
+	// Timeout is the go test -timeout when set. nil means omit the flag (go
+	// default 10m). non-nil zero means -timeout=0 (disable). Use **T parse via
+	// less-flags Duration so unset and zero stay distinct (go-best-practice).
+	Timeout *time.Duration
+	SubDir  string
 	Color                 ColorMode
 	SuppressResultSummary bool
 	ChangedOnly           bool

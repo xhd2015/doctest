@@ -3,9 +3,9 @@ label: heavy
 ---
 
 ## Expected
-- The command rejects the invalid `--timeout` value.
+- The command rejects the invalid `-timeout` value.
 - Exit code is non-zero.
-- stderr mentions `--timeout`.
+- stderr mentions `timeout` (flag name in parse error).
 
 ```go
 import (
@@ -17,12 +17,12 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     combined := resp.Stdout + resp.Stderr
     lower := strings.ToLower(combined)
 
-    if !strings.Contains(lower, "--timeout") {
-        t.Fatalf("expected --timeout in error output, got:\n%s", combined)
+    if !strings.Contains(lower, "timeout") {
+        t.Fatalf("expected timeout in error output, got:\n%s", combined)
     }
 
     if resp.ExitCode == 0 {
-        t.Fatalf("expected non-zero exit for invalid --timeout, got 0\ncombined:\n%s", combined)
+        t.Fatalf("expected non-zero exit for invalid -timeout, got 0\ncombined:\n%s", combined)
     }
 }
 ```

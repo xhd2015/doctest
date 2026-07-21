@@ -4,7 +4,7 @@ label: heavy
 
 ## Expected
 - Both runs exit 0.
-- Second run stdout contains ", 0 Cached" because ASSERT.md changed.
+- Second run stdout contains ", 0 Cached" because leaf ASSERT Go changed (spine key).
 
 ## Exit Code
 - Exit code 0.

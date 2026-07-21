@@ -3,16 +3,15 @@ label: heavy
 ---
 
 ## Expected
-- First captured run (same env as warmup) reports `1 Cached`.
-- Second captured run (different `DOCTEST_SESSION_ID`) reports `0 Cached` because
-  `os.Getenv` is recorded in the go test cache inputs.
+- First captured run (env A) reports `1 Cached` (or Cached > 0).
+- Second captured run (different env B) still reports Cached > 0 because
+  process env is **not** part of the leaf-cache key (`os.Getenv` is not special-cased).
 
 ## Exit Code
 - Exit code 0.
 
 ```go
 import (
-    "strings"
     "testing"
 )
 
@@ -27,12 +26,12 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatal("env-cache state not set by Setup")
     }
     firstStdout := envState.FirstResp.Stdout
-    if !strings.Contains(firstStdout, ", 1 Cached") {
-        t.Fatalf("first run was not cached; expected stdout to contain ', 1 Cached':\n%s", firstStdout)
+    if !stdoutHasPositiveCached(firstStdout) {
+        t.Fatalf("first run was not cached; expected Cached > 0:\n%s", firstStdout)
     }
     secondStdout := envState.SecondResp.Stdout
-    if !strings.Contains(secondStdout, ", 0 Cached") {
-        t.Fatalf("second run was cached after os.Getenv env change; expected ', 0 Cached':\n%s", secondStdout)
+    if !stdoutHasPositiveCached(secondStdout) {
+        t.Fatalf("second run lost cache after os.Getenv env change; env must not be in leaf-cache key:\n%s", secondStdout)
     }
 }
 ```

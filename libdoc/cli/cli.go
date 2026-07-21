@@ -153,7 +153,7 @@ Examples:
   doctest edit ./tests/feature/ui-leaf/ASSERT.md --add-label manual
 `
 
-const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [-a] [--no-leaf-cache] [--timeout DURATION] [--color] [--no-color] [--changed] [--label EXPR]... [--label-all] [--metrics-on] [--cold-cache] [-cpuprofile FILE] [-memprofile FILE] [-memprofilerate N] [-blockprofile FILE] [-blockprofilerate N] [-mutexprofile FILE] [-mutexprofilefraction N] [-trace FILE] [-outputdir DIR] [-coverprofile FILE] [-cover] <dir>
+const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [-a] [--no-leaf-cache] [-timeout DURATION] [--color] [--no-color] [--changed] [--label EXPR]... [--label-all] [--metrics-on] [--cold-cache] [-cpuprofile FILE] [-memprofile FILE] [-memprofilerate N] [-blockprofile FILE] [-blockprofilerate N] [-mutexprofile FILE] [-mutexprofilefraction N] [-trace FILE] [-outputdir DIR] [-coverprofile FILE] [-cover] <dir>
 
 Run executable Go snippets from a doc-style test directory, allow ./... patterns like go test.
 
@@ -166,9 +166,9 @@ Options:
   -a                Forward -a to go test (force rebuild packages); also
                     disable programmatic leaf-cache skip for this run
   --no-leaf-cache   Disable programmatic leaf-cache skip for this run
-  --timeout DURATION
-                    Forward Go test timeout to generated test binary
-                    (e.g. 30s, 5m, 1h); omitted uses go test default (10m)
+  -timeout DURATION
+                    Forward -timeout to go test (e.g. 30s, 5m, 1h; 0 disables).
+                    Omitted uses go test default (10m). Alias: --timeout
   --color           Force ANSI color in non-verbose progress output
   --no-color        Disable ANSI color in non-verbose progress output
   --changed         Only run doctest leaves affected by git working-tree changes

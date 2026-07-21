@@ -18,7 +18,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     }
     for _, want := range []string{
         "Usage: doctest test",
-        "-v", "--verbose", "--rm", "-count", "--timeout", "--color", "--no-color",
+        "-v", "--verbose", "--rm", "-count", "-timeout", "--color", "--no-color",
         "--cold-cache",
         // Go-style profiling / cover flags forwarded to go test
         "-cpuprofile", "-memprofile", "-memprofilerate",
