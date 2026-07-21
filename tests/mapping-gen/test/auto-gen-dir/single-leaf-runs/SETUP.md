@@ -19,6 +19,7 @@ auto gen-dir -> one package per leaf | explicit gen-dir -> user-specified layout
 
 ```go
 import (
+	"path/filepath"
 	"testing"
 )
 

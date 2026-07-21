@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"golang.org/x/tools/imports"
 )
 
 func TestRootSetupRequiresRequestAndResponseTypes(t *testing.T) {
@@ -478,8 +477,8 @@ func TestAssembleFuncClosureSharedTypeNamedResultsParses(t *testing.T) {
 	if _, err := parser.ParseFile(token.NewFileSet(), "generated_test.go", src, 0); err != nil {
 		t.Fatalf("generated source should parse: %v\n%s", err, src)
 	}
-	if _, err := imports.Process("generated_test.go", []byte(src), nil); err != nil {
-		t.Fatalf("imports.Process should succeed: %v\n%s", err, src)
+	if _, err := formatGeneratedGo("generated_test.go", []byte(src)); err != nil {
+		t.Fatalf("formatGeneratedGo should succeed: %v\n%s", err, src)
 	}
 }
 
@@ -535,8 +534,8 @@ func splitNames(req *Request) (mainRepo, wtDir, branch string) {
 	if _, err := parser.ParseFile(token.NewFileSet(), "generated_test.go", src, 0); err != nil {
 		t.Fatalf("generated source should parse: %v\n%s", err, src)
 	}
-	if _, err := imports.Process("generated_test.go", []byte(src), nil); err != nil {
-		t.Fatalf("imports.Process should succeed: %v\n%s", err, src)
+	if _, err := formatGeneratedGo("generated_test.go", []byte(src)); err != nil {
+		t.Fatalf("formatGeneratedGo should succeed: %v\n%s", err, src)
 	}
 }
 
@@ -582,8 +581,8 @@ func callee(x int) string { return "x" }
 	if _, err := parser.ParseFile(token.NewFileSet(), "generated_test.go", src, 0); err != nil {
 		t.Fatalf("generated source should parse: %v\n%s", err, src)
 	}
-	if _, err := imports.Process("generated_test.go", []byte(src), nil); err != nil {
-		t.Fatalf("imports.Process should succeed: %v\n%s", err, src)
+	if _, err := formatGeneratedGo("generated_test.go", []byte(src)); err != nil {
+		t.Fatalf("formatGeneratedGo should succeed: %v\n%s", err, src)
 	}
 }
 

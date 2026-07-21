@@ -12,6 +12,11 @@ doctest build <labeled-tree> -> exit 0
 1. Configure `req.Args` with `doctest build` and a labeled temp tree.
 
 ```go
+import (
+	"testing"
+	"time"
+)
+
 func Setup(t *testing.T, req *Request) error {
 	if req.Timeout == 0 {
 		req.Timeout = 120 * time.Second

@@ -17,6 +17,11 @@ git changed files -> leaf subset -> label expression -> run/skip
 3. Run `doctest test <mod> --changed --label EXPR` from repo root.
 
 ```go
+import (
+	"testing"
+	"time"
+)
+
 func Setup(t *testing.T, req *Request) error {
 	if req.Timeout == 0 {
 		req.Timeout = 120 * time.Second

@@ -23,6 +23,7 @@ progress dots -> . F | verbose -> go test -v | count -> N tests
 ```go
 import (
     "testing"
+    "time"
 )
 
 func Setup(t *testing.T, req *Request) error {

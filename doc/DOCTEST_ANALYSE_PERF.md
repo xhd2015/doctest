@@ -25,7 +25,7 @@ the CLI; the HTML is a presentation of CLI evidence only.
 
 # Authority
 
-Flag text and subcommands live in the binary. When unsure:
+Flag text, Env, and subcommands live in the binary. When unsure:
 
 ```sh
 doctest test --help
@@ -34,15 +34,22 @@ doctest metrics top --help
 doctest metrics phases --help
 ```
 
+Also: **`DOCTEST_DEBUG`** (engine-internal GODEBUG-style; listed under Env on
+`doctest test --help` and section **1b** below).
+
 # Built-in recipe (always this order)
 
 ```text
 1. Record   →  doctest test <scope> --metrics-on  [+ --cold-cache / --label…]
+1b. (optional) Prepare-only / host pprof via DOCTEST_DEBUG
+      DOCTEST_DEBUG=bypass-go-test=1[,cpuprofile=…,memprofile=…,blockprofile=…]
+      + same --metrics-on / --cold-cache as needed
 2. Confirm  →  doctest metrics last
 3. Pipeline →  doctest metrics phases --run last
 4. Leaves   →  doctest metrics top --n 20
 5. Discovery→  doctest metrics top --n 20 --unlabeled-only [--default-only]
 6. Brief user (chat) and/or write HTML from the template (section 4)
+7. (optional) go tool pprof on host profile files from DOCTEST_DEBUG
 ```
 
 ---
@@ -81,18 +88,71 @@ doctest test ./... --metrics-on --label 'heavy || slow'
 | **`--label EXPR`** | Measure a **slice** of labeled work only |
 | **`-count=N`** | Go test count (cold-cache forces 1 when unset) |
 | **`-v`** | Verbose leaf output; noisier/slower — zoom one leaf |
-| **`-cpuprofile` / `-memprofile` / …** | Go profiles — **after** metrics names a hot tree |
+| **`-cpuprofile` / `-memprofile` / …** | Forwarded to **go test** (suite binary). Use after metrics shows leaf / go_test cost |
+
+### Host engine debug — `DOCTEST_DEBUG` (section 1b)
+
+Engine-internal, **not** leaf harness / `d.DOCTEST_*`. Format is GODEBUG-style
+comma-separated `key=value`. **Unknown keys error** (fail closed). Keys may be
+**combined**. Installed at process start (all subcommands: test, vet, metrics, …).
+
+| Key | Role in cost analysis |
+|-----|------------------------|
+| **`bypass-go-test=1`** | Skip host-driven **go test** after generate + workspace write+tidy. Prepare still runs. Honest summary: `BYPASS (N planned, 0 executed, go test bypassed) in …`. Isolates discover/generate wall. |
+| **`cpuprofile=PATH`** | **Host** CPU profile (doctest process). Written on process exit. |
+| **`memprofile=PATH`** | **Host** heap profile at exit (`GC` + write). |
+| **`blockprofile=PATH`** | **Host** block profile at exit (`SetBlockProfileRate` while running). |
+
+**Host DEBUG profiles ≠ CLI `-cpuprofile`:**
+
+| Mechanism | What is profiled |
+|-----------|------------------|
+| `DOCTEST_DEBUG=cpuprofile=…` (and mem/block) | **doctest host** — discover, generate, CLI, workspace prep |
+| `doctest test -cpuprofile=…` | **go test** / generated suite binary |
+
+```sh
+# Prepare-only wall (no suite compile/run)
+DOCTEST_DEBUG=bypass-go-test=1 doctest test ./... --metrics-on
+# → BYPASS (…); metrics phases: go_test 0 or bypassed; discover/generate dominate
+
+# Cold prepare-only
+DOCTEST_DEBUG=bypass-go-test=1 doctest test ./... --metrics-on --cold-cache
+
+# Host CPU (+ optional mem/block) for prepare
+DOCTEST_DEBUG=bypass-go-test=1,cpuprofile=/tmp/prep.pprof,memprofile=/tmp/prep.mprof,blockprofile=/tmp/prep.block \
+  doctest test ./... --metrics-on
+go tool pprof -http=:8080 /tmp/prep.pprof
+
+# Host profile of any subcommand
+DOCTEST_DEBUG=cpuprofile=/tmp/cpu.pprof doctest metrics last
+```
+
+Expected stderr when active (examples):
+
+```text
+doctest: DOCTEST_DEBUG cpuprofile=/tmp/prep.pprof
+doctest: DOCTEST_DEBUG bypass-go-test=1 (go test will be skipped)
+…
+BYPASS (230 planned, 0 executed, go test bypassed) in 2.94s
+```
+
+Paths are abs-resolved from cwd; parent dirs are created. Nested child `doctest`
+processes **inherit** `DOCTEST_DEBUG` — use unique profile paths or prepare-only
+bypass when profiling (same path can race).
 
 ### Wall clock from the same command
 
 `doctest test` already prints the user’s wait time. Capture:
 
 - Pass/fail line with duration (`PASS (N/M) in …`)
+- Bypass line when applicable (`BYPASS (N planned, 0 executed, go test bypassed) in …`)
 - Summary: `(N Run, N Pass, N Fail, N Cached)`
 - Cold-cache announce if present (`gen=… GOCACHE=… count=…`)
+- `DOCTEST_DEBUG` profile banners on stderr
 
 **Wall from this summary = “how long I waited.”**  
-**Phase sums from `metrics phases` = composition of work** (can exceed wall when trees run in parallel).
+**Phase sums from `metrics phases` = composition of work** (can exceed wall when trees run in parallel — including **generate** under multi-tree prepare).  
+With **bypass-go-test**, wall ≈ prepare; `go_test` is 0 / skipped.
 
 ---
 
@@ -272,6 +332,14 @@ placeholder from CLI output**.
 > If nest/child work shows up in phases or top, report outer leaf wall vs nested
 > go_test. Large nested sums mean child `doctest test` / `go test` inside leaves.
 
+**Prepare-only / bypass**
+
+> Suite wall **W** with `DOCTEST_DEBUG=bypass-go-test=1`. `metrics phases`:
+> discover/generate dominate; go_test absent or 0. Generate **sum** may exceed
+> wall (parallel trees). Host pprof (if taken) attributes engine paths
+> (e.g. WriteFormattedGo / imports.Process / WalkDir) — not leaf suite runtime.
+> Compare only bypass↔bypass and cold↔cold / warm↔warm.
+
 ---
 
 # 4. HTML report template
@@ -435,7 +503,7 @@ HTML comments `<!-- … -->` and sample rows.
       <tr><td>run_id</td><td class="path"><!-- RUN_ID from metrics last --></td></tr>
       <tr><td>default_suite</td><td><!-- true|false --></td></tr>
       <tr><td>doctest / go</td><td class="muted"><!-- optional versions --></td></tr>
-      <tr><td>Notes</td><td><!-- cold-cache announce, GOCACHE, gen dir, count --></td></tr>
+      <tr><td>Notes</td><td><!-- cold-cache announce, GOCACHE, gen dir, count; DOCTEST_DEBUG=bypass / host profile paths --></td></tr>
     </table>
   </div>
 </section>
@@ -599,23 +667,31 @@ HTML comments `<!-- … -->` and sample rows.
 | Rank discovery cost ignoring labels | `--unlabeled-only` / `--default-only` |
 | Free-form HTML with invented numbers | Fill **this** template from CLI; paste evidence appendix |
 | HTML before measuring | Record + `metrics *` first, then fill template |
+| `go run -cpuprofile=… ./cmd/doctest` | Build/install binary + `DOCTEST_DEBUG=cpuprofile=…` (or OS sample) |
+| CLI `-cpuprofile` to profile generate/discover | Host `DOCTEST_DEBUG=cpuprofile=` |
+| Quote generate phase **sum** as prepare wait | Suite wall; generate sum ≫ wall when trees prepare in parallel |
+| Same host profile path for nested full suite | Unique paths, or profile with `bypass-go-test=1` |
 
 # Pitfalls
 
 - Metrics **off by default** — missing `--metrics-on` → empty/stale analysis  
 - Stale run: always `metrics last` after the command you care about  
-- Parallel trees: go_test phase sum can be several× wall  
+- Parallel trees: go_test **and** generate phase sums can be several× wall  
 - `--label-all` measures a **different** suite than default discovery  
 - `--cold-cache` changes gen/GOCACHE — say so in the breakdown  
 - Nested selftest binaries: wipe selftest-bin only when measuring **this**
   doctest binary’s own tests  
 - Leaving `.fill` sample rows in the published HTML  
+- Nested child `doctest` **inherits** `DOCTEST_DEBUG` — same `cpuprofile` path can
+  race; prefer unique paths or prepare-only bypass  
+- `bypass-go-test` is **engine debug**, not a product feature / CI default  
+- Host `memprofile` is heap **at exit**, not continuous alloc sampling  
 
 # Related
 
 - `doc/ANALYSE_PERF_REPORT_TEMPLATE.html` — same HTML template as a file  
 - `doctest skill review-perf --show` — labels + default-suite budget  
-- `doctest metrics --help` / `doctest test --help` — flag authority  
+- `doctest metrics --help` / `doctest test --help` — flag + **Env `DOCTEST_DEBUG`** authority  
 - `doc/GO_TEST_CACHE.md` — gen/mtime/chdir notes  
 - Cache digs: `script/debug/bug-repro/go-test-cache-stale-even-code-changed/`
 

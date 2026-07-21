@@ -1,12 +1,11 @@
 package testcase
 
 import (
+	"github.com/xhd2015/doctest/session"
 	"syscall"
 	droot "testcase/__droot"
 	registry "testcase/__registry"
 	"testing"
-
-	"github.com/xhd2015/doctest/session"
 )
 
 func init() {

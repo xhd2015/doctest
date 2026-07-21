@@ -213,6 +213,7 @@ actions). Clear or note absence of the slow-suite **WARNING**.
 ```sh
 doctest skill review-perf --show          # this skill
 doctest skill review --show               # design contrast (doctest-review)
+doctest skill analyse-perf --show         # pipeline/host prepare cost (metrics + DOCTEST_DEBUG)
 
 doctest test ./...                        # default-suite performance surface
 doctest test ./... --label-all            # full including labeled
@@ -222,6 +223,9 @@ doctest metrics top --default-only --unlabeled-only
 doctest metrics last
 doctest metrics summary --last 5
 ```
+
+For pipeline phases, prepare-only wall (`DOCTEST_DEBUG=bypass-go-test=1`), and
+host CPU/mem/block profiles, use **`doctest-analyse-perf`** — not this skill.
 
 ## Output tone
 

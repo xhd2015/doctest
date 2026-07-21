@@ -18,7 +18,10 @@ doctest skill --list -> skill names -> stdout
 2. Run the doctest command.
 
 ```go
-import "testing"
+import (
+    "testing"
+    "time"
+)
 
 func Setup(t *testing.T, req *Request) error {
     req.Timeout = 20 * time.Second

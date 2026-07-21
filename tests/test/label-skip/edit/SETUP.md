@@ -12,6 +12,11 @@ doctest edit <leaf> --add-label/--add-explanation -> mutate ASSERT.md
 1. Prepare temp tree and invoke `doctest edit`.
 
 ```go
+import (
+	"testing"
+	"time"
+)
+
 func Setup(t *testing.T, req *Request) error {
 	if req.Timeout == 0 {
 		req.Timeout = 120 * time.Second

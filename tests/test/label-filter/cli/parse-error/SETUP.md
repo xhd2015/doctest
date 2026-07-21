@@ -11,6 +11,11 @@ doctest test --label 'slow &&' -> parse error, non-zero exit
 1. Run test against fixture mod with invalid expression.
 
 ```go
+import (
+	"testing"
+	"time"
+)
+
 func Setup(t *testing.T, req *Request) error {
 	if req.Timeout == 0 {
 		req.Timeout = 120 * time.Second

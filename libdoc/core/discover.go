@@ -777,7 +777,7 @@ func WriteGeneratedCase(leafDir string, tc TreeCase, compileOnly bool, pkgName s
 	// hashes chdir/stat mtime of dirs under the module root).
 	res, err := formatGeneratedGo(testPath, []byte(src))
 	if err != nil {
-		return "", false, fmt.Errorf("format imports failed: %w", err)
+		return "", false, fmt.Errorf("format generated Go failed: %w", err)
 	}
 
 	existing, _ := os.ReadFile(testPath)

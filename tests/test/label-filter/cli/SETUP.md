@@ -12,6 +12,11 @@ doctest test <mod> --label EXPR -> filter labeled leaves -> run/skip summary
 2. Set `req.Args` to `test`, mod path, and `--label` flags.
 
 ```go
+import (
+	"testing"
+	"time"
+)
+
 func Setup(t *testing.T, req *Request) error {
 	if req.Timeout == 0 {
 		req.Timeout = 120 * time.Second

@@ -18,7 +18,10 @@ embedded go block | go test shellout | DOCTEST_SESSION_ID env read | assert with
 2. Run `doctest vet`.
 
 ```go
-import "testing"
+import (
+    "testing"
+    "time"
+)
 
 func Setup(t *testing.T, req *Request) error {
     req.Timeout = 20 * time.Second
