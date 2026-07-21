@@ -1416,6 +1416,19 @@ func WriteRefLeafCase(leafDir string, tc TreeCase, compileOnly bool, pkgName, do
 	return testPath, nil
 }
 
+// formatGeneratedOpts for imports.Process. Full import fix/strip is required:
+// intermediate SETUP packages often need parent/stdlib import adjustments
+// (FormatOnly caused "imported and not used" / "undefined: time" build fails).
+var formatGeneratedOpts = &imports.Options{
+	Comments:  true,
+	TabIndent: true,
+	TabWidth:  8,
+}
+
+func formatGeneratedGo(path string, src []byte) ([]byte, error) {
+	return imports.Process(path, src, formatGeneratedOpts)
+}
+
 // WriteFormattedGo formats src with imports.Process and writes atomically when
 // changed. When path sits under a gen root that already has doctest.gen-manifest
 // (typically after WriteGoMod), the final formatted bytes are recorded via the
@@ -1424,7 +1437,7 @@ func WriteFormattedGo(path, src string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
-	res, err := imports.Process(path, []byte(src), nil)
+	res, err := formatGeneratedGo(path, []byte(src))
 	if err != nil {
 		_ = os.WriteFile(path, []byte(src), 0644)
 		return fmt.Errorf("format imports for %s: %w", path, err)

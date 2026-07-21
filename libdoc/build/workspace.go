@@ -37,6 +37,7 @@ func PrepareTree(dir string, opts core.Options) (TreePrep, error) {
 		GenRoot: stats.GenRoot,
 		Unified: stats.Unified,
 		Skipped: stats.Skipped,
+		Cases:   stats.Cases, // reuse filtered cases — avoid second full discover
 		Stats:   stats,
 	}
 	if prep.AbsRoot == "" {
@@ -45,20 +46,6 @@ func PrepareTree(dir string, opts core.Options) (TreePrep, error) {
 		} else {
 			prep.AbsRoot = dir
 		}
-	}
-	// Re-discover cases for metrics/leaf attribution (same filters as TestWithStats).
-	if cases, derr := core.DiscoverTreeCases(dir); derr == nil {
-		if o.SubDir != "" {
-			cases = core.FilterBySubDir(cases, dir, o.SubDir)
-		}
-		if o.ChangedOnly {
-			gitRoot, changedFiles, cerr := core.ChangedGitFiles(dir)
-			if cerr == nil {
-				cases = core.FilterByChangedFiles(cases, dir, gitRoot, changedFiles)
-			}
-		}
-		cases, _ = core.FilterCasesByLabel(cases, o)
-		prep.Cases = cases
 	}
 	if err != nil {
 		return prep, err
@@ -227,6 +214,8 @@ func runWorkspaceMultiModHub(preps []TreePrep, byGen map[string][]TreePrep, genO
 
 // finishWorkspaceGoTest runs go test for workspace (single-gen or multi-mod hub).
 // runDir is the process cwd (gen root or __hub).
+// When opts.BypassGoTest is set, workspace/hub files are already written by the
+// caller; this returns without exec'ing go test.
 func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packageArgs []string, treeCount int, stats TestRunStats, opts core.Options) (TestRunStats, error) {
 	w := opts.Stderr
 	if w == nil {
@@ -235,6 +224,21 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	stdout := opts.Stdout
 	if stdout == nil {
 		stdout = os.Stdout
+	}
+
+	if opts.BypassGoTest {
+		label := "workspace"
+		if strings.Contains(runDir, HubDirName) {
+			label = "workspace hub"
+		}
+		fmt.Fprintf(w, "doctest: %s (%d trees, %d tests)\n", label, treeCount, stats.Total)
+		fmt.Fprintf(w, "doctest: DOCTEST_DEBUG bypass-go-test=1 (go test skipped after workspace write)\n")
+		stats.GoTestBypassed = true
+		stats.Passed = 0
+		stats.GenRoot = genRootLabel
+		stats.Unified = true
+		stats.Phases = append(stats.Phases, PhaseTiming{Name: "go_test", ElapsedNs: 0})
+		return stats, nil
 	}
 
 	flagArgs := []string{"test", "-mod=mod"}

@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -114,6 +115,40 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 	}
 	if len(cases) != 1 {
 		t.Fatalf("expected 1 case (testdata/ skipped), got %d", len(cases))
+	}
+}
+
+func TestDiscoverTreeCasesSharedSetupMemoized(t *testing.T) {
+	// Many leaves share one root SETUP; memoization must not change results.
+	root := t.TempDir()
+	writeTreeFile(t, root, "DOCTEST.md", doctestDoc(`
+type Request struct{ X int }
+type Response struct{}
+func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+`))
+	writeTreeFile(t, root, "SETUP.md", setupDoc(`
+func Setup(t *testing.T, req *Request) error { req.X = 1; return nil }
+`))
+	for i := 0; i < 12; i++ {
+		name := fmt.Sprintf("leaf%d", i)
+		writeTreeFile(t, root, filepath.Join(name, "SETUP.md"), setupDoc(`
+func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+`))
+		writeTreeFile(t, root, filepath.Join(name, "ASSERT.md"), assertDoc(`
+func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+`))
+	}
+	cases, err := DiscoverTreeCases(root)
+	if err != nil {
+		t.Fatalf("discover: %v", err)
+	}
+	if len(cases) != 12 {
+		t.Fatalf("got %d cases", len(cases))
+	}
+	for _, c := range cases {
+		if len(c.SetupFiles) < 2 {
+			t.Fatalf("leaf %s: expected setup chain, got %d", c.Path, len(c.SetupFiles))
+		}
 	}
 }
 

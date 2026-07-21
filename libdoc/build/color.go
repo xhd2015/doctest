@@ -121,6 +121,14 @@ type TestRunStats struct {
 	// Unified is true when hierarchical suite gen was used (not internal-compile).
 	Unified bool
 	AbsRoot string
+
+	// GoTestBypassed is true when DOCTEST_DEBUG bypass-go-test skipped go test
+	// exec after successful prepare (and workspace write when applicable).
+	GoTestBypassed bool
+
+	// Cases are runnable leaves after label/changed filters (set by TestWithStats).
+	// PrepareTree reuses this to avoid a second DiscoverTreeCases walk.
+	Cases []core.TreeCase
 }
 
 func formatDisplayDuration(d time.Duration) string {
@@ -326,11 +334,26 @@ func skippedSummaryHeader(skipped []core.SkippedCase) string {
 }
 
 func PrintResultSummary(opts core.Options, stats TestRunStats) {
-	if stats.Total == 0 {
+	if stats.Total == 0 && !stats.GoTestBypassed {
 		return
 	}
 	style := newColorStyle(opts.Color, os.Stdout)
+	if stats.GoTestBypassed {
+		fmt.Println(formatBypassResultSummary(style, stats.Total, stats.Elapsed))
+		return
+	}
 	fmt.Println(formatResultSummary(style, stats.Passed, stats.Total, stats.Elapsed))
+}
+
+// formatBypassResultSummary is the honest end line when go test was skipped.
+func formatBypassResultSummary(style colorStyle, planned int, elapsed time.Duration) string {
+	token := fmt.Sprintf("BYPASS (%d planned, 0 executed, go test bypassed)", planned)
+	suffix := fmt.Sprintf(" in %s", formatDisplayDuration(elapsed))
+	if style.enabled {
+		// Neutral accent (same as muted info) — not green PASS.
+		return token + suffix
+	}
+	return token + suffix
 }
 
 func SkippedDisplayPath(doctestRoot, leafPath string) string {

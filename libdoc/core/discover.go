@@ -13,7 +13,6 @@ import (
 	"syscall"
 
 	"github.com/xhd2015/doctest/libdoc/rules"
-	"golang.org/x/tools/imports"
 )
 
 func DiscoverTreeCases(root string) ([]TreeCase, error) {
@@ -34,6 +33,8 @@ func discoverTreeCasesInternal(root string, w io.Writer) ([]TreeCase, error) {
 	}
 
 	var verrs []ValidationError
+	// Memoize SETUP parse by abs path within this walk (shared ancestors).
+	setupCache := make(map[string]setupCacheEntry)
 
 	doctestPath := filepath.Join(root, "DOCTEST.md")
 	doctestContent, err := os.ReadFile(doctestPath)
@@ -58,21 +59,20 @@ func discoverTreeCasesInternal(root string, w io.Writer) ([]TreeCase, error) {
 	}
 
 	rootSetupPath := filepath.Join(root, "SETUP.md")
-	rootSetupContent, rootSetupErr := os.ReadFile(rootSetupPath)
-	if rootSetupErr == nil {
-		rootSetup, parseErr := ParseSetupDocument(rootSetupPath, string(rootSetupContent))
-		if parseErr != nil {
-			verrs = append(verrs, ValidationError{Path: "SETUP.md", Msg: parseErr.Error()})
+	if _, rootStatErr := os.Stat(rootSetupPath); rootStatErr == nil {
+		rootSetup, rootSetupErr := readSetupCached(rootSetupPath, setupCache)
+		if rootSetupErr != nil {
+			verrs = append(verrs, ValidationError{Path: "SETUP.md", Msg: rootSetupErr.Error()})
 		} else if rootSetup.GoBlock != nil {
 			if v := rules.CheckRootSetupNoRequestResponseRun(rootSetup.GoBlock.Types, rootSetup.GoBlock.Run != nil, "SETUP.md"); v != nil {
 				verrs = append(verrs, ValidationError{Path: v.Path, Msg: v.Msg})
 			}
 		}
-		if w != nil {
+		if w != nil && rootSetupErr == nil {
 			printSetupVerbose(w, rootSetup, "SETUP.md")
 		}
-	} else if !os.IsNotExist(rootSetupErr) {
-		return nil, rootSetupErr
+	} else if !os.IsNotExist(rootStatErr) {
+		return nil, rootStatErr
 	}
 
 	if w != nil {
@@ -101,7 +101,7 @@ func discoverTreeCasesInternal(root string, w io.Writer) ([]TreeCase, error) {
 			if w != nil {
 				setupPath := filepath.Join(path, "SETUP.md")
 				if !printedSetupDirs[setupPath] {
-					doc, readErr := readSetup(setupPath)
+					doc, readErr := readSetupCached(setupPath, setupCache)
 					if readErr == nil && doc.GoBlock != nil {
 						printedSetupDirs[setupPath] = true
 						printSetupVerbose(w, doc, filepath.Join(relPath, "SETUP.md"))
@@ -109,7 +109,7 @@ func discoverTreeCasesInternal(root string, w io.Writer) ([]TreeCase, error) {
 				}
 			}
 			setupPath := filepath.Join(path, "SETUP.md")
-			doc, readErr := readSetup(setupPath)
+			doc, readErr := readSetupCached(setupPath, setupCache)
 			if readErr != nil {
 				rel, _ := filepath.Rel(root, setupPath)
 				verrs = append(verrs, ValidationError{Path: rel, Msg: readErr.Error()})
@@ -134,7 +134,7 @@ func discoverTreeCasesInternal(root string, w io.Writer) ([]TreeCase, error) {
 		if relLeaf == "." {
 			relLeaf = ""
 		}
-		setupDocs, chainErr := setupChain(root, leafDir, doctestDoc)
+		setupDocs, chainErr := setupChainCached(root, leafDir, doctestDoc, setupCache)
 		if chainErr != nil {
 			relAssert, _ := filepath.Rel(root, path)
 			verrs = append(verrs, ValidationError{Path: relAssert, Msg: chainErr.Error()})
@@ -228,18 +228,53 @@ func runSource(setupDocs []SetupDocument) string {
 	return "none"
 }
 
+type setupCacheEntry struct {
+	doc SetupDocument
+	err error
+}
+
 func readSetup(path string) (SetupDocument, error) {
+	return readSetupCached(path, nil)
+}
+
+// readSetupCached loads and parses SETUP.md once per path when cache != nil.
+// Missing file: empty document, nil error (same as historical readSetup).
+func readSetupCached(path string, cache map[string]setupCacheEntry) (SetupDocument, error) {
+	key := path
+	if abs, aerr := filepath.Abs(path); aerr == nil {
+		key = abs
+	}
+	if cache != nil {
+		if e, ok := cache[key]; ok {
+			return e.doc, e.err
+		}
+	}
 	content, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return SetupDocument{Path: path}, nil
+			doc := SetupDocument{Path: path}
+			if cache != nil {
+				cache[key] = setupCacheEntry{doc: doc}
+			}
+			return doc, nil
+		}
+		if cache != nil {
+			cache[key] = setupCacheEntry{err: err}
 		}
 		return SetupDocument{}, err
 	}
-	return ParseSetupDocument(path, string(content))
+	doc, err := ParseSetupDocument(path, string(content))
+	if cache != nil {
+		cache[key] = setupCacheEntry{doc: doc, err: err}
+	}
+	return doc, err
 }
 
 func setupChain(root, leafDir string, doctestDoc SetupDocument) ([]SetupDocument, error) {
+	return setupChainCached(root, leafDir, doctestDoc, nil)
+}
+
+func setupChainCached(root, leafDir string, doctestDoc SetupDocument, cache map[string]setupCacheEntry) ([]SetupDocument, error) {
 	rel, err := filepath.Rel(root, leafDir)
 	if err != nil {
 		return nil, err
@@ -257,7 +292,7 @@ func setupChain(root, leafDir string, doctestDoc SetupDocument) ([]SetupDocument
 	for i := 0; i <= len(parts); i++ {
 		dir := filepath.Join(append([]string{root}, parts[:i]...)...)
 		path := filepath.Join(dir, "SETUP.md")
-		doc, err := readSetup(path)
+		doc, err := readSetupCached(path, cache)
 		if err != nil {
 			return nil, err
 		}
@@ -439,6 +474,7 @@ func WriteGoMod(genDir, modRoot, modPath string, hasMod bool, withAssertReplace 
 	genModMu.Lock()
 	defer genModMu.Unlock()
 
+	genDir = filepath.Clean(genDir)
 	if err := os.MkdirAll(genDir, 0755); err != nil {
 		return err
 	}
@@ -464,7 +500,7 @@ func WriteGoMod(genDir, modRoot, modPath string, hasMod bool, withAssertReplace 
 		content += fmt.Sprintf("replace %s => %s\n", SessionImportPath, sessionCacheDir)
 	}
 
-	man, err := loadGenManifest(genDir)
+	man, err := cachedGenManifest(genDir)
 	if err != nil {
 		return err
 	}
@@ -735,15 +771,11 @@ func WriteGeneratedCase(leafDir string, tc TreeCase, compileOnly bool, pkgName s
 	testFile := TestFileName(tc)
 	testPath := filepath.Join(leafDir, testFile)
 
-	// Format in memory. Pass the final path so goimports resolves package
-	// context correctly. Do NOT stage a temp file inside leafDir first:
+	// Format in memory. Do NOT stage a temp file inside leafDir first:
 	// CreateTemp+Remove there updates the package directory mtime even when
 	// content is unchanged, which busts go test's result cache (testlog
 	// hashes chdir/stat mtime of dirs under the module root).
-	//
-	// Use golang.org/x/tools/imports.Process instead of the goimports binary
-	// (gofmt alone is insufficient — Process also adds/removes imports).
-	res, err := imports.Process(testPath, []byte(src), nil)
+	res, err := formatGeneratedGo(testPath, []byte(src))
 	if err != nil {
 		return "", false, fmt.Errorf("format imports failed: %w", err)
 	}

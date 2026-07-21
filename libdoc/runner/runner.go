@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -16,6 +17,7 @@ import (
 	"github.com/xhd2015/less-flags"
 	runnerbuild "github.com/xhd2015/doctest/libdoc/build"
 	"github.com/xhd2015/doctest/libdoc/core"
+	"github.com/xhd2015/doctest/libdoc/debug"
 	"github.com/xhd2015/doctest/libdoc/metrics"
 	"github.com/xhd2015/doctest/libdoc/path_resolve"
 	"github.com/xhd2015/doctest/libdoc/validate"
@@ -54,6 +56,20 @@ func Test(args []string) error {
 		stdoutForColor = os.Stdout
 	}
 	opts.Color = runnerbuild.ResolveColorMode(opts.Color, stdoutForColor)
+
+	// Engine-internal DOCTEST_DEBUG (GODEBUG-style). Fail closed on unknown keys.
+	dbg, err := debug.FromEnv()
+	if err != nil {
+		return err
+	}
+	if dbg.BypassGoTest {
+		opts.BypassGoTest = true
+		w := opts.Stderr
+		if w == nil {
+			w = os.Stderr
+		}
+		fmt.Fprintln(w, "doctest: DOCTEST_DEBUG bypass-go-test=1 (go test will be skipped)")
+	}
 
 	// Cold-cache: resolve gen root, wipe on startup, force count, isolate GOCACHE.
 	// Applied once per CLI invocation so multi-tree ./... shares GenDir/GOCACHE.
@@ -161,7 +177,9 @@ func Test(args []string) error {
 				end := time.Now()
 				for _, c := range cases {
 					result := "fail"
-					if passLeft > 0 {
+					if s.GoTestBypassed {
+						result = "bypassed"
+					} else if passLeft > 0 {
 						result = "pass"
 						passLeft--
 					}
@@ -181,6 +199,9 @@ func Test(args []string) error {
 				stats.Passed += s.Passed
 				stats.Total += s.Total
 				stats.Skipped = append(stats.Skipped, s.Skipped...)
+				if s.GoTestBypassed {
+					stats.GoTestBypassed = true
+				}
 				if s.NoTestsChanged {
 					stats.NoTestsChanged = true
 				}
@@ -196,6 +217,9 @@ func Test(args []string) error {
 		stats.Passed += s.Passed
 		stats.Total += s.Total
 		stats.Skipped = append(stats.Skipped, s.Skipped...)
+		if s.GoTestBypassed {
+			stats.GoTestBypassed = true
+		}
 		if s.NoTestsChanged {
 			stats.NoTestsChanged = true
 		}
@@ -232,7 +256,7 @@ func Test(args []string) error {
 		if metrics.ShouldWarnDefaultSuiteSlow(defaultSuite, stats.Total, stats.Elapsed, metrics.DefaultSuiteWarnThreshold) {
 			warns = append(warns, "default_suite_slow")
 		}
-		exitOK := runErr == nil && stats.Passed >= stats.Total && stats.Total > 0
+		exitOK := runErr == nil && stats.Total > 0 && (stats.GoTestBypassed || stats.Passed >= stats.Total)
 		_ = rec.writeRunEnd(stats, exitOK, warns)
 		_ = rec.close()
 		rec = nil
@@ -256,6 +280,9 @@ func Test(args []string) error {
 			return nil
 		}
 		return ErrNoTestsFound
+	}
+	if stats.GoTestBypassed {
+		return nil
 	}
 	if stats.Passed < stats.Total {
 		return fmt.Errorf("%d of %d tests passed", stats.Passed, stats.Total)
@@ -315,7 +342,13 @@ func testDotDotDotWorkspace(arg string, opts core.Options, rec *runRecorder, sta
 	results := make([]prepResult, len(roots))
 	var wg sync.WaitGroup
 	// Bound concurrency similar to defaultTreeWorkers.
-	workers := 4
+	workers := runtime.NumCPU()
+	if workers < 4 {
+		workers = 4
+	}
+	if workers > 12 {
+		workers = 12
+	}
 	sem := make(chan struct{}, workers)
 	for i, root := range roots {
 		wg.Add(1)
@@ -420,14 +453,21 @@ func testDotDotDotWorkspace(arg string, opts core.Options, rec *runRecorder, sta
 		stats.Passed += s.Passed
 		stats.Total += s.Total
 		stats.Skipped = append(stats.Skipped, s.Skipped...)
+		if s.GoTestBypassed {
+			stats.GoTestBypassed = true
+		}
 		statsMu.Unlock()
 		if rec != nil {
 			for _, ph := range s.Phases {
 				if ph.Name == "go_test" {
-					_ = rec.writePhase("suite", "go_test", "", ph.ElapsedNs, map[string]any{
+					detail := map[string]any{
 						"trees": len(unified),
 						"cases": s.Total,
-					})
+					}
+					if s.GoTestBypassed {
+						detail["bypassed"] = true
+					}
+					_ = rec.writePhase("suite", "go_test", "", ph.ElapsedNs, detail)
 				}
 			}
 			// Attribute leaf ends; timings may be sparse when paths collide across trees.
@@ -441,7 +481,9 @@ func testDotDotDotWorkspace(arg string, opts core.Options, rec *runRecorder, sta
 			for _, p := range unified {
 				for _, c := range p.Cases {
 					result := "fail"
-					if wsErr == nil {
+					if s.GoTestBypassed {
+						result = "bypassed"
+					} else if wsErr == nil {
 						result = "pass"
 					}
 					lt := timingByPath[c.Path]
@@ -469,6 +511,9 @@ func testDotDotDotWorkspace(arg string, opts core.Options, rec *runRecorder, sta
 		stats.Passed += s.Passed
 		stats.Total += s.Total
 		stats.Skipped = append(stats.Skipped, s.Skipped...)
+		if s.GoTestBypassed {
+			stats.GoTestBypassed = true
+		}
 		statsMu.Unlock()
 		if err != nil && !strings.Contains(err.Error(), "no runnable test cases found") {
 			errs = append(errs, r.dir+": "+err.Error())
@@ -801,6 +846,7 @@ func applyColdCache(opts *core.Options) error {
 	if err := os.RemoveAll(gen); err != nil {
 		return fmt.Errorf("cold-cache: wipe gen dir %s: %w", gen, err)
 	}
+	core.InvalidateGenManifestCache(gen)
 	if err := os.MkdirAll(gen, 0o755); err != nil {
 		return fmt.Errorf("cold-cache: create gen dir %s: %w", gen, err)
 	}

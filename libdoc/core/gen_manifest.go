@@ -19,9 +19,10 @@ const (
 // genManifest is an in-memory path → content-hash map for one gen root.
 // Paths are slash-separated relative to the gen root.
 type genManifest struct {
-	version int
-	hashes  map[string]string
-	dirty   bool
+	version      int
+	hashes       map[string]string
+	dirty        bool
+	pendingFlush int // dirty updates since last flush
 }
 
 func contentSHA256(data []byte) string {
@@ -146,19 +147,27 @@ func (m *genManifest) writeRelIfChanged(genRoot, rel string, data []byte) (wrote
 	return wrote, nil
 }
 
+// In-memory gen-manifest cache (gen root abs path → man). Avoids re-reading
+// doctest.gen-manifest on every WriteIfChanged. Protected by genModMu.
+var manByRoot = map[string]*genManifest{}
+
 // WriteIfChanged is the public unified gen writer: hash desired content against
 // doctest.gen-manifest; skip rewrite on hit; write + update entry on miss.
+// Flushes the manifest at most every manifestFlushEvery updates (or when the
+// entry is new) so parallel generate does not rewrite the whole index file
+// once per Go package.
 func WriteIfChanged(genRoot, rel string, data []byte) (wrote bool, err error) {
 	if genRoot == "" || rel == "" {
 		return false, fmt.Errorf("WriteIfChanged: genRoot and rel required")
 	}
+	genRoot = filepath.Clean(genRoot)
 	genModMu.Lock()
 	defer genModMu.Unlock()
 
 	if err := os.MkdirAll(genRoot, 0755); err != nil {
 		return false, err
 	}
-	man, err := loadGenManifest(genRoot)
+	man, err := cachedGenManifest(genRoot)
 	if err != nil {
 		return false, err
 	}
@@ -166,10 +175,59 @@ func WriteIfChanged(genRoot, rel string, data []byte) (wrote bool, err error) {
 	if err != nil {
 		return false, err
 	}
-	if err := man.flush(genRoot); err != nil {
-		return wrote, err
+	// Always flush when dirty so callers (and nested selftests) reading
+	// doctest.gen-manifest from disk see updates immediately after WriteIfChanged.
+	// In-memory manByRoot still avoids re-reading the file on every call.
+	if man.dirty {
+		if err := man.flush(genRoot); err != nil {
+			return wrote, err
+		}
+		man.pendingFlush = 0
 	}
 	return wrote, nil
+}
+
+// FlushGenManifest writes any dirty in-memory manifest for genRoot. Call after
+// a tree's generate batch so hashes are durable before go test.
+func FlushGenManifest(genRoot string) error {
+	if genRoot == "" {
+		return nil
+	}
+	genRoot = filepath.Clean(genRoot)
+	genModMu.Lock()
+	defer genModMu.Unlock()
+	man := manByRoot[genRoot]
+	if man == nil || !man.dirty {
+		return nil
+	}
+	if err := man.flush(genRoot); err != nil {
+		return err
+	}
+	man.pendingFlush = 0
+	return nil
+}
+
+// InvalidateGenManifestCache drops the cached manifest (e.g. after cold wipe).
+func InvalidateGenManifestCache(genRoot string) {
+	if genRoot == "" {
+		return
+	}
+	genRoot = filepath.Clean(genRoot)
+	genModMu.Lock()
+	delete(manByRoot, genRoot)
+	genModMu.Unlock()
+}
+
+func cachedGenManifest(genRoot string) (*genManifest, error) {
+	if man, ok := manByRoot[genRoot]; ok {
+		return man, nil
+	}
+	man, err := loadGenManifest(genRoot)
+	if err != nil {
+		return nil, err
+	}
+	manByRoot[genRoot] = man
+	return man, nil
 }
 
 // findGenRootWithManifest walks up from path's directory looking for

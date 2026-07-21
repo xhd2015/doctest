@@ -123,6 +123,11 @@ type Options struct {
 	// Used to prepare trees for a multi-root workspace suite run.
 	GenerateOnly bool
 
+	// BypassGoTest skips host-driven go test exec after generate and after
+	// workspace/hub write+tidy (DOCTEST_DEBUG=bypass-go-test=1). Prepare and
+	// fan-in still run. Not a public CLI flag.
+	BypassGoTest bool
+
 	// ColdCache enables doctest test --cold-cache: wipe mapping gen root on
 	// startup, force -count=1 when unset, and isolate GOCACHE for the run.
 	ColdCache bool

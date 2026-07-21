@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/xhd2015/doctest/libdoc/core"
@@ -82,6 +83,62 @@ func TestPrepareAndRunWorkspaceTwoTrees(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(genDir, core.WorkspaceDirName, core.WorkspaceSuiteDirName, "suite_test.go")); err != nil {
 		t.Fatalf("workspace suite missing: %v", err)
+	}
+}
+
+// TestPrepareTreeParallelSharedGenRoot stress-tests concurrent writeCases into
+// one gen root (P3: no global writeCases lock; genModMu only on shared files).
+func TestPrepareTreeParallelSharedGenRoot(t *testing.T) {
+	mod := t.TempDir()
+	if err := os.WriteFile(filepath.Join(mod, "go.mod"), []byte("module example.com/par\n\ngo 1.22\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	const n = 6
+	trees := make([]string, n)
+	for i := 0; i < n; i++ {
+		trees[i] = filepath.Join(mod, "t"+string(rune('a'+i)))
+		testtree.WriteMinimalRunnableTree(t, trees[i], []testtree.LeafSpec{
+			{Name: "one", Steps: "s", Expected: "ok"},
+			{Name: "two", Steps: "s2", Expected: "ok"},
+		})
+	}
+	genDir := filepath.Join(t.TempDir(), "gen")
+	opts := core.Options{
+		GenDir:                genDir,
+		Count:                 1,
+		SuppressResultSummary: true,
+		Stderr:                ioDiscard{},
+	}
+	preps := make([]TreePrep, n)
+	errs := make([]error, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			p, err := PrepareTree(trees[i], opts)
+			preps[i] = p
+			errs[i] = err
+		}(i)
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("PrepareTree %d: %v", i, err)
+		}
+		if preps[i].Stats.Total != 2 {
+			t.Fatalf("tree %d total=%d", i, preps[i].Stats.Total)
+		}
+	}
+	var stdout bytes.Buffer
+	runOpts := opts
+	runOpts.Stdout = &stdout
+	stats, err := RunWorkspace(preps, runOpts)
+	if err != nil {
+		t.Fatalf("RunWorkspace: %v\n%s", err, stdout.String())
+	}
+	if stats.Passed != n*2 || stats.Total != n*2 {
+		t.Fatalf("want %d/%d, got %d/%d\n%s", n*2, n*2, stats.Passed, stats.Total, stdout.String())
 	}
 }
 

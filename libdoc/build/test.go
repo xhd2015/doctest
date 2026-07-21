@@ -38,8 +38,10 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	}
 
 	// --- discover ---
+	// SelectThenDeep: light scan (labels only) → filter → deep-parse run set.
+	// Skipped labeled leaves are not fully parsed (default discovery speed).
 	tDiscover := time.Now()
-	allCases, err := core.DiscoverTreeCases(dir)
+	allCases, err := core.DiscoverTreeCasesLight(dir)
 	if err != nil {
 		return TestRunStats{Phases: phases}, err
 	}
@@ -70,10 +72,17 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	for i := range skipped {
 		skipped[i].DisplayPath = SkippedDisplayPath(dir, skipped[i].Path)
 	}
+	if len(cases) > 0 {
+		cases, err = core.HydrateTreeCases(dir, cases)
+		if err != nil {
+			track("discover", tDiscover)
+			return TestRunStats{Phases: phases, Skipped: skipped}, err
+		}
+	}
 	track("discover", tDiscover)
 	if len(cases) == 0 {
 		if len(skipped) > 0 {
-			stats := TestRunStats{Skipped: skipped, Phases: phases}
+			stats := TestRunStats{Skipped: skipped, Phases: phases, Cases: nil}
 			if !opts.SuppressResultSummary {
 				PrintSkippedSummary(skipped, opts.Verbose)
 			}
@@ -82,7 +91,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		return TestRunStats{Phases: phases}, fmt.Errorf("%s: no runnable test cases found", dir)
 	}
 
-	stats := TestRunStats{Total: len(cases), Skipped: skipped}
+	stats := TestRunStats{Total: len(cases), Skipped: skipped, Cases: cases}
 
 	// --- materialize ---
 	tMat := time.Now()
@@ -127,6 +136,19 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		stats.TreeRel = ctx.treeRel()
 		stats.Unified = ctx.unifiedMode
 		stats.AbsRoot = absRoot
+		return stats, nil
+	}
+
+	// DOCTEST_DEBUG bypass-go-test: stop after generate (single-tree path).
+	if opts.BypassGoTest {
+		stats.Phases = phases
+		stats.GenRoot = ctx.genRoot
+		stats.TreeRel = ctx.treeRel()
+		stats.Unified = ctx.unifiedMode
+		stats.AbsRoot = absRoot
+		stats.GoTestBypassed = true
+		// Planned leaves stay in Total; do not claim pass.
+		stats.Passed = 0
 		return stats, nil
 	}
 

@@ -157,16 +157,11 @@ func (ctx *generateContext) announceRoots() {
 	fmt.Fprintf(ctx.w, "→ %s\n\n", pathfmt.Short(ctx.genRoot))
 }
 
-// genRootWriteMu serializes multi-tree generate into a shared mapping-gen root
-// (go.mod tidy + concurrent package writes from ./... prepare).
-var genRootWriteMu sync.Mutex
-
+// writeCases generates packages for one tree. Shared gen-root bookkeeping
+// (go.mod, tidy-done, doctest.gen-manifest) is serialized inside core via
+// genModMu; tree-local package dirs may be written in parallel by multi-tree
+// ./... prepare (no global writeCases lock).
 func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) error {
-	if !ctx.internalCompile {
-		genRootWriteMu.Lock()
-		defer genRootWriteMu.Unlock()
-	}
-
 	pkgName := "testcase"
 	srcDir, origPkg, hasPkgUnderTest := core.ResolvePkgUnderTest(ctx.absRoot)
 	if hasPkgUnderTest {
@@ -192,7 +187,10 @@ func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) 
 	}
 
 	if ctx.unifiedMode {
-		return ctx.writeUnifiedCases(cases, compileOnly, pkgName, hasPkgUnderTest, srcDir, origPkg)
+		if err := ctx.writeUnifiedCases(cases, compileOnly, pkgName, hasPkgUnderTest, srcDir, origPkg); err != nil {
+			return err
+		}
+		return core.FlushGenManifest(ctx.genRoot)
 	}
 
 	// Internal-compile only: classic full-inline AssembleTestSource per leaf.
@@ -227,7 +225,7 @@ func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) 
 			return err
 		}
 	}
-	return nil
+	return core.FlushGenManifest(ctx.genRoot)
 }
 
 // treeRel is the doctest root path relative to the module root (or ".").
@@ -342,7 +340,7 @@ func (ctx *generateContext) writeUnifiedCases(cases []core.TreeCase, compileOnly
 			return err
 		}
 	}
-	return nil
+	return core.FlushGenManifest(ctx.genRoot)
 }
 
 // pathLooksHeavySelftestTree mirrors path_resolve heavy trees (…/doctest/tests/…)

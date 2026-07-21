@@ -203,6 +203,14 @@ Options:
 Env:
   DOCTEST_CACHE_HOME  Base cache home (default store: $CacheHome/doctest/leaf-cache/v1)
   DOCTEST_LEAF_CACHE  Override leaf pass-store root
+  DOCTEST_DEBUG       Engine-internal GODEBUG-style flags (comma key=value).
+                      Unknown keys error. Keys may be combined. Supported:
+                      bypass-go-test=1 — skip go test after generate/workspace
+                      write+tidy (honest BYPASS summary; prepare measurement);
+                      cpuprofile=PATH — host CPU profile (all subcommands);
+                      memprofile=PATH — host heap profile at process exit;
+                      blockprofile=PATH — host block profile at process exit.
+                      Host profiles are distinct from test -cpuprofile (go test).
 
 Examples:
   doctest test -v ./
@@ -212,6 +220,8 @@ Examples:
   doctest test ./mod --label slow
   doctest test ./mod --label 'slow && ui-automation'
   doctest test ./mod --label slow --label heavy
+  DOCTEST_DEBUG=bypass-go-test=1 doctest test ./... --cold-cache
+  DOCTEST_DEBUG=bypass-go-test=1,cpuprofile=/tmp/prep.pprof,memprofile=/tmp/prep.mprof,blockprofile=/tmp/prep.block doctest test ./...
 `
 
 const agentImplementUsage = `Usage: doctest agent implement [--session-id ID] [--agent-runner RUNNER] [--mock-config PATH] [--requirement PATH] [--timeout DURATION] [--trace] [--status] [--list-sessions] <prompt>
