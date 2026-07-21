@@ -1,8 +1,6 @@
 package build
 
 import (
-	"bufio"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -260,106 +258,64 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	singlePkgInvocations := profileFlagsNeedSinglePackage(opts) && len(packageArgs) > 1
 
 	// --- go_test ---
+	// Always use go test -json for Pass/Fail/Run suite accounting. Verbose is
+	// presentation only (stream more Output events); same counts as quiet.
 	tGo := time.Now()
-	var goTestElapsed time.Duration
-	if opts.Verbose {
-		var out []byte
-		var err error
-		if singlePkgInvocations {
-			for _, pkg := range packageArgs {
-				execArgs := append(append([]string(nil), flagArgs...), pkg)
-				goTestCmd := exec.Command("go", execArgs...)
-				goTestCmd.Dir = runDir
-				goTestCmd.Env = goTestEnvFull(sessionID, goCache, opts.MetricsNestSink, "", leafSkipEnv)
-				pkgOut, pkgErr := goTestCmd.CombinedOutput()
-				out = append(out, pkgOut...)
-				if pkgErr != nil && err == nil {
-					err = pkgErr
-				}
-			}
-		} else {
-			execArgs := append(append([]string(nil), flagArgs...), packageArgs...)
-			goTestCmd := exec.Command("go", execArgs...)
-			goTestCmd.Dir = runDir
-			goTestCmd.Env = goTestEnvFull(sessionID, goCache, opts.MetricsNestSink, "", leafSkipEnv)
-			out, err = goTestCmd.CombinedOutput()
-		}
-		goTestElapsed = time.Since(tGo)
-		track("go_test", tGo)
-		stdout.Write(out)
-		stats.Passed = passedCases(stats.Total, countFailuresFromGoTestOutput(out))
-		// Verbose path: no package Elapsed; single-leaf gets full go_test wall.
-		if len(cases) == 1 {
-			stats.LeafTimings = []LeafTiming{{Path: cases[0].Path, ElapsedNs: goTestElapsed.Nanoseconds()}}
-		}
-		// Best-effort PutPass: verbose mode lacks per-leaf fail map — store only on full success.
-		if err == nil {
-			recordLeafCachePasses(leafKeys, nil, true)
-		}
-		if !opts.SuppressResultSummary {
-			stats.Elapsed = goTestElapsed
-			PrintSkippedSummary(stats.Skipped, opts.Verbose)
-			PrintResultSummary(opts, stats)
-		}
-		if err != nil {
-			// Surface timeout clearly even when verbose already dumps the panic.
-			if msg := goTestTimeoutErrorLine(string(out)); msg != "" {
-				fmt.Fprintln(w, msg)
-			}
-			stats.Phases = phases
-			return stats, fmt.Errorf("go test failed: %v", err)
-		}
+	style := newColorStyle(opts.Color, stdout)
+	var result goTestJSONResult
+	var goTestErr error
+	if singlePkgInvocations {
+		result, goTestErr = runGoTestJSONPerPackage(runDir, flagArgs, packageArgs, sessionID, goCache, opts.MetricsNestSink, leafSkipEnv, stdout, style, opts.Verbose)
 	} else {
-		style := newColorStyle(opts.Color, stdout)
-		var result goTestJSONResult
-		var err error
-		if singlePkgInvocations {
-			result, err = runGoTestJSONPerPackage(runDir, flagArgs, packageArgs, sessionID, goCache, opts.MetricsNestSink, leafSkipEnv, stdout, style)
-		} else {
-			result, err = runGoTestJSONShards(runDir, flagArgs, packageArgs, sessionID, goCache, opts.MetricsNestSink, leafSkipEnv, stdout, style)
-		}
-		goTestElapsed = time.Since(tGo)
-		track("go_test", tGo)
-		stats.Passed = passedCases(stats.Total, result.failCount)
-		if ctx.unifiedMode {
-			stats.LeafTimings = leafTimingsFromSubtests(cases, result, goTestElapsed)
-		} else {
-			stats.LeafTimings = leafTimingsFromPackages(cases, packageArgs, isSingleLeaf, result, goTestElapsed)
-		}
+		result, goTestErr = runGoTestJSONShards(runDir, flagArgs, packageArgs, sessionID, goCache, opts.MetricsNestSink, leafSkipEnv, stdout, style, opts.Verbose)
+	}
+	goTestElapsed := time.Since(tGo)
+	track("go_test", tGo)
+	stats.Passed = passedCases(stats.Total, result.failCount)
+	if ctx.unifiedMode {
+		stats.LeafTimings = leafTimingsFromSubtests(cases, result, goTestElapsed)
+	} else {
+		stats.LeafTimings = leafTimingsFromPackages(cases, packageArgs, isSingleLeaf, result, goTestElapsed)
+	}
 
-		// Summary Cached is leaf-cache-only:
-		//   - Cached = number of warm leaf-cache skips (GetPass hits used for skip)
-		//   - full go package (cached) expands to N only when every leaf key also
-		//     hits (otherwise go DCE/testcache can stay warm while spine text
-		//     changed and leaf keys miss — product wants 0 Cached then)
-		//   - leaf-cache bypass (-count / -a / --no-leaf-cache): always 0
-		result.cachedCount = leafCachedSummary(len(cases), skipPaths, result.anyPackageCached(),
-			leafcache.SkipEnabled(opts.Count, opts.ForceWithFlagA, opts.NoLeafCache))
-		recordLeafCachePasses(leafKeys, result.suiteLeafFailed, err == nil && result.failCount == 0)
+	// Summary Cached is leaf-cache-only:
+	//   - Cached = number of warm leaf-cache skips (GetPass hits used for skip)
+	//   - full go package (cached) expands to N only when every leaf key also
+	//     hits (otherwise go DCE/testcache can stay warm while spine text
+	//     changed and leaf keys miss — product wants 0 Cached then)
+	//   - leaf-cache bypass (-count / -a / --no-leaf-cache): always 0
+	result.cachedCount = leafCachedSummary(len(cases), skipPaths, result.anyPackageCached(),
+		leafcache.SkipEnabled(opts.Count, opts.ForceWithFlagA, opts.NoLeafCache))
+	recordLeafCachePasses(leafKeys, result.suiteLeafFailed, goTestErr == nil && result.failCount == 0)
 
+	// Quiet path: compact progress summary. Verbose already streamed Output events.
+	if !opts.Verbose {
 		fmt.Fprintln(stdout, formatSummary(style, result.passCount+result.failCount, result.passCount, result.failCount, result.cachedCount, goTestElapsed))
+	}
 
-		if !opts.SuppressResultSummary {
-			stats.Elapsed = goTestElapsed
-			PrintSkippedSummary(stats.Skipped, opts.Verbose)
-			PrintResultSummary(opts, stats)
-		}
+	if !opts.SuppressResultSummary {
+		stats.Elapsed = goTestElapsed
+		PrintSkippedSummary(stats.Skipped, opts.Verbose)
+		PrintResultSummary(opts, stats)
+	}
 
+	// Quiet path buffers fail details for post-run print. Verbose streamed live.
+	if !opts.Verbose {
 		for _, line := range result.failLines {
 			fmt.Fprintln(stdout, line)
 		}
 		for _, line := range result.detailLines {
 			fmt.Fprintln(stdout, line)
 		}
-		if len(result.stderrData) > 0 {
-			stdout.Write(result.stderrData)
-		}
-		printGoTestTimeoutError(w, stdout, result)
+	}
+	if len(result.stderrData) > 0 {
+		stdout.Write(result.stderrData)
+	}
+	printGoTestTimeoutError(w, stdout, result)
 
-		if err != nil {
-			stats.Phases = phases
-			return stats, fmt.Errorf("go test: %w", err)
-		}
+	if goTestErr != nil {
+		stats.Phases = phases
+		return stats, fmt.Errorf("go test: %w", goTestErr)
 	}
 
 	tPost := time.Now()
@@ -663,12 +619,12 @@ func goTestEnvFromOpts(sessionID string, opts core.Options) []string {
 
 // runGoTestJSONPerPackage runs one go test process per package (serial) so
 // profile flags that go rejects with multi-package lists still work.
-func runGoTestJSONPerPackage(runDir string, flagArgs, packageArgs []string, sessionID, goCache, nestSink, leafSkipPaths string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
+func runGoTestJSONPerPackage(runDir string, flagArgs, packageArgs []string, sessionID, goCache, nestSink, leafSkipPaths string, stdout io.Writer, style colorStyle, verbose bool) (goTestJSONResult, error) {
 	var merged goTestJSONResult
 	var firstErr error
 	for _, pkg := range packageArgs {
 		args := append(append([]string(nil), flagArgs...), pkg)
-		res, err := runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, stdout, style)
+		res, err := runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, stdout, style, verbose)
 		mergeGoTestJSONResult(&merged, res)
 		if err != nil && firstErr == nil {
 			firstErr = err
@@ -708,7 +664,7 @@ func lockGoTestModule(runDir string) func() {
 	return mu.Unlock
 }
 
-func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionID, goCache, nestSink, leafSkipPaths string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
+func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionID, goCache, nestSink, leafSkipPaths string, stdout io.Writer, style colorStyle, verbose bool) (goTestJSONResult, error) {
 	// Single go test process per tree. Package sharding multiplies nested
 	// self-test fan-out and has raced go.mod; wall cut is tree concurrency +
 	// heavy/light scheduling in path_resolve.
@@ -716,7 +672,7 @@ func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionI
 	shards := packageTestShards(packageArgs, workers)
 	if len(shards) <= 1 {
 		args := append(append([]string(nil), flagArgs...), packageArgs...)
-		return runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, stdout, style)
+		return runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, stdout, style, verbose)
 	}
 
 	// Multi-shard: readonly module mode so concurrent go tests share genDir safely.
@@ -742,7 +698,7 @@ func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionI
 			defer wg.Done()
 			args := append(append([]string(nil), shardFlags...), shard...)
 			// Locked stdout keeps progress dots incremental and non-interleaved by byte.
-			res, err := runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, &lockedWriter{w: stdout, mu: &mu}, style)
+			res, err := runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, &lockedWriter{w: stdout, mu: &mu}, style, verbose)
 			mu.Lock()
 			defer mu.Unlock()
 			mergeGoTestJSONResult(&merged, res)
@@ -766,14 +722,27 @@ func (l *lockedWriter) Write(p []byte) (int, error) {
 	return l.w.Write(p)
 }
 
-func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nestSink, goWork, leafSkipPaths string, stdout io.Writer, style colorStyle) (goTestJSONResult, error) {
+func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nestSink, goWork, leafSkipPaths string, stdout io.Writer, style colorStyle, verbose bool) (goTestJSONResult, error) {
 	goTestSlots <- struct{}{}
 	defer func() { <-goTestSlots }()
 
 	unlockMod := lockGoTestModule(runDir)
 	defer unlockMod()
 
-	execArgs := append(append([]string(nil), testArgs...), "-json")
+	// Always -json for suite accounting. Drop -v from the real invocation:
+	// go test -json already emits Output for fmt.Print/t.Logf; combining -v
+	// makes test2json re-parse framing lines and invent phantom fail events
+	// when nested suites print "--- FAIL:" / "=== RUN" into a passing leaf.
+	// Display still shows -v (flagArgs) so verbose-go-flag / user-facing cd
+	// lines keep advertising presentation mode.
+	execArgs := make([]string, 0, len(testArgs)+1)
+	for _, a := range testArgs {
+		if a == "-v" {
+			continue
+		}
+		execArgs = append(execArgs, a)
+	}
+	execArgs = append(execArgs, "-json")
 	goTestCmd := exec.Command("go", execArgs...)
 	goTestCmd.Dir = runDir
 	goTestCmd.Env = goTestEnvFull(sessionID, goCache, nestSink, goWork, leafSkipPaths)
@@ -892,6 +861,17 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 				res.testElapsedNs[test] = ns
 			}
 		}
+		// Quiet progress dots only; verbose streams Output events instead.
+		writePassDot := func() {
+			if !verbose {
+				stdout.Write([]byte("."))
+			}
+		}
+		writeFailDot := func() {
+			if !verbose {
+				fmt.Fprint(stdout, style.red("."))
+			}
+		}
 		decoder := json.NewDecoder(stdoutPipe)
 		for {
 			var ev goTestEvent
@@ -911,30 +891,38 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 						res.timeoutError = msg
 					}
 				}
+				// Verbose: stream raw Output (presentation only; counts from pass/fail).
+				if verbose && ev.Output != "" {
+					stdout.Write([]byte(ev.Output))
+				}
 				trimmed := strings.TrimSpace(ev.Output)
 				if ev.Test == "" && (strings.HasPrefix(trimmed, "ok ") || strings.HasPrefix(trimmed, "ok\t")) {
 					if strings.Contains(ev.Output, "(cached)") {
 						packageCached[ev.Package] = true
 					}
 				}
-				if ev.Test == "" && (strings.HasPrefix(trimmed, "FAIL\t") || strings.HasPrefix(trimmed, "FAIL ")) {
-					res.failLines = append(res.failLines, trimmed)
-				}
-				if trimmed != "" && trimmed != "PASS" {
-					if ev.Test != "" {
-						key := testKey(ev.Package, ev.Test)
-						line := strings.TrimRight(ev.Output, "\n")
-						if strings.Contains(ev.Output, "--- FAIL:") {
-							flushTestOutput(key)
-							res.detailLines = append(res.detailLines, line)
-						} else if failedTests[key] {
-							res.detailLines = append(res.detailLines, line)
-						} else {
-							testOutputs[key] = append(testOutputs[key], line)
+				// Quiet path buffers fail details for post-run print. Verbose already
+				// streamed above — still track package FAIL lines for accounting paths.
+				if !verbose {
+					if ev.Test == "" && (strings.HasPrefix(trimmed, "FAIL\t") || strings.HasPrefix(trimmed, "FAIL ")) {
+						res.failLines = append(res.failLines, trimmed)
+					}
+					if trimmed != "" && trimmed != "PASS" {
+						if ev.Test != "" {
+							key := testKey(ev.Package, ev.Test)
+							line := strings.TrimRight(ev.Output, "\n")
+							if strings.Contains(ev.Output, "--- FAIL:") {
+								flushTestOutput(key)
+								res.detailLines = append(res.detailLines, line)
+							} else if failedTests[key] {
+								res.detailLines = append(res.detailLines, line)
+							} else {
+								testOutputs[key] = append(testOutputs[key], line)
+							}
+						} else if !strings.HasPrefix(trimmed, "ok ") && !strings.HasPrefix(trimmed, "ok\t") &&
+							!strings.HasPrefix(trimmed, "FAIL\t") && !strings.HasPrefix(trimmed, "FAIL ") {
+							res.detailLines = append(res.detailLines, trimmed)
 						}
-					} else if !strings.HasPrefix(trimmed, "ok ") && !strings.HasPrefix(trimmed, "ok\t") &&
-						!strings.HasPrefix(trimmed, "FAIL\t") && !strings.HasPrefix(trimmed, "FAIL ") {
-						res.detailLines = append(res.detailLines, trimmed)
 					}
 				}
 			case "pass":
@@ -945,7 +933,7 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 						before := suiteLeafPass + suiteLeafFail
 						countSuiteLeaf(ev.Package, ev.Test, false)
 						if suiteLeafPass+suiteLeafFail > before {
-							stdout.Write([]byte("."))
+							writePassDot()
 						}
 					}
 					continue
@@ -956,7 +944,7 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 				}
 				recordPkg(ev.Package, ev.Elapsed, packageCached[ev.Package])
 				if suiteLeafPass+suiteLeafFail == 0 {
-					stdout.Write([]byte("."))
+					writePassDot()
 				}
 			case "fail":
 				if ev.Test != "" {
@@ -967,7 +955,7 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 						before := suiteLeafPass + suiteLeafFail
 						countSuiteLeaf(ev.Package, ev.Test, true)
 						if suiteLeafPass+suiteLeafFail > before {
-							fmt.Fprint(stdout, style.red("."))
+							writeFailDot()
 						}
 					}
 					continue
@@ -975,7 +963,7 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 				res.failCount++
 				recordPkg(ev.Package, ev.Elapsed, false)
 				if suiteLeafPass+suiteLeafFail == 0 {
-					fmt.Fprint(stdout, style.red("."))
+					writeFailDot()
 				}
 			}
 		}
@@ -1161,18 +1149,6 @@ func recordLeafCachePasses(keys map[string]string, failed map[string]bool, allPa
 		}
 		_ = store.PutPass(key)
 	}
-}
-
-func countFailuresFromGoTestOutput(out []byte) int {
-	failures := 0
-	scanner := bufio.NewScanner(bytes.NewReader(out))
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "FAIL\t") || strings.HasPrefix(line, "FAIL ") {
-			failures++
-		}
-	}
-	return failures
 }
 
 func passedCases(total, failCount int) int {

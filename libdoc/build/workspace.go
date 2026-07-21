@@ -3,7 +3,6 @@ package build
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -310,35 +309,22 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	goCache := opts.GoCache
 	style := newColorStyle(opts.Color, stdout)
 
+	// Always use go test -json for Pass/Fail/Run suite accounting. Verbose is
+	// presentation only (stream more Output events); same counts as quiet.
 	tGo := time.Now()
-	var runErr error
-	if opts.Verbose {
-		execArgs := append(append([]string(nil), flagArgs...), packageArgs...)
-		goTestCmd := exec.Command("go", execArgs...)
-		goTestCmd.Dir = runDir
-		goTestCmd.Env = goTestEnvFull(sessionID, goCache, opts.MetricsNestSink, "", "")
-		out, err := goTestCmd.CombinedOutput()
-		stdout.Write(out)
-		runErr = err
-		stats.Passed = passedCases(stats.Total, countFailuresFromGoTestOutput(out))
-		if err != nil {
-			if msg := goTestTimeoutErrorLine(string(out)); msg != "" {
-				fmt.Fprintln(w, msg)
-			}
+	result, runErr := runGoTestJSONOnce(runDir, append(append([]string(nil), flagArgs...), packageArgs...), sessionID, goCache, opts.MetricsNestSink, "", "", stdout, style, opts.Verbose)
+	goTestElapsed := time.Since(tGo)
+	stats.Phases = append(stats.Phases, PhaseTiming{Name: "go_test", ElapsedNs: goTestElapsed.Nanoseconds()})
+	if result.passCount+result.failCount > 0 {
+		stats.Passed = result.passCount
+		if result.passCount+result.failCount != stats.Total {
+			stats.Total = result.passCount + result.failCount
 		}
 	} else {
-		result, err := runGoTestJSONOnce(runDir, append(append([]string(nil), flagArgs...), packageArgs...), sessionID, goCache, opts.MetricsNestSink, "", "", stdout, style)
-		runErr = err
-		goTestElapsed := time.Since(tGo)
-		stats.Phases = append(stats.Phases, PhaseTiming{Name: "go_test", ElapsedNs: goTestElapsed.Nanoseconds()})
-		if result.passCount+result.failCount > 0 {
-			stats.Passed = result.passCount
-			if result.passCount+result.failCount != stats.Total {
-				stats.Total = result.passCount + result.failCount
-			}
-		} else {
-			stats.Passed = passedCases(stats.Total, result.failCount)
-		}
+		stats.Passed = passedCases(stats.Total, result.failCount)
+	}
+	// Quiet path: compact progress summary. Verbose already streamed Output events.
+	if !opts.Verbose {
 		fmt.Fprintln(stdout, formatSummary(style, result.passCount+result.failCount, result.passCount, result.failCount, result.cachedCount, goTestElapsed))
 		for _, line := range result.failLines {
 			fmt.Fprintln(stdout, line)
@@ -346,16 +332,16 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 		for _, line := range result.detailLines {
 			fmt.Fprintln(stdout, line)
 		}
-		if len(result.stderrData) > 0 {
-			stdout.Write(result.stderrData)
-		}
-		printGoTestTimeoutError(w, stdout, result)
-		var allCases []core.TreeCase
-		for _, p := range preps {
-			allCases = append(allCases, p.Cases...)
-		}
-		stats.LeafTimings = leafTimingsFromSubtests(allCases, result, goTestElapsed)
 	}
+	if len(result.stderrData) > 0 {
+		stdout.Write(result.stderrData)
+	}
+	printGoTestTimeoutError(w, stdout, result)
+	var allCases []core.TreeCase
+	for _, p := range preps {
+		allCases = append(allCases, p.Cases...)
+	}
+	stats.LeafTimings = leafTimingsFromSubtests(allCases, result, goTestElapsed)
 
 	if !opts.Verbose {
 		fmt.Fprintln(w)
