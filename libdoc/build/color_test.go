@@ -109,18 +109,39 @@ func TestFormatResultSummaryForceFail(t *testing.T) {
 	style := colorStyle{enabled: false}
 	elapsed := 2 * time.Second
 
-	pass := formatResultSummary(style, 10, 10, elapsed, false)
+	pass := formatResultSummary(style, 10, 10, elapsed, false, 0)
 	if !strings.HasPrefix(pass, "PASS (10/10)") {
 		t.Fatalf("expected PASS when all ok, got %q", pass)
 	}
 	// Survivors all passed but another tree failed prepare: must not look green.
-	forced := formatResultSummary(style, 10, 10, elapsed, true)
+	forced := formatResultSummary(style, 10, 10, elapsed, true, 0)
 	if !strings.HasPrefix(forced, "FAIL (10/10)") {
 		t.Fatalf("expected FAIL when forceFail, got %q", forced)
 	}
-	partial := formatResultSummary(style, 8, 10, elapsed, false)
+	partial := formatResultSummary(style, 8, 10, elapsed, false, 0)
 	if !strings.HasPrefix(partial, "FAIL (8/10)") {
 		t.Fatalf("expected FAIL on partial pass, got %q", partial)
+	}
+}
+
+func TestFormatResultSummaryRuntimeSkip(t *testing.T) {
+	style := colorStyle{enabled: false}
+	elapsed := time.Second
+
+	// 1 pass + 1 t.Skip → succeeded/actual_run with t.Skip suffix.
+	passSkip := formatResultSummary(style, 1, 1, elapsed, false, 1)
+	if !strings.HasPrefix(passSkip, "PASS (1/1, 1 t.Skip) in ") {
+		t.Fatalf("pass+skip: got %q", passSkip)
+	}
+	// 0 pass + 1 fail + 1 t.Skip.
+	failSkip := formatResultSummary(style, 0, 1, elapsed, false, 1)
+	if !strings.HasPrefix(failSkip, "FAIL (0/1, 1 t.Skip) in ") {
+		t.Fatalf("fail+skip: got %q", failSkip)
+	}
+	// N=0 must keep legacy form (no t.Skip text).
+	noSkip := formatResultSummary(style, 2, 2, elapsed, false, 0)
+	if strings.Contains(noSkip, "t.Skip") || !strings.HasPrefix(noSkip, "PASS (2/2) in ") {
+		t.Fatalf("zero skip must be legacy PASS (2/2), got %q", noSkip)
 	}
 }
 

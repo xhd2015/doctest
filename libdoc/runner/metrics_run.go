@@ -152,7 +152,8 @@ func RunTest(dir string, opts core.Options) error {
 		return runErr
 	}
 	if stats.Total == 0 {
-		if stats.NoTestsChanged || len(stats.Skipped) > 0 {
+		// Runtime t.Skip alone (actual_run=0) is not a suite failure.
+		if stats.NoTestsChanged || len(stats.Skipped) > 0 || stats.SkipCount > 0 {
 			return nil
 		}
 		return fmt.Errorf("%s: no runnable test cases found", dir)

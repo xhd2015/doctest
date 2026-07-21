@@ -315,11 +315,13 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	result, runErr := runGoTestJSONOnce(runDir, append(append([]string(nil), flagArgs...), packageArgs...), sessionID, goCache, opts.MetricsNestSink, "", "", stdout, style, opts.Verbose)
 	goTestElapsed := time.Since(tGo)
 	stats.Phases = append(stats.Phases, PhaseTiming{Name: "go_test", ElapsedNs: goTestElapsed.Nanoseconds()})
-	if result.passCount+result.failCount > 0 {
+	// Prefer JSON suite-leaf accounting. actual_run = pass+fail (exclude
+	// runtime t.Skip from denominator). SkipCount is separate from label skips.
+	actualRun := result.passCount + result.failCount
+	if actualRun > 0 || result.skipCount > 0 {
 		stats.Passed = result.passCount
-		if result.passCount+result.failCount != stats.Total {
-			stats.Total = result.passCount + result.failCount
-		}
+		stats.Total = actualRun
+		stats.SkipCount = result.skipCount
 	} else {
 		stats.Passed = passedCases(stats.Total, result.failCount)
 	}

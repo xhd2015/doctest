@@ -110,6 +110,9 @@ type TestRunStats struct {
 	Elapsed        time.Duration
 	NoTestsChanged bool
 	Skipped        []core.SkippedCase
+	// SkipCount is suite-leaf go test Action "skip" (runtime t.Skip). Distinct
+	// from Skipped (label-discovery skips shown in the discovery block).
+	SkipCount int
 	// Phases are filled by TestWithStats when the tree actually runs.
 	Phases []PhaseTiming
 	// LeafTimings map leaf paths to go-test package elapsed when available.
@@ -177,16 +180,24 @@ func formatSummary(style colorStyle, runCount, passCount, failCount, cachedCount
 // formatResultSummary builds the end-of-run PASS/FAIL line.
 // When forceFail is true (e.g. a sibling tree failed prepare while survivors
 // all passed), always print FAIL so the summary matches non-zero exit.
-func formatResultSummary(style colorStyle, passed, total int, elapsed time.Duration, forceFail bool) string {
+//
+// When skipCount > 0 (runtime t.Skip on suite leaves), fraction is
+// succeeded/actual_run with ", N t.Skip" (actual_run = pass+fail, excludes
+// skips). When skipCount == 0, keep PASS (p/t) / FAIL (p/t) unchanged.
+func formatResultSummary(style colorStyle, passed, total int, elapsed time.Duration, forceFail bool, skipCount int) string {
 	suffix := fmt.Sprintf(" in %s", formatDisplayDuration(elapsed))
+	frac := fmt.Sprintf("%d/%d", passed, total)
+	if skipCount > 0 {
+		frac = fmt.Sprintf("%d/%d, %d t.Skip", passed, total, skipCount)
+	}
 	if passed == total && !forceFail {
-		token := fmt.Sprintf("PASS (%d/%d)", passed, total)
+		token := fmt.Sprintf("PASS (%s)", frac)
 		if style.enabled {
 			return style.green(token) + suffix
 		}
 		return token + suffix
 	}
-	token := fmt.Sprintf("FAIL (%d/%d)", passed, total)
+	token := fmt.Sprintf("FAIL (%s)", frac)
 	if style.enabled {
 		return style.red(token) + suffix
 	}
@@ -346,7 +357,7 @@ func PrintResultSummary(opts core.Options, stats TestRunStats) {
 // uses FAIL even if passed==total (partial multi-tree: survivors passed but
 // another tree failed prepare, or workspace error with odd counts).
 func PrintResultSummaryOverall(opts core.Options, stats TestRunStats, overallOK bool) {
-	if stats.Total == 0 && !stats.GoTestBypassed {
+	if stats.Total == 0 && stats.SkipCount == 0 && !stats.GoTestBypassed {
 		return
 	}
 	style := newColorStyle(opts.Color, os.Stdout)
@@ -354,7 +365,7 @@ func PrintResultSummaryOverall(opts core.Options, stats TestRunStats, overallOK 
 		fmt.Println(formatBypassResultSummary(style, stats.Total, stats.Elapsed))
 		return
 	}
-	fmt.Println(formatResultSummary(style, stats.Passed, stats.Total, stats.Elapsed, !overallOK))
+	fmt.Println(formatResultSummary(style, stats.Passed, stats.Total, stats.Elapsed, !overallOK, stats.SkipCount))
 }
 
 // formatBypassResultSummary is the honest end line when go test was skipped.

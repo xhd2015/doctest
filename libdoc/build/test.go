@@ -271,7 +271,16 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	}
 	goTestElapsed := time.Since(tGo)
 	track("go_test", tGo)
-	stats.Passed = passedCases(stats.Total, result.failCount)
+	// Prefer JSON suite-leaf accounting when available. actual_run = pass+fail
+	// (exclude runtime t.Skip from denominator). SkipCount is separate.
+	actualRun := result.passCount + result.failCount
+	if actualRun > 0 || result.skipCount > 0 {
+		stats.Passed = result.passCount
+		stats.Total = actualRun
+		stats.SkipCount = result.skipCount
+	} else {
+		stats.Passed = passedCases(stats.Total, result.failCount)
+	}
 	if ctx.unifiedMode {
 		stats.LeafTimings = leafTimingsFromSubtests(cases, result, goTestElapsed)
 	} else {
@@ -473,6 +482,7 @@ func packageMatchesLeaf(pkg, leafSlash string) bool {
 type goTestJSONResult struct {
 	passCount   int
 	failCount   int
+	skipCount   int // suite-leaf Action "skip" (t.Skip); not package-level
 	cachedCount int
 	failLines   []string
 	detailLines []string
@@ -500,6 +510,7 @@ func (r goTestJSONResult) anyPackageCached() bool {
 func mergeGoTestJSONResult(dst *goTestJSONResult, src goTestJSONResult) {
 	dst.passCount += src.passCount
 	dst.failCount += src.failCount
+	dst.skipCount += src.skipCount
 	dst.cachedCount += src.cachedCount
 	dst.failLines = append(dst.failLines, src.failLines...)
 	dst.detailLines = append(dst.detailLines, src.detailLines...)
@@ -780,10 +791,11 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 		testOutputs := make(map[string][]string)
 		// suiteLeaf* count progress + summary from unified suite subtests
 		// (TestDoctestSuite/<leafPath>). When any leaf subtest is seen, skip
-		// package-level dots and use leaf pass/fail/cached for the summary so
-		// one suite binary still reports one result per leaf (not 1 package).
+		// package-level dots and use leaf pass/fail/skip/cached for the summary
+		// so one suite binary still reports one result per leaf (not 1 package).
 		suiteLeafPass := 0
 		suiteLeafFail := 0
+		suiteLeafSkip := 0
 		// Dedup suite leaves by package+name: multi-module go.work runs multiple
 		// suite packages that often share leaf subtest names (e.g. "simple").
 		// Keying only on test name collapsed those to one count.
@@ -814,18 +826,22 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 			}
 			return true
 		}
-		countSuiteLeaf := func(pkg, test string, failed bool) {
+		// outcome: "pass", "fail", or "skip"
+		countSuiteLeaf := func(pkg, test string, outcome string) {
 			key := testKey(pkg, test)
 			if suiteLeafSeen[key] {
 				return
 			}
 			suiteLeafSeen[key] = true
-			if failed {
+			switch outcome {
+			case "fail":
 				suiteLeafFail++
 				if rel := suiteLeafRelPath(test); rel != "" {
 					res.suiteLeafFailed[rel] = true
 				}
-			} else {
+			case "skip":
+				suiteLeafSkip++
+			default:
 				suiteLeafPass++
 			}
 		}
@@ -930,9 +946,9 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 					recordTest(ev.Test, ev.Elapsed)
 					delete(testOutputs, testKey(ev.Package, ev.Test))
 					if isCountableSuiteLeaf(ev.Package, ev.Test) {
-						before := suiteLeafPass + suiteLeafFail
-						countSuiteLeaf(ev.Package, ev.Test, false)
-						if suiteLeafPass+suiteLeafFail > before {
+						before := suiteLeafPass + suiteLeafFail + suiteLeafSkip
+						countSuiteLeaf(ev.Package, ev.Test, "pass")
+						if suiteLeafPass+suiteLeafFail+suiteLeafSkip > before {
 							writePassDot()
 						}
 					}
@@ -943,7 +959,7 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 					res.cachedCount++
 				}
 				recordPkg(ev.Package, ev.Elapsed, packageCached[ev.Package])
-				if suiteLeafPass+suiteLeafFail == 0 {
+				if suiteLeafPass+suiteLeafFail+suiteLeafSkip == 0 {
 					writePassDot()
 				}
 			case "fail":
@@ -952,9 +968,9 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 					key := testKey(ev.Package, ev.Test)
 					flushTestOutput(key)
 					if isCountableSuiteLeaf(ev.Package, ev.Test) {
-						before := suiteLeafPass + suiteLeafFail
-						countSuiteLeaf(ev.Package, ev.Test, true)
-						if suiteLeafPass+suiteLeafFail > before {
+						before := suiteLeafPass + suiteLeafFail + suiteLeafSkip
+						countSuiteLeaf(ev.Package, ev.Test, "fail")
+						if suiteLeafPass+suiteLeafFail+suiteLeafSkip > before {
 							writeFailDot()
 						}
 					}
@@ -962,16 +978,27 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 				}
 				res.failCount++
 				recordPkg(ev.Package, ev.Elapsed, false)
-				if suiteLeafPass+suiteLeafFail == 0 {
+				if suiteLeafPass+suiteLeafFail+suiteLeafSkip == 0 {
 					writeFailDot()
+				}
+			case "skip":
+				// Runtime t.Skip on suite leaves: count separately (not pass/fail).
+				if ev.Test != "" {
+					recordTest(ev.Test, ev.Elapsed)
+					delete(testOutputs, testKey(ev.Package, ev.Test))
+					if isCountableSuiteLeaf(ev.Package, ev.Test) {
+						countSuiteLeaf(ev.Package, ev.Test, "skip")
+					}
+					continue
 				}
 			}
 		}
 		// Prefer leaf-level counts for unified suite so multi-leaf trees report
 		// N Run / N Pass instead of a single package result.
-		if suiteLeafPass+suiteLeafFail > 0 {
+		if suiteLeafPass+suiteLeafFail+suiteLeafSkip > 0 {
 			res.passCount = suiteLeafPass
 			res.failCount = suiteLeafFail
+			res.skipCount = suiteLeafSkip
 			anyCached := false
 			for _, c := range packageCached {
 				if c {

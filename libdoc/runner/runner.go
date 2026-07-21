@@ -198,6 +198,7 @@ func Test(args []string) error {
 				statsMu.Lock()
 				stats.Passed += s.Passed
 				stats.Total += s.Total
+				stats.SkipCount += s.SkipCount
 				stats.Skipped = append(stats.Skipped, s.Skipped...)
 				if s.GoTestBypassed {
 					stats.GoTestBypassed = true
@@ -216,6 +217,7 @@ func Test(args []string) error {
 		statsMu.Lock()
 		stats.Passed += s.Passed
 		stats.Total += s.Total
+		stats.SkipCount += s.SkipCount
 		stats.Skipped = append(stats.Skipped, s.Skipped...)
 		if s.GoTestBypassed {
 			stats.GoTestBypassed = true
@@ -244,7 +246,7 @@ func Test(args []string) error {
 	if len(stats.Skipped) > 0 {
 		runnerbuild.PrintSkippedSummary(stats.Skipped, opts.Verbose)
 	}
-	if stats.Total > 0 {
+	if stats.Total > 0 || stats.SkipCount > 0 {
 		stats.Elapsed = time.Since(start)
 		// Soft "no tests" is not an overall failure for the summary line.
 		// Any other runErr (prepare, go test, multi-tree) must not print PASS
@@ -280,7 +282,8 @@ func Test(args []string) error {
 		return runErr
 	}
 	if stats.Total == 0 {
-		if stats.NoTestsChanged || len(stats.Skipped) > 0 {
+		// Runtime t.Skip alone (actual_run=0) is not a suite failure.
+		if stats.NoTestsChanged || len(stats.Skipped) > 0 || stats.SkipCount > 0 {
 			return nil
 		}
 		return ErrNoTestsFound
@@ -457,6 +460,7 @@ func testDotDotDotWorkspace(arg string, opts core.Options, rec *runRecorder, sta
 		statsMu.Lock()
 		stats.Passed += s.Passed
 		stats.Total += s.Total
+		stats.SkipCount += s.SkipCount
 		stats.Skipped = append(stats.Skipped, s.Skipped...)
 		if s.GoTestBypassed {
 			stats.GoTestBypassed = true
@@ -515,6 +519,7 @@ func testDotDotDotWorkspace(arg string, opts core.Options, rec *runRecorder, sta
 		statsMu.Lock()
 		stats.Passed += s.Passed
 		stats.Total += s.Total
+		stats.SkipCount += s.SkipCount
 		stats.Skipped = append(stats.Skipped, s.Skipped...)
 		if s.GoTestBypassed {
 			stats.GoTestBypassed = true
