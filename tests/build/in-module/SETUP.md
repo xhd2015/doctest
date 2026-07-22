@@ -29,7 +29,7 @@ public imports only -> cache/outside gen-dir -> module testcase + replace
 
 ## Context
 
-- Package-level vars `moduleRoot`, `genDir`, and `testDir` are set by shared helpers.
+- Per-leaf paths live on `req` (`ModuleRoot`, `GenDir`, `TestDir`, `OutsideGenDir`) — not package globals — so Parallel leaves do not race.
 - Feature leaves assert import-scan + temp-compile behavior (RED before implementation).
 - `legacy/nested-module-unchanged` verifies unchanged public-import legacy path.
 
@@ -53,11 +53,6 @@ import (
 )
 
 const modPath = "example.com/app"
-var (
-	moduleRoot	string
-	genDir		string
-	testDir		string
-)
 var bt = string([]byte{96, 96, 96})
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Timeout = 120 * time.Second
@@ -198,45 +193,45 @@ func copyDir(dst string, src string) error {
 		return os.WriteFile(target, data, 0644)
 	})
 }
-func copyInternalModuleFixture(t *testing.T, d *session.Doctest, fixtureName string) {
+func copyInternalModuleFixture(t *testing.T, d *session.Doctest, req *Request, fixtureName string) {
 	t.Helper()
 
 	fixtureSrc := filepath.Join(d.DOCTEST_ROOT, "testdata", fixtureName)
-	moduleRoot = t.TempDir()
-	if err := copyDir(moduleRoot, fixtureSrc); err != nil {
+	req.ModuleRoot = t.TempDir()
+	if err := copyDir(req.ModuleRoot, fixtureSrc); err != nil {
 		t.Fatalf("copy fixture %s: %v", fixtureName, err)
 	}
-	testDir = filepath.Join(moduleRoot, "tests")
-	genDir = filepath.Join(moduleRoot, "_gen")
+	req.TestDir = filepath.Join(req.ModuleRoot, "tests")
+	req.GenDir = filepath.Join(req.ModuleRoot, "_gen")
 }
-func createInternalModuleProject(t *testing.T, d *session.Doctest) {
+func createInternalModuleProject(t *testing.T, d *session.Doctest, req *Request) {
 	t.Helper()
-	copyInternalModuleFixture(t, d, "internal-module")
+	copyInternalModuleFixture(t, d, req, "internal-module")
 }
-func createInternalModuleProjectWithLeaves(t *testing.T, d *session.Doctest) {
+func createInternalModuleProjectWithLeaves(t *testing.T, d *session.Doctest, req *Request) {
 	t.Helper()
 
 	fixtureSrc := filepath.Join(d.DOCTEST_CASE, "testdata")
-	moduleRoot = t.TempDir()
-	if err := copyDir(moduleRoot, fixtureSrc); err != nil {
+	req.ModuleRoot = t.TempDir()
+	if err := copyDir(req.ModuleRoot, fixtureSrc); err != nil {
 		t.Fatalf("copy fixture %s: %v", fixtureSrc, err)
 	}
-	testDir = filepath.Join(moduleRoot, "tests")
-	genDir = filepath.Join(moduleRoot, "_gen")
+	req.TestDir = filepath.Join(req.ModuleRoot, "tests")
+	req.GenDir = filepath.Join(req.ModuleRoot, "_gen")
 }
-func createPublicModuleProject(t *testing.T) {
+func createPublicModuleProject(t *testing.T, req *Request) {
 	t.Helper()
 
-	moduleRoot = t.TempDir()
+	req.ModuleRoot = t.TempDir()
 	if err := os.WriteFile(
-		filepath.Join(moduleRoot, "go.mod"),
+		filepath.Join(req.ModuleRoot, "go.mod"),
 		[]byte("module "+modPath+"\n\ngo 1.21\n"),
 		0644,
 	); err != nil {
 		t.Fatalf("write go.mod: %v", err)
 	}
 
-	greetDir := filepath.Join(moduleRoot, "pkg", "greet")
+	greetDir := filepath.Join(req.ModuleRoot, "pkg", "greet")
 	if err := os.MkdirAll(greetDir, 0755); err != nil {
 		t.Fatalf("mkdir pkg/greet: %v", err)
 	}
@@ -248,26 +243,26 @@ func createPublicModuleProject(t *testing.T) {
 		t.Fatalf("write greet.go: %v", err)
 	}
 
-	testDir = filepath.Join(moduleRoot, "tests")
-	if err := os.MkdirAll(testDir, 0755); err != nil {
+	req.TestDir = filepath.Join(req.ModuleRoot, "tests")
+	if err := os.MkdirAll(req.TestDir, 0755); err != nil {
 		t.Fatalf("mkdir tests: %v", err)
 	}
 	extraImports := "\t\"" + modPath + "/pkg/greet\"\n"
 	runCode := "func Run(t *testing.T, req *Request) (*Response, error) {\n" +
 		"\treturn &Response{Message: greet.Hello()}, nil\n" +
 		"}"
-	if err := createDoctestRoot(testDir, extraImports, runCode); err != nil {
+	if err := createDoctestRoot(req.TestDir, extraImports, runCode); err != nil {
 		t.Fatalf("create doctest root: %v", err)
 	}
-	if err := createDoctestLeaf(filepath.Join(testDir, "leaf")); err != nil {
+	if err := createDoctestLeaf(filepath.Join(req.TestDir, "leaf")); err != nil {
 		t.Fatalf("create doctest leaf: %v", err)
 	}
 
-	genDir = filepath.Join(moduleRoot, "_gen")
+	req.GenDir = filepath.Join(req.ModuleRoot, "_gen")
 }
 func setupModuleEnv(t *testing.T, req *Request) {
 	t.Helper()
-	req.WorkDir = moduleRoot
+	req.WorkDir = req.ModuleRoot
 	req.Env = append(req.Env, "GOWORK=off")
 }
 func assertFileExists(t *testing.T, path string) {

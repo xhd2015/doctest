@@ -28,9 +28,9 @@ import "testing"
 
 func Setup(t *testing.T, req *Request) error {
 	withCacheSandbox(t, req)
-	st.TestDir = createTempTestProject(t)
-	seedMarker(t, st.ColdHome, "marker-before")
-	req.Args = []string{"test", "--cold-cache", st.TestDir}
+	req.CCTestDir = createTempTestProject(t)
+	seedMarker(t, req, req.CCColdHome, "marker-before")
+	req.Args = []string{"test", "--cold-cache", req.CCTestDir}
 	return nil
 }
 ```

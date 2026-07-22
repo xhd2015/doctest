@@ -22,7 +22,7 @@ import "testing"
 
 func Setup(t *testing.T, req *Request) error {
 	withCacheSandbox(t, req)
-	st.TestDir = createTempTestProject(t)
+	req.CCTestDir = createTempTestProject(t)
 	return nil
 }
 ```

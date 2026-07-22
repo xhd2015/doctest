@@ -33,27 +33,27 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("expected exit 0, got %d\nstdout:\n%s\nstderr:\n%s", resp.ExitCode, resp.Stdout, resp.Stderr)
 	}
 
-	if st.Marker == "" || st.ColdHome == "" {
-		t.Fatal("st.Marker / st.ColdHome not set by setup")
+	if req.CCMarker == "" || req.CCColdHome == "" {
+		t.Fatal("req.CCMarker / req.CCColdHome not set by setup")
 	}
-	if _, statErr := os.Stat(st.Marker); statErr == nil {
-		t.Fatalf("startup wipe failed: marker still exists at %s", st.Marker)
+	if _, statErr := os.Stat(req.CCMarker); statErr == nil {
+		t.Fatalf("startup wipe failed: marker still exists at %s", req.CCMarker)
 	} else if !os.IsNotExist(statErr) {
 		t.Fatalf("stat marker: %v", statErr)
 	}
 
-	fi, statErr := os.Stat(st.ColdHome)
+	fi, statErr := os.Stat(req.CCColdHome)
 	if statErr != nil {
-		t.Fatalf("cold home missing after finish (should leftover): %s: %v\nstderr:\n%s", st.ColdHome, statErr, resp.Stderr)
+		t.Fatalf("cold home missing after finish (should leftover): %s: %v\nstderr:\n%s", req.CCColdHome, statErr, resp.Stderr)
 	}
 	if !fi.IsDir() {
-		t.Fatalf("cold home is not a directory: %s", st.ColdHome)
+		t.Fatalf("cold home is not a directory: %s", req.CCColdHome)
 	}
-	if !dirHasGoFiles(st.ColdHome) {
+	if !dirHasGoFiles(req.CCColdHome) {
 		// Also accept non-empty tree if layout uses only go.mod at root of cold home.
-		entries, readErr := os.ReadDir(st.ColdHome)
+		entries, readErr := os.ReadDir(req.CCColdHome)
 		if readErr != nil || len(entries) == 0 {
-			t.Fatalf("cold home empty after run (expected generated leftover): %s\nstderr:\n%s", st.ColdHome, resp.Stderr)
+			t.Fatalf("cold home empty after run (expected generated leftover): %s\nstderr:\n%s", req.CCColdHome, resp.Stderr)
 		}
 	}
 
@@ -62,7 +62,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	announcesCold := strings.Contains(lower, "cold-cache") ||
 		strings.Contains(lower, "cold cache") ||
 		strings.Contains(combined, "mapping-gen-cold") ||
-		strings.Contains(combined, st.ColdHome)
+		strings.Contains(combined, req.CCColdHome)
 	if !announcesCold {
 		t.Fatalf("expected cold-cache announcement (cold-cache keyword and/or cold gen path) on stderr:\n%s", resp.Stderr)
 	}
@@ -76,7 +76,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	}
 
 	// Sanity: marker name must not reappear as leftover content root file.
-	if _, err := os.Stat(filepath.Join(st.ColdHome, "marker-before")); err == nil {
+	if _, err := os.Stat(filepath.Join(req.CCColdHome, "marker-before")); err == nil {
 		t.Fatalf("marker-before reappeared under cold home")
 	}
 }

@@ -25,6 +25,6 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	}
 	assertStderrUsesTempCompile(t, resp)
 	assertStderrUsesModfile(t, resp)
-	assertNoDoctestRunDirs(t, moduleRoot)
+	assertNoDoctestRunDirs(t, req.ModuleRoot)
 }
 ```

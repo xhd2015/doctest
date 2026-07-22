@@ -25,12 +25,12 @@ func Setup(t *testing.T, req *Request) error {
     testDir := createTempTestProjectOpts(t, "mytest", treeOpts{
         RunCode: runCodeWithLog("run-v1"),
     })
-    cfg = multiRunCfg{
+    cfg := multiRunCfg{
         TestDir:       testDir,
         ModifyFile:    "DOCTEST.md",
         ModifyContent: testtree.MinimalDOCTEST(doctestBody(modifiedRunCode())),
     }
-    doMultiRun(t, req)
+    doMultiRun(t, req, cfg)
     return nil
 }
 ```

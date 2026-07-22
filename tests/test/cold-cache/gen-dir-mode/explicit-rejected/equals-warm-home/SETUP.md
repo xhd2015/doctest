@@ -22,8 +22,8 @@ doctest test --cold-cache --gen-dir $warmHome <tree>
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-	seedMarker(t, st.WarmHome, "marker-before")
-	req.Args = []string{"test", "--cold-cache", "--gen-dir", st.WarmHome, st.TestDir}
+	seedMarker(t, req, req.CCWarmHome, "marker-before")
+	req.Args = []string{"test", "--cold-cache", "--gen-dir", req.CCWarmHome, req.CCTestDir}
 	return nil
 }
 ```

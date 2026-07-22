@@ -24,6 +24,5 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	}
 	cacheDir := expectedAssertCacheDir(t, req.CacheHome)
 	assertCacheLayout(t, cacheDir)
-	_ = cacheExistedBefore
 }
 ```

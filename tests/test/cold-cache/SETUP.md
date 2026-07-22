@@ -24,12 +24,13 @@ DOCTEST_CACHE_HOME sandbox -> CacheHome() so tests never touch developer cache
   stay under a per-leaf temp sandbox.
 - Fixture trees are minimal (1 leaf) so leaves stay fast.
 - `--cold-cache` is **not** implemented yet (classic TDD RED until implementer).
+- **Parallel-safe**: sandbox paths live on `req.CC*` fields (not package-global `st`).
 
 ## Steps
 
 1. Raise timeout for generate + `go test` of a tiny fixture.
 2. Provide helpers: minimal project tree, cache sandbox, warm/cold home paths,
-   marker seed, go-test command line extraction.
+   marker seed, go-test command line extraction — all write to `req`.
 
 ## Context
 
@@ -50,26 +51,14 @@ import (
 
 var bt = "`" + "`" + "`"
 
-// st carries per-leaf paths for Assert (reset in each leaf Setup).
-var st struct {
-	CacheHome string
-	WarmHome  string
-	ColdHome  string
-	GenDir    string // explicit --gen-dir when set
-	TestDir   string
-	Marker    string // path of pre-seeded marker file
-}
-
 func Setup(t *testing.T, req *Request) error {
 	req.Timeout = 120 * time.Second
-	st = struct {
-		CacheHome string
-		WarmHome  string
-		ColdHome  string
-		GenDir    string
-		TestDir   string
-		Marker    string
-	}{}
+	req.CCCacheHome = ""
+	req.CCWarmHome = ""
+	req.CCColdHome = ""
+	req.CCGenDir = ""
+	req.CCTestDir = ""
+	req.CCMarker = ""
 	return nil
 }
 
@@ -130,17 +119,17 @@ func createTempTestProject(t *testing.T) string {
 	return testDir
 }
 
-// withCacheSandbox sets DOCTEST_CACHE_HOME on the subprocess env and fills st paths.
+// withCacheSandbox sets DOCTEST_CACHE_HOME on the subprocess env and fills req.CC* paths.
 func withCacheSandbox(t *testing.T, req *Request) {
 	t.Helper()
 	cache := t.TempDir()
-	st.CacheHome = cache
-	st.WarmHome = filepath.Join(cache, "doctest", "mapping-gen")
-	st.ColdHome = filepath.Join(cache, "doctest", "mapping-gen-cold")
+	req.CCCacheHome = cache
+	req.CCWarmHome = filepath.Join(cache, "doctest", "mapping-gen")
+	req.CCColdHome = filepath.Join(cache, "doctest", "mapping-gen-cold")
 	req.Env = append(req.Env, "DOCTEST_CACHE_HOME="+cache)
 }
 
-func seedMarker(t *testing.T, dir, name string) string {
+func seedMarker(t *testing.T, req *Request, dir, name string) string {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatalf("mkdir for marker: %v", err)
@@ -149,7 +138,7 @@ func seedMarker(t *testing.T, dir, name string) string {
 	if err := os.WriteFile(p, []byte("marker-before\n"), 0644); err != nil {
 		t.Fatalf("write marker: %v", err)
 	}
-	st.Marker = p
+	req.CCMarker = p
 	return p
 }
 

@@ -23,9 +23,10 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
+    cfg := multiRunCfg{}
     cfg.TestDir = createTempTestProject(t, "mytest")
     cfg.SecondFlags = []string{"-count=1"}
-    doMultiRun(t, req)
+    doMultiRun(t, req, cfg)
     return nil
 }
 ```

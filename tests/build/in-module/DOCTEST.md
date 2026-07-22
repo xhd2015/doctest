@@ -126,6 +126,12 @@ type Request struct {
 	WorkDir	string
 	Timeout	time.Duration
 	Bin	string
+	// Per-leaf sandbox paths (Parallel-safe). Must not be package globals —
+	// leaves in this tree run under t.Parallel() in one suite package.
+	ModuleRoot	string
+	GenDir		string
+	TestDir		string
+	OutsideGenDir	string
 	// InterruptDuringWriteCases sends SIGINT after the trigger leaf test file
 	// appears in verbose stderr, reproducing Ctrl-C during temp compile generation.
 	InterruptDuringWriteCases	bool

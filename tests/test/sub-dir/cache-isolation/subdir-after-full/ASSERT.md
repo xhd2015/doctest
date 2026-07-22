@@ -24,18 +24,18 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if resp.ExitCode != 0 {
         t.Fatalf("expected exit 0, got %d\nstderr:\n%s", resp.ExitCode, resp.Stderr)
     }
-    if isoState.FirstRun == nil || isoState.SecondRun == nil {
-        t.Fatal("multi-run state not set")
+    if req.MRFirst == nil || req.MRSecond == nil {
+        t.Fatal("multi-run state not set on req (doMultiRun)")
     }
 
-    firstStderr := isoState.FirstRun.Stderr
+    firstStderr := req.MRFirst.Stderr
     if !strings.Contains(firstStderr, "3 test cases") {
         t.Fatalf("first run expected 3 test cases, stderr:\n%s", firstStderr)
     }
 
-    secondStdout := isoState.SecondRun.Stdout
-    if !strings.Contains(isoState.SecondRun.Stderr, "2 test cases") {
-        t.Fatalf("second run expected 2 test cases, stderr:\n%s", isoState.SecondRun.Stderr)
+    secondStdout := req.MRSecond.Stdout
+    if !strings.Contains(req.MRSecond.Stderr, "2 test cases") {
+        t.Fatalf("second run expected 2 test cases, stderr:\n%s", req.MRSecond.Stderr)
     }
 
     // Unified: subtests named by path; group-a has leaf-1/leaf-2 only.

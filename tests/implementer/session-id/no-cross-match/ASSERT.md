@@ -61,12 +61,30 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         }
     }
 
+    // Second call must use the same isolated session home as the first call
+    // (DOCTEST_DEBUG_SESSION_HOME from root Setup). Without it, the product
+    // looks under the process default session base and either pollutes or
+    // resumes a leftover session — never writing sess-B into req.SessionHome.
+    sessionHome := req.SessionHome
+    if sessionHome == "" {
+        for _, e := range req.Env {
+            if strings.HasPrefix(e, "DOCTEST_DEBUG_SESSION_HOME=") {
+                sessionHome = e[len("DOCTEST_DEBUG_SESSION_HOME="):]
+                break
+            }
+        }
+    }
+    if sessionHome == "" {
+        t.Fatal("DOCTEST_DEBUG_SESSION_HOME / req.SessionHome not set")
+    }
+
     // Second call: use CODEX_THREAD_ID instead of --session-id
     cmd := exec.Command(doctestBin, "agent", "implement", "--agent-runner", "fake-codex", "second call")
     cmd.Env = append(os.Environ(),
         "CODEX_THREAD_ID=sess-B",
         "FAKE_CODEX_MOCK_CONFIG="+mockPath,
         "AGENT_RUNNER_FAKE_CODEX_PATH="+fakeCodexPath,
+        "DOCTEST_DEBUG_SESSION_HOME="+sessionHome,
     )
     out2, err2 := cmd.CombinedOutput()
     if err2 != nil {
@@ -76,6 +94,10 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 
     if !strings.Contains(string(out2), "second call B done") {
         t.Fatalf("second call stdout missing expected text:\n%s", string(out2))
+    }
+    // New source ID must create, not resume sess-A or any other session.
+    if !strings.Contains(string(out2), "Session created: sess-B") {
+        t.Fatalf("second call expected 'Session created: sess-B' (no cross-match), got:\n%s", string(out2))
     }
 
     // Verify TWO separate sessions exist

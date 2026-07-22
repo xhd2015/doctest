@@ -26,12 +26,12 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
-    cfg = multiRunCfg{
+    cfg := multiRunCfg{
         TestDir:        createTempTestProject(t, "mytest"),
         ModifyFile:     "simple/SETUP.md",
         TouchMtimeOnly: true,
     }
-    doMultiRun(t, req)
+    doMultiRun(t, req, cfg)
     return nil
 }
 ```

@@ -25,10 +25,10 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
-	under := filepath.Join(st.WarmHome, "foo")
-	st.GenDir = under
-	seedMarker(t, under, "marker-before")
-	req.Args = []string{"test", "--cold-cache", "--gen-dir", under, st.TestDir}
+	under := filepath.Join(req.CCWarmHome, "foo")
+	req.CCGenDir = under
+	seedMarker(t, req, under, "marker-before")
+	req.Args = []string{"test", "--cold-cache", "--gen-dir", under, req.CCTestDir}
 	return nil
 }
 ```

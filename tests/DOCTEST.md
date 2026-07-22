@@ -80,6 +80,22 @@ type Request struct {
 	SessionHome	string
 	YieldPQBin	string
 	TestQFile	string // yield-pending Assert path; not process env
+
+	// Multi-run harness results (parallel-safe). Filled by leaf Setup helpers
+	// (doMultiRun) so Assert never reads package-global state under t.Parallel().
+	// Each multi-run uses a unique DOCTEST_SESSION_ID for its warmup/measured pair.
+	MRFirst		*Response
+	MRSecond	*Response
+	MRGenDir	string
+
+	// Cold-cache sandbox paths (parallel-safe). Filled by cold-cache Setup helpers
+	// instead of a package-global `st` struct.
+	CCCacheHome	string
+	CCWarmHome	string
+	CCColdHome	string
+	CCGenDir	string
+	CCTestDir	string
+	CCMarker	string
 }
 type Response struct {
 	ExitCode	int

@@ -24,7 +24,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("SIGINT cleanup test failed before assert: %v", err)
 	}
 
-	assertNoDoctestRunDirs(t, moduleRoot)
+	assertNoDoctestRunDirs(t, req.ModuleRoot)
 	assertStderrUsesTempCompile(t, resp)
 	if strings.Contains(resp.Stderr, "cd ") && strings.Contains(resp.Stderr, "go test") {
 		t.Fatalf("expected SIGINT before go test started, but stderr contains go test invocation:\n%s", resp.Stderr)

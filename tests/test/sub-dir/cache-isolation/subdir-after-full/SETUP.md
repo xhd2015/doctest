@@ -28,8 +28,7 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
-    cisoCfg.Scenario = "subdir_after_full"
-    doMultiRun(t, req)
+    doMultiRun(t, req, "subdir_after_full")
     return nil
 }
 ```

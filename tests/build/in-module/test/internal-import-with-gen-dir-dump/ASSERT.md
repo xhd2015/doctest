@@ -24,9 +24,9 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if resp.ExitCode != 0 {
 		t.Fatalf("expected internal import with gen-dir dump to pass, got exit %d\nstdout:\n%s\nstderr:\n%s", resp.ExitCode, resp.Stdout, resp.Stderr)
 	}
-	assertDumpHasInternalImport(t, genDir)
-	assertDumpNoNestedGoMod(t, genDir)
+	assertDumpHasInternalImport(t, req.GenDir)
+	assertDumpNoNestedGoMod(t, req.GenDir)
 	assertStderrUsesTempCompile(t, resp)
-	assertNoDoctestRunDirs(t, moduleRoot)
+	assertNoDoctestRunDirs(t, req.ModuleRoot)
 }
 ```

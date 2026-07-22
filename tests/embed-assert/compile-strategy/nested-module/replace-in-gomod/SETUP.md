@@ -24,10 +24,10 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
-	createPublicModuleProject(t, "", defaultAssertAssertGo())
+	createPublicModuleProject(t, req, "", defaultAssertAssertGo())
 	req.OutsideGenDir = filepath.Join(t.TempDir(), "generated")
 	setupModuleEnv(t, req)
-	req.Args = []string{"test", testDir, "--gen-dir", req.OutsideGenDir, "-v"}
+	req.Args = []string{"test", req.TestDir, "--gen-dir", req.OutsideGenDir, "-v"}
 	return nil
 }
 ```

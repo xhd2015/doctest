@@ -26,8 +26,9 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
+    cfg := multiRunCfg{}
     cfg.TestDir = createTempTestProject(t, "mytest")
-    doMultiRun(t, req)
+    doMultiRun(t, req, cfg)
     return nil
 }
 ```

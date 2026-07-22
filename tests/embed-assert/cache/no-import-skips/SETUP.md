@@ -30,9 +30,9 @@ import (
 func Setup(t *testing.T, req *Request) error {
 	cacheDir := expectedAssertCacheDir(t, req.CacheHome)
 	_ = os.RemoveAll(cacheDir)
-	createPublicModuleProject(t, "", defaultPublicAssertGo())
+	createPublicModuleProject(t, req, "", defaultPublicAssertGo())
 	setupModuleEnv(t, req)
-	req.Args = []string{"test", testDir, "-v"}
+	req.Args = []string{"test", req.TestDir, "-v"}
 	return nil
 }
 ```

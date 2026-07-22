@@ -19,12 +19,12 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
-    cfg = multiRunCfg{
+    cfg := multiRunCfg{
         TestDir:       createDeepChainProject(t, "mytest"),
         ModifyFile:    "mid-a/mid-b/mid-c/SETUP.md",
         ModifyContent: modifiedSetupContent("modified-l3-setup"),
     }
-    doMultiRun(t, req)
+    doMultiRun(t, req, cfg)
     return nil
 }
 ```

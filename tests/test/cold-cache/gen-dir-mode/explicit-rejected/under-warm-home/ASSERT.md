@@ -46,11 +46,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("expected clear Error refusing gen-dir under warm mapping-gen, got:\nstderr:\n%s\nstdout:\n%s", resp.Stderr, resp.Stdout)
 	}
 
-	if st.Marker == "" {
-		t.Fatal("st.Marker not set")
+	if req.CCMarker == "" {
+		t.Fatal("req.CCMarker not set")
 	}
-	if _, statErr := os.Stat(st.Marker); statErr != nil {
-		t.Fatalf("content under warm mapping-gen was wiped on reject: %s: %v\nstderr:\n%s", st.Marker, statErr, resp.Stderr)
+	if _, statErr := os.Stat(req.CCMarker); statErr != nil {
+		t.Fatalf("content under warm mapping-gen was wiped on reject: %s: %v\nstderr:\n%s", req.CCMarker, statErr, resp.Stderr)
 	}
 }
 ```

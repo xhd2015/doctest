@@ -29,15 +29,15 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("expected legacy nested-module test to pass, got exit %d\nstdout:\n%s\nstderr:\n%s", resp.ExitCode, resp.Stdout, resp.Stderr)
 	}
 
-	assertNestedGoMod(t, outsideGenDir)
+	assertNestedGoMod(t, req.OutsideGenDir)
 
-	genTest := generatedLeafTestPath(outsideGenDir)
+	genTest := generatedLeafTestPath(req.OutsideGenDir)
 	assertFileExists(t, genTest)
 
 	// Unified: Run (and its imports) live in __droot; leaf is thin.
 	wantImport := modPath + "/pkg/greet"
 	found := false
-	filepath.Walk(outsideGenDir, func(path string, info os.FileInfo, err error) error {
+	filepath.Walk(req.OutsideGenDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") {
 			return err
 		}
@@ -51,9 +51,9 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		return nil
 	})
 	if !found {
-		t.Fatalf("expected generated tree to import %s under %s", wantImport, outsideGenDir)
+		t.Fatalf("expected generated tree to import %s under %s", wantImport, req.OutsideGenDir)
 	}
 
-	assertNoDoctestRunDirs(t, moduleRoot)
+	assertNoDoctestRunDirs(t, req.ModuleRoot)
 }
 ```

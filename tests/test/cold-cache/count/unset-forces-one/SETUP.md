@@ -21,7 +21,7 @@ doctest test --cold-cache <tree>   # no -count flag
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-	req.Args = []string{"test", "--cold-cache", st.TestDir}
+	req.Args = []string{"test", "--cold-cache", req.CCTestDir}
 	return nil
 }
 ```

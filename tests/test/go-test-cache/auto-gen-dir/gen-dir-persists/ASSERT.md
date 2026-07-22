@@ -4,7 +4,7 @@ label: heavy
 
 ## Expected
 - The gen directory exists and is not empty after the first run completes.
-- The gen directory path was captured in state.
+- The gen directory path was captured on `req.MRGenDir`.
 
 ## Exit Code
 - Exit code 0.
@@ -17,20 +17,20 @@ import (
 )
 
 func Assert(t *testing.T, req *Request, resp *Response, err error) {
-    if state.GenDir == "" {
+    if req.MRGenDir == "" {
         t.Fatal("gen dir path was not captured from output")
     }
-    if !strings.Contains(state.GenDir, "/doctest/") {
-        t.Fatalf("gen dir is not a hash-based doctest path; got: %s", state.GenDir)
+    if !strings.Contains(req.MRGenDir, "/doctest/") {
+        t.Fatalf("gen dir is not a hash-based doctest path; got: %s", req.MRGenDir)
     }
-    fi, statErr := os.Stat(state.GenDir)
+    fi, statErr := os.Stat(req.MRGenDir)
     if statErr != nil {
-        t.Fatalf("gen dir does not exist at %s: %v", state.GenDir, statErr)
+        t.Fatalf("gen dir does not exist at %s: %v", req.MRGenDir, statErr)
     }
     if !fi.IsDir() {
-        t.Fatalf("gen dir path is not a directory: %s", state.GenDir)
+        t.Fatalf("gen dir path is not a directory: %s", req.MRGenDir)
     }
-    entries, readErr := os.ReadDir(state.GenDir)
+    entries, readErr := os.ReadDir(req.MRGenDir)
     if readErr != nil {
         t.Fatalf("cannot read gen dir: %v", readErr)
     }

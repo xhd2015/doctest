@@ -29,12 +29,12 @@ func Setup(t *testing.T, req *Request) error {
     // Same Go as leafSetupContent(); only Steps prose differs. Build fences via bt.
     proseOnly := "## Steps\n1. prose-only change that must not alter extracted Go\n\n" +
         bt + "go\nimport \"testing\"\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }\n" + bt + "\n"
-    cfg = multiRunCfg{
+    cfg := multiRunCfg{
         TestDir:       createTempTestProject(t, "mytest"),
         ModifyFile:    "simple/SETUP.md",
         ModifyContent: proseOnly,
     }
-    doMultiRun(t, req)
+    doMultiRun(t, req, cfg)
     return nil
 }
 ```

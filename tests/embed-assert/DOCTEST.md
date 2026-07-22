@@ -102,10 +102,19 @@ type Request struct {
 	WorkDir		string
 	Timeout		time.Duration
 	Bin		string
+	// Per-leaf sandbox paths (Parallel-safe). Not package globals — this tree
+	// runs leaves under t.Parallel() in one suite package.
+	ModuleRoot	string
+	TestDir		string
 	OutsideGenDir	string
 	// CacheHome is the isolated DOCTEST_CACHE_HOME for this leaf (child Env + parent path asserts).
 	// Never applied via parent process Setenv.
 	CacheHome	string
+	// Snapshot state for cache/second-run-idempotent (Parallel-safe, not package globals).
+	BeforeAssertMtime	int64
+	BeforeAssertDigest	[16]byte
+	BeforeGoModMtime	int64
+	BeforeGoModDigest	[16]byte
 }
 type Response struct {
 	ExitCode	int

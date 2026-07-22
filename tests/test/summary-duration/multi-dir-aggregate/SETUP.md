@@ -1,10 +1,10 @@
 # Scenario
 
-**Feature**: multiple directory arguments produce per-dir inline durations and one final aggregate
+**Feature**: multiple directory arguments use one suite plan — one progress summary + one final aggregate
 
 ```
-# multi-arg aggregation
-doctest test <dir-a> <dir-b> -> per-dir inline (N Run, ...) in DURATION -> single PASS(passed/total) in DURATION
+# multi-arg one suite plan (non-conflicting roots)
+doctest test <dir-a> <dir-b> -> one prepare/workspace hub go test -> one (3 Run, 3 Pass, ...) in DURATION -> single PASS(3/3) in DURATION
 ```
 
 ## Preconditions

@@ -23,9 +23,9 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if resp.ExitCode != 0 {
 		t.Fatalf("expected outside gen-dir dump to pass, got exit %d\nstdout:\n%s\nstderr:\n%s", resp.ExitCode, resp.Stdout, resp.Stderr)
 	}
-	assertDumpHasInternalImport(t, outsideGenDir)
-	assertDumpNoNestedGoMod(t, outsideGenDir)
+	assertDumpHasInternalImport(t, req.OutsideGenDir)
+	assertDumpNoNestedGoMod(t, req.OutsideGenDir)
 	assertStderrUsesTempCompile(t, resp)
-	assertNoDoctestRunDirs(t, moduleRoot)
+	assertNoDoctestRunDirs(t, req.ModuleRoot)
 }
 ```

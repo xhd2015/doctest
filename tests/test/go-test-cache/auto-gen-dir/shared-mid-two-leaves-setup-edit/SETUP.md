@@ -20,12 +20,12 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
-    cfg = multiRunCfg{
+    cfg := multiRunCfg{
         TestDir:       createSharedMidTwoLeavesProject(t, "mytest"),
         ModifyFile:    "mid-a/SETUP.md",
         ModifyContent: modifiedSetupContent("modified-shared-mid"),
     }
-    doMultiRun(t, req)
+    doMultiRun(t, req, cfg)
     return nil
 }
 ```

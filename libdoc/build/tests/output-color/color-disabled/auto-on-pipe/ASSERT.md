@@ -26,7 +26,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("expected summary with 1 Pass, got:\n%s", resp.Output)
 	}
 	if containsANSI(resp.Output) {
-		t.Fatalf("ColorAuto on pipe must not emit ANSI, got:\n%s", resp.Output)
+		t.Fatalf("ColorAuto on opts.Stdout buffer (non-TTY) must not emit ANSI, got:\n%s", resp.Output)
 	}
 }
 ```

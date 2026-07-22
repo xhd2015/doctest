@@ -29,11 +29,11 @@ import (
 
 func Setup(t *testing.T, req *Request) error {
 	withCacheSandbox(t, req)
-	st.TestDir = createTempTestProject(t)
+	req.CCTestDir = createTempTestProject(t)
 	// Explicit dir lives outside the warm home (sibling under sandbox, not under mapping-gen).
-	st.GenDir = filepath.Join(st.CacheHome, "other-cold")
-	seedMarker(t, st.GenDir, "marker-before")
-	req.Args = []string{"test", "--cold-cache", "--gen-dir", st.GenDir, st.TestDir}
+	req.CCGenDir = filepath.Join(req.CCCacheHome, "other-cold")
+	seedMarker(t, req, req.CCGenDir, "marker-before")
+	req.Args = []string{"test", "--cold-cache", "--gen-dir", req.CCGenDir, req.CCTestDir}
 	return nil
 }
 ```

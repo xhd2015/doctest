@@ -15,23 +15,29 @@ final aggregate `PASS (p/t) in DURATION` / `FAIL (p/t) in DURATION`.
 - **`doctest test`** — CLI subcommand that discovers runnable leaves, builds
   generated go-test packages, runs them, and reports progress.
 - **Test tree** — temp directory hierarchy the command targets.
-- **Runner** — aggregates stats and wall-clock time across multiple directory
-  arguments within one invocation.
-- **Per-suite timer** — measures wall time of a single `go test` subprocess
-  (non-verbose dot path only for inline summary).
-- **Stdout** — receives dot progress, inline per-suite summaries, and the
-  final aggregate result line.
+- **Suite plan** — one prepare + workspace/hub `go test` for a coherent set of
+  roots (single path, or multi-arg non-conflicting roots).
+- **Runner** — measures wall-clock time for the suite plan and for the whole
+  invocation (final aggregate).
+- **Per-suite timer** — measures wall time of a single suite-plan `go test`
+  subprocess (non-verbose dot path only for inline summary).
+- **Stdout** — receives dot progress, one inline suite progress summary per
+  suite plan, and the final aggregate result line.
 
 ### Behaviors
 
 - **Discover** — walk arguments and count runnable leaves (`Total`).
-- **Execute** — run each leaf package via `go test`; emit dots in non-verbose
+- **Plan** — multi-arg non-conflicting roots become **one** suite plan (not
+  one plan per directory argument).
+- **Execute** — run the suite plan via hub `go test`; emit dots in non-verbose
   mode.
-- **Inline summarize** — after dots, print `(N Run, N Pass, N Fail, N Cached)
-  in DURATION` where `DURATION` is display-formatted wall time for that `go test`
-  subprocess (integer sub-second units; ≥1s with at most 2 decimal digits).
-- **Aggregate** — runner sums pass/fail counts and measures total invocation
-  wall time from start until just before the final summary.
+- **Inline summarize** — after dots, print **one** `(N Run, N Pass, N Fail, N Cached)
+  in DURATION` for that suite plan, where `DURATION` is display-formatted wall
+  time for the hub `go test` subprocess (integer sub-second units; ≥1s with at
+  most 2 decimal digits). Multi-arg with 3 leaves → one `(3 Run, 3 Pass, …)`,
+  not separate per-dir lines.
+- **Aggregate** — runner measures total invocation wall time from start until
+  just before the final summary.
 - **Final summarize** — print one line `PASS (p/t) in DURATION` or
   `FAIL (p/t) in DURATION` on stdout.
 - **Color** — when enabled, gray-wrap `DURATION` after the closing paren in
@@ -47,7 +53,7 @@ summary-duration
 ├── verbose-pass ─────────────── -v → no inline summary; final has duration
 ├── color-pass ───────────────── --color → gray inline duration; green PASS token
 ├── color-disabled ───────────── --no-color → plain durations, no ANSI
-├── multi-dir-aggregate ──────── two dirs → per-dir inline + one final duration
+├── multi-dir-aggregate ──────── two dirs → one suite inline + one final duration
 └── slow-leaf ────────────────── ~1s sleep → durations ≥ 1s
 ```
 
@@ -60,7 +66,7 @@ summary-duration
 | `verbose-pass` | `-v` | No inline summary; `PASS (1/1) in <dur>` after go test -v output |
 | `color-pass` | `--color` | Gray inline duration; green `PASS (1/1)`; plain ` in <dur>` |
 | `color-disabled` | `--no-color` | Plain durations throughout stdout |
-| `multi-dir-aggregate` | two dirs | Per-dir inline summaries with duration; one `PASS (3/3) in <dur>` |
+| `multi-dir-aggregate` | two dirs | One suite `(3 Run, 3 Pass, …) in <dur>` (not per-dir); one `PASS (3/3) in <dur>` |
 | `slow-leaf` | default | Parsed durations ≥ 1s |
 
 ## How to Run

@@ -28,10 +28,10 @@ import (
 func Setup(t *testing.T, req *Request) error {
 	// Parent configured --cold-cache (auto gen) and seeded the marker.
 	// Verify preconditions so Assert can rely on wipe semantics.
-	if st.ColdHome == "" || st.Marker == "" {
+	if req.CCColdHome == "" || req.CCMarker == "" {
 		t.Fatal("auto parent must set ColdHome and seed Marker")
 	}
-	if _, err := os.Stat(st.Marker); err != nil {
+	if _, err := os.Stat(req.CCMarker); err != nil {
 		t.Fatalf("marker must exist before cold-cache run: %v", err)
 	}
 	if len(req.Args) == 0 {

@@ -32,7 +32,7 @@ on dot progress and the summary line, controlled by `core.Options.Color`
 ```
 output-color
 ├── color-disabled          [Color off]
-│   ├── auto-on-pipe        ColorAuto + stdout pipe → no ANSI
+│   ├── auto-on-pipe        ColorAuto + opts.Stdout buffer (non-TTY) → no ANSI
 │   └── never-on-fail       ColorNever + failing leaf → no ANSI anywhere
 └── color-enabled           [ColorAlways — deterministic]
     ├── force-color         1 pass → green `N Pass`, plain dot
@@ -45,7 +45,7 @@ output-color
 
 | Leaf | Description |
 |------|-------------|
-| `color-disabled/auto-on-pipe` | `ColorAuto` with stdout redirected to pipe emits no escape sequences |
+| `color-disabled/auto-on-pipe` | `ColorAuto` with `opts.Stdout` buffer (non-TTY) emits no escape sequences |
 | `color-disabled/never-on-fail` | `ColorNever` leaves fail dot and summary uncolored |
 | `color-enabled/force-color` | `ColorAlways` wraps `N Pass` in green and `0 Fail` in gray |
 | `color-enabled/all-pass` | Two pass dots stay plain; Pass green; `0 Fail` and `0 Cached` gray |
@@ -63,11 +63,7 @@ doctest test ./tests/test/color-flags/conflict
 ```go
 import (
 	"bytes"
-	"io"
-	"os"
 	"path/filepath"
-	"regexp"
-	"strings"
 	"testing"
 	"github.com/xhd2015/doctest/libdoc/build"
 	"github.com/xhd2015/doctest/libdoc/core"
@@ -93,36 +89,37 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 
 	createSubTree(t, subRoot, req.PassCount, req.FailCount)
 
+	// Parallel-safe capture: write progress into opts.Stdout (bytes.Buffer is
+	// non-TTY, so ColorAuto resolves off). Never swap os.Stdout — that races
+	// under t.Parallel() across leaves in the same package.
+	var buf bytes.Buffer
 	opts := core.Options{
 		GenDir:		genDir,
 		RemoveTemp:	false,
 		Color:		req.Color,
 		Count:		req.Count,
+		Stdout:		&buf,
+		// Keep PASS/FAIL end-line off real stdout during harness capture.
+		SuppressResultSummary:	true,
 	}
 
 	if req.WarmCache {
+		// Warmup must not pollute the measured buffer (and must not race
+		// os.Stdout). Reuse the same opts but discard progress.
+		var warmDiscard bytes.Buffer
+		warmOpts := opts
+		warmOpts.Stdout = &warmDiscard
 		// First run may rewrite gen with -count=1 (no result cache store);
 		// second run stores the entry the measured run should hit.
-		if err := build.Test(subRoot, opts); err != nil {
+		if err := build.Test(subRoot, warmOpts); err != nil {
 			t.Fatalf("cache warmup run 1 failed: %v", err)
 		}
-		if err := build.Test(subRoot, opts); err != nil {
+		if err := build.Test(subRoot, warmOpts); err != nil {
 			t.Fatalf("cache warmup run 2 failed: %v", err)
 		}
 	}
 
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stdout = w
-
 	testErr := build.Test(subRoot, opts)
-	w.Close()
-	var buf bytes.Buffer
-	_, _ = io.Copy(&buf, r)
-	os.Stdout = oldStdout
 
 	output := buf.String()
 	dots, summary := splitDotsAndSummary(output)

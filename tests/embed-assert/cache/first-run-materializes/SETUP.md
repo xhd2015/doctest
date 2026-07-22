@@ -20,21 +20,14 @@ doctest test with assert -> creates <md5>/{assert.go,go.mod}
 
 ```go
 import (
-	"os"
 	"testing"
 )
 
-var cacheExistedBefore bool
-
 func Setup(t *testing.T, req *Request) error {
-	cacheDir := expectedAssertCacheDir(t, req.CacheHome)
-	if _, err := os.Stat(cacheDir); err == nil {
-		cacheExistedBefore = true
-	}
 	// Do not RemoveAll: isolated DOCTEST_CACHE_HOME must never wipe the global cache.
-	createPublicModuleProject(t, "", defaultAssertAssertGo())
+	createPublicModuleProject(t, req, "", defaultAssertAssertGo())
 	setupModuleEnv(t, req)
-	req.Args = []string{"test", testDir, "-v"}
+	req.Args = []string{"test", req.TestDir, "-v"}
 	return nil
 }
 ```

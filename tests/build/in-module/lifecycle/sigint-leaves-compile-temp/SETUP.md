@@ -28,12 +28,11 @@ import (
 "github.com/xhd2015/doctest/session"
 )
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-	createInternalModuleProjectWithLeaves(t, d)
-	_ = genDir
+	createInternalModuleProjectWithLeaves(t, d, req)
 	setupModuleEnv(t, req)
 	req.InterruptDuringWriteCases = true
 	req.InterruptTriggerLeaf = 15
-	req.Args = append(req.Args, testDir, "-v")
+	req.Args = append(req.Args, req.TestDir, "-v")
 	return nil
 }
 ```

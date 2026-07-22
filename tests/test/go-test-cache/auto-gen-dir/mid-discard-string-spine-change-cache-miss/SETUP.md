@@ -22,12 +22,12 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
-    cfg = multiRunCfg{
+    cfg := multiRunCfg{
         TestDir:       createL1ProjectDeadDiscard(t, "mytest"),
         ModifyFile:    "mid-a/SETUP.md",
         ModifyContent: modifiedDiscardStringSetup("discard-v2"),
     }
-    doMultiRun(t, req)
+    doMultiRun(t, req, cfg)
     return nil
 }
 ```

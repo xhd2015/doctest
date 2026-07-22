@@ -20,12 +20,12 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
-    cfg = multiRunCfg{
+    cfg := multiRunCfg{
         TestDir:       createTempTestProjectRootWorkDir(t, "mytest", "root-v1"),
         ModifyFile:    "SETUP.md",
         ModifyContent: modifiedSetupContent("modified-root-setup"),
     }
-    doMultiRun(t, req)
+    doMultiRun(t, req, cfg)
     return nil
 }
 ```

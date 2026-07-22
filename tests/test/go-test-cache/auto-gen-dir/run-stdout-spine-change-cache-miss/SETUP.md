@@ -32,12 +32,12 @@ func Setup(t *testing.T, req *Request) error {
     if err := os.WriteFile(filepath.Join(testDir, "simple", "ASSERT.md"), []byte(leafAssertStdoutNonEmpty()), 0644); err != nil {
         t.Fatalf("write assert: %v", err)
     }
-    cfg = multiRunCfg{
+    cfg := multiRunCfg{
         TestDir:    testDir,
         ModifyFile: "DOCTEST.md",
         ModifyContent: testtree.MinimalDOCTEST(doctestBody(runCodeWithStdout("run-edited"))),
     }
-    doMultiRun(t, req)
+    doMultiRun(t, req, cfg)
     return nil
 }
 ```

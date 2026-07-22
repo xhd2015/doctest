@@ -24,14 +24,11 @@ import (
 	"testing"
 )
 
-var outsideGenDir string
-
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-	createInternalModuleProject(t, d)
-	_ = genDir
-	outsideGenDir = filepath.Join(t.TempDir(), "outside_dump")
+	createInternalModuleProject(t, d, req)
+	req.OutsideGenDir = filepath.Join(t.TempDir(), "outside_dump")
 	setupModuleEnv(t, req)
-	req.Args = append(req.Args, testDir, "--gen-dir", outsideGenDir, "-v")
+	req.Args = append(req.Args, req.TestDir, "--gen-dir", req.OutsideGenDir, "-v")
 	return nil
 }
 ```

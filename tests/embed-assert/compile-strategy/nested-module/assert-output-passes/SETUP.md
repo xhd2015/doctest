@@ -20,9 +20,9 @@ doctest test -> replace assert => cache -> go test PASS
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-	createPublicModuleProject(t, "", defaultAssertAssertGo())
+	createPublicModuleProject(t, req, "", defaultAssertAssertGo())
 	setupModuleEnv(t, req)
-	req.Args = []string{"test", testDir, "-v"}
+	req.Args = []string{"test", req.TestDir, "-v"}
 	return nil
 }
 ```

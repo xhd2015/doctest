@@ -30,12 +30,12 @@ func Setup(t *testing.T, req *Request) error {
         []string{"mid-a", "other"},
         []string{"mid-a/leaf-x", "other/leaf-z"},
     )
-    cfg = multiRunCfg{
+    cfg := multiRunCfg{
         TestDir:       testDir,
         ModifyFile:    "other/SETUP.md",
         ModifyContent: modifiedSetupContent("modified-sibling-branch"),
     }
-    doMultiRun(t, req)
+    doMultiRun(t, req, cfg)
     return nil
 }
 ```

@@ -22,13 +22,13 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     if resp.ExitCode != 0 {
         t.Fatalf("expected exit 0, got %d\nstderr:\n%s", resp.ExitCode, resp.Stderr)
     }
-    if state.FirstResp == nil || state.SecondResp == nil {
-        t.Fatal("multi-run state not set by Run")
+    if req.MRFirst == nil || req.MRSecond == nil {
+        t.Fatal("multi-run state not set on req (doMultiRun)")
     }
-    if state.FirstResp.ExitCode != 0 {
-        t.Fatalf("first run exit %d, stderr:\n%s", state.FirstResp.ExitCode, state.FirstResp.Stderr)
+    if req.MRFirst.ExitCode != 0 {
+        t.Fatalf("first run exit %d, stderr:\n%s", req.MRFirst.ExitCode, req.MRFirst.Stderr)
     }
-    secondStdout := state.SecondResp.Stdout
+    secondStdout := req.MRSecond.Stdout
     // Leaf-cache product: warm second run must show Cached > 0.
     if !stdoutHasPositiveCached(secondStdout) {
         t.Fatalf("second run not leaf-cached; expected Cached > 0 in stdout:\n%s", secondStdout)

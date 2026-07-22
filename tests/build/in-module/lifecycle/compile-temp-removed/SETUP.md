@@ -24,9 +24,9 @@ import (
 "github.com/xhd2015/doctest/session"
 )
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-	createInternalModuleProject(t, d)
+	createInternalModuleProject(t, d, req)
 	setupModuleEnv(t, req)
-	req.Args = append(req.Args, testDir, "--gen-dir", genDir, "-v")
+	req.Args = append(req.Args, req.TestDir, "--gen-dir", req.GenDir, "-v")
 	return nil
 }
 ```

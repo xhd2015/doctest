@@ -17,11 +17,16 @@ doctest test <fixture> [flags] -> summary (N Run, N Pass, N Fail, N Cached)
 - Warmup runs populate leaf-cache (and go cache) before the two captured runs.
 - **Cached** means leaf-cache skips when the package runs; whole-package go
   `(cached)` expands to N Cached for all N leaves.
+- **Parallel-safe**: multi-run cfg is a local parameter; results live on
+  `req.MRFirst` / `req.MRSecond` / `req.MRGenDir` (not package globals).
 
 ## Steps
-1. Define shared configuration and state for multi-run test leaves.
-2. Provide a multi-run helper that orchestrates silent warmups then two captured executions.
-3. Each leaf sets cfg flags (edit path, mtime-only, identical rewrite, SecondFlags).
+1. Provide a multi-run helper that takes cfg, orchestrates silent warmups, then
+   two captured executions, and writes results onto `req`.
+2. Each leaf builds a local `multiRunCfg` (edit path, mtime-only, identical rewrite,
+   SecondFlags) and calls `doMultiRun(t, req, cfg)`.
+3. Use a unique `DOCTEST_SESSION_ID` per multi-run instance (stable across that
+   instance's warmup/measured pair; isolated from concurrent leaves).
 
 ```go
 import (
@@ -49,21 +54,13 @@ type multiRunCfg struct {
     RewriteIdentical  bool // rewrite ModifyFile with its current bytes
 }
 
-var cfg multiRunCfg
-
-type multiRunState struct {
-    FirstResp  *Response
-    SecondResp *Response
-    GenDir     string
-}
-
-var state multiRunState
-
 func Setup(t *testing.T, req *Request) error {
-    // Reset shared package state every leaf — unified suite runs all leaves in
-    // one package; stale cfg.ModifyFile from a prior leaf would poison cache tests.
-    cfg = multiRunCfg{}
-    state = multiRunState{}
+    // Clear multi-run fields so a leaked pointer from a prior leaf cannot
+    // satisfy Assert under sequential reuse of a Request value (defensive;
+    // doctest allocates per leaf — package globals were the real race).
+    req.MRFirst = nil
+    req.MRSecond = nil
+    req.MRGenDir = ""
     req.Args = []string{}
     return nil
 }
@@ -97,7 +94,7 @@ func doRun(t *testing.T, bin string, args []string, extraEnv ...string) *Respons
     return resp
 }
 
-func parseGenDir(stderr string) {
+func parseGenDir(stderr string) string {
     for _, line := range strings.Split(stderr, "\n") {
         trimmed := strings.TrimSpace(line)
         if !strings.HasPrefix(trimmed, "cd ") || !strings.Contains(trimmed, " && go ") {
@@ -110,8 +107,7 @@ func parseGenDir(stderr string) {
         for {
             if strings.Contains(dir, "mapping-gen") {
                 if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-                    state.GenDir = dir
-                    return
+                    return dir
                 }
             }
             parent := filepath.Dir(dir)
@@ -120,13 +116,14 @@ func parseGenDir(stderr string) {
             }
             dir = parent
         }
-        return
+        return ""
     }
+    return ""
 }
 
 // stdoutHasPositiveCached is defined on the go-test-cache root SETUP.
 
-func doMultiRun(t *testing.T, req *Request) {
+func doMultiRun(t *testing.T, req *Request, cfg multiRunCfg) {
     if req.Bin == "" {
         t.Fatalf("req.Bin is not set")
     }
@@ -138,14 +135,15 @@ func doMultiRun(t *testing.T, req *Request) {
 
     baseArgs := []string{"test", testDir}
 
-    // Isolate GOCACHE + leaf-cache store + fix session id across warmup/measured
-    // runs so concurrent outer-suite noise cannot race shared machine caches.
+    // Isolate GOCACHE + leaf-cache store; unique session id per multi-run so
+    // concurrent leaves do not share session/leaf-cache state.
     goCache := t.TempDir()
     leafCache := t.TempDir()
+    sessionID := "multi-run-" + filepath.Base(leafCache)
     stableEnv := []string{
         "GOCACHE=" + goCache,
         "DOCTEST_LEAF_CACHE=" + leafCache,
-        "DOCTEST_SESSION_ID=multi-run-stable-session",
+        "DOCTEST_SESSION_ID=" + sessionID,
     }
 
     // Two warmups: first generation may rewrite mapping-gen; second stores the
@@ -154,9 +152,8 @@ func doMultiRun(t *testing.T, req *Request) {
     doRun(t, req.Bin, baseArgs, stableEnv...)
 
     resp1 := doRun(t, req.Bin, baseArgs, stableEnv...)
-    state.FirstResp = resp1
-
-    parseGenDir(resp1.Stderr)
+    req.MRFirst = resp1
+    req.MRGenDir = parseGenDir(resp1.Stderr)
 
     if cfg.ModifyFile != "" {
         targetPath := filepath.Join(testDir, cfg.ModifyFile)
@@ -190,6 +187,6 @@ func doMultiRun(t *testing.T, req *Request) {
     }
 
     resp2 := doRun(t, req.Bin, args2, stableEnv...)
-    state.SecondResp = resp2
+    req.MRSecond = resp2
 }
 ```

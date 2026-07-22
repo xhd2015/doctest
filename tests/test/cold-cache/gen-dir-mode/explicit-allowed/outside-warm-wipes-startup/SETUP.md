@@ -24,10 +24,10 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
-	if st.GenDir == "" || st.Marker == "" {
+	if req.CCGenDir == "" || req.CCMarker == "" {
 		t.Fatal("explicit-allowed parent must set GenDir and seed Marker")
 	}
-	if _, err := os.Stat(st.Marker); err != nil {
+	if _, err := os.Stat(req.CCMarker); err != nil {
 		t.Fatalf("marker must exist under explicit gen-dir before run: %v", err)
 	}
 	if len(req.Args) == 0 {

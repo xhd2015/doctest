@@ -28,17 +28,17 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	cacheDir := expectedAssertCacheDir(t, req.CacheHome)
 	afterAssertMtime, afterAssertDigest := snapshotFileState(t, filepath.Join(cacheDir, "assert.go"))
 	afterGoModMtime, afterGoModDigest := snapshotFileState(t, filepath.Join(cacheDir, "go.mod"))
-	if afterAssertDigest != beforeAssertDigest {
+	if afterAssertDigest != req.BeforeAssertDigest {
 		t.Fatalf("assert.go content changed on second run")
 	}
-	if afterGoModDigest != beforeGoModDigest {
+	if afterGoModDigest != req.BeforeGoModDigest {
 		t.Fatalf("go.mod content changed on second run")
 	}
-	if afterAssertMtime != beforeAssertMtime {
-		t.Fatalf("assert.go mtime changed on second run: before=%d after=%d", beforeAssertMtime, afterAssertMtime)
+	if afterAssertMtime != req.BeforeAssertMtime {
+		t.Fatalf("assert.go mtime changed on second run: before=%d after=%d", req.BeforeAssertMtime, afterAssertMtime)
 	}
-	if afterGoModMtime != beforeGoModMtime {
-		t.Fatalf("go.mod mtime changed on second run: before=%d after=%d", beforeGoModMtime, afterGoModMtime)
+	if afterGoModMtime != req.BeforeGoModMtime {
+		t.Fatalf("go.mod mtime changed on second run: before=%d after=%d", req.BeforeGoModMtime, afterGoModMtime)
 	}
 }
 ```

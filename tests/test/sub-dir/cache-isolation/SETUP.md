@@ -16,11 +16,13 @@ progress dots -> . F | verbose -> go test -v | count -> N tests
 ## Preconditions
 - The root Setup has built the doctest binary and set req.Bin.
 - Tests need extended timeout for Go compilation (two doctest invocations).
+- **Parallel-safe**: multi-run results live on `req.MRFirst` / `req.MRSecond`
+  (not package-global `isoState`).
 
 ## Steps
-1. Define shared configuration and state for multi-run test leaves.
-2. Provide a multi-run `Run` function that creates a test tree with groups and runs doctest twice.
-3. Each leaf sets the scenario via `cisoCfg.Scenario`.
+1. Provide a multi-run `doMultiRun` that creates a test tree with groups and runs
+   doctest twice for a given scenario string.
+2. Each leaf passes its scenario to `doMultiRun`; results are written onto `req`.
 
 ```go
 import (
@@ -36,19 +38,6 @@ import (
 
 	"github.com/xhd2015/doctest/libdoc/testtree"
 )
-
-type CacheIsoCfg struct {
-	Scenario string
-}
-
-var cisoCfg CacheIsoCfg
-
-type CacheIsoState struct {
-	FirstRun  *Response
-	SecondRun *Response
-}
-
-var isoState CacheIsoState
 
 var bt = "`" + "`" + "`"
 
@@ -125,7 +114,7 @@ func doRun(t *testing.T, bin string, args []string, timeout time.Duration) *Resp
 	return resp
 }
 
-func doMultiRun(t *testing.T, req *Request) {
+func doMultiRun(t *testing.T, req *Request, scenario string) {
     if req.Bin == "" {
         t.Fatalf("req.Bin is not set")
     }
@@ -134,7 +123,7 @@ func doMultiRun(t *testing.T, req *Request) {
     createMultiGroupTree(t, treeRoot)
 
     var firstArgs, secondArgs []string
-    switch cisoCfg.Scenario {
+    switch scenario {
     case "subdir_after_full":
         firstArgs = []string{"test", "-v", treeRoot}
         secondArgs = []string{"test", "-v", filepath.Join(treeRoot, "group-a")}
@@ -145,18 +134,18 @@ func doMultiRun(t *testing.T, req *Request) {
         firstArgs = []string{"test", "-v", filepath.Join(treeRoot, "group-a")}
         secondArgs = []string{"test", "-v", filepath.Join(treeRoot, "group-b")}
     default:
-        t.Fatalf("unknown scenario: %s", cisoCfg.Scenario)
+        t.Fatalf("unknown scenario: %s", scenario)
     }
 
     runTimeout := 120 * time.Second
-    isoState.FirstRun = doRun(t, req.Bin, firstArgs, runTimeout)
-    isoState.SecondRun = doRun(t, req.Bin, secondArgs, runTimeout)
+    req.MRFirst = doRun(t, req.Bin, firstArgs, runTimeout)
+    req.MRSecond = doRun(t, req.Bin, secondArgs, runTimeout)
 }
 
 func Setup(t *testing.T, req *Request) error {
     _ = fmt.Sprintf
-    isoState.FirstRun = nil
-    isoState.SecondRun = nil
+    req.MRFirst = nil
+    req.MRSecond = nil
     req.Timeout = 150 * time.Second
     req.Args = []string{}
     return nil

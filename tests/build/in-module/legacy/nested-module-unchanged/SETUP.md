@@ -23,14 +23,11 @@ import (
 	"testing"
 )
 
-var outsideGenDir string
-
 func Setup(t *testing.T, req *Request) error {
-	createPublicModuleProject(t)
-	_ = genDir
-	outsideGenDir = filepath.Join(t.TempDir(), "generated")
-	req.WorkDir = moduleRoot
-	req.Args = []string{"test", testDir, "--gen-dir", outsideGenDir, "-v"}
+	createPublicModuleProject(t, req)
+	req.OutsideGenDir = filepath.Join(t.TempDir(), "generated")
+	req.WorkDir = req.ModuleRoot
+	req.Args = []string{"test", req.TestDir, "--gen-dir", req.OutsideGenDir, "-v"}
 	return nil
 }
 ```

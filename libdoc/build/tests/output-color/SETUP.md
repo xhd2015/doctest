@@ -16,33 +16,32 @@ fail dot -> red | pass dot -> plain | summary Pass/Fail/Cached -> green/red/gray
 ## Preconditions
 - The `build` package is importable (`github.com/xhd2015/doctest/libdoc/build`).
 - Each leaf configures `Request` fields; root `Run` builds a temp sub-tree,
-  redirects `os.Stdout` to a pipe, and calls `build.Test`.
+  captures progress via `opts.Stdout` (`bytes.Buffer`, non-TTY), and calls
+  `build.Test` — **never** swaps `os.Stdout` (parallel-safe under `t.Parallel()`).
 - Backtick characters in embedded Go strings use `\x60` to avoid conflicting
   with the outer markdown code fence.
 
 ## Steps
 1. Create a temp sub-tree with `PassCount` passing and `FailCount` failing leaves.
 2. Optionally warm the go-test cache with a prior `build.Test` run (`WarmCache`).
-3. Redirect `os.Stdout` to a pipe (non-TTY) and call `build.Test`.
-4. Parse dots and summary from captured stdout into `Response`.
+3. Call `build.Test` with `opts.Stdout` set to a buffer (non-TTY → ColorAuto off).
+4. Parse dots and summary from the buffer into `Response`.
 
 ## Context
 - Leaf names use `a_` / `z_` prefixes so pass packages sort before fail packages.
 - Tests use `ColorAlways` / `ColorNever` for deterministic behavior without a
-  real terminal. `ColorAuto` + pipe verifies auto-off behavior.
+  real terminal. `ColorAuto` + buffer verifies auto-off (non-file writer).
 - ANSI detection uses the regex `\x1b\[[0-9;]*m`.
+- `core.Options.Stdout` is required for parallel-safe harnesses; product already
+  routes progress + color resolution through it (`build.Test`).
 
 ```go
 import (
-	"bytes"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
-	"github.com/xhd2015/doctest/libdoc/build"
-	"github.com/xhd2015/doctest/libdoc/core"
 	"github.com/xhd2015/doctest/libdoc/testtree"
 )
 

@@ -20,9 +20,9 @@ doctest build <tests> -> generated code compiles with assert replace
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-	createPublicModuleProject(t, "", defaultAssertAssertGo())
+	createPublicModuleProject(t, req, "", defaultAssertAssertGo())
 	setupModuleEnv(t, req)
-	req.Args = []string{"build", testDir}
+	req.Args = []string{"build", req.TestDir}
 	return nil
 }
 ```

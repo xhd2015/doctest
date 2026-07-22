@@ -26,28 +26,21 @@ import (
 	"github.com/xhd2015/doctest/session"
 )
 
-var (
-	beforeAssertMtime	int64
-	beforeAssertDigest	[16]byte
-	beforeGoModMtime	int64
-	beforeGoModDigest	[16]byte
-)
-
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-	createPublicModuleProject(t, "", defaultAssertAssertGo())
+	createPublicModuleProject(t, req, "", defaultAssertAssertGo())
 	setupModuleEnv(t, req)
 
-	req.Args = []string{"test", testDir, "-v"}
+	req.Args = []string{"test", req.TestDir, "-v"}
 	if _, err := Run(t, d, req); err != nil {
 		t.Fatalf("first doctest run failed: %v", err)
 	}
 
 	cacheDir := expectedAssertCacheDir(t, req.CacheHome)
 	assertCacheLayout(t, cacheDir)
-	beforeAssertMtime, beforeAssertDigest = snapshotFileState(t, filepath.Join(cacheDir, "assert.go"))
-	beforeGoModMtime, beforeGoModDigest = snapshotFileState(t, filepath.Join(cacheDir, "go.mod"))
+	req.BeforeAssertMtime, req.BeforeAssertDigest = snapshotFileState(t, filepath.Join(cacheDir, "assert.go"))
+	req.BeforeGoModMtime, req.BeforeGoModDigest = snapshotFileState(t, filepath.Join(cacheDir, "go.mod"))
 
-	req.Args = []string{"test", testDir, "-v"}
+	req.Args = []string{"test", req.TestDir, "-v"}
 	return nil
 }
 ```

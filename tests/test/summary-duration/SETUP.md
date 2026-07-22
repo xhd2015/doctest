@@ -3,8 +3,8 @@
 **Feature**: elapsed time in per-suite and final test summaries
 
 ```
-# discover leaves, run packages, measure wall time
-doctest test <dirs> -> discover leaves -> go test per suite -> inline (N Run, ...) in DURATION
+# discover leaves, one suite plan (incl. multi-arg non-conflicting roots), measure wall time
+doctest test <dirs> -> discover leaves -> one suite-plan hub go test -> inline (N Run, ...) in DURATION
 
 # final aggregate
 runner -> PASS(passed/total) in DURATION | FAIL(passed/total) in DURATION
@@ -23,7 +23,7 @@ runner -> PASS(passed/total) in DURATION | FAIL(passed/total) in DURATION
 
 ## Context
 
-- Non-verbose runs include per-suite `(N Run, N Pass, N Fail, N Cached) in DURATION` after dots.
+- Non-verbose runs include one suite-plan `(N Run, N Pass, N Fail, N Cached) in DURATION` after dots (multi-arg non-conflicting roots share one summary totaling all leaves).
 - The aggregated `PASS (x/y) in DURATION` or `FAIL (x/y) in DURATION` line is the last non-empty stdout line when cases exist.
 - Color tests use `--color` or `--no-color` CLI flags.
 - Duration uses display formatting: sub-second values as integers (e.g. `949ms`); ≥1s with at most 2 decimal digits (e.g. `1.37s`). Assertions parse rather than match exact values.

@@ -29,9 +29,7 @@ internal -> temp -modfile (parent go.mod + assert/session replaces) -> go test -
 
 ## Context
 
-- Package-level vars `moduleRoot`, `testDir`, `genDir`, and `outsideGenDir` are
-  set by shared helpers for nested-module scenarios.
-- `internalModuleRoot` is set for internal-compile fixture copies.
+- Per-leaf paths live on `req` (`ModuleRoot`, `TestDir`, `OutsideGenDir`, `CacheHome`) — not package globals — so Parallel leaves do not race.
 - Helpers use `assertmod.RawSourceCacheKeyMD5()` for the cache path that
   `MaterializeAssertModule` writes (same contract whether cache is warm or cold).
 
@@ -59,11 +57,7 @@ const (
 	modPath		= "example.com/app"
 	assertModPath	= "github.com/xhd2015/doctest/assert"
 )
-var (
-	moduleRoot	string
-	testDir		string
-	bt		= string([]byte{96, 96, 96})
-)
+var bt = string([]byte{96, 96, 96})
 func lockCacheTests(t *testing.T) {
 	t.Helper()
 	lockPath := filepath.Join(os.TempDir(), "doctest-embed-assert-cache-tests.lock")
@@ -143,19 +137,19 @@ func copyDir(dst string, src string) error {
 		return os.WriteFile(target, data, 0644)
 	})
 }
-func createPublicModuleProject(t *testing.T, leafSetupGo string, leafAssertGo string) {
+func createPublicModuleProject(t *testing.T, req *Request, leafSetupGo string, leafAssertGo string) {
 	t.Helper()
 
-	moduleRoot = t.TempDir()
+	req.ModuleRoot = t.TempDir()
 	if err := os.WriteFile(
-		filepath.Join(moduleRoot, "go.mod"),
+		filepath.Join(req.ModuleRoot, "go.mod"),
 		[]byte("module "+modPath+"\n\ngo 1.21\n"),
 		0644,
 	); err != nil {
 		t.Fatalf("write go.mod: %v", err)
 	}
 
-	greetDir := filepath.Join(moduleRoot, "pkg", "greet")
+	greetDir := filepath.Join(req.ModuleRoot, "pkg", "greet")
 	if err := os.MkdirAll(greetDir, 0755); err != nil {
 		t.Fatalf("mkdir pkg/greet: %v", err)
 	}
@@ -167,40 +161,40 @@ func createPublicModuleProject(t *testing.T, leafSetupGo string, leafAssertGo st
 		t.Fatalf("write greet.go: %v", err)
 	}
 
-	testDir = filepath.Join(moduleRoot, "tests")
-	if err := os.MkdirAll(testDir, 0755); err != nil {
+	req.TestDir = filepath.Join(req.ModuleRoot, "tests")
+	if err := os.MkdirAll(req.TestDir, 0755); err != nil {
 		t.Fatalf("mkdir tests: %v", err)
 	}
 	extraImports := "\t\"" + modPath + "/pkg/greet\"\n"
 	runCode := "func Run(t *testing.T, req *Request) (*Response, error) {\n" +
 		"\treturn &Response{Message: greet.Hello()}, nil\n" +
 		"}"
-	if err := createDoctestRoot(testDir, extraImports, runCode); err != nil {
+	if err := createDoctestRoot(req.TestDir, extraImports, runCode); err != nil {
 		t.Fatalf("create doctest root: %v", err)
 	}
-	if err := createDoctestLeaf(filepath.Join(testDir, "leaf"), leafSetupGo, leafAssertGo); err != nil {
+	if err := createDoctestLeaf(filepath.Join(req.TestDir, "leaf"), leafSetupGo, leafAssertGo); err != nil {
 		t.Fatalf("create doctest leaf: %v", err)
 	}
 }
-func copyFixtureModule(t *testing.T, d *session.Doctest, fixtureRel string) {
+func copyFixtureModule(t *testing.T, d *session.Doctest, req *Request, fixtureRel string) {
 	t.Helper()
 
 	fixtureSrc := filepath.Join(d.DOCTEST_ROOT, fixtureRel)
-	moduleRoot = t.TempDir()
-	if err := copyDir(moduleRoot, fixtureSrc); err != nil {
+	req.ModuleRoot = t.TempDir()
+	if err := copyDir(req.ModuleRoot, fixtureSrc); err != nil {
 		t.Fatalf("copy fixture %s: %v", fixtureRel, err)
 	}
-	testDir = filepath.Join(moduleRoot, "tests")
+	req.TestDir = filepath.Join(req.ModuleRoot, "tests")
 }
-func createInternalOnlyProject(t *testing.T, d *session.Doctest) {
-	copyFixtureModule(t, d, "testdata/internal-only-module")
+func createInternalOnlyProject(t *testing.T, d *session.Doctest, req *Request) {
+	copyFixtureModule(t, d, req, "testdata/internal-only-module")
 }
-func createInternalAssertProject(t *testing.T, d *session.Doctest) {
-	copyFixtureModule(t, d, "testdata/internal-assert-module")
+func createInternalAssertProject(t *testing.T, d *session.Doctest, req *Request) {
+	copyFixtureModule(t, d, req, "testdata/internal-assert-module")
 }
 func setupModuleEnv(t *testing.T, req *Request) {
 	t.Helper()
-	req.WorkDir = moduleRoot
+	req.WorkDir = req.ModuleRoot
 	req.Env = append(req.Env, "GOWORK=off")
 }
 func assertFileExists(t *testing.T, path string) {

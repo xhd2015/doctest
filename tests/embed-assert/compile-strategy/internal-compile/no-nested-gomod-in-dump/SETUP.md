@@ -25,9 +25,9 @@ import (
 )
 
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-	createInternalAssertProject(t, d)
+	createInternalAssertProject(t, d, req)
 	setupModuleEnv(t, req)
-	req.Args = []string{"test", testDir, "--gen-dir", filepath.Join(moduleRoot, "_gen"), "-v"}
+	req.Args = []string{"test", req.TestDir, "--gen-dir", filepath.Join(req.ModuleRoot, "_gen"), "-v"}
 	return nil
 }
 ```

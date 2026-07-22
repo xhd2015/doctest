@@ -28,7 +28,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if resp.ExitCode != 0 {
 		t.Fatalf("expected internal+assert gen-dir dump test to pass, got exit %d\nstdout:\n%s\nstderr:\n%s", resp.ExitCode, resp.Stdout, resp.Stderr)
 	}
-	dumpDir := filepath.Join(moduleRoot, "_gen")
+	dumpDir := filepath.Join(req.ModuleRoot, "_gen")
 	genTest := generatedLeafTestPath(dumpDir)
 	assertFileExists(t, genTest)
 	data, err := os.ReadFile(genTest)
@@ -44,6 +44,6 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	}
 	assertDumpNoNestedGoMod(t, dumpDir)
 	assertStderrUsesTempCompile(t, resp)
-	assertNoDoctestRunDirs(t, moduleRoot)
+	assertNoDoctestRunDirs(t, req.ModuleRoot)
 }
 ```
