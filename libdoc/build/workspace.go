@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/xhd2015/doctest/libdoc/core"
+	"github.com/xhd2015/doctest/libdoc/leafcache"
 	"github.com/xhd2015/dot-pkgs/go-pkgs/pathfmt"
 )
 
@@ -312,10 +314,15 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	goCache := opts.GoCache
 	style := newColorStyle(opts.Color, stdout)
 
+	// Multi-prep leaf-cache: PreparePassPlan over all trees, tree-qualified skip env.
+	// leafKeys + skipPaths feed stream PutPass and grey warm-skip progress dots.
+	leafKeys, skipPaths := prepareWorkspaceLeafCache(preps, opts)
+	leafSkipEnv := leafcache.FormatSkipPaths(skipPaths)
+
 	// Always use go test -json for Pass/Fail/Run suite accounting. Verbose is
 	// presentation only (stream more Output events); same counts as quiet.
 	tGo := time.Now()
-	result, runErr := runGoTestJSONOnce(runDir, append(append([]string(nil), flagArgs...), packageArgs...), sessionID, goCache, opts.MetricsNestSink, "", "", stdout, style, opts.Verbose)
+	result, runErr := runGoTestJSONOnce(runDir, append(append([]string(nil), flagArgs...), packageArgs...), sessionID, goCache, opts.MetricsNestSink, "", leafSkipEnv, leafKeys, stdout, style, opts.Verbose)
 	goTestElapsed := time.Since(tGo)
 	stats.Phases = append(stats.Phases, PhaseTiming{Name: "go_test", ElapsedNs: goTestElapsed.Nanoseconds()})
 	// Prefer JSON suite-leaf accounting. actual_run = pass+fail (exclude
@@ -328,6 +335,18 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	} else {
 		stats.Passed = passedCases(stats.Total, result.failCount)
 	}
+
+	// Summary Cached is leaf-cache skip count (not go package cache inflate).
+	nCases := 0
+	for _, p := range preps {
+		nCases += len(p.Cases)
+	}
+	result.cachedCount = leafCachedSummary(nCases, skipPaths, result.anyPackageCached(),
+		leafcache.SkipEnabled(opts.Count, opts.ForceWithFlagA, opts.NoLeafCache))
+	// Map suite fail bare leaf paths → FormatLeafIdentity for RecordPasses.
+	failed := workspaceFailedIdentities(preps, result.suiteLeafFailed)
+	recordLeafCachePasses(leafKeys, failed, runErr == nil && result.failCount == 0)
+
 	// Quiet path: compact progress summary. Verbose already streamed Output events.
 	if !opts.Verbose {
 		fmt.Fprintln(stdout, formatSummary(style, result.passCount+result.failCount, result.passCount, result.failCount, result.cachedCount, goTestElapsed))
@@ -359,4 +378,62 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 		return stats, fmt.Errorf("go test: %w", runErr)
 	}
 	return stats, nil
+}
+
+// prepareWorkspaceLeafCache builds multi-tree PassPlan keys (FormatLeafIdentity)
+// and env-safe skip tokens (FormatLeafIdentityEnv) for DOCTEST_LEAF_CACHE_SKIP_PATHS.
+// Store I/O errors are ignored (best-effort; suite continues).
+func prepareWorkspaceLeafCache(preps []TreePrep, opts core.Options) (keys map[string]string, skipPaths []string) {
+	keys = make(map[string]string)
+	var leaves []leafcache.LeafRef
+	for _, p := range preps {
+		root := p.AbsRoot
+		for _, tc := range p.Cases {
+			leaves = append(leaves, leafcache.LeafRef{TreeRoot: root, LeafRel: tc.Path})
+		}
+	}
+	if len(leaves) == 0 {
+		return keys, nil
+	}
+	storeRoot, err := leafcache.ResolveStoreRoot()
+	if err != nil {
+		return keys, nil
+	}
+	store, err := leafcache.NewStore(storeRoot)
+	if err != nil {
+		return keys, nil
+	}
+	goVer := runtime.Version()
+	enabled := leafcache.SkipEnabled(opts.Count, opts.ForceWithFlagA, opts.NoLeafCache)
+	plan, err := leafcache.PreparePassPlan(store, leaves, goVer, enabled)
+	if err != nil {
+		return keys, nil
+	}
+	keys = plan.Keys
+	for _, id := range plan.Skip {
+		skipPaths = append(skipPaths, leafcache.IdentityToEnv(id))
+	}
+	// plan.Skip is already sorted; IdentityToEnv preserves order.
+	return keys, skipPaths
+}
+
+// workspaceFailedIdentities maps suiteLeafFailed bare leaf paths to
+// FormatLeafIdentity tokens for each matching prep case.
+func workspaceFailedIdentities(preps []TreePrep, suiteLeafFailed map[string]bool) map[string]bool {
+	failed := make(map[string]bool)
+	if len(suiteLeafFailed) == 0 {
+		return failed
+	}
+	for _, p := range preps {
+		for _, tc := range p.Cases {
+			if !suiteLeafFailed[tc.Path] {
+				// Also accept slash-normalized path.
+				if !suiteLeafFailed[filepath.ToSlash(tc.Path)] {
+					continue
+				}
+			}
+			failed[leafcache.FormatLeafIdentity(p.AbsRoot, tc.Path)] = true
+		}
+	}
+	return failed
 }

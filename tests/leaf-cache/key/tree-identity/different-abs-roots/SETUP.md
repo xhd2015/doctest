@@ -20,7 +20,8 @@ keyA != keyB
 
 ## Context
 
-- Classic TDD for product fix: mix abs TreeRoot (or stable tree id) into ComputeLeafKey.
+- Store keys mix abs TreeRoot into ComputeLeafKey (GREEN). Multi-prep **identity**
+  tokens (skip/fail maps) are covered under `runsuite/identity/` separately.
 
 ```go
 import "testing"

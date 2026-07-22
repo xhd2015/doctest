@@ -48,9 +48,13 @@ const DoctestSessionIDEnv = "DOCTEST_SESSION_ID"
 
 var (
 	errMissingSession = errors.New("session.Once: DOCTEST_SESSION_ID is not set (syscall.Getenv)")
+	errEmptySession   = errors.New("session.OnceSession: session id is empty")
 	errEmptyKey       = errors.New("session.Once: key is empty")
 	errEmptySlug      = errors.New("session.Once: key slugifies to empty string")
 )
+
+// OnceFn is the callback passed to Once / OnceSession.
+type OnceFn func(t testing.TB, cacheDir string) (json.RawMessage, error)
 
 type onceMemo struct {
 	raw json.RawMessage
@@ -62,23 +66,39 @@ type onceMemo struct {
 var processMemo sync.Map // memoKey -> onceMemo
 
 // Once runs fn at most once per (DOCTEST_SESSION_ID, key) within this process
-// (processMemo). Optional on-disk lock/value under t.TempDir() so concurrent
-// first callers can serialize without writing outside the test temporary tree
-// (keeps go test package cache warm across CLI runs with different session ids).
+// (processMemo). Session id is read with syscall.Getenv only (never os.Getenv).
+//
+// Production path: the suite go test process has DOCTEST_SESSION_ID set once via
+// child cmd.Env. Do not mutate process env from concurrent leaves — use
+// OnceSession with an explicit id in Parallel-safe tests.
 //
 // cacheDir passed to fn is:
 //
 //	t.TempDir()/session-once/<slug(key)>/
-//
-// Session id is read with syscall.Getenv only (never os.Getenv).
-func Once(t testing.TB, key string, fn func(t testing.TB, cacheDir string) (json.RawMessage, error)) (json.RawMessage, error) {
+func Once(t testing.TB, key string, fn OnceFn) (json.RawMessage, error) {
 	t.Helper()
-	if key == "" {
-		return nil, errEmptyKey
-	}
 	sid, ok := syscall.Getenv(DoctestSessionIDEnv)
 	if !ok || sid == "" {
 		return nil, errMissingSession
+	}
+	return onceImpl(t, sid, key, fn)
+}
+
+// OnceSession is Parallel-safe: session id is explicit and process env is not read
+// or written. Use this from concurrent leaves / unit tests that need an isolated sid.
+// Empty sessionID returns errEmptySession without running fn.
+func OnceSession(t testing.TB, sessionID, key string, fn OnceFn) (json.RawMessage, error) {
+	t.Helper()
+	if sessionID == "" {
+		return nil, errEmptySession
+	}
+	return onceImpl(t, sessionID, key, fn)
+}
+
+func onceImpl(t testing.TB, sid, key string, fn OnceFn) (json.RawMessage, error) {
+	t.Helper()
+	if key == "" {
+		return nil, errEmptyKey
 	}
 	slug := slugify(key)
 	if slug == "" {
@@ -208,4 +228,8 @@ func writeFileAtomic(path string, data []byte) error {
 		return err
 	}
 	return os.Rename(tmpName, path)
+}
+
+func lookupSessionEnvImpl() (string, bool) {
+	return syscall.Getenv(DoctestSessionIDEnv)
 }

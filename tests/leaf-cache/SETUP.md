@@ -1,39 +1,61 @@
 # Scenario
 
-**Feature**: leaf source-hash cache — library (P1) + runtime skip/CLI/Cached (P2)
+**Feature**: leaf source-hash cache — library + runtime + RunSuite + workspace + multi-arg CLI plan
 
 ```
-# P1: compute stable leaf key from local content DAG
+# Library: compute stable leaf key from local content DAG
 module + tree + leaf + goVersion
   -> spine Go + local pkgs + go.mod/sum + local replace
-  -> hex key
+  -> hex key (abs TreeRoot mixed in)
 Caller -> Store.PutPass(key) -> GetPass(key)=true
 
-# P2: doctest test wires store into skip + summary Cached
+# Runtime: doctest test wires store into skip + summary Cached
 doctest test fixture (DOCTEST_LEAF_CACHE / DOCTEST_CACHE_HOME; fresh GOCACHE/run)
-  -> pass leaf PutPass
-  -> warm second run GetPass hit -> Cached > 0
-  -> -count | -a | --no-leaf-cache -> no skip
+  -> on Action:pass stream PutPass (interrupt-safe)
+  -> warm second run GetPass hit -> Cached > 0; quiet+color grey progress .
+  -> -count | -a | --no-leaf-cache -> no skip / no grey leaf-cache dots
+
+# RunSuite P1 extract: multi-prep identity + prepare/record
+FormatLeafIdentity / PreparePassPlan / RecordPasses
+  -> tree-qualified skip/fail map identities
+
+# RunSuite P2 product: multi-tree workspace leaf-cache
+doctest test <mod>/... (tree-a + tree-b)
+  -> RunWorkspace / finishWorkspaceGoTest
+  -> multi-prep skip env + RecordPasses + Cached
+
+# CLI one plan P3: multi-arg same leaf-cache policy
+doctest test tree-a tree-b
+  -> union roots / shared store + SkipEnabled
+  -> warm Cached + -count bypass (parity with single + ./...)
 ```
 
 ## Preconditions
 
-- Package under test: `github.com/xhd2015/doctest/libdoc/leafcache` (P1 library; GREEN).
-- P1 leaves set `req.Op`, `req.Flavor`, and optional `req.Mutation`.
-- P2 runtime leaves set `Op=runtime_multi`, build `req.Bin`, fixture dir, and Args/Args2.
+- Package under test: `github.com/xhd2015/doctest/libdoc/leafcache`.
+- Key/store/runtime leaves set `req.Op`, optional `req.Flavor` / `req.Mutation`.
+- Runtime leaves set `Op=runtime_multi`, build `req.Bin`, fixture dir, and Args/Args2.
+- RunSuite multi-prep leaves set `format_identity*` / `multi_prep_*` and twin trees.
+- Workspace P2 leaves set `Op=runtime_multi` with multi-tree `<mod>/...` Args
+  (helpers under `workspace/SETUP.md`).
+- CLI one plan P3 leaves set `Op=runtime_multi` with multi-arg
+  `test tree-a tree-b` Args (helpers under `cli-plan/SETUP.md`; same fixture).
 - All fixtures and store roots use `t.TempDir()` — never write into the user cache.
 - Product default store path: `$CacheHome/doctest/leaf-cache/v1`; tests isolate via
   `DOCTEST_CACHE_HOME` and/or `DOCTEST_LEAF_CACHE`.
 
 ## Steps
 
-1. P1: leaf/group `Setup` builds a mini module + doctest tree via helpers; Run calls library APIs.
-2. P2: runtime `Setup` builds doctest binary, writes a mini fixture tree, runs `doctest test` twice.
-3. Assert key equality, store hits, or summary Cached counts / exit codes.
+1. Library: leaf/group `Setup` builds a mini module + doctest tree via helpers; Run calls APIs.
+2. Runtime: `Setup` builds doctest binary, writes a mini fixture tree, runs `doctest test` twice.
+3. RunSuite multi-prep: twin trees + store seed; Run calls FormatLeafIdentity / PreparePassPlan / RecordPasses.
+4. Workspace P2: multi-tree module fixture; nested `doctest test <mod>/...` (warm / partial-fail / count / isolation).
+5. CLI P3: same fixture; nested `doctest test tree-a tree-b` (warm / count bypass).
+6. Assert key equality, store hits, summary Cached counts, multi-prep outcomes, workspace, or multi-arg Cached.
 
 ## Context
 
-### Expected public API surface (implementer contract)
+### Expected public API surface (sealed product)
 
 - `const AlgoVersion = "v1"`
 - `type KeyInput struct { ModuleRoot, TreeRoot, LeafDir, GoVersion string }`
@@ -99,14 +121,50 @@ and a non-local fake tree `remote-src/example.com/remote@v1.0.0/*.go` that is
   `Run` adds a **fresh GOCACHE per invocation** so go testcache cannot inflate Cached.
 - CLI flags under test: `-count`, `-a`, `--no-leaf-cache`.
 
-### P3 polish helpers (see `polish/` + `key/tree-identity/`)
+### Polish helpers (see `polish/` + `key/tree-identity/`)
 
 - `prepareTwoSiblingPassLeaves`, `prepareLocalDepPassFixture`, `prepareTwinTrees`
 - `preparePartialPackageDepsFixture` — 4 pkgs + 3 leaves (shared a/b/c vs alone/d)
 - `applyPolishMutation` / `MutateAfterRun` for mid-sequence edits
 - `compute_two_inputs`, `runtime_once` ops
 
-Still out of scope: full-repo 849 CI, remote hashing, wipe-on-cold-cache.
+### RunSuite multi-prep (nested tree `runsuite/`)
+
+- Nested `DOCTEST.md` root — see `tests/leaf-cache/runsuite/` for Request/Run.
+- Implementer API: `FormatLeafIdentity`, `LeafRef`, `PassPlan`, `PreparePassPlan`, `RecordPasses`
+- Parent `prepareTwinTrees` is mirrored inside the nested tree setup.
+
+### Workspace multi-tree product (branch `workspace/` — P2)
+
+- Helpers: `prepareWorkspaceTwoTrees`, `prepareWorkspaceAllPass`,
+  `prepareWorkspacePartialFail`, `prepareWorkspaceSameRelpathPassFail`,
+  `mustWorkspacePattern` / `workspaceDotDotDot` — under `workspace/SETUP.md`.
+- Nested CLI uses parent `runtime_multi` + isolated leaf-cache env + fresh GOCACHE.
+- Product path under test: `doctest test <mod>/...` → `RunWorkspace` /
+  `finishWorkspaceGoTest` (not library-only PreparePassPlan).
+
+### CLI one plan multi-arg (branch `cli-plan/` — P3)
+
+- Helpers under `cli-plan/SETUP.md`: `prepareMultiArgAllPass` /
+  `prepareMultiArgTwoTrees` / `multiArgTwoTrees` (same two-tree module layout
+  as workspace; local copies because sibling `workspace/` helpers are not
+  inherited across branches).
+- Product path under test: `doctest test tree-a tree-b` — leaf-cache warm +
+  `-count` bypass with the same store isolation as runtime/workspace.
+- Asserts use `sumCachedCount` so N× per-tree summaries and a future single
+  aggregated summary both count as total warm skips.
+
+### Stream PutPass + grey progress dots (branch `runtime/stream-pass`, `runtime/progress-dots`)
+
+- `prepareStreamInterruptFixture` — two instant-pass leaves + one hang leaf;
+  `InterruptAfterDots` + SIGINT on first `runtime_multi` invocation; mutation
+  `stream_unhang` rewrites hang ASSERT so run2 can finish.
+- `preparePassFailMixFixture` — N pass + M fail leaves for red fail-dot lock.
+- Grey/red progress-dot helpers live in root `DOCTEST.md` (`countGrayProgressDots`,
+  `countRedProgressDots`, `progressPrefix`).
+
+Still out of scope: full-repo CI stress, remote file hashing, exhaustive
+hub-only fixtures (hub shares finishWorkspaceGoTest).
 
 ```go
 import (
@@ -397,6 +455,60 @@ func prepareFailFixture(t *testing.T, failCount int) string {
 	return dir
 }
 
+// prepareStreamInterruptFixture writes one instant-pass leaf and one hang leaf
+// (long sleep). SIGINT after the pass progress dot cannot reach end-of-run
+// recordLeafCachePasses while hang is still running.
+func prepareStreamInterruptFixture(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	testtree.WriteMinimalRunnableTree(t, dir, []testtree.LeafSpec{
+		{
+			Name: "leaf_a",
+			AssertGo: `import "testing"
+
+func Assert(t *testing.T, req *Request, resp *Response, err error) {
+	// stream_leaf_a
+	_ = req
+	_ = resp
+	_ = err
+}`,
+		},
+		{
+			Name: "leaf_hang",
+			AssertGo: `import (
+	"testing"
+	"time"
+)
+
+func Assert(t *testing.T, req *Request, resp *Response, err error) {
+	// stream_hang_marker
+	_ = req
+	_ = resp
+	_ = err
+	time.Sleep(10 * time.Minute)
+}`,
+		},
+	})
+	return dir
+}
+
+// preparePassFailMixFixture writes passCount always-pass + failCount always-fail leaves.
+func preparePassFailMixFixture(t *testing.T, passCount, failCount int) string {
+	t.Helper()
+	dir := t.TempDir()
+	if passCount < 0 {
+		passCount = 0
+	}
+	if failCount < 0 {
+		failCount = 0
+	}
+	if passCount+failCount == 0 {
+		passCount = 1
+	}
+	testtree.WritePassFailTree(t, dir, passCount, failCount)
+	return dir
+}
+
 // prepareTwoSiblingPassLeaves writes a tree with leaf_a and leaf_b (always pass).
 // Markers in ASSERT Go allow polish_edit_leaf_a mutation.
 func prepareTwoSiblingPassLeaves(t *testing.T) string {
@@ -620,6 +732,17 @@ func applyPolishMutation(t *testing.T, req *Request) error {
 	case "polish_edit_shared_a":
 		p := filepath.Join(req.ModuleRoot, "shared", "a", "a.go")
 		return os.WriteFile(p, []byte("package a\n\nfunc Version() string { return \"A2\" }\n"), 0o644)
+	case "stream_unhang":
+		// Replace hang sleep ASSERT with an instant pass so run2 can finish.
+		// Content change also ensures hang leaf is not treated as a warm hit
+		// from a non-existent hang key (hang never PutPass'd).
+		p := filepath.Join(req.FixtureDir, "leaf_hang", "ASSERT.md")
+		body := "## Expected\n- unhung pass\n\n" + goFenceOpen() +
+			"import \"testing\"\n\n" +
+			"func Assert(t *testing.T, req *Request, resp *Response, err error) {\n" +
+			"\t// stream_unhang_pass\n" +
+			"\t_ = req\n\t_ = resp\n\t_ = err\n}\n" + fenceClose()
+		return os.WriteFile(p, []byte(body), 0o644)
 	case "":
 		return fmt.Errorf("polish Mutation is empty")
 	default:

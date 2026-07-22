@@ -144,11 +144,20 @@ func AssembleUnifiedAllLeavesSource(leafImports []string) string {
 // package names are registry/allleaves — bare imports get dropped by goimports.
 //
 // Warm leaf-cache hits are passed from the outer doctest process via
-// DOCTEST_LEAF_CACHE_SKIP_PATHS (newline-separated tree-relative paths). Those
-// leaves return immediately as pass without calling the leaf body.
+// DOCTEST_LEAF_CACHE_SKIP_PATHS (newline-separated tokens). Tokens may be bare
+// tree-relative leaf paths (single-tree) and/or FormatLeafIdentityEnv values
+// (tree-qualified; multi-tree workspace/hub). treeAbsRoot, when non-empty, is
+// baked so tree-qualified env ids match.
 //
 // Every leaf subtest calls t.Parallel().
-func AssembleUnifiedRunAllSource(registryImport, allLeavesImport string) string {
+func AssembleUnifiedRunAllSource(registryImport, allLeavesImport, treeAbsRoot string) string {
+	absRoot := strings.TrimSpace(treeAbsRoot)
+	if absRoot != "" {
+		if a, err := filepath.Abs(absRoot); err == nil {
+			absRoot = a
+		}
+		absRoot = filepath.ToSlash(filepath.Clean(absRoot))
+	}
 	var buf strings.Builder
 	buf.WriteString("package ")
 	buf.WriteString(UnifiedSuitePkgName)
@@ -166,6 +175,12 @@ func AssembleUnifiedRunAllSource(registryImport, allLeavesImport string) string 
 	buf.WriteString(allLeavesImport)
 	buf.WriteString("\"\n")
 	buf.WriteString(")\n\n")
+	if absRoot != "" {
+		buf.WriteString("// doctestTreeRootAbs is baked for tree-qualified leaf-cache skip matching.\n")
+		buf.WriteString("const doctestTreeRootAbs = ")
+		buf.WriteString(fmt.Sprintf("%q", absRoot))
+		buf.WriteString("\n\n")
+	}
 	// Nest parent leaf is on d.Metrics.ParentLeaf inside each RunTestLeaf
 	// (no process env — parallel-safe).
 	//
@@ -190,9 +205,19 @@ func AssembleUnifiedRunAllSource(registryImport, allLeavesImport string) string 
 	buf.WriteString("\t\tt.Run(name, func(t *testing.T) {\n")
 	buf.WriteString("\t\t\tt.Parallel()\n")
 	buf.WriteString("\t\t\tif _, hit := skip[e.Path]; hit {\n")
-	buf.WriteString("\t\t\t\t// Warm leaf-cache hit: count as pass; outer process counts Cached.\n")
+	buf.WriteString("\t\t\t\t// Warm leaf-cache hit (bare path; single-tree): pass; outer counts Cached.\n")
 	buf.WriteString("\t\t\t\treturn\n")
 	buf.WriteString("\t\t\t}\n")
+	if absRoot != "" {
+		buf.WriteString("\t\t\trel := e.Path\n")
+		buf.WriteString("\t\t\tif rel == \".\" {\n")
+		buf.WriteString("\t\t\t\trel = \"\"\n")
+		buf.WriteString("\t\t\t}\n")
+		buf.WriteString("\t\t\tif _, hit := skip[doctestTreeRootAbs+\"\\t\"+rel]; hit {\n")
+		buf.WriteString("\t\t\t\t// Warm leaf-cache hit (tree-qualified identity; workspace/hub).\n")
+		buf.WriteString("\t\t\t\treturn\n")
+		buf.WriteString("\t\t\t}\n")
+	}
 	buf.WriteString("\t\t\te.Fn(t)\n")
 	buf.WriteString("\t\t})\n")
 	buf.WriteString("\t}\n")
@@ -472,13 +497,14 @@ func WriteUnifiedTree(genRoot string, cases []TreeCase, docTestRoot string, comp
 		leafImports = append(leafImports, LeafImportForTree(leafRel))
 	}
 
-	return WriteUnifiedTreeExtras(genRoot, ".", leafImports)
+	return WriteUnifiedTreeExtras(genRoot, ".", docTestRoot, leafImports)
 }
 
 // WriteUnifiedTreeExtras writes __registry, __allleaves, and suite for a tree.
 // leafImports are full module import paths for each leaf package.
+// treeAbsRoot is the absolute doctest tree root for tree-qualified skip matching.
 // go testcache invalidation is left to the toolchain (no suite fingerprint seed).
-func WriteUnifiedTreeExtras(genRoot, treeRel string, leafImports []string) error {
+func WriteUnifiedTreeExtras(genRoot, treeRel, treeAbsRoot string, leafImports []string) error {
 	regDir := UnifiedRegistryDirForTree(genRoot, treeRel)
 	if err := os.MkdirAll(regDir, 0755); err != nil {
 		return err
@@ -503,7 +529,7 @@ func WriteUnifiedTreeExtras(genRoot, treeRel string, leafImports []string) error
 	}
 	regImp := UnifiedRegistryImportForTree(treeRel)
 	allImp := UnifiedAllLeavesImportForTree(treeRel)
-	if err := WriteFormattedGo(filepath.Join(suiteDir, "runall.go"), AssembleUnifiedRunAllSource(regImp, allImp)); err != nil {
+	if err := WriteFormattedGo(filepath.Join(suiteDir, "runall.go"), AssembleUnifiedRunAllSource(regImp, allImp, treeAbsRoot)); err != nil {
 		return fmt.Errorf("write unified RunAll: %w", err)
 	}
 	if err := WriteFormattedGo(filepath.Join(suiteDir, "suite_test.go"), AssembleUnifiedSuiteTestSource(regImp, allImp)); err != nil {

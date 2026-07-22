@@ -238,9 +238,21 @@ func Test(args []string) error {
 		// __workspace/suite (workspace registry + per-tree __wreg).
 		runErr = testDotDotDotWorkspace(remainArgs[0], opts, rec, &stats, &statsMu)
 	} else if len(remainArgs) == 1 {
+		// Single-tree: TestWithStats (prepareLeafCache + go test); same leaf-cache policy.
 		runErr = processSingleArg(remainArgs[0], opts, runFn)
 	} else {
-		runErr = processMultiArg(remainArgs, opts, runFn)
+		// P3: multi-arg shares DiscoverRoots → PrepareAll → BindExec → RunSuite
+		// with ./... when roots can bind one workspace/hub. Conflicting filters
+		// on the same root fall back to N× TestWithStats.
+		targets, expErr := expandTestArgs(remainArgs)
+		switch {
+		case expErr != nil:
+			runErr = expErr
+		case suiteTargetsConflict(targets):
+			runErr = processMultiArg(remainArgs, opts, runFn)
+		default:
+			runErr = runSuitePlan(targets, opts, rec, &stats, &statsMu)
+		}
 	}
 
 	if len(stats.Skipped) > 0 {
@@ -317,36 +329,123 @@ func processArgs(args []string, cmdName string, parseFn func([]string) (core.Opt
 	return processMultiArg(remainArgs, opts, processDirFn)
 }
 
-// testDotDotDotWorkspace prepares every DOCTEST root under a ./... pattern,
-// fans unified trees into one workspace suite, and runs a single go test.
-// Internal-compile trees (non-unified) still run per-root.
+// suiteTarget is one DOCTEST root (optional SubDir / ExplicitLeaf filter) in a
+// suite plan: DiscoverRoots → PrepareAll → BindExec → RunSuite → Report.
+type suiteTarget struct {
+	Root         string
+	SubDir       string
+	ExplicitLeaf bool
+}
+
+// expandTestArgs expands CLI remain args into a deduped union of suite targets.
+// Supports explicit paths and ./... patterns (same discovery as ./... workspace).
+func expandTestArgs(args []string) ([]suiteTarget, error) {
+	var targets []suiteTarget
+	seen := map[string]bool{}
+	add := func(t suiteTarget) {
+		r := filepath.Clean(t.Root)
+		s := filepath.Clean(t.SubDir)
+		key := r + "\x00" + s + "\x00"
+		if t.ExplicitLeaf {
+			key += "1"
+		} else {
+			key += "0"
+		}
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		t.Root = r
+		t.SubDir = s
+		targets = append(targets, t)
+	}
+
+	for _, arg := range args {
+		if arg == "..." {
+			return nil, fmt.Errorf("bare '...' pattern is not supported; use './...' or 'path/...' instead")
+		}
+		if path_resolve.IsDotDotDotPattern(arg) {
+			dirs, err := path_resolve.FindDotDotDotDirs(path_resolve.ExtractBasePath(arg))
+			if err != nil {
+				return nil, err
+			}
+			for _, d := range dirs {
+				root, ok := path_resolve.ResolveRoot(d)
+				if !ok || root == "" {
+					root = d
+				}
+				// Full-tree under ./...: SubDir = root (same as historical workspace path).
+				add(suiteTarget{Root: root, SubDir: root, ExplicitLeaf: false})
+			}
+			continue
+		}
+		targetDir, explicitLeaf := resolveTestTarget(arg)
+		root, ok := path_resolve.ResolveRoot(targetDir)
+		if !ok {
+			root = targetDir
+		}
+		add(suiteTarget{Root: root, SubDir: targetDir, ExplicitLeaf: explicitLeaf})
+	}
+	return targets, nil
+}
+
+// suiteTargetsConflict is true when the same Root appears with different
+// SubDir/ExplicitLeaf filters — cannot safely bind one workspace suite.
+func suiteTargetsConflict(targets []suiteTarget) bool {
+	type filt struct {
+		subDir string
+		leaf   bool
+		set    bool
+	}
+	byRoot := map[string]filt{}
+	for _, t := range targets {
+		r := filepath.Clean(t.Root)
+		f := filt{subDir: filepath.Clean(t.SubDir), leaf: t.ExplicitLeaf, set: true}
+		if prev, ok := byRoot[r]; ok && prev.set {
+			if prev.subDir != f.subDir || prev.leaf != f.leaf {
+				return true
+			}
+			continue
+		}
+		byRoot[r] = f
+	}
+	return false
+}
+
+// testDotDotDotWorkspace discovers DOCTEST roots under a ./... pattern and
+// runs the shared suite plan (PrepareAll + RunWorkspace / legacy per-root).
 func testDotDotDotWorkspace(arg string, opts core.Options, rec *runRecorder, stats *runnerbuild.TestRunStats, statsMu *sync.Mutex) error {
-	base := path_resolve.ExtractBasePath(arg)
-	dirs, err := path_resolve.FindDotDotDotDirs(base)
+	targets, err := expandTestArgs([]string{arg})
 	if err != nil {
 		return err
 	}
-	if len(dirs) == 0 {
+	if len(targets) == 0 {
 		return ErrNoTestsFound
 	}
+	return runSuitePlan(targets, opts, rec, stats, statsMu)
+}
 
-	// Resolve roots (DOCTEST.md directory).
-	roots := make([]string, 0, len(dirs))
-	for _, d := range dirs {
-		root, ok := path_resolve.ResolveRoot(d)
-		if !ok || root == "" {
-			root = d
-		}
-		roots = append(roots, root)
+// runSuitePlan is the shared CLI plan path for multi-root invocations
+// (./... and multi-arg when non-conflicting):
+//
+//	PrepareAll (parallel PrepareTree) → BindExec (RunWorkspace for unified;
+//	TestWithStats for non-unified) → aggregate stats for suite Report.
+//
+// Metrics recorder stays suite-level (one file); nested trees set MetricsOn=false.
+func runSuitePlan(targets []suiteTarget, opts core.Options, rec *runRecorder, stats *runnerbuild.TestRunStats, statsMu *sync.Mutex) error {
+	if len(targets) == 0 {
+		return ErrNoTestsFound
 	}
 
 	// Parallel prepare (generate-only), same worker pool as RunForDirs.
 	type prepResult struct {
-		prep runnerbuild.TreePrep
-		err  error
-		dir  string
+		prep         runnerbuild.TreePrep
+		err          error
+		dir          string
+		subDir       string
+		explicitLeaf bool
 	}
-	results := make([]prepResult, len(roots))
+	results := make([]prepResult, len(targets))
 	var wg sync.WaitGroup
 	// Bound concurrency similar to defaultTreeWorkers.
 	workers := runtime.NumCPU()
@@ -357,23 +456,23 @@ func testDotDotDotWorkspace(arg string, opts core.Options, rec *runRecorder, sta
 		workers = 12
 	}
 	sem := make(chan struct{}, workers)
-	for i, root := range roots {
+	for i, tgt := range targets {
 		wg.Add(1)
-		go func(i int, root string) {
+		go func(i int, tgt suiteTarget) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			o := opts
-			o.SubDir = root
-			o.ExplicitLeaf = false
+			o.SubDir = tgt.SubDir
+			o.ExplicitLeaf = tgt.ExplicitLeaf
 			o.MetricsOn = false
 			o.SuppressResultSummary = true
 			// Isolate noisy per-tree headers into buffers; workspace run prints once.
 			var outBuf, errBuf bytes.Buffer
 			o.Stdout = &outBuf
 			o.Stderr = &errBuf
-			prep, err := runnerbuild.PrepareTree(root, o)
-			results[i] = prepResult{prep: prep, err: err, dir: root}
+			prep, err := runnerbuild.PrepareTree(tgt.Root, o)
+			results[i] = prepResult{prep: prep, err: err, dir: tgt.Root, subDir: tgt.SubDir, explicitLeaf: tgt.ExplicitLeaf}
 			// Drop generate chatter unless verbose (user sees workspace go test line).
 			if opts.Verbose {
 				stderrBase := opts.Stderr
@@ -387,7 +486,7 @@ func testDotDotDotWorkspace(arg string, opts core.Options, rec *runRecorder, sta
 				_, _ = io.Copy(stderrBase, &errBuf)
 				_, _ = io.Copy(stdoutBase, &outBuf)
 			}
-		}(i, root)
+		}(i, tgt)
 	}
 	wg.Wait()
 
@@ -511,8 +610,8 @@ func testDotDotDotWorkspace(arg string, opts core.Options, rec *runRecorder, sta
 	// Non-unified (internal-compile) trees: legacy per-root go test.
 	for _, r := range legacy {
 		o := opts
-		o.SubDir = r.dir
-		o.ExplicitLeaf = false
+		o.SubDir = r.subDir
+		o.ExplicitLeaf = r.explicitLeaf
 		o.MetricsOn = false
 		o.SuppressResultSummary = true
 		s, err := runnerbuild.TestWithStats(r.dir, o)

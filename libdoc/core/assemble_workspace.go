@@ -106,10 +106,21 @@ func All() []TreeEntry {
 
 // AssembleTreeWregSource emits <treeRel>/__wreg that registers into the workspace.
 // treeRelSlash is the slash-separated tree path stored on TreeEntry.Path (may be ".").
-// Every leaf subtest calls t.Parallel().
-func AssembleTreeWregSource(treeRelSlash string, treeRegistryImport, treeAllLeavesImport, workspaceRegistryImport string) string {
+// treeAbsRoot is the absolute doctest tree root (cleaned slash form preferred); when
+// non-empty, warm skips match FormatLeafIdentityEnv(treeAbsRoot, leafRel) so same
+// relative leaf paths in sibling trees do not false-skip. Every leaf subtest calls
+// t.Parallel().
+func AssembleTreeWregSource(treeRelSlash string, treeRegistryImport, treeAllLeavesImport, workspaceRegistryImport, treeAbsRoot string) string {
 	if treeRelSlash == "" {
 		treeRelSlash = "."
+	}
+	// Normalize abs root the same way FormatLeafIdentity does (caller may pass raw).
+	absRoot := strings.TrimSpace(treeAbsRoot)
+	if absRoot != "" {
+		if a, err := filepath.Abs(absRoot); err == nil {
+			absRoot = a
+		}
+		absRoot = filepath.ToSlash(filepath.Clean(absRoot))
 	}
 	var buf strings.Builder
 	buf.WriteString("package ")
@@ -129,13 +140,19 @@ func AssembleTreeWregSource(treeRelSlash string, treeRegistryImport, treeAllLeav
 	buf.WriteString(workspaceRegistryImport)
 	buf.WriteString("\"\n")
 	buf.WriteString(")\n\n")
+	if absRoot != "" {
+		buf.WriteString("// doctestTreeRootAbs is baked for tree-qualified leaf-cache skip matching.\n")
+		buf.WriteString("const doctestTreeRootAbs = ")
+		buf.WriteString(strconvQuote(absRoot))
+		buf.WriteString("\n\n")
+	}
 	buf.WriteString("func init() {\n")
 	buf.WriteString("\twsreg.Register(wsreg.TreeEntry{\n")
 	buf.WriteString("\t\tPath: ")
 	buf.WriteString(strconvQuote(treeRelSlash))
 	buf.WriteString(",\n")
 	// Leaf nest parent is d.Metrics.ParentLeaf inside RunTestLeaf — no process env.
-	// Warm leaf-cache skips use DOCTEST_LEAF_CACHE_SKIP_PATHS (same as tree suite RunAll).
+	// Warm leaf-cache skips use DOCTEST_LEAF_CACHE_SKIP_PATHS (tree-qualified env ids).
 	buf.WriteString("\t\tRun: func(t *testing.T) {\n")
 	buf.WriteString("\t\t\tskip := map[string]struct{}{}\n")
 	buf.WriteString("\t\t\tif s, ok := syscall.Getenv(\"DOCTEST_LEAF_CACHE_SKIP_PATHS\"); ok && s != \"\" {\n")
@@ -152,9 +169,21 @@ func AssembleTreeWregSource(treeRelSlash string, treeRegistryImport, treeAllLeav
 	buf.WriteString("\t\t\t\tname := strings.ReplaceAll(e.Path, \"/\", \"__\")\n")
 	buf.WriteString("\t\t\t\tt.Run(name, func(t *testing.T) {\n")
 	buf.WriteString("\t\t\t\t\tt.Parallel()\n")
-	buf.WriteString("\t\t\t\t\tif _, hit := skip[e.Path]; hit {\n")
-	buf.WriteString("\t\t\t\t\t\treturn\n")
-	buf.WriteString("\t\t\t\t\t}\n")
+	if absRoot != "" {
+		// Tree-qualified only: bare relpath would false-skip siblings in multi-tree workspace.
+		buf.WriteString("\t\t\t\t\trel := e.Path\n")
+		buf.WriteString("\t\t\t\t\tif rel == \".\" {\n")
+		buf.WriteString("\t\t\t\t\t\trel = \"\"\n")
+		buf.WriteString("\t\t\t\t\t}\n")
+		buf.WriteString("\t\t\t\t\tif _, hit := skip[doctestTreeRootAbs+\"\\t\"+rel]; hit {\n")
+		buf.WriteString("\t\t\t\t\t\t// Warm leaf-cache hit (tree-qualified identity).\n")
+		buf.WriteString("\t\t\t\t\t\treturn\n")
+		buf.WriteString("\t\t\t\t\t}\n")
+	} else {
+		buf.WriteString("\t\t\t\t\tif _, hit := skip[e.Path]; hit {\n")
+		buf.WriteString("\t\t\t\t\t\treturn\n")
+		buf.WriteString("\t\t\t\t\t}\n")
+	}
 	buf.WriteString("\t\t\t\t\te.Fn(t)\n")
 	buf.WriteString("\t\t\t\t})\n")
 	buf.WriteString("\t\t\t}\n")
@@ -239,7 +268,9 @@ func AssembleWorkspaceSuiteTestSource(workspaceRegistryImport, allTreesImport st
 }
 
 // WriteTreeWreg writes <treeRel>/__wreg for workspace registration.
-func WriteTreeWreg(genRoot, treeRel string) error {
+// treeAbsRoot is the absolute source tree root used for tree-qualified leaf-cache
+// skip matching (FormatLeafIdentityEnv); empty falls back to bare relpath checks.
+func WriteTreeWreg(genRoot, treeRel, treeAbsRoot string) error {
 	treeRelSlash := filepath.ToSlash(filepath.Clean(treeRel))
 	if treeRelSlash == "" {
 		treeRelSlash = "."
@@ -253,6 +284,7 @@ func WriteTreeWreg(genRoot, treeRel string) error {
 		UnifiedRegistryImportForTree(treeRel),
 		UnifiedAllLeavesImportForTree(treeRel),
 		WorkspaceRegistryImport(),
+		treeAbsRoot,
 	)
 	return WriteFormattedGo(filepath.Join(dir, "wreg.go"), src)
 }

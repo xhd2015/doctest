@@ -1,18 +1,35 @@
-# Leaf Source-Hash Cache — Key, Store (P1) + Runtime (P2) + Polish (P3)
+# Leaf Source-Hash Cache — Full Product (single-tree + workspace `./...` + multi-arg)
 
 ## Version
 0.0.2
 
 Specification for `github.com/xhd2015/doctest/libdoc/leafcache` and its
-wiring into `doctest test`.
+wiring into `doctest test` across **all product invocation shapes**:
 
-| Phase | Surface | Status intent |
-|-------|---------|----------------|
-| **P1** | `ComputeLeafKey` + `Store` GetPass/PutPass | sealed under `key/**` (except new tree-identity), `store/**` |
-| **P2** | suite skip, CLI disable flags, summary **Cached** | sealed under `runtime/**` (GREEN) |
-| **P3** | selective invalidation, tree isolation, help docs | new `polish/**` + `key/tree-identity/**` |
+| Invocation shape | Example | Product branch |
+|------------------|---------|----------------|
+| **Single-tree** | `doctest test ./path/to/tree` | `runtime/**`, `polish/**`, … |
+| **Workspace / `./...`** | `doctest test <mod>/...` (multi-root module) | `workspace/**` |
+| **Multi-arg** | `doctest test treeA treeB` | `cli-plan/**` |
 
-P1/P2 ASSERTs stay sealed — P3 **adds leaves only**.
+Leaf-cache is **not** single-tree only. Warm skip, PutPass, disable flags
+(`-count` / `-a` / `--no-leaf-cache`), and summary **Cached** apply on every
+shape above. **Cached** in the suite summary is the **programmatic leaf-cache
+skip count** (GetPass hits), not go testcache alone — product leaves isolate
+`GOCACHE` so observed `N Cached` is leaf-cache only.
+
+| Phase | Surface | Status |
+|-------|---------|--------|
+| **Library** | `ComputeLeafKey` + `Store` GetPass/PutPass | sealed `key/**`, `store/**` (**GREEN**) |
+| **Runtime** | suite skip, CLI disable flags, summary **Cached** | sealed warm/disable/fail (**GREEN**); stream PutPass + grey dots **RED** under `runtime/stream-pass/**`, `runtime/progress-dots/**` |
+| **Polish** | selective invalidation, tree isolation, help docs | sealed `polish/**` + `key/tree-identity/**` + `partial-package-deps/**` (**GREEN**) |
+| **RunSuite extract** | multi-prep identity + `PreparePassPlan` / `RecordPasses` | sealed nested `runsuite/**` (**GREEN**) |
+| **Workspace product** | multi-tree `__workspace` (hub shares finish path) warm + PutPass + Cached | sealed `workspace/**` (**GREEN**) |
+| **CLI multi-arg** | multi-arg `a b` same leaf-cache policy as single + `./...` | sealed `cli-plan/**` (**GREEN**) |
+
+P1–P3 production + product leaves are sealed. P4 is **docs / How to Run
+alignment** only — no new production features; hub multi-mod has no separate
+leaf (same `finishWorkspaceGoTest` as single-module workspace).
 
 # DSN (Domain Specific Notion)
 
@@ -31,17 +48,24 @@ P1/P2 ASSERTs stay sealed — P3 **adds leaves only**.
   `(N Run, N Pass, N Fail, N Cached)` where **Cached** counts leaves skipped
   because GetPass hit (programmatic leaf cache), not merely go testcache.
 
-### Behaviors (P1 library)
+### Behaviors (library)
 
 - **ComputeLeafKey** — local-only DAG; remote module sources not file-hashed.
 - **GetPass / PutPass** — Put only on explicit pass; Get false when missing.
 
-### Behaviors (P2 runtime)
+### Behaviors (single-tree runtime)
 
-- **On leaf pass** — after a successful leaf, suite calls `PutPass(key)`.
+- **On leaf pass (stream PutPass)** — on each countable suite-leaf JSON
+  `Action: pass`, suite immediately `PutPass(key)` so a mid-run interrupt
+  (e.g. Ctrl-C) still leaves already-passed leaves warm for the next run.
+  Fail never PutPass. End-of-run `RecordPasses` may remain as idempotent reconcile.
 - **Warm skip** — before running a leaf, if leaf-cache is enabled and
   `GetPass(key)`, skip execution and count **Cached** (and treat as pass for
-  totals as product defines).
+  totals as product defines). **Cached** is the leaf-cache product counter.
+- **Grey warm progress dots (quiet + color)** — when color is on, progress `.`
+  for identities in this-run leaf-cache skip set is **grey** (`\x1b[90m.\x1b[0m`).
+  Executed pass stays **plain** `.`. Fail stays **red** (`\x1b[31m.\x1b[0m`).
+  `-count` / `-a` / `--no-leaf-cache` disable skip → no grey leaf-cache dots.
 - **Disable leaf-cache skip** when any of:
   - `-count` is set to any N (including `1`)
   - `-a` is set (also forwarded to `go test -a`)
@@ -51,7 +75,7 @@ P1/P2 ASSERTs stay sealed — P3 **adds leaves only**.
 - **Store I/O errors** — should not fail the suite (best-effort; optional leaf
   not required if hard to force).
 
-### Behaviors (P3 polish)
+### Behaviors (polish)
 
 - **Selective invalidation** — editing one leaf's ASSERT Go changes only that
   leaf's key; sibling leaves that still GetPass stay **Cached**.
@@ -62,7 +86,56 @@ P1/P2 ASSERTs stay sealed — P3 **adds leaves only**.
   (tree identity mixed into the key or equivalent).
 - **Help** — `doctest test --help` documents `-a` and `--no-leaf-cache`.
 
-### CLI / env contract (P2 implementer)
+### Behaviors (RunSuite multi-prep extract)
+
+- **FormatLeafIdentity** — tree-qualified token for skip/fail maps; distinct for
+  different abs TreeRoots even when the relative leaf path is identical.
+- **PreparePassPlan** — for a list of `(TreeRoot, leafRel)` refs: compute store
+  keys (`map[identity]storeKey`); when skip enabled and GetPass hits, append
+  identity to `Skip` (sorted). Skip empty when skip disabled.
+- **RecordPasses** — PutPass for non-failed identities (or all when
+  `allPassed`); never PutPass failed identities; when `!allPassed && failed==nil`,
+  store nothing.
+- **Store keys vs identities** — store hex keys already include abs TreeRoot;
+  identities are the in-memory/env tokens for multi-tree maps (must not be bare
+  relative paths alone).
+
+### Behaviors (workspace multi-tree product — `./...` / `<mod>/...`)
+
+- **`doctest test <mod>/...`** with multiple DOCTEST roots under one module uses
+  `PrepareTree` ×N + `RunWorkspace` → `finishWorkspaceGoTest` (`__workspace`
+  suite; multi-mod → `__hub` same finish path).
+- **Multi-prep before go test** — call PreparePassPlan (or equivalent) for
+  **all** TreePreps; pass tree-qualified skip identities into
+  `DOCTEST_LEAF_CACHE_SKIP_PATHS` (generated `__wreg` / RunAll checks match
+  those tokens).
+- **RecordPasses after JSON** — PutPass non-failed leaves using fail identities
+  from suite JSON; partial fail stores only passes.
+- **Summary Cached** — leaf-cache skip count (not only go package cache);
+  fresh GOCACHE in tests so Cached is programmatic leaf-cache only.
+- **`-count` bypass** — any `-count=N` → SkipEnabled false → 0 Cached on
+  workspace path (same as single-tree).
+- **Same-relpath isolation** — warm tree-a only must not false-skip tree-b at
+  the same relative path inside one workspace suite.
+- **Sibling product paths** — CLI multi-arg policy lives under `cli-plan/`;
+  hub multi-mod reuses the same finish path as single-module workspace (no
+  separate hub leaf).
+
+### Behaviors (CLI multi-arg product)
+
+- **`doctest test treeA treeB`** (two or more explicit roots) respects the same
+  leaf-cache enable/disable rules as single-tree and `./...` when skip is
+  enabled: PutPass on pass; warm second run reports programmatic **Cached**.
+- **Warm multi-arg** — two-tree all-pass fixture run twice without `-count` →
+  total Cached across summary line(s) **>= number of warm leaves** (here >= 2).
+- **`-count` bypass** — after a proven warm multi-arg hit, `-count=1` → 0 Cached.
+- **Policy parity** — multi-arg must not ignore store / skip / summary Cached.
+  Engine shape (N× `TestWithStats` vs shared SuitePlan) is free; tests assert
+  **observable** Cached, not call-graph shape.
+- **Already sealed elsewhere** — single-tree warm under `runtime/**`;
+  `./...` workspace under `workspace/**`.
+
+### CLI / env contract (product — all invocation shapes)
 
 | Flag / env | Effect |
 |------------|--------|
@@ -80,51 +153,94 @@ Summary `Cached` then reflects **programmatic leaf-cache skips only**.
 ### Pipeline sketch
 
 ```
-# P1
+# Library
 module + tree + leaf + goVersion -> ComputeLeafKey -> hex key
 Store.PutPass / GetPass under isolated Root
 
-# P2
+# Single-tree runtime
 doctest test fixture
   -> for each leaf: key = ComputeLeafKey(...)
-  -> if enabled && GetPass(key): skip; Cached++
-  -> else run leaf; on pass PutPass(key)
+  -> if enabled && GetPass(key): skip; Cached++; quiet+color -> grey progress .
+  -> else run leaf; on Action:pass stream PutPass(key); plain progress .
+  -> on Action:fail: no PutPass; red progress .
+  -> end-of-run RecordPasses may reconcile (idempotent)
   -> summary (Run, Pass, Fail, Cached)
+
+# Multi-tree workspace (./... product — not single-tree only)
+doctest test <mod>/...
+  -> PrepareTree each root
+  -> PreparePassPlan(all trees) -> skip env (tree-qualified)
+  -> go test __workspace/suite (or __hub)
+  -> RecordPasses from suite JSON fails
+  -> summary Cached = leaf-cache skip count
+
+# Multi-arg CLI (same leaf-cache policy)
+doctest test treeA treeB
+  -> roots = union of args (may still N× TestWithStats or one SuitePlan)
+  -> prepare / bind / run each root with shared store + SkipEnabled
+  -> PutPass / warm Cached / -count bypass same as single + workspace
 ```
 
 ## Decision Tree
 
 ```
 tests/leaf-cache/
-├── key/                                      [P1 ComputeLeafKey]
+├── key/                                      [library ComputeLeafKey]
 │   ├── stable/identical-twice
 │   ├── spine/{leaf-assert-change,ancestor-setup-change}
 │   ├── local-package/{imported-source-change,unrelated-source-stable}
 │   ├── replace/{lib-source-change,lib-gomod-change}
 │   ├── remote/source-not-hashed
-│   └── go-version/different-differs
-├── store/                                    [P1 GetPass/PutPass]
+│   ├── go-version/different-differs
+│   └── tree-identity/different-abs-roots/    same content, different TreeRoot → keys≠
+├── store/                                    [library GetPass/PutPass]
 │   ├── put-then-get
 │   ├── missing-false
 │   └── root-isolation
-├── runtime/                                  [P2 doctest test + leaf cache]
+├── runtime/                                  [doctest test + leaf cache]
 │   ├── warm/second-run-cached/
 │   ├── disable/{count,force-a,no-leaf-cache}-bypasses/
-│   └── fail-path/fail-not-stored/
-├── key/tree-identity/                        [P3 key tree identity]
-│   └── different-abs-roots/                  same content, different TreeRoot → keys≠
+│   ├── fail-path/fail-not-stored/
+│   ├── stream-pass/interrupt-partial-cached/ SIGINT after pass dots → next Cached>=1
+│   └── progress-dots/
+│       ├── warm-grey-dots/                   quiet+--color warm → grey progress dots
+│       ├── fail-still-red/                   --color pass+fail → red fail dot
+│       └── count-no-grey-cached/             warm grey then -count=1 → 0 grey dots
 ├── partial-package-deps/                     [partial leaf-cache across packages]
 │   ├── edit-alone-d-two-cached/              edit alone/d → 2 Cached (shared leaves warm)
 │   └── edit-shared-a-one-cached/             edit shared/a → 1 Cached (leaf-d warm)
-└── polish/                                   [P3 runtime polish]
-    ├── selective/
-    │   ├── sibling-stays-cached/             edit leaf_a ASSERT → sibling still Cached
-    │   └── local-dep-invalidates/            edit imported pkg → leaf re-runs (0 Cached)
-    ├── isolation/
-    │   └── same-relpath-two-trees/           warm treeA; treeB cold (no cross-tree hit)
-    └── docs/
-        └── test-help-mentions-flags/         test --help lists -a / no-leaf-cache
+├── polish/                                   [runtime polish]
+│   ├── selective/
+│   │   ├── sibling-stays-cached/             edit leaf_a ASSERT → sibling still Cached
+│   │   └── local-dep-invalidates/            edit imported pkg → leaf re-runs (0 Cached)
+│   ├── isolation/
+│   │   └── same-relpath-two-trees/           warm treeA; treeB cold (no cross-tree hit)
+│   └── docs/
+│       └── test-help-mentions-flags/         test --help lists -a / no-leaf-cache
+├── runsuite/                                 [nested DOCTEST.md — multi-prep extract]
+│   ├── identity/
+│   │   ├── same-relpath-two-trees/           FormatLeafIdentity distinct across trees
+│   │   └── stable-roundtrip/                 stable + distinguishes leaf rels
+│   └── multi-prep/
+│       ├── prepare-both-warm-skip/           both warm → 2 tree-qualified skip ids
+│       ├── prepare-one-warm-only/            only A warm → skip = [idA]
+│       ├── prepare-skip-disabled/            skipEnabled=false → empty Skip
+│       └── record-partial-fail/              failed id not PutPass; other is
+├── workspace/                                [./... multi-tree product path]
+│   ├── warm/second-run-cached/               two trees all pass; run2 Cached >= 2
+│   ├── partial-fail/fail-one-others-cached/  pass+fail trees; run2 Cached >= 1, still fail
+│   ├── disable/count-bypasses/               warm then -count=1 → 0 Cached
+│   └── isolation/same-relpath-no-cross-skip/ warm tree-a; workspace must not false-skip tree-b
+└── cli-plan/                                 [multi-arg product path]
+    └── multi-arg/
+        ├── warm/second-run-cached/           test treeA treeB twice; sum Cached >= 2
+        └── disable/count-bypasses/           warm then multi-arg -count=1 → 0 Cached
 ```
+
+> **Nested root:** `tests/leaf-cache/runsuite/DOCTEST.md` is a self-contained tree
+> (own Request/Response/Run) so classic multi-prep APIs stay isolated from parent
+> compile. **Workspace** (`./...`) and **CLI multi-arg** product leaves live under
+> the parent tree (same `runtime_multi` nested-CLI harness as `runtime/**`).
 
 ## Test Index
 
@@ -145,59 +261,156 @@ tests/leaf-cache/
 | `store/missing-false` | Missing key → false |
 | `store/root-isolation` | Root A invisible under B |
 
-### P2 (new)
+### Runtime (single-tree product — sealed GREEN + new RED)
 
-| Leaf | Scenario |
-|------|----------|
-| `runtime/warm/second-run-cached` | Two default runs of a 1-pass fixture; run2 summary has Cached > 0 |
-| `runtime/disable/count-bypasses` | Run1 store; run2 warm Cached>0; run3 `-count=1` → `0 Cached` |
-| `runtime/disable/force-a-bypasses` | Run1 store; run2 warm Cached>0; run3 `-a` → `0 Cached` |
+| Leaf | Scenario | Expect |
+|------|----------|--------|
+| `runtime/warm/second-run-cached` | Two default runs of a 1-pass fixture; run2 summary has Cached > 0 | **GREEN** |
+| `runtime/disable/count-bypasses` | Run1 store; run2 warm Cached>0; run3 `-count=1` → `0 Cached` | **GREEN** |
+| `runtime/disable/force-a-bypasses` | Run1 store; run2 warm Cached>0; run3 `-a` → `0 Cached` | **GREEN** |
+| `runtime/disable/no-leaf-cache-bypasses` | Run1 store; run2 warm Cached>0; run3 `--no-leaf-cache` → `0 Cached` | **GREEN** |
+| `runtime/fail-path/fail-not-stored` | Failing fixture twice; both exit ≠0 and `0 Cached` | **GREEN** |
+| `runtime/stream-pass/interrupt-partial-cached` | Multi-leaf + hang; SIGINT after 2 pass dots; unhang; run2 Cached >= 1 | **RED** (stream PutPass) |
+| `runtime/progress-dots/warm-grey-dots` | 2-leaf warm second run with `--color` → grey progress dots >= 2 | **RED** (grey skip dots) |
+| `runtime/progress-dots/fail-still-red` | 1-pass+1-fail `--color` → red progress dot present | **GREEN** (lock-in; fail dots already red) |
+| `runtime/progress-dots/count-no-grey-cached` | Warm grey then `-count=1 --color` → 0 Cached, 0 grey dots | **RED** (depends on grey) |
 
-| `runtime/disable/no-leaf-cache-bypasses` | Run1 store; run2 warm Cached>0; run3 `--no-leaf-cache` → `0 Cached` |
-| `runtime/fail-path/fail-not-stored` | Failing fixture twice; both exit ≠0 and `0 Cached` |
+### Polish / isolation / partial deps
 
-### P3 (polish / isolation)
+| Leaf | Scenario | Expect |
+|------|----------|--------|
+| `key/tree-identity/different-abs-roots` | Identical content under two abs TreeRoots → distinct keys | **GREEN** (TreeRoot mixed into key) |
+| `polish/selective/sibling-stays-cached` | 2-pass tree; warm both; edit leaf_a; re-run → Cached == 1 | **GREEN** |
+| `polish/selective/local-dep-invalidates` | Pass leaf imports local pkg; warm; edit pkg; re-run → 0 Cached | **GREEN** |
+| `partial-package-deps/edit-alone-d-two-cached` | 3 leaves / 4 pkgs; edit alone/d; run2 → **2 Cached** | **GREEN** |
+| `partial-package-deps/edit-shared-a-one-cached` | same fixture; edit shared/a; run2 → **1 Cached** | **GREEN** |
+| `polish/isolation/same-relpath-two-trees` | Warm treeA; first run treeB same relpath → 0 Cached | **GREEN** |
+| `polish/docs/test-help-mentions-flags` | `doctest test --help` mentions `-a` and `--no-leaf-cache` | **GREEN** |
 
-| Leaf | Scenario | Expect (observed) |
-|------|----------|-------------------|
-| `key/tree-identity/different-abs-roots` | Identical content under two abs TreeRoots → distinct keys | **RED** — keys currently collide (no abs TreeRoot in hash) |
-| `polish/selective/sibling-stays-cached` | 2-pass tree; warm both; edit leaf_a; re-run → Cached == 1 | **GREEN** (backfill) |
-| `polish/selective/local-dep-invalidates` | Pass leaf imports local pkg; warm; edit pkg; re-run → 0 Cached | **GREEN** (backfill) |
-| `partial-package-deps/edit-alone-d-two-cached` | 3 leaves / 4 pkgs; run1 `-count=1`; edit alone/d; run2 → **2 Cached** | partial DAG |
-| `partial-package-deps/edit-shared-a-one-cached` | same fixture; edit shared/a; run2 → **1 Cached** | multi-leaf bust |
-| `polish/isolation/same-relpath-two-trees` | Warm treeA; first run treeB same relpath → 0 Cached | **RED** — treeB incorrectly Cached (same root cause) |
-| `polish/docs/test-help-mentions-flags` | `doctest test --help` mentions `-a` and `--no-leaf-cache` |
+### RunSuite P1 (multi-prep extract — sealed GREEN)
+
+| Leaf | Scenario | Expect |
+|------|----------|--------|
+| `runsuite/identity/same-relpath-two-trees` | FormatLeafIdentity(A,leaf) ≠ FormatLeafIdentity(B,leaf) | **GREEN** |
+| `runsuite/identity/stable-roundtrip` | Format stable; different rels differ | **GREEN** |
+| `runsuite/multi-prep/prepare-both-warm-skip` | both warm → 2 tree-qualified Skip ids | **GREEN** |
+| `runsuite/multi-prep/prepare-one-warm-only` | only A warm → Skip = [idA] | **GREEN** |
+| `runsuite/multi-prep/prepare-skip-disabled` | skipEnabled=false → empty Skip; keys still set | **GREEN** |
+| `runsuite/multi-prep/record-partial-fail` | failed A not stored; B PutPass'd | **GREEN** |
+
+### Workspace multi-tree product (`./...` / `<mod>/...` — sealed GREEN)
+
+| Leaf | Scenario | Expect |
+|------|----------|--------|
+| `workspace/warm/second-run-cached` | two-tree `/...`; run2 Cached >= 2 | **GREEN** |
+| `workspace/partial-fail/fail-one-others-cached` | pass+fail trees; run2 Cached >= 1, still fail | **GREEN** |
+| `workspace/disable/count-bypasses` | warm then workspace `-count=1` → 0 Cached | **GREEN** |
+| `workspace/isolation/same-relpath-no-cross-skip` | warm tree-a; workspace Cached==1 and tree-b still fails | **GREEN** |
+
+### CLI multi-arg product (sealed GREEN)
+
+| Leaf | Scenario | Expect |
+|------|----------|--------|
+| `cli-plan/multi-arg/warm/second-run-cached` | `test treeA treeB` twice; sum Cached >= 2 | **GREEN** |
+| `cli-plan/multi-arg/disable/count-bypasses` | warm then multi-arg `-count=1` → 0 Cached | **GREEN** |
+
+Single-tree warm/disable remain under `runtime/**` (no duplicate leaves).
+`./...` / multi-root workspace remains under `workspace/**`. Multi-arg remains
+under `cli-plan/**`. Summary **Cached** on all three paths is the leaf-cache
+product counter (skip hits), not go package cache.
 
 ## How to Run
 
+Product leaves under `runtime/**`, `polish/**`, `partial-package-deps/**`,
+`workspace/**`, and `cli-plan/**` are labeled `heavy` — use **`--label-all`**
+(or an explicit path + label opt-in) for the full product tree. Nested
+`runsuite/` has no labels and is always discovered.
+
 ```sh
+# Structure check (parent tree + nested runsuite roots)
 doctest vet ./tests/leaf-cache/
+doctest vet ./tests/leaf-cache/runsuite/
+
+# Full leaf-cache product suite (library + single + workspace + multi-arg)
 doctest test ./tests/leaf-cache/ --label-all -count=1
+
+# By surface (all must stay GREEN)
 doctest test ./tests/leaf-cache/key/...
 doctest test ./tests/leaf-cache/store/...
-doctest test ./tests/leaf-cache/runtime/...
-doctest test ./tests/leaf-cache/polish/...
+doctest test ./tests/leaf-cache/runtime/... --label-all -count=1     # single-tree product
+# New RED surfaces (stream PutPass + grey progress dots):
+doctest test ./tests/leaf-cache/runtime/stream-pass/... --label-all -count=1
+doctest test ./tests/leaf-cache/runtime/progress-dots/... --label-all -count=1
+doctest test ./tests/leaf-cache/polish/... --label-all -count=1
+doctest test ./tests/leaf-cache/partial-package-deps/... --label-all -count=1
+doctest test ./tests/leaf-cache/runsuite/ -count=1                  # multi-prep extract
+doctest test ./tests/leaf-cache/workspace/... --label-all -count=1  # ./... multi-tree product
+doctest test ./tests/leaf-cache/cli-plan/... --label-all -count=1   # multi-arg product
+
+# Minimum exit-criteria product set (P4)
+doctest test ./tests/leaf-cache/runsuite/ -count=1
+doctest test ./tests/leaf-cache/workspace/... --label-all -count=1
+doctest test ./tests/leaf-cache/cli-plan/... --label-all -count=1
+doctest test ./tests/leaf-cache/runtime/... --label-all -count=1
 ```
 
-## Expected public API (P1 library — implementer contract)
+**Multi-path policy reminder:** leaf-cache applies to single-tree, workspace
+`<mod>/...` / `./...`, and multi-arg `treeA treeB` with the same enable/disable
+rules. Observing `N Cached` after a warm second run without `-count` proves the
+product skip path for that invocation shape.
+
+## Expected public API (library — sealed)
 
 Package: `github.com/xhd2015/doctest/libdoc/leafcache`
 
 - `const AlgoVersion = "v1"`
 - `type KeyInput struct { ModuleRoot, TreeRoot, LeafDir, GoVersion string }`
-- `func ComputeLeafKey(in KeyInput) (string, error)` — lowercase hex
+- `func ComputeLeafKey(in KeyInput) (string, error)` — lowercase hex; abs TreeRoot mixed in
 - `func NewStore(root string) (*Store, error)`
 - `func (s *Store) GetPass(key string) (bool, error)` — false when missing
 - `func (s *Store) PutPass(key string) error` — explicit pass only
+- `func SkipEnabled(count int, force, noLeafCache bool) bool`
+- `func KeyForLeaf(treeRoot, leafRel, goVersion string) (KeyInput, error)`
 
-## Expected suite wiring (P2 — implementer contract)
+## Expected public API (RunSuite multi-prep extract — sealed)
 
-- After leaf **pass**, compute key and `PutPass` into store under
-  `DOCTEST_LEAF_CACHE` or `$CacheHome/doctest/leaf-cache/v1`.
+Same package so single-tree `prepareLeafCache` / `recordLeafCachePasses`
+and multi-tree RunSuite share one implementation:
+
+- `func FormatLeafIdentity(treeRoot, leafRel string) string`
+- `type LeafRef struct { TreeRoot, LeafRel string }`
+- `type PassPlan struct { Keys map[string]string; Skip []string }`
+- `func PreparePassPlan(store *Store, leaves []LeafRef, goVersion string, skipEnabled bool) (PassPlan, error)`
+- `func RecordPasses(store *Store, keys map[string]string, failed map[string]bool, allPassed bool)`
+
+In-memory models (no new on-disk format):
+
+- `keys: map[identity]storeKey`
+- `skipPaths: []identity` for GetPass hits when skip enabled
+- `failed: map[identity]bool` from suite JSON
+
+## Expected suite wiring (single-tree — sealed + stream/grey)
+
+- On each countable suite-leaf JSON **pass**, compute key and **stream**
+  `PutPass` into store under `DOCTEST_LEAF_CACHE` or
+  `$CacheHome/doctest/leaf-cache/v1` (do not wait solely for end-of-run).
 - Before leaf run, if skip enabled and `GetPass`, skip go test for that leaf
   and increment **Cached** in the suite summary line.
+- Quiet + color: progress `.` for this-run skip-set identities is **grey**;
+  executed pass plain `.`; fail **red**.
 - Skip disabled when `-count` present, or `-a`, or `--no-leaf-cache`.
-- Never `PutPass` on fail.
+- Never `PutPass` on fail; partial fail stores only non-failed leaves.
+
+## Expected suite wiring (workspace multi-tree + multi-arg — sealed product)
+
+- In `finishWorkspaceGoTest` (and hub path): multi-prep prepare for **all**
+  TreePreps before `go test`; inject skip env matching generated suite checks.
+- After JSON: `RecordPasses` / `recordLeafCachePasses` with fail identities.
+- Summary **Cached** is the **leaf-cache skip count** (not go testcache alone);
+  product tests use a fresh `GOCACHE` so `N Cached` is programmatic leaf-cache only.
+- Multi-arg `doctest test treeA treeB` respects the same SkipEnabled / PutPass /
+  warm Cached policy as single-tree and workspace (see `cli-plan/**`).
+- Single-tree runtime and workspace product leaves must stay GREEN together.
 
 ```go
 import (
@@ -205,9 +418,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -215,10 +431,11 @@ import (
 )
 
 // Request selects one leaf-cache surface. Leaves set Op and related fields.
+// RunSuite multi-prep lives in nested tree tests/leaf-cache/runsuite/ (own DOCTEST.md).
 type Request struct {
 	Op string // compute_twice | compute_mutate | compute_go_versions | store_put_get | store_missing | store_isolate | compute_two_inputs | runtime_multi | runtime_once
 
-	// --- P1 fixture / store ---
+	// --- library fixture / store ---
 	WorkDir    string
 	ModuleRoot string
 	TreeRoot   string
@@ -236,7 +453,7 @@ type Request struct {
 	TreeRootB   string
 	LeafDirB    string
 
-	// --- P2/P3 runtime (doctest test subprocess) ---
+	// --- runtime (doctest test subprocess) ---
 	Bin        string
 	Timeout    time.Duration
 	FixtureDir string // mini doctest tree root (primary)
@@ -246,19 +463,24 @@ type Request struct {
 	Args2      []string
 	Args3      []string
 	// MutateAfterRun: 0=none; 1=after run1 before run2; 2=after run2 before run3.
-	// Uses Mutation polish_* values via applyMutation / applyPolishMutation.
+	// Uses Mutation polish_* / stream_unhang values via applyPolishMutation.
 	MutateAfterRun int
+
+	// InterruptAfterDots: when > 0, first runtime_multi invocation streams
+	// stdout and sends SIGINT after this many quiet progress dots (plain or
+	// colored). Proves mid-run stream PutPass durability.
+	InterruptAfterDots int
 }
 
 type Response struct {
-	// P1
+	// library key/store
 	Key  string
 	Key2 string
 	Hit  bool
 	HitB bool
 	Err  string
 
-	// P2 multi-run (up to 3 invocations)
+	// runtime multi-run (up to 3 invocations)
 	ExitCode  int
 	Stdout    string
 	Stderr    string
@@ -458,7 +680,13 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 		// Fresh GOCACHE per invocation so go testcache cannot produce summary
 		// Cached across runs; only programmatic leaf-cache skips should.
 		env1 := withFreshGoCache(t, req.Env)
-		r1, err := runDoctestCLI(t, req.Bin, req.Args, env1, timeout)
+		var r1 *cliResult
+		var err error
+		if req.InterruptAfterDots > 0 {
+			r1, err = runDoctestCLIInterruptAfterDots(t, req.Bin, req.Args, env1, req.InterruptAfterDots, timeout)
+		} else {
+			r1, err = runDoctestCLI(t, req.Bin, req.Args, env1, timeout)
+		}
 		if err != nil {
 			resp.Err = err.Error()
 			return resp, err
@@ -557,6 +785,81 @@ func runDoctestCLI(t *testing.T, bin string, args, extraEnv []string, timeout ti
 	return res, err
 }
 
+// runDoctestCLIInterruptAfterDots starts doctest, streams stdout, and sends
+// os.Interrupt once at least afterDots quiet progress dots have been observed.
+// Used by stream-pass interrupt durability leaves.
+func runDoctestCLIInterruptAfterDots(t *testing.T, bin string, args, extraEnv []string, afterDots int, timeout time.Duration) (*cliResult, error) {
+	t.Helper()
+	if afterDots <= 0 {
+		afterDots = 1
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, bin, args...)
+	cmd.Env = append(os.Environ(), extraEnv...)
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, err
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+
+	var (
+		stdoutBuf   bytes.Buffer
+		stderrBuf   bytes.Buffer
+		mu          sync.Mutex
+		interrupted bool
+	)
+	stderrDone := make(chan struct{})
+	go func() {
+		defer close(stderrDone)
+		_, _ = io.Copy(&stderrBuf, stderrPipe)
+	}()
+
+	buf := make([]byte, 512)
+	for {
+		n, readErr := stdoutPipe.Read(buf)
+		if n > 0 {
+			mu.Lock()
+			stdoutBuf.Write(buf[:n])
+			dots := countProgressDotsIn(stdoutBuf.String())
+			if !interrupted && dots >= afterDots {
+				interrupted = true
+				_ = cmd.Process.Signal(os.Interrupt)
+			}
+			mu.Unlock()
+		}
+		if readErr != nil {
+			break
+		}
+	}
+	waitErr := cmd.Wait()
+	<-stderrDone
+
+	res := &cliResult{Stdout: stdoutBuf.String(), Stderr: stderrBuf.String()}
+	if waitErr != nil {
+		var exitErr *exec.ExitError
+		if errors.As(waitErr, &exitErr) {
+			res.ExitCode = exitErr.ExitCode()
+		} else if ctx.Err() != nil {
+			return res, ctx.Err()
+		} else if !interrupted {
+			return res, waitErr
+		}
+	}
+	if !interrupted {
+		return res, fmt.Errorf("never sent SIGINT: need %d progress dots; saw %d\nstdout:\n%s\nstderr:\n%s",
+			afterDots, countProgressDotsIn(res.Stdout), res.Stdout, res.Stderr)
+	}
+	return res, nil
+}
+
 // stdoutCachedPositive reports summary Cached count > 0.
 func stdoutCachedPositive(stdout string) bool {
 	return cachedCount(stdout) > 0
@@ -581,11 +884,85 @@ func cachedCount(stdout string) int {
 	return n
 }
 
+// sumCachedCount sums every "N Cached" summary segment. Multi-arg N× trees
+// emit one line per tree; workspace emits one aggregated line. Both shapes
+// pass when total warm skips equal the sum.
+func sumCachedCount(stdout string) int {
+	matches := cachedRe.FindAllStringSubmatch(stdout, -1)
+	total := 0
+	for _, m := range matches {
+		var n int
+		fmt.Sscanf(m[1], "%d", &n)
+		total += n
+	}
+	return total
+}
+
 // withFreshGoCache copies extraEnv and appends a unique GOCACHE temp dir.
 func withFreshGoCache(t *testing.T, extraEnv []string) []string {
 	t.Helper()
 	out := append([]string(nil), extraEnv...)
 	out = append(out, "GOCACHE="+t.TempDir())
 	return out
+}
+
+// --- progress-dot helpers (quiet path; used by runtime/progress-dots/**) ---
+
+var ansiEscapeRe = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+const (
+	ansiGrayDot = "\x1b[90m.\x1b[0m"
+	ansiRedDot  = "\x1b[31m.\x1b[0m"
+)
+
+func stripANSI(s string) string {
+	return ansiEscapeRe.ReplaceAllString(s, "")
+}
+
+// progressPrefix returns stdout before the suite inline summary.
+// Quiet mode often prints dots and the summary on the same line:
+//
+//	"..  (2 Run, 2 Pass, 0 Fail, 2 Cached) in 1s"
+//
+// so we cut at the summary token rather than discarding the whole line.
+func progressPrefix(stdout string) string {
+	// Preferred: cut at "  (N Run," (double-space before open paren).
+	if loc := summaryRunRe.FindStringIndex(stdout); loc != nil {
+		return stdout[:loc[0]]
+	}
+	// Fallback: any "(N Run,"
+	if loc := summaryRunLooseRe.FindStringIndex(stdout); loc != nil {
+		return stdout[:loc[0]]
+	}
+	// Stop before final PASS/FAIL result line if no inline summary found.
+	for _, line := range strings.Split(stdout, "\n") {
+		plain := strings.TrimSpace(stripANSI(line))
+		if strings.HasPrefix(plain, "PASS (") || strings.HasPrefix(plain, "FAIL (") {
+			idx := strings.Index(stdout, line)
+			if idx >= 0 {
+				return stdout[:idx]
+			}
+		}
+	}
+	return stdout
+}
+
+var (
+	summaryRunRe      = regexp.MustCompile(`  \(\d+ Run,`)
+	summaryRunLooseRe = regexp.MustCompile(`\(\d+ Run,`)
+)
+
+func countGrayProgressDots(stdout string) int {
+	return strings.Count(progressPrefix(stdout), ansiGrayDot)
+}
+
+func countRedProgressDots(stdout string) int {
+	return strings.Count(progressPrefix(stdout), ansiRedDot)
+}
+
+// countProgressDotsIn counts progress dots (plain or colored) in the progress
+// region — used by interrupt-after-dots harness.
+func countProgressDotsIn(stdout string) int {
+	return strings.Count(stripANSI(progressPrefix(stdout)), ".")
 }
 ```

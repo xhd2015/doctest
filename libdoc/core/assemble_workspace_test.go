@@ -30,6 +30,7 @@ func TestAssembleWorkspaceRegistryAndSuite(t *testing.T) {
 		"testcase/libdoc/build/tests/__registry",
 		"testcase/libdoc/build/tests/__allleaves",
 		WorkspaceRegistryImport(),
+		"/tmp/doctest-abs-root",
 	)
 	if !strings.Contains(wreg, "wsreg.Register") {
 		t.Fatalf("wreg must register into workspace:\n%s", wreg)
@@ -87,7 +88,7 @@ func TestWriteWorkspaceExtrasTwoTrees(t *testing.T) {
 		if err := WriteFormattedGo(filepath.Join(allDir, "all.go"), AssembleUnifiedAllLeavesSource(nil)); err != nil {
 			t.Fatal(err)
 		}
-		if err := WriteTreeWreg(genRoot, tr); err != nil {
+		if err := WriteTreeWreg(genRoot, tr, filepath.Join(genRoot, tr)); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -14,9 +14,12 @@ const EnvLeafCache = "DOCTEST_LEAF_CACHE"
 // EnvCacheHome overrides the base cache directory (shared with other doctest caches).
 const EnvCacheHome = "DOCTEST_CACHE_HOME"
 
-// EnvSkipPaths lists tree-relative leaf paths (newline-separated) that the suite
-// should treat as warm GetPass hits and skip executing. Set by the outer
-// `doctest test` process after consulting the pass store.
+// EnvSkipPaths lists warm-skip tokens (newline-separated) that the suite should
+// treat as GetPass hits and skip executing. Set by the outer `doctest test`
+// process after consulting the pass store.
+//
+// Tokens are either bare tree-relative leaf paths (single-tree suite) or
+// FormatLeafIdentityEnv values (tree-qualified; multi-tree workspace / hub).
 const EnvSkipPaths = "DOCTEST_LEAF_CACHE_SKIP_PATHS"
 
 // DefaultStoreRel is the path under CacheHome for the v1 pass store.

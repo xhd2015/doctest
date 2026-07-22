@@ -373,12 +373,12 @@ func (ctx *generateContext) writeUnifiedCases(cases []core.TreeCase, compileOnly
 		leafImports = append(leafImports, core.LeafImportForTree(leafRel))
 	}
 
-	if err := core.WriteUnifiedTreeExtras(ctx.genRoot, treeRel, leafImports); err != nil {
+	if err := core.WriteUnifiedTreeExtras(ctx.genRoot, treeRel, ctx.absRoot, leafImports); err != nil {
 		return err
 	}
 	// Workspace registration plane: each tree's __wreg registers into
 	// __workspace/__registry (fan-in rewritten when multi-root runs).
-	if err := core.WriteTreeWreg(ctx.genRoot, treeRel); err != nil {
+	if err := core.WriteTreeWreg(ctx.genRoot, treeRel, ctx.absRoot); err != nil {
 		return fmt.Errorf("write tree wreg: %w", err)
 	}
 	if ctx.verbose && ctx.w != nil {

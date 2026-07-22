@@ -12,7 +12,7 @@ DOCTEST_LEAF_CACHE + DOCTEST_CACHE_HOME; fresh GOCACHE per run
 
 ## Preconditions
 
-- Nested CLI integration (Classic TDD RED until suite/CLI wiring lands).
+- Nested CLI integration — single-tree leaf-cache product path (**GREEN**).
 - Requires a freshly built doctest binary (`testbin.Ensure`).
 - Fixture trees are temp mini doctest projects (not this tree's key/store leaves).
 - Fresh `GOCACHE` per invocation so `N Cached` means programmatic leaf-cache skips only.
@@ -25,7 +25,8 @@ DOCTEST_LEAF_CACHE + DOCTEST_CACHE_HOME; fresh GOCACHE per run
 
 ## Context
 
-- Significance: runtime behavior is the product surface for P2; library P1 is sealed.
+- Significance: single-tree product surface; workspace `./...` is under
+  `workspace/**`, multi-arg under `cli-plan/**` — same Cached/disable policy.
 - Labels: leaves use `heavy` (nested compile + two runs).
 
 ```go

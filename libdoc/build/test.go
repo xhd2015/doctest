@@ -248,6 +248,8 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	}
 
 	// Programmatic leaf-cache: warm GetPass hits skip leaf bodies via suite env.
+	// leafKeys + skipPaths also feed the JSON consumer for stream PutPass and
+	// grey warm-skip progress dots (quiet + color).
 	leafKeys, skipPaths := prepareLeafCache(absRoot, cases, opts)
 	leafSkipEnv := leafcache.FormatSkipPaths(skipPaths)
 
@@ -268,9 +270,9 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	var result goTestJSONResult
 	var goTestErr error
 	if singlePkgInvocations {
-		result, goTestErr = runGoTestJSONPerPackage(runDir, flagArgs, packageArgs, sessionID, goCache, opts.MetricsNestSink, leafSkipEnv, stdout, style, opts.Verbose)
+		result, goTestErr = runGoTestJSONPerPackage(runDir, flagArgs, packageArgs, sessionID, goCache, opts.MetricsNestSink, leafSkipEnv, leafKeys, stdout, style, opts.Verbose)
 	} else {
-		result, goTestErr = runGoTestJSONShards(runDir, flagArgs, packageArgs, sessionID, goCache, opts.MetricsNestSink, leafSkipEnv, stdout, style, opts.Verbose)
+		result, goTestErr = runGoTestJSONShards(runDir, flagArgs, packageArgs, sessionID, goCache, opts.MetricsNestSink, leafSkipEnv, leafKeys, stdout, style, opts.Verbose)
 	}
 	goTestElapsed := time.Since(tGo)
 	track("go_test", tGo)
@@ -633,12 +635,12 @@ func goTestEnvFromOpts(sessionID string, opts core.Options) []string {
 
 // runGoTestJSONPerPackage runs one go test process per package (serial) so
 // profile flags that go rejects with multi-package lists still work.
-func runGoTestJSONPerPackage(runDir string, flagArgs, packageArgs []string, sessionID, goCache, nestSink, leafSkipPaths string, stdout io.Writer, style colorStyle, verbose bool) (goTestJSONResult, error) {
+func runGoTestJSONPerPackage(runDir string, flagArgs, packageArgs []string, sessionID, goCache, nestSink, leafSkipPaths string, leafKeys map[string]string, stdout io.Writer, style colorStyle, verbose bool) (goTestJSONResult, error) {
 	var merged goTestJSONResult
 	var firstErr error
 	for _, pkg := range packageArgs {
 		args := append(append([]string(nil), flagArgs...), pkg)
-		res, err := runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, stdout, style, verbose)
+		res, err := runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, leafKeys, stdout, style, verbose)
 		mergeGoTestJSONResult(&merged, res)
 		if err != nil && firstErr == nil {
 			firstErr = err
@@ -678,7 +680,7 @@ func lockGoTestModule(runDir string) func() {
 	return mu.Unlock
 }
 
-func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionID, goCache, nestSink, leafSkipPaths string, stdout io.Writer, style colorStyle, verbose bool) (goTestJSONResult, error) {
+func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionID, goCache, nestSink, leafSkipPaths string, leafKeys map[string]string, stdout io.Writer, style colorStyle, verbose bool) (goTestJSONResult, error) {
 	// Single go test process per tree. Package sharding multiplies nested
 	// self-test fan-out and has raced go.mod; wall cut is tree concurrency +
 	// suite-level t.Parallel.
@@ -686,7 +688,7 @@ func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionI
 	shards := packageTestShards(packageArgs, workers)
 	if len(shards) <= 1 {
 		args := append(append([]string(nil), flagArgs...), packageArgs...)
-		return runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, stdout, style, verbose)
+		return runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, leafKeys, stdout, style, verbose)
 	}
 
 	// Multi-shard: readonly module mode so concurrent go tests share genDir safely.
@@ -712,7 +714,7 @@ func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionI
 			defer wg.Done()
 			args := append(append([]string(nil), shardFlags...), shard...)
 			// Locked stdout keeps progress dots incremental and non-interleaved by byte.
-			res, err := runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, &lockedWriter{w: stdout, mu: &mu}, style, verbose)
+			res, err := runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, leafKeys, &lockedWriter{w: stdout, mu: &mu}, style, verbose)
 			mu.Lock()
 			defer mu.Unlock()
 			mergeGoTestJSONResult(&merged, res)
@@ -736,7 +738,7 @@ func (l *lockedWriter) Write(p []byte) (int, error) {
 	return l.w.Write(p)
 }
 
-func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nestSink, goWork, leafSkipPaths string, stdout io.Writer, style colorStyle, verbose bool) (goTestJSONResult, error) {
+func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nestSink, goWork, leafSkipPaths string, leafKeys map[string]string, stdout io.Writer, style colorStyle, verbose bool) (goTestJSONResult, error) {
 	goTestSlots <- struct{}{}
 	defer func() { <-goTestSlots }()
 
@@ -772,6 +774,17 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 	if err := goTestCmd.Start(); err != nil {
 		return goTestJSONResult{}, fmt.Errorf("go test start: %w", err)
 	}
+
+	// Stream PutPass: open store once for this consumer so mid-run Ctrl-C still
+	// leaves already-passed leaves durable. Fail never PutPass (only pass path).
+	var streamStore *leafcache.Store
+	if len(leafKeys) > 0 {
+		if root, err := leafcache.ResolveStoreRoot(); err == nil {
+			streamStore, _ = leafcache.NewStore(root)
+		}
+	}
+	// This-run warm skip set (bare paths and/or FormatLeafIdentityEnv tokens).
+	warmSkip := leafcache.ParseSkipPaths(leafSkipPaths)
 
 	var res goTestJSONResult
 	res.pkgElapsedNs = make(map[string]int64)
@@ -880,11 +893,29 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 				res.testElapsedNs[test] = ns
 			}
 		}
-		// Quiet progress dots only; verbose streams Output events instead.
-		writePassDot := func() {
-			if !verbose {
-				stdout.Write([]byte("."))
+		// Stream PutPass for a countable suite-leaf pass (best-effort).
+		// Fail never calls this. End-of-run recordLeafCachePasses remains as
+		// idempotent reconcile for clean completions.
+		streamPutPassLeaf := func(leafRel string) {
+			if streamStore == nil || leafRel == "" || len(leafKeys) == 0 {
+				return
 			}
+			if key := streamKeyForLeaf(leafKeys, leafRel); key != "" {
+				_ = streamStore.PutPass(key)
+			}
+		}
+		// Quiet progress dots only; verbose streams Output events instead.
+		// Warm leaf-cache skips (identity in this-run skip set) print grey
+		// when color is on; executed passes stay plain "."; fails stay red.
+		writePassDot := func(leafRel string) {
+			if verbose {
+				return
+			}
+			if leafRel != "" && style.enabled && isWarmSkipLeaf(warmSkip, leafRel) {
+				fmt.Fprint(stdout, style.gray("."))
+				return
+			}
+			stdout.Write([]byte("."))
 		}
 		writeFailDot := func() {
 			if !verbose {
@@ -952,7 +983,12 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 						before := suiteLeafPass + suiteLeafFail + suiteLeafSkip
 						countSuiteLeaf(ev.Package, ev.Test, "pass")
 						if suiteLeafPass+suiteLeafFail+suiteLeafSkip > before {
-							writePassDot()
+							leafRel := suiteLeafRelPath(ev.Test)
+							// PutPass before the progress dot so interrupt-after-dots
+							// harnesses (and Ctrl-C) observe a durable store entry
+							// once a pass dot is visible.
+							streamPutPassLeaf(leafRel)
+							writePassDot(leafRel)
 						}
 					}
 					continue
@@ -963,7 +999,7 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 				}
 				recordPkg(ev.Package, ev.Elapsed, packageCached[ev.Package])
 				if suiteLeafPass+suiteLeafFail+suiteLeafSkip == 0 {
-					writePassDot()
+					writePassDot("")
 				}
 			case "fail":
 				if ev.Test != "" {
@@ -1096,6 +1132,67 @@ func suiteLeafRelPath(test string) string {
 	return strings.ReplaceAll(rest, "__", "/")
 }
 
+// streamKeyForLeaf resolves a store key for a suite leaf relative path.
+// Single-tree prepareLeafCache keys by bare path; workspace keys use
+// FormatLeafIdentity (NUL-separated). When multiple FormatLeafIdentity keys
+// share the same bare leaf (multi-tree same relpath), returns "" so stream
+// PutPass skips — end-of-run RecordPasses still reconciles uniquely.
+func streamKeyForLeaf(leafKeys map[string]string, leafRel string) string {
+	if len(leafKeys) == 0 || leafRel == "" {
+		return ""
+	}
+	if k, ok := leafKeys[leafRel]; ok {
+		return k
+	}
+	slash := filepath.ToSlash(leafRel)
+	if k, ok := leafKeys[slash]; ok {
+		return k
+	}
+	// Unique FormatLeafIdentity suffix match (treeRoot\x00leafRel).
+	var found string
+	n := 0
+	needle := "\x00" + leafRel
+	needleSlash := "\x00" + slash
+	for id, k := range leafKeys {
+		if id == leafRel || id == slash ||
+			strings.HasSuffix(id, needle) || strings.HasSuffix(id, needleSlash) {
+			found = k
+			n++
+			if n > 1 {
+				return ""
+			}
+		}
+	}
+	if n == 1 {
+		return found
+	}
+	return ""
+}
+
+// isWarmSkipLeaf reports whether leafRel is in this-run warm skip set.
+// Skip tokens are bare paths (single-tree) and/or FormatLeafIdentityEnv
+// (absRoot\tleafRel for workspace).
+func isWarmSkipLeaf(warmSkip map[string]struct{}, leafRel string) bool {
+	if len(warmSkip) == 0 || leafRel == "" {
+		return false
+	}
+	if _, ok := warmSkip[leafRel]; ok {
+		return true
+	}
+	slash := filepath.ToSlash(leafRel)
+	if _, ok := warmSkip[slash]; ok {
+		return true
+	}
+	suffix := "\t" + leafRel
+	suffixSlash := "\t" + slash
+	for p := range warmSkip {
+		if strings.HasSuffix(p, suffix) || strings.HasSuffix(p, suffixSlash) {
+			return true
+		}
+	}
+	return false
+}
+
 // leafCachedSummary computes summary Cached for the leaf-cache product.
 // When skip is disabled (-count / -a / --no-leaf-cache), always 0.
 // Otherwise Cached is the leaf-skip count; full go package (cached) expands to
@@ -1112,6 +1209,9 @@ func leafCachedSummary(nCases int, skipPaths []string, anyPkgCached, skipEnabled
 }
 
 // prepareLeafCache computes leaf keys and warm skip paths for this tree run.
+// Uses leafcache.PreparePassPlan, then remaps tree-qualified identities back to
+// bare tree-relative paths so the suite skip env (DOCTEST_LEAF_CACHE_SKIP_PATHS)
+// and suiteLeafFailed maps stay path-based for single-tree runs.
 // Store I/O errors are ignored (best-effort; suite continues).
 func prepareLeafCache(treeRoot string, cases []core.TreeCase, opts core.Options) (keys map[string]string, skipPaths []string) {
 	keys = make(map[string]string, len(cases))
@@ -1128,24 +1228,25 @@ func prepareLeafCache(treeRoot string, cases []core.TreeCase, opts core.Options)
 	}
 	goVer := runtime.Version()
 	enabled := leafcache.SkipEnabled(opts.Count, opts.ForceWithFlagA, opts.NoLeafCache)
+	leaves := make([]leafcache.LeafRef, 0, len(cases))
+	idToPath := make(map[string]string, len(cases))
 	for _, tc := range cases {
-		in, err := leafcache.KeyForLeaf(treeRoot, tc.Path, goVer)
-		if err != nil {
-			continue
+		leaves = append(leaves, leafcache.LeafRef{TreeRoot: treeRoot, LeafRel: tc.Path})
+		idToPath[leafcache.FormatLeafIdentity(treeRoot, tc.Path)] = tc.Path
+	}
+	plan, err := leafcache.PreparePassPlan(store, leaves, goVer, enabled)
+	if err != nil {
+		return keys, nil
+	}
+	for id, key := range plan.Keys {
+		if path, ok := idToPath[id]; ok {
+			keys[path] = key
 		}
-		key, err := leafcache.ComputeLeafKey(in)
-		if err != nil {
-			continue
+	}
+	for _, id := range plan.Skip {
+		if path, ok := idToPath[id]; ok {
+			skipPaths = append(skipPaths, path)
 		}
-		keys[tc.Path] = key
-		if !enabled {
-			continue
-		}
-		hit, err := store.GetPass(key)
-		if err != nil || !hit {
-			continue
-		}
-		skipPaths = append(skipPaths, tc.Path)
 	}
 	sort.Strings(skipPaths)
 	return keys, skipPaths
@@ -1153,7 +1254,8 @@ func prepareLeafCache(treeRoot string, cases []core.TreeCase, opts core.Options)
 
 // recordLeafCachePasses writes PutPass for leaves that passed.
 // When allPassed is true, every key is stored. Otherwise failed paths are skipped.
-// Errors are ignored (best-effort).
+// Errors are ignored (best-effort). Keys/failed use bare tree-relative paths
+// for single-tree (same identity scheme as prepareLeafCache returns).
 func recordLeafCachePasses(keys map[string]string, failed map[string]bool, allPassed bool) {
 	if len(keys) == 0 {
 		return
@@ -1166,19 +1268,7 @@ func recordLeafCachePasses(keys map[string]string, failed map[string]bool, allPa
 	if err != nil {
 		return
 	}
-	for path, key := range keys {
-		if !allPassed {
-			if failed != nil && failed[path] {
-				continue
-			}
-			// Partial fail without per-leaf map: only store when allPassed or known non-fail.
-			// When failed map is nil and !allPassed, skip all to avoid storing fails.
-			if failed == nil {
-				continue
-			}
-		}
-		_ = store.PutPass(key)
-	}
+	leafcache.RecordPasses(store, keys, failed, allPassed)
 }
 
 func passedCases(total, failCount int) int {
