@@ -14,10 +14,11 @@ import (
 )
 
 const (
-	ansiReset = "\x1b[0m"
-	ansiRed   = "\x1b[31m"
-	ansiGreen = "\x1b[32m"
-	ansiGray  = "\x1b[90m"
+	ansiReset  = "\x1b[0m"
+	ansiRed    = "\x1b[31m"
+	ansiGreen  = "\x1b[32m"
+	ansiGray   = "\x1b[90m"
+	ansiOrange = "\x1b[38;5;208m" // warning accent (timeout cancelled segment)
 )
 
 // isTerminal reports whether w is an *os.File connected to a character device (TTY).
@@ -87,6 +88,13 @@ func (c colorStyle) gray(s string) string {
 	return ansiGray + s + ansiReset
 }
 
+func (c colorStyle) orange(s string) string {
+	if !c.enabled {
+		return s
+	}
+	return ansiOrange + s + ansiReset
+}
+
 // PhaseTiming is a wall-clock span for one pipeline step inside a tree run
 // (discover / materialize / generate / go_test / post).
 type PhaseTiming struct {
@@ -113,6 +121,12 @@ type TestRunStats struct {
 	// SkipCount is suite-leaf go test Action "skip" (runtime t.Skip). Distinct
 	// from Skipped (label-discovery skips shown in the discovery block).
 	SkipCount int
+	// Planned is discovery leaf count before Total is rewritten to actual_run
+	// (pass+fail). Used for timeout cancelled accounting.
+	Planned int
+	// TimedOut is true when this run surfaced a go test timeout Error
+	// ("test timed out after …"). Enables FAIL (p/planned, N cancelled).
+	TimedOut bool
 	// Phases are filled by TestWithStats when the tree actually runs.
 	Phases []PhaseTiming
 	// LeafTimings map leaf paths to go-test package elapsed when available.
@@ -132,6 +146,33 @@ type TestRunStats struct {
 	// Cases are runnable leaves after label/changed filters (set by TestWithStats).
 	// PrepareTree reuses this to avoid a second DiscoverTreeCases walk.
 	Cases []core.TreeCase
+}
+
+// timeoutCancelled returns cancelled leaf count when TimedOut; else 0.
+// cancelled = max(0, planned − pass − fail − skipCount) with fail derived
+// from actual_run Total (pass+fail) when Total is the post-run actual_run.
+func timeoutCancelled(stats TestRunStats) int {
+	if !stats.TimedOut {
+		return 0
+	}
+	planned := stats.Planned
+	if planned <= 0 {
+		// Fallback: Total may still hold discovery count when no actual_run.
+		planned = stats.Total
+	}
+	fail := stats.Total - stats.Passed
+	if fail < 0 {
+		fail = 0
+	}
+	// When Total still equals planned (no actual_run rewrite), treat unfinished
+	// as cancelled rather than as fails: use fail only from actual finished fails.
+	// actual_run = pass+fail ≤ planned; if Total == planned and TimedOut with
+	// no per-leaf results, Passed was forced to 0 and Total may be 0 (see apply).
+	c := planned - stats.Passed - fail - stats.SkipCount
+	if c < 0 {
+		return 0
+	}
+	return c
 }
 
 func formatDisplayDuration(d time.Duration) string {
@@ -181,11 +222,25 @@ func formatSummary(style colorStyle, runCount, passCount, failCount, cachedCount
 // When forceFail is true (e.g. a sibling tree failed prepare while survivors
 // all passed), always print FAIL so the summary matches non-zero exit.
 //
-// When skipCount > 0 (runtime t.Skip on suite leaves), fraction is
-// succeeded/actual_run with ", N t.Skip" (actual_run = pass+fail, excludes
-// skips). When skipCount == 0, keep PASS (p/t) / FAIL (p/t) unchanged.
-func formatResultSummary(style colorStyle, passed, total int, elapsed time.Duration, forceFail bool, skipCount int) string {
+// When cancelled > 0 (go test timeout with unfinished planned leaves), fraction
+// is passed/planned with ", N cancelled" (v1: omit t.Skip on this line). The
+// cancelled phrase uses orange when color is on; FAIL token stays red.
+//
+// When skipCount > 0 (runtime t.Skip on suite leaves) and no timeout cancelled,
+// fraction is succeeded/actual_run with ", N t.Skip" (actual_run = pass+fail,
+// excludes skips). When skipCount == 0 and cancelled == 0, keep PASS (p/t) /
+// FAIL (p/t) unchanged.
+func formatResultSummary(style colorStyle, passed, total int, elapsed time.Duration, forceFail bool, skipCount int, cancelled int) string {
 	suffix := fmt.Sprintf(" in %s", formatDisplayDuration(elapsed))
+	if cancelled > 0 {
+		// Timeout path: always FAIL with planned denom + cancelled segment.
+		cancelledSeg := fmt.Sprintf("%d cancelled", cancelled)
+		if style.enabled {
+			// Prefer orange only on the cancelled phrase; FAIL token red.
+			return style.red("FAIL") + fmt.Sprintf(" (%d/%d, %s)", passed, total, style.orange(cancelledSeg)) + suffix
+		}
+		return fmt.Sprintf("FAIL (%d/%d, %s)%s", passed, total, cancelledSeg, suffix)
+	}
 	frac := fmt.Sprintf("%d/%d", passed, total)
 	if skipCount > 0 {
 		frac = fmt.Sprintf("%d/%d, %d t.Skip", passed, total, skipCount)
@@ -356,16 +411,37 @@ func PrintResultSummary(opts core.Options, stats TestRunStats) {
 // PrintResultSummaryOverall prints PASS/FAIL. When overallOK is false, always
 // uses FAIL even if passed==total (partial multi-tree: survivors passed but
 // another tree failed prepare, or workspace error with odd counts).
+//
+// On timeout (stats.TimedOut) with cancelled > 0, the fraction uses Planned
+// as denom and appends ", N cancelled" (orange when color on).
 func PrintResultSummaryOverall(opts core.Options, stats TestRunStats, overallOK bool) {
-	if stats.Total == 0 && stats.SkipCount == 0 && !stats.GoTestBypassed {
+	cancelled := timeoutCancelled(stats)
+	// Timeout with all leaves cancelled may leave Total==0 (actual_run=0);
+	// still print FAIL (0/planned, N cancelled).
+	if stats.Total == 0 && stats.SkipCount == 0 && cancelled == 0 && !stats.GoTestBypassed {
 		return
 	}
 	style := newColorStyle(opts.Color, os.Stdout)
 	if stats.GoTestBypassed {
-		fmt.Println(formatBypassResultSummary(style, stats.Total, stats.Elapsed))
+		planned := stats.Total
+		if stats.Planned > 0 {
+			planned = stats.Planned
+		}
+		fmt.Println(formatBypassResultSummary(style, planned, stats.Elapsed))
 		return
 	}
-	fmt.Println(formatResultSummary(style, stats.Passed, stats.Total, stats.Elapsed, !overallOK, stats.SkipCount))
+	passed := stats.Passed
+	total := stats.Total
+	skipCount := stats.SkipCount
+	if cancelled > 0 {
+		if stats.Planned > 0 {
+			total = stats.Planned
+		}
+		// v1: omit t.Skip phrase on timeout FAIL line.
+		skipCount = 0
+		overallOK = false
+	}
+	fmt.Println(formatResultSummary(style, passed, total, stats.Elapsed, !overallOK, skipCount, cancelled))
 }
 
 // formatBypassResultSummary is the honest end line when go test was skipped.

@@ -109,16 +109,16 @@ func TestFormatResultSummaryForceFail(t *testing.T) {
 	style := colorStyle{enabled: false}
 	elapsed := 2 * time.Second
 
-	pass := formatResultSummary(style, 10, 10, elapsed, false, 0)
+	pass := formatResultSummary(style, 10, 10, elapsed, false, 0, 0)
 	if !strings.HasPrefix(pass, "PASS (10/10)") {
 		t.Fatalf("expected PASS when all ok, got %q", pass)
 	}
 	// Survivors all passed but another tree failed prepare: must not look green.
-	forced := formatResultSummary(style, 10, 10, elapsed, true, 0)
+	forced := formatResultSummary(style, 10, 10, elapsed, true, 0, 0)
 	if !strings.HasPrefix(forced, "FAIL (10/10)") {
 		t.Fatalf("expected FAIL when forceFail, got %q", forced)
 	}
-	partial := formatResultSummary(style, 8, 10, elapsed, false, 0)
+	partial := formatResultSummary(style, 8, 10, elapsed, false, 0, 0)
 	if !strings.HasPrefix(partial, "FAIL (8/10)") {
 		t.Fatalf("expected FAIL on partial pass, got %q", partial)
 	}
@@ -129,19 +129,77 @@ func TestFormatResultSummaryRuntimeSkip(t *testing.T) {
 	elapsed := time.Second
 
 	// 1 pass + 1 t.Skip → succeeded/actual_run with t.Skip suffix.
-	passSkip := formatResultSummary(style, 1, 1, elapsed, false, 1)
+	passSkip := formatResultSummary(style, 1, 1, elapsed, false, 1, 0)
 	if !strings.HasPrefix(passSkip, "PASS (1/1, 1 t.Skip) in ") {
 		t.Fatalf("pass+skip: got %q", passSkip)
 	}
 	// 0 pass + 1 fail + 1 t.Skip.
-	failSkip := formatResultSummary(style, 0, 1, elapsed, false, 1)
+	failSkip := formatResultSummary(style, 0, 1, elapsed, false, 1, 0)
 	if !strings.HasPrefix(failSkip, "FAIL (0/1, 1 t.Skip) in ") {
 		t.Fatalf("fail+skip: got %q", failSkip)
 	}
 	// N=0 must keep legacy form (no t.Skip text).
-	noSkip := formatResultSummary(style, 2, 2, elapsed, false, 0)
+	noSkip := formatResultSummary(style, 2, 2, elapsed, false, 0, 0)
 	if strings.Contains(noSkip, "t.Skip") || !strings.HasPrefix(noSkip, "PASS (2/2) in ") {
 		t.Fatalf("zero skip must be legacy PASS (2/2), got %q", noSkip)
+	}
+}
+
+func TestFormatResultSummaryTimeoutCancelled(t *testing.T) {
+	style := colorStyle{enabled: false}
+	elapsed := 2 * time.Second
+	// FAIL (0/3, 3 cancelled) — planned denom, no t.Skip phrase.
+	got := formatResultSummary(style, 0, 3, elapsed, true, 0, 3)
+	if !strings.HasPrefix(got, "FAIL (0/3, 3 cancelled) in ") {
+		t.Fatalf("plain cancelled: got %q", got)
+	}
+	if strings.Contains(got, "t.Skip") {
+		t.Fatalf("timeout FAIL must omit t.Skip: %q", got)
+	}
+
+	colored := colorStyle{enabled: true}
+	cgot := formatResultSummary(colored, 0, 3, elapsed, true, 0, 2)
+	if !strings.Contains(cgot, ansiOrange+"2 cancelled"+ansiReset) {
+		t.Fatalf("expected orange cancelled segment, got %q", cgot)
+	}
+	if !strings.Contains(cgot, ansiRed+"FAIL"+ansiReset) {
+		t.Fatalf("expected red FAIL token, got %q", cgot)
+	}
+	// Error path uses red/gray separately; cancelled must not use red-only for phrase.
+	if strings.Contains(cgot, ansiRed+"2 cancelled") {
+		t.Fatalf("cancelled must not be red: %q", cgot)
+	}
+}
+
+func TestTimeoutCancelledAccounting(t *testing.T) {
+	// planned=3, actual_run pass+fail=0 → 3 cancelled
+	st := TestRunStats{Passed: 0, Total: 0, Planned: 3, TimedOut: true}
+	if c := timeoutCancelled(st); c != 3 {
+		t.Fatalf("all cancelled: got %d", c)
+	}
+	// planned=3, package fail actual_run=1 → cancelled=2
+	st = TestRunStats{Passed: 0, Total: 1, Planned: 3, TimedOut: true}
+	if c := timeoutCancelled(st); c != 2 {
+		t.Fatalf("package fail residual: got %d", c)
+	}
+	// no timeout → 0
+	st = TestRunStats{Passed: 0, Total: 1, Planned: 3, TimedOut: false}
+	if c := timeoutCancelled(st); c != 0 {
+		t.Fatalf("no timeout: got %d", c)
+	}
+}
+
+func TestPrintResultSummaryOverallTimeoutCancelled(t *testing.T) {
+	// Ensure Total==0 + TimedOut still prints (cancelled path).
+	// Capture via redirect is heavy; use formatResultSummary + timeoutCancelled only.
+	st := TestRunStats{Passed: 0, Total: 0, Planned: 3, TimedOut: true, Elapsed: time.Second}
+	c := timeoutCancelled(st)
+	if c != 3 {
+		t.Fatalf("cancelled=%d", c)
+	}
+	line := formatResultSummary(colorStyle{}, 0, st.Planned, st.Elapsed, true, 0, c)
+	if !strings.HasPrefix(line, "FAIL (0/3, 3 cancelled) in ") {
+		t.Fatalf("got %q", line)
 	}
 }
 

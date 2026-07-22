@@ -1,6 +1,6 @@
 # Scenario
 
-**Feature**: fast-passing suites do not emit a false timeout Error
+**Feature**: fast-passing suites do not emit a false timeout Error or cancelled phrase
 
 ```
 # fast 1-pass tree under normal/generous timeout
@@ -8,6 +8,7 @@ doctest test --no-color <pass-tree> -> go test completes -> exit 0
 
 # must not look like a timeout failure
 doctest -> no "Error: go test timed out"
+doctest -> no "cancelled" on PASS/FAIL or progress
 ```
 
 ## Preconditions

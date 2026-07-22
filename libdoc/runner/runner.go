@@ -25,6 +25,27 @@ import (
 
 var ErrNoTestsFound = path_resolve.ErrNoTestsFound
 
+// mergeRunStats accumulates per-tree stats into the CLI suite totals,
+// including timeout Planned/TimedOut for cancelled FAIL presentation.
+func mergeRunStats(dst *runnerbuild.TestRunStats, src runnerbuild.TestRunStats) {
+	dst.Passed += src.Passed
+	dst.Total += src.Total
+	dst.SkipCount += src.SkipCount
+	dst.Skipped = append(dst.Skipped, src.Skipped...)
+	if src.Planned > 0 {
+		dst.Planned += src.Planned
+	}
+	if src.TimedOut {
+		dst.TimedOut = true
+	}
+	if src.GoTestBypassed {
+		dst.GoTestBypassed = true
+	}
+	if src.NoTestsChanged {
+		dst.NoTestsChanged = true
+	}
+}
+
 func Build(dir string) error {
 	return runnerbuild.Build(dir, core.Options{RemoveTemp: false})
 }
@@ -196,16 +217,7 @@ func Test(args []string) error {
 					_ = rec.writeLeafEndSkipped(sk, dir, end)
 				}
 				statsMu.Lock()
-				stats.Passed += s.Passed
-				stats.Total += s.Total
-				stats.SkipCount += s.SkipCount
-				stats.Skipped = append(stats.Skipped, s.Skipped...)
-				if s.GoTestBypassed {
-					stats.GoTestBypassed = true
-				}
-				if s.NoTestsChanged {
-					stats.NoTestsChanged = true
-				}
+				mergeRunStats(&stats, s)
 				statsMu.Unlock()
 				if err != nil && strings.Contains(err.Error(), "no runnable test cases found") {
 					return ErrNoTestsFound
@@ -215,16 +227,7 @@ func Test(args []string) error {
 		}
 		s, err := runnerbuild.TestWithStats(dir, o)
 		statsMu.Lock()
-		stats.Passed += s.Passed
-		stats.Total += s.Total
-		stats.SkipCount += s.SkipCount
-		stats.Skipped = append(stats.Skipped, s.Skipped...)
-		if s.GoTestBypassed {
-			stats.GoTestBypassed = true
-		}
-		if s.NoTestsChanged {
-			stats.NoTestsChanged = true
-		}
+		mergeRunStats(&stats, s)
 		statsMu.Unlock()
 		if err != nil && strings.Contains(err.Error(), "no runnable test cases found") {
 			return ErrNoTestsFound
@@ -557,13 +560,7 @@ func runSuitePlan(targets []suiteTarget, opts core.Options, rec *runRecorder, st
 		wsOpts.SuppressResultSummary = true
 		s, wsErr := runnerbuild.RunWorkspace(unified, wsOpts)
 		statsMu.Lock()
-		stats.Passed += s.Passed
-		stats.Total += s.Total
-		stats.SkipCount += s.SkipCount
-		stats.Skipped = append(stats.Skipped, s.Skipped...)
-		if s.GoTestBypassed {
-			stats.GoTestBypassed = true
-		}
+		mergeRunStats(stats, s)
 		statsMu.Unlock()
 		if rec != nil {
 			for _, ph := range s.Phases {
@@ -616,13 +613,7 @@ func runSuitePlan(targets []suiteTarget, opts core.Options, rec *runRecorder, st
 		o.SuppressResultSummary = true
 		s, err := runnerbuild.TestWithStats(r.dir, o)
 		statsMu.Lock()
-		stats.Passed += s.Passed
-		stats.Total += s.Total
-		stats.SkipCount += s.SkipCount
-		stats.Skipped = append(stats.Skipped, s.Skipped...)
-		if s.GoTestBypassed {
-			stats.GoTestBypassed = true
-		}
+		mergeRunStats(stats, s)
 		statsMu.Unlock()
 		if err != nil && !strings.Contains(err.Error(), "no runnable test cases found") {
 			runErrs = append(runErrs, r.dir+": "+err.Error())

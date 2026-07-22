@@ -276,10 +276,22 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	}
 	goTestElapsed := time.Since(tGo)
 	track("go_test", tGo)
+	// Discovery planned count before Total is rewritten to actual_run.
+	if stats.Planned == 0 {
+		stats.Planned = stats.Total
+	}
+	if result.timeoutError != "" {
+		stats.TimedOut = true
+	}
 	// Prefer JSON suite-leaf accounting when available. actual_run = pass+fail
 	// (exclude runtime t.Skip from denominator). SkipCount is separate.
+	// On timeout: never invent phantom passes from planned − failCount.
 	actualRun := result.passCount + result.failCount
-	if actualRun > 0 || result.skipCount > 0 {
+	if stats.TimedOut {
+		stats.Passed = result.passCount
+		stats.Total = actualRun
+		stats.SkipCount = result.skipCount
+	} else if actualRun > 0 || result.skipCount > 0 {
 		stats.Passed = result.passCount
 		stats.Total = actualRun
 		stats.SkipCount = result.skipCount
@@ -303,16 +315,12 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	recordLeafCachePasses(leafKeys, result.suiteLeafFailed, goTestErr == nil && result.failCount == 0)
 
 	// Quiet path: compact progress summary. Verbose already streamed Output events.
+	// Progress stays finished-only (no Cancelled segment).
 	if !opts.Verbose {
 		fmt.Fprintln(stdout, formatSummary(style, result.passCount+result.failCount, result.passCount, result.failCount, result.cachedCount, goTestElapsed))
 	}
 
-	if !opts.SuppressResultSummary {
-		stats.Elapsed = goTestElapsed
-		PrintSkippedSummary(stats.Skipped, opts.Verbose)
-		PrintResultSummary(opts, stats)
-	}
-
+	// Print order: progress → fail dumps → Error/hint → PASS/FAIL.
 	// Quiet path buffers fail details for post-run print. Verbose streamed live.
 	if !opts.Verbose {
 		for _, line := range result.failLines {
@@ -325,7 +333,14 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	if len(result.stderrData) > 0 {
 		stdout.Write(result.stderrData)
 	}
-	printGoTestTimeoutError(w, stdout, result)
+	// Timeout Error/hint on stdout (before FAIL) so user-facing order is correct.
+	printGoTestTimeoutError(stdout, result, style)
+
+	if !opts.SuppressResultSummary {
+		stats.Elapsed = goTestElapsed
+		PrintSkippedSummary(stats.Skipped, opts.Verbose)
+		PrintResultSummary(opts, stats)
+	}
 
 	if goTestErr != nil {
 		stats.Phases = phases
@@ -1063,6 +1078,12 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 			res.timeoutError = msg
 		}
 	}
+	// Avoid false suite-level timeout when nested fail dumps contain
+	// "test timed out after" but this go test process succeeded (e.g. outer
+	// harness leaf that asserts nested timeout messaging).
+	if err == nil {
+		res.timeoutError = ""
+	}
 	if err != nil {
 		return res, err
 	}
@@ -1096,19 +1117,26 @@ func goTestTimeoutErrorLine(s string) string {
 		"\nhint: increase with -timeout=DURATION (e.g. -timeout=30m; -timeout=0 disables)"
 }
 
-// printGoTestTimeoutError writes the surfaced timeout Error line (if any).
-// Prefer stderr (w); fall back to stdout so the line is always visible in
-// combined process output.
-func printGoTestTimeoutError(w, stdout io.Writer, result goTestJSONResult) {
-	if result.timeoutError == "" {
+// printGoTestTimeoutError writes the surfaced timeout Error + hint lines (if any)
+// to stdout so they appear before the end FAIL summary on the user-facing stream.
+// When color is enabled: Error line red, hint line gray.
+func printGoTestTimeoutError(stdout io.Writer, result goTestJSONResult, style colorStyle) {
+	if result.timeoutError == "" || stdout == nil {
 		return
 	}
-	if w != nil {
-		fmt.Fprintln(w, result.timeoutError)
-		return
-	}
-	if stdout != nil {
-		fmt.Fprintln(stdout, result.timeoutError)
+	for _, line := range strings.Split(result.timeoutError, "\n") {
+		if line == "" {
+			continue
+		}
+		if style.enabled {
+			switch {
+			case strings.HasPrefix(line, "Error:"):
+				line = style.red(line)
+			case strings.HasPrefix(line, "hint:"):
+				line = style.gray(line)
+			}
+		}
+		fmt.Fprintln(stdout, line)
 	}
 }
 

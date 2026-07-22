@@ -78,6 +78,12 @@ func RunWorkspace(preps []TreePrep, opts core.Options) (TestRunStats, error) {
 		}
 		active = append(active, p)
 		stats.Total += p.Stats.Total
+		// Planned accumulates discovery leaf counts across trees.
+		planned := p.Stats.Planned
+		if planned == 0 {
+			planned = p.Stats.Total
+		}
+		stats.Planned += planned
 	}
 	if stats.Total == 0 {
 		return stats, nil
@@ -325,10 +331,22 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	result, runErr := runGoTestJSONOnce(runDir, append(append([]string(nil), flagArgs...), packageArgs...), sessionID, goCache, opts.MetricsNestSink, "", leafSkipEnv, leafKeys, stdout, style, opts.Verbose)
 	goTestElapsed := time.Since(tGo)
 	stats.Phases = append(stats.Phases, PhaseTiming{Name: "go_test", ElapsedNs: goTestElapsed.Nanoseconds()})
+	// Discovery planned count before Total is rewritten to actual_run.
+	if stats.Planned == 0 {
+		stats.Planned = stats.Total
+	}
+	if result.timeoutError != "" {
+		stats.TimedOut = true
+	}
 	// Prefer JSON suite-leaf accounting. actual_run = pass+fail (exclude
 	// runtime t.Skip from denominator). SkipCount is separate from label skips.
+	// On timeout: never invent phantom passes from planned − failCount.
 	actualRun := result.passCount + result.failCount
-	if actualRun > 0 || result.skipCount > 0 {
+	if stats.TimedOut {
+		stats.Passed = result.passCount
+		stats.Total = actualRun
+		stats.SkipCount = result.skipCount
+	} else if actualRun > 0 || result.skipCount > 0 {
 		stats.Passed = result.passCount
 		stats.Total = actualRun
 		stats.SkipCount = result.skipCount
@@ -348,6 +366,8 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	recordLeafCachePasses(leafKeys, failed, runErr == nil && result.failCount == 0)
 
 	// Quiet path: compact progress summary. Verbose already streamed Output events.
+	// Print order: progress → fail dumps → Error/hint (PASS/FAIL is printed by
+	// the runner after return when SuppressResultSummary).
 	if !opts.Verbose {
 		fmt.Fprintln(stdout, formatSummary(style, result.passCount+result.failCount, result.passCount, result.failCount, result.cachedCount, goTestElapsed))
 		for _, line := range result.failLines {
@@ -360,7 +380,7 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	if len(result.stderrData) > 0 {
 		stdout.Write(result.stderrData)
 	}
-	printGoTestTimeoutError(w, stdout, result)
+	printGoTestTimeoutError(stdout, result, style)
 	var allCases []core.TreeCase
 	for _, p := range preps {
 		allCases = append(allCases, p.Cases...)

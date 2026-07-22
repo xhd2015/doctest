@@ -5,11 +5,13 @@
 
 
 Doc-style tests for clear user-facing messaging when nested `go test`
-panics with `test timed out after <duration>`.
+panics with `test timed out after <duration>`, including cancelled-leaf
+accounting on the FAIL line and color accents (Error red, hint gray,
+`N cancelled` orange).
 
 Does **not** change default timeout policy: only verifies messaging when
 the user passes `--timeout` and the suite actually times out, and that
-fast-passing suites do not emit a false timeout Error.
+fast-passing suites do not emit a false timeout Error or `cancelled`.
 
 ## DSN (Domain Specific Notion)
 
@@ -17,49 +19,79 @@ fast-passing suites do not emit a false timeout Error.
 
 - **`doctest test`** — CLI subcommand that discovers runnable leaves, builds
   generated go-test packages, runs them with optional `-timeout`, and reports
-  progress / failures.
-- **Test tree** — temp fixture hierarchy the command targets (sleep leaf or
-  fast-pass leaf).
+  progress / failures / final PASS|FAIL.
+- **Test tree** — temp fixture hierarchy the command targets (multi-leaf sleep
+  tree for timeout leaves, or a fast-pass leaf).
 - **`go test`** — underlying runner; when the package exceeds `-timeout`, it
   panics with `test timed out after <d>` (often buried under JSON/filtered
-  output unless doctest surfaces it).
-- **Stdout / Stderr** — combined user-visible sinks; timeout must be obvious
-  without digging through a full goroutine dump.
+  output unless doctest surfaces it). Leaves that never reach pass/fail/skip
+  are **cancelled** relative to discovery **planned** count.
+- **Stdout / Stderr** — combined user-visible sinks; timeout Error/hint and
+  FAIL accounting must be obvious without digging through a full goroutine dump.
 
 ### Behaviors
 
 - **Timeout flag** — `doctest test --timeout=2s` forwards `-timeout=2s` to
   `go test` (flag forwarding covered elsewhere; this tree checks messaging).
-- **Surface timeout** — when the nested suite times out, exit ≠ 0 and a clear
-  line is visible, e.g. `Error: go test timed out after 2s` (or an equivalent
-  `test timed out after 2s` / `timed out after 2s` signal on the fail path).
+- **Surface timeout** — when the nested suite times out, exit ≠ 0 and locked
+  wording is visible:
+
+  ```
+  Error: go test timed out after 2s
+  hint: increase with -timeout=DURATION (e.g. -timeout=30m; -timeout=0 disables)
+  ```
+
+- **Cancelled accounting** — on timeout with cancelled > 0:
+
+  - **planned** = discovery leaf count (before go_test rewrites Total to actual_run)
+  - **cancelled** = `max(0, planned − pass − fail − skipCount)`
+  - FAIL denom uses planned: `FAIL (<passed>/<planned>, <N> cancelled)`
+  - v1: show `N cancelled` only (omit `t.Skip` phrase on the timeout FAIL line)
+
+- **Progress line** — quiet compact line stays finished-only:
+  `(N Run, N Pass, N Fail, N Cached)` — **no** `Cancelled` segment.
+- **Print order** — progress → fail dumps → Error/hint → PASS/FAIL
+  (Error/hint **before** the final FAIL line on the user-facing stream).
+- **Color (when on)** — Error **red**, hint **gray**, `N cancelled` segment
+  **orange** (warning accent, e.g. 256-color `38;5;208`); whole `FAIL (…)`
+  token stays red with orange nested on the cancelled phrase preferred.
+- **No color** — `--no-color` / ColorNever: same wording, no ANSI.
 - **No false positive** — a fast-passing tree must not print
-  `Error: go test timed out`.
+  `Error: go test timed out` and must not mention `cancelled`.
 
 ## Decision Tree
 
 ```
 timeout-message
-├── surfaces ──── sleep ≥3s leaf + --timeout=2s → non-zero + timeout Error visible
-└── fast-pass ─── 1-pass leaf, normal/large timeout → exit 0, no timeout Error
+├── surfaces ──── multi-sleep + --timeout=2s --no-color → Error/hint + FAIL (p/P, N cancelled), order  [RED]
+├── color ─────── multi-sleep + --timeout=2s --color → Error red, hint gray, cancelled orange         [RED]
+└── fast-pass ─── 1-pass leaf, normal timeout → exit 0, no timeout Error, no cancelled               [GREEN]
 ```
+
+Split factor (most significant first): **timeout fires vs not**. Under timeout,
+secondary axis is **color mode** (`--no-color` vs `--color`).
 
 ## Test Index
 
-| Leaf | Scenario | Exit | Output signal |
-|------|----------|------|----------------|
-| `surfaces` | Temp tree sleeps in Run; `doctest test --timeout=2s --no-color` | ≠ 0 | `Error: go test timed out after …` (or `test timed out after` / `timed out after`) |
-| `fast-pass` | Temp 1-pass tree; default or generous timeout | 0 | Must **not** contain `Error: go test timed out` |
+| Leaf | Scenario | Exit | Output signal | Classic |
+|------|----------|------|---------------|---------|
+| `surfaces` | 3 sleep leaves; `doctest test --timeout=2s --no-color` | ≠ 0 | Locked Error + hint; `FAIL (0/3, N cancelled)` with N>0; progress has no `cancelled`; Error/hint before FAIL | RED until cancelled + order |
+| `color` | same multi-sleep; `--timeout=2s --color` | ≠ 0 | Error red, hint gray, `N cancelled` orange; plain wording as surfaces | RED until color helpers |
+| `fast-pass` | Temp 1-pass tree; default/generous timeout; `--no-color` | 0 | Must **not** contain `Error: go test timed out` or `cancelled` | expect GREEN |
 
 ## How to Run
 
 ```sh
 doctest vet ./tests/test/timeout-message
 doctest test --label heavy ./tests/test/timeout-message/...
+# or all labels:
+doctest test --label-all ./tests/test/timeout-message/...
 ```
 
-Classic TDD: expect **RED** on `surfaces` until implementer surfaces timeout
-messages on the JSON/verbose fail path. `fast-pass` should stay GREEN.
+Classic TDD: expect **RED** on `surfaces` and `color` until implementer lands
+planned FAIL denom + `, N cancelled`, timeout Error/hint coloring, orange
+cancelled accent, and Error/hint-before-FAIL print order. `fast-pass` should
+stay GREEN.
 
 ```go
 import (
