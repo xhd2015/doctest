@@ -7,12 +7,23 @@
 Verify that `subagent.Logf` produces `[2006-01-02T15:04:05]` prefixed output
 with correct newline handling, format verbs, and special characters.
 
+## DSN (Domain Specific Notion)
+
+### Participants
+- **`subagent.Logf`** — formats a timestamped log line and writes it to stdout.
+- **probe subprocess** — tiny `go run` program that calls `Logf`; parent captures
+  child stdout only (never reassigns `os.Stdout`).
+
+### Behaviors
+- **timestamp prefix** — every line starts with `[YYYY-MM-DDTHH:MM:SS] `.
+- **newline normalize** — appends `\n` when the message does not already end with one.
+
 ## Decision Tree
 
 ```
 tests/agent-logf/logf/
 ├── DOCTEST.md                     # This file
-├── SETUP.md                       # Root: Request/Response, Run calls subagent.Logf
+├── SETUP.md                       # Root: Request/Response, Run calls subagent.Logf via subprocess
 ├── without-trailing-newline/      # Message without \n → newline appended
 ├── with-trailing-newline/         # Message with \n → no double newline
 ├── empty-message/                 # Empty string → just timestamp + \n
@@ -41,14 +52,17 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
-	"github.com/xhd2015/agent-pro/agent/subagent"
 )
 
 type Request struct {
 	Args	[]string
 	Env	[]string
+	// ModuleRoot is the doctest module root (request-local) for go run probe.
+	ModuleRoot	string
 }
 type Response struct {
 	Stdout string
@@ -62,32 +76,79 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 		}
 	}
 
-	var args []any
-	for _, a := range req.Args {
-		args = append(args, a)
+	// Subprocess isolation: never reassign os.Stdout. Product Logf writes via
+	// fmt.Print with no inject writer, so capture child stdout only.
+	if req.ModuleRoot == "" {
+		return nil, fmt.Errorf("req.ModuleRoot is not set")
 	}
-
-	old := os.Stdout
-	r, w, err := os.Pipe()
+	agentDir, err := agentProDir(req.ModuleRoot)
 	if err != nil {
-		return nil, fmt.Errorf("create pipe: %w", err)
+		return nil, err
 	}
-	os.Stdout = w
 
+	dir := t.TempDir()
+	mainPath := filepath.Join(dir, "main.go")
+	modPath := filepath.Join(dir, "go.mod")
+	mainSrc := `package main
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/xhd2015/agent-pro/agent/subagent"
+)
+
+func main() {
+	format := os.Getenv("LOGF_FORMAT")
+	if format == "" {
+		format = "default"
+	}
+	args := os.Args[1:]
 	if len(args) > 0 {
-		subagent.Logf("%s", fmt.Sprintf(fmtStr, args...))
-	} else {
-		subagent.Logf("%s", fmtStr)
+		ia := make([]any, len(args))
+		for i, a := range args {
+			ia[i] = a
+		}
+		subagent.Logf("%s", fmt.Sprintf(format, ia...))
+		return
+	}
+	subagent.Logf("%s", format)
+}
+`
+	if err := os.WriteFile(mainPath, []byte(mainSrc), 0644); err != nil {
+		return nil, err
+	}
+	goMod := "module logfprobe\n\ngo 1.21\n\nrequire github.com/xhd2015/agent-pro v0.0.0\n\nreplace github.com/xhd2015/agent-pro => " +
+		filepath.ToSlash(agentDir) + "\n"
+	if err := os.WriteFile(modPath, []byte(goMod), 0644); err != nil {
+		return nil, err
 	}
 
-	w.Close()
-	os.Stdout = old
-
-	var buf bytes.Buffer
-	if _, readErr := buf.ReadFrom(r); readErr != nil {
-		return nil, fmt.Errorf("read pipe: %w", readErr)
+	cmdArgs := append([]string{"run", "."}, req.Args...)
+	cmd := exec.Command("go", cmdArgs...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GOWORK=off", "LOGF_FORMAT="+fmtStr)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("logf probe failed: %w\nstderr:\n%s", err, stderr.String())
 	}
+	return &Response{Stdout: stdout.String()}, nil
+}
 
-	return &Response{Stdout: buf.String()}, nil
+func agentProDir(moduleRoot string) (string, error) {
+	cmd := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/xhd2015/agent-pro")
+	cmd.Dir = moduleRoot
+	cmd.Env = append(os.Environ(), "GOWORK=off")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("go list agent-pro: %w", err)
+	}
+	dir := strings.TrimSpace(string(out))
+	if dir == "" {
+		return "", fmt.Errorf("empty agent-pro dir from go list")
+	}
+	return dir, nil
 }
 ```

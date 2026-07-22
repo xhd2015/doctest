@@ -284,6 +284,26 @@ Options:
   -h, --help              Show help
 `
 
+// testStdout, when non-nil, receives CLI help/list output instead of os.Stdout.
+// Set only via withTestStdout so unit tests never reassign os.Stdout.
+var testStdout io.Writer
+
+func cliStdout() io.Writer {
+	if testStdout != nil {
+		return testStdout
+	}
+	return os.Stdout
+}
+
+// withTestStdout runs fn with CLI user-facing text directed to w.
+// Does not reassign os.Stdout (Parallel-safe under concurrent packages).
+func withTestStdout(w io.Writer, fn func() error) error {
+	prev := testStdout
+	testStdout = w
+	defer func() { testStdout = prev }()
+	return fn()
+}
+
 func Run(args []string) error {
 	if filepath.Base(os.Args[0]) == "yield-pending-questions" {
 		return subagent.HandleYieldPendingQuestions(args)
@@ -292,7 +312,7 @@ func Run(args []string) error {
 		return subagent.HandleReportProgress(args)
 	}
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
-		fmt.Print(usage)
+		fmt.Fprint(cliStdout(), usage)
 		return nil
 	}
 	switch args[0] {
@@ -319,7 +339,7 @@ func Run(args []string) error {
 
 func runAgent(args []string) error {
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
-		fmt.Print(`Usage: doctest agent <command> [options]
+		fmt.Fprint(cliStdout(), `Usage: doctest agent <command> [options]
 
 Commands:
   generate <idea> [-d|--dir <target-dir>]
@@ -335,7 +355,7 @@ Commands:
 		return runAgentGenerate(args[1:])
 	case "fill-code":
 		if len(args) > 1 && (args[1] == "-h" || args[1] == "--help") {
-			fmt.Print("Usage: doctest agent fill-code <target-dir>\n")
+			fmt.Fprint(cliStdout(), "Usage: doctest agent fill-code <target-dir>\n")
 			return nil
 		}
 		if len(args) != 2 {
@@ -355,7 +375,7 @@ Commands:
 
 func runAgentGenerate(args []string) error {
 	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
-		fmt.Print(agentGenerateUsage)
+		fmt.Fprint(cliStdout(), agentGenerateUsage)
 		return nil
 	}
 	opts := agent.GenerateOptions{AgentRunner: "opencode"}
@@ -379,7 +399,7 @@ func runAgentGenerate(args []string) error {
 
 func runAgentImplement(args []string) error {
 	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
-		fmt.Print(agentImplementUsage)
+		fmt.Fprint(cliStdout(), agentImplementUsage)
 		return nil
 	}
 	opts := implementer.Options{}
@@ -421,7 +441,7 @@ func runAgentImplement(args []string) error {
 
 func runAgentDesign(args []string) error {
 	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
-		fmt.Print(agentDesignerUsage)
+		fmt.Fprint(cliStdout(), agentDesignerUsage)
 		return nil
 	}
 	opts := designer.Options{}
@@ -463,7 +483,7 @@ func runAgentDesign(args []string) error {
 
 func runAgentWith(args []string) error {
 	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
-		fmt.Print(`Usage: doctest agent with --agent-runner=RUNNER [--model=MODEL] <prog> [args...]
+		fmt.Fprint(cliStdout(), `Usage: doctest agent with --agent-runner=RUNNER [--model=MODEL] <prog> [args...]
 
 Execute a program with DOCTEST_SUBAGENT_AGENT_RUNNER and optionally DOCTEST_SUBAGENT_MODEL set in its environment.
 
@@ -522,7 +542,7 @@ Options:
 
 func runRunner(args []string, usage string, fn func([]string) error) error {
 	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
-		fmt.Print(usage)
+		fmt.Fprint(cliStdout(), usage)
 		return nil
 	}
 	err := fn(args)
@@ -535,7 +555,7 @@ func runRunner(args []string, usage string, fn func([]string) error) error {
 
 func runSkills(args []string) error {
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
-		fmt.Print(skillsUsage)
+		fmt.Fprint(cliStdout(), skillsUsage)
 		return nil
 	}
 	switch args[0] {
@@ -630,7 +650,7 @@ func parseSkillArgs(args []string) (parsedSkillArgs, error) {
 
 func runSkill(args []string) error {
 	if len(args) == 0 {
-		fmt.Print(skillUsage)
+		fmt.Fprint(cliStdout(), skillUsage)
 		return nil
 	}
 	parsed, err := parseSkillArgs(args)
@@ -639,7 +659,7 @@ func runSkill(args []string) error {
 	}
 	switch parsed.Action {
 	case skillActionHelp:
-		fmt.Print(skillUsage)
+		fmt.Fprint(cliStdout(), skillUsage)
 		return nil
 	case skillActionList:
 		for _, name := range []string{
@@ -656,7 +676,7 @@ func runSkill(args []string) error {
 			"implementer",
 			"designer",
 		} {
-			fmt.Println(name)
+			fmt.Fprintln(cliStdout(), name)
 		}
 		return nil
 	case skillActionShow:
@@ -675,10 +695,10 @@ func runSkill(args []string) error {
 			if err != nil {
 				return err
 			}
-			fmt.Print(out)
+			fmt.Fprint(cliStdout(), out)
 			return nil
 		}
-		fmt.Print(content)
+		fmt.Fprint(cliStdout(), content)
 		return nil
 	case skillActionInstall:
 		name, installArgs, err := splitSkillName(parsed.Rest)
@@ -708,7 +728,7 @@ func splitSkillName(rest []string) (name string, installArgs []string, err error
 
 func runEdit(args []string) error {
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
-		fmt.Print(editUsage)
+		fmt.Fprint(cliStdout(), editUsage)
 		return nil
 	}
 	var addLabel, addExplanation string
@@ -724,19 +744,43 @@ func runEdit(args []string) error {
 	return edit.Edit(remainArgs[0], addLabel, addExplanation)
 }
 
+// testStdin, when non-nil, is used by readStdinIfPresent instead of os.Stdin.
+// Set only via TestExported_RunWithStdin so harnesses never reassign os.Stdin.
+var testStdin *os.File
+
 func readStdinIfPresent() (string, error) {
-	stat, err := os.Stdin.Stat()
+	in := os.Stdin
+	if testStdin != nil {
+		in = testStdin
+	}
+	return readStdinFrom(in)
+}
+
+func readStdinFrom(in *os.File) (string, error) {
+	if in == nil {
+		return "", nil
+	}
+	stat, err := in.Stat()
 	if err != nil {
 		return "", err
 	}
 	if (stat.Mode() & os.ModeCharDevice) != 0 {
 		return "", nil
 	}
-	data, err := io.ReadAll(os.Stdin)
+	data, err := io.ReadAll(in)
 	if err != nil {
 		return "", err
 	}
 	return string(data), nil
+}
+
+// TestExported_RunWithStdin runs cli.Run with an injected stdin file.
+// Does not reassign os.Stdin/Stdout/Stderr (harness Parallel-safe; no process stdio swap).
+func TestExported_RunWithStdin(args []string, stdin *os.File) error {
+	prev := testStdin
+	testStdin = stdin
+	defer func() { testStdin = prev }()
+	return Run(args)
 }
 
 func Main() {

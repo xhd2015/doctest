@@ -31,6 +31,8 @@ type generateContext struct {
 	sessionCacheDir string
 	modfilePath     string
 	removeLegacyTmp bool
+	// goCache is optional isolated GOCACHE for go mod tidy / go build children.
+	goCache string
 	// unifiedMode: hierarchical ref packages + one suite package per DOCTEST tree.
 	// Always true for normal generation; false only for internal-compile trees
 	// (module-internal import path layout still uses classic AssembleTestSource).
@@ -77,6 +79,7 @@ func newGenerateContext(dir string, opts core.Options, cases []core.TreeCase, w 
 		internalCompile: internalCompile,
 		assertImport:    assertImport,
 		sessionImport:   sessionImport,
+		goCache:         opts.GoCache,
 		unifiedMode:     unifiedMode,
 	}
 
@@ -274,7 +277,7 @@ func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) 
 
 	return ctx.withGenLock(func() error {
 		if ctx.hasMod && !ctx.internalCompile {
-			if err := core.CondTidyGoMod(ctx.genRoot); err != nil {
+			if err := core.CondTidyGoMod(ctx.genRoot, ctx.goCache); err != nil {
 				return err
 			}
 		}
@@ -389,7 +392,7 @@ func (ctx *generateContext) writeUnifiedCases(cases []core.TreeCase, compileOnly
 	}
 
 	if ctx.hasMod && !ctx.internalCompile {
-		if err := core.CondTidyGoMod(ctx.genRoot); err != nil {
+		if err := core.CondTidyGoMod(ctx.genRoot, ctx.goCache); err != nil {
 			return err
 		}
 	}

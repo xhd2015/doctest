@@ -16,6 +16,8 @@ run C (probe=session-b) -> still Cached hit (env not in key)
 - Each leaf configures how the generated test reads `DOCTEST_CACHE_ENV_PROBE`.
 - Product: no osenv value hashing; no go-testlog getenv special-case for Cached.
 - Probe var is **not** `DOCTEST_SESSION_ID` so session harness stays stable across A/B.
+- **Parallel-safe**: multi-run cfg is a local parameter; results live on
+  `req.MRFirst` / `req.MRSecond` (not package globals).
 
 ## Steps
 1. Build a one-leaf doctest project whose Setup reads `DOCTEST_CACHE_ENV_PROBE`.
@@ -46,24 +48,10 @@ type envCacheCfg struct {
     EnvValueB    string
 }
 
-var envCfg envCacheCfg
-
-type envCacheState struct {
-    FirstResp  *Response
-    SecondResp *Response
-}
-
-var envState envCacheState
-
 func Setup(t *testing.T, req *Request) error {
-    envState.FirstResp = nil
-    envState.SecondResp = nil
-    if envCfg.EnvValueA == "" {
-        envCfg.EnvValueA = "session-aaaa-1111"
-    }
-    if envCfg.EnvValueB == "" {
-        envCfg.EnvValueB = "session-bbbb-2222"
-    }
+    // Clear multi-run fields so a leaked pointer cannot satisfy Assert.
+    req.MRFirst = nil
+    req.MRSecond = nil
     return nil
 }
 
@@ -88,10 +76,10 @@ func createTestTreeWithLeafSetup(dir string, leafSetupGo string) error {
     return nil
 }
 
-func createEnvProbeTestProject(t *testing.T, dirName string) string {
+func createEnvProbeTestProject(t *testing.T, dirName string, leafSetupGo string) string {
     t.Helper()
-    if envCfg.LeafSetupGo == "" {
-        t.Fatal("envCfg.LeafSetupGo is required")
+    if leafSetupGo == "" {
+        t.Fatal("leafSetupGo is required")
     }
     tmp := t.TempDir()
     if err := os.WriteFile(filepath.Join(tmp, "go.mod"), []byte("module testproj\ngo 1.21\n"), 0644); err != nil {
@@ -101,7 +89,7 @@ func createEnvProbeTestProject(t *testing.T, dirName string) string {
     if err := os.MkdirAll(testDir, 0755); err != nil {
         t.Fatalf("mkdir test dir: %v", err)
     }
-    if err := createTestTreeWithLeafSetup(testDir, envCfg.LeafSetupGo); err != nil {
+    if err := createTestTreeWithLeafSetup(testDir, leafSetupGo); err != nil {
         t.Fatalf("create test tree: %v", err)
     }
     return testDir
@@ -137,15 +125,21 @@ func doRunWithEnv(t *testing.T, bin string, args []string, envValue string, extr
     return resp
 }
 
-func doEnvCacheRun(t *testing.T, req *Request) {
+func doEnvCacheRun(t *testing.T, req *Request, cfg envCacheCfg) {
     t.Helper()
     if req.Bin == "" {
         t.Fatal("req.Bin is not set")
     }
+    if cfg.EnvValueA == "" {
+        cfg.EnvValueA = "session-aaaa-1111"
+    }
+    if cfg.EnvValueB == "" {
+        cfg.EnvValueB = "session-bbbb-2222"
+    }
 
-    testDir := envCfg.TestDir
+    testDir := cfg.TestDir
     if testDir == "" {
-        testDir = createEnvProbeTestProject(t, "envprobe")
+        testDir = createEnvProbeTestProject(t, "envprobe", cfg.LeafSetupGo)
     }
 
     baseArgs := []string{"test", testDir}
@@ -161,10 +155,10 @@ func doEnvCacheRun(t *testing.T, req *Request) {
     }
 
     // Two warmups with env A, then measured hit with A, then B (still hit).
-    doRunWithEnv(t, req.Bin, baseArgs, envCfg.EnvValueA, stableEnv...)
-    doRunWithEnv(t, req.Bin, baseArgs, envCfg.EnvValueA, stableEnv...)
+    doRunWithEnv(t, req.Bin, baseArgs, cfg.EnvValueA, stableEnv...)
+    doRunWithEnv(t, req.Bin, baseArgs, cfg.EnvValueA, stableEnv...)
 
-    envState.FirstResp = doRunWithEnv(t, req.Bin, baseArgs, envCfg.EnvValueA, stableEnv...)
-    envState.SecondResp = doRunWithEnv(t, req.Bin, baseArgs, envCfg.EnvValueB, stableEnv...)
+    req.MRFirst = doRunWithEnv(t, req.Bin, baseArgs, cfg.EnvValueA, stableEnv...)
+    req.MRSecond = doRunWithEnv(t, req.Bin, baseArgs, cfg.EnvValueB, stableEnv...)
 }
 ```

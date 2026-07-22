@@ -82,7 +82,11 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		if len(skipped) > 0 {
 			stats := TestRunStats{Skipped: skipped, Phases: phases, Cases: nil}
 			if !opts.SuppressResultSummary {
-				PrintSkippedSummary(skipped, opts.Verbose)
+				sw := opts.Stdout
+				if sw == nil {
+					sw = os.Stdout
+				}
+				PrintSkippedSummaryTo(sw, skipped, opts.Verbose)
 			}
 			return stats, nil
 		}
@@ -238,7 +242,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		fmt.Fprintf(w, "cd %s && go %s\n", pathfmt.Short(runDir), strings.Join(displayArgs, " "))
 	}
 
-	sessionID := core.DoctestSessionIDForRun()
+	sessionID := core.SessionIDFromOpts(opts)
 	goCache := opts.GoCache
 	// Prefer explicit nest sink on opts; else inherit process (suite child).
 	if opts.MetricsNestSink == "" {
@@ -338,7 +342,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 
 	if !opts.SuppressResultSummary {
 		stats.Elapsed = goTestElapsed
-		PrintSkippedSummary(stats.Skipped, opts.Verbose)
+		PrintSkippedSummaryTo(stdout, stats.Skipped, opts.Verbose)
 		PrintResultSummary(opts, stats)
 	}
 
@@ -618,33 +622,39 @@ const envMetricsNestSink = "DOCTEST_METRICS_NEST_SINK"
 // DOCTEST_SESSION_ID, optional isolated GOCACHE, and nest sink when present.
 // Nest sink is process-lifetime for the suite binary (leaves copy into
 // d.Metrics.NestSink via read-only getenv); prefer opts.MetricsNestSink +
-// goTestEnvWithOpts over mid-suite os.Setenv.
+// goTestEnvFromOpts over mid-suite process env mutation.
 func goTestEnv(sessionID, goCache string) []string {
 	return goTestEnvFull(sessionID, goCache, "", "", "")
 }
 
+// goTestEnvFull builds child env with key-replace (core.ChildEnv) so SESSION_ID,
+// GOCACHE, nest sink, GOWORK, and leaf-skip paths override process values
+// without blind append duplicates.
 func goTestEnvFull(sessionID, goCache, nestSink, goWork, leafSkipPaths string) []string {
-	env := append(os.Environ(), core.DoctestSessionIDEnv+"="+sessionID)
+	overrides := []string{core.DoctestSessionIDEnv + "=" + sessionID}
 	if goCache != "" {
-		env = append(env, "GOCACHE="+goCache)
+		overrides = append(overrides, "GOCACHE="+goCache)
 	}
 	if nestSink != "" {
-		env = append(env, envMetricsNestSink+"="+nestSink)
+		overrides = append(overrides, envMetricsNestSink+"="+nestSink)
 	} else if v := os.Getenv(envMetricsNestSink); v != "" {
 		// Inherit outer nest sink for nested go test (read-only).
-		env = append(env, envMetricsNestSink+"="+v)
+		overrides = append(overrides, envMetricsNestSink+"="+v)
 	}
 	if goWork != "" {
 		// Multi-module workspace hub (go.work). Empty means use process default / off.
-		env = append(env, "GOWORK="+goWork)
+		overrides = append(overrides, "GOWORK="+goWork)
 	}
 	if leafSkipPaths != "" {
-		env = append(env, leafcache.EnvSkipPaths+"="+leafSkipPaths)
+		overrides = append(overrides, leafcache.EnvSkipPaths+"="+leafSkipPaths)
 	}
-	return env
+	return core.ChildEnv(nil, overrides...)
 }
 
 func goTestEnvFromOpts(sessionID string, opts core.Options) []string {
+	if sessionID == "" {
+		sessionID = core.SessionIDFromOpts(opts)
+	}
 	return goTestEnvFull(sessionID, opts.GoCache, opts.MetricsNestSink, "", "")
 }
 

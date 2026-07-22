@@ -217,8 +217,9 @@ type memberSuite struct {
 }
 
 // writeMultiModHub writes toplevel/__hub/go.mod + suite that calls each RunAll.
-// Returns hub directory (cwd for go test).
-func writeMultiModHub(toplevel string, members []memberSuite, replaceByMod map[string]string) (hubDir string, err error) {
+// Returns hub directory (cwd for go test). goCache is optional isolated GOCACHE
+// for hub go mod tidy (cmd.Env only).
+func writeMultiModHub(toplevel string, members []memberSuite, replaceByMod map[string]string, goCache string) (hubDir string, err error) {
 	hubDir = filepath.Join(toplevel, HubDirName)
 	if err := os.MkdirAll(filepath.Join(hubDir, "suite"), 0o755); err != nil {
 		return "", err
@@ -281,7 +282,7 @@ func writeMultiModHub(toplevel string, members []memberSuite, replaceByMod map[s
 		return "", err
 	}
 	// Populate go.sum / resolve graph for the hub module.
-	if err := tidyHubGoMod(hubDir); err != nil {
+	if err := tidyHubGoMod(hubDir, goCache); err != nil {
 		return "", fmt.Errorf("hub go mod tidy: %w", err)
 	}
 
@@ -351,9 +352,12 @@ func collectGoModReplaces(genRoot string) ([]string, error) {
 	return out, nil
 }
 
-func tidyHubGoMod(hubDir string) error {
+func tidyHubGoMod(hubDir, goCache string) error {
 	cmd := exec.Command("go", "mod", "tidy")
 	cmd.Dir = hubDir
+	if goCache != "" {
+		cmd.Env = core.ChildEnv(nil, "GOCACHE="+goCache)
+	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%w\n%s", err, out)

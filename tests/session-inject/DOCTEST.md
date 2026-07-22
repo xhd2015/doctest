@@ -79,6 +79,13 @@ type Request struct {
 	WorkDir string
 	Timeout time.Duration
 	Bin     string
+	// GenDir is the absolute --gen-dir path for this leaf (request-local; no package var).
+	GenDir  string
+	// ModuleRoot / TestDir are the temp fixture paths for this leaf (request-local).
+	ModuleRoot string
+	TestDir    string
+	// GoModBefore is a snapshot of session-mod go.mod before a measured run (request-local).
+	GoModBefore []byte
 }
 
 type Response struct {

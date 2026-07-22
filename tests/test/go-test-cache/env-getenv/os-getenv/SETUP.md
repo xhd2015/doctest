@@ -16,7 +16,8 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
-    envCfg.LeafSetupGo = `import (
+    cfg := envCacheCfg{
+        LeafSetupGo: `import (
     "os"
     "testing"
 )
@@ -24,8 +25,9 @@ func Setup(t *testing.T, req *Request) error {
 func Setup(t *testing.T, req *Request) error {
     _ = os.Getenv("DOCTEST_CACHE_ENV_PROBE")
     return nil
-}`
-    doEnvCacheRun(t, req)
+}`,
+    }
+    doEnvCacheRun(t, req, cfg)
     return nil
 }
 ```

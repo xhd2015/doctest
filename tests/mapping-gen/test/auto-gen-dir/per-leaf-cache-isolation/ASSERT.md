@@ -24,14 +24,14 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("expected exit 0, got %d\nstderr:\n%s", resp.ExitCode, resp.Stderr)
 	}
 
-	if firstResp == nil || secondResp == nil {
-		t.Fatal("multi-run state not set by Run")
+	if req.MRFirst == nil || req.MRSecond == nil {
+		t.Fatal("multi-run state not set by Setup")
 	}
-	if secondResp.ExitCode != 0 {
-		t.Fatalf("second run exit %d\nstderr:\n%s", secondResp.ExitCode, secondResp.Stderr)
+	if req.MRSecond.ExitCode != 0 {
+		t.Fatalf("second run exit %d\nstderr:\n%s", req.MRSecond.ExitCode, req.MRSecond.Stderr)
 	}
 
-	secondOutput := secondResp.Stdout
+	secondOutput := req.MRSecond.Stdout
 	if !strings.Contains(secondOutput, "Cached") {
 		t.Fatalf("expected second run summary to report cached packages, stdout:\n%s", secondOutput)
 	}

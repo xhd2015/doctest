@@ -26,9 +26,13 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("expected exit 0, got %d\nstderr:\n%s", resp.ExitCode, resp.Stderr)
 	}
 
-	// Source files should be copied to each leaf directory
-	leafA := filepath.Join(genDir, "tests", "leaf_a")
-	leafB := filepath.Join(genDir, "tests", "leaf_b")
+	if req.GenDir == "" {
+		t.Fatal("req.GenDir is empty; grouping Setup must set request-local gen dir")
+	}
+
+	// Source files should be copied to each leaf directory (req-local path, Parallel-safe)
+	leafA := filepath.Join(req.GenDir, "tests", "leaf_a")
+	leafB := filepath.Join(req.GenDir, "tests", "leaf_b")
 
 	for _, leafDir := range []string{leafA, leafB} {
 		calcPath := filepath.Join(leafDir, "calc.go")
@@ -44,7 +48,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	}
 
 	// Source files should NOT be in the grouping dir or root
-	assertFileNotExists(t, filepath.Join(genDir, "tests", "calc.go"))
-	assertFileNotExists(t, filepath.Join(genDir, "calc.go"))
+	assertFileNotExists(t, filepath.Join(req.GenDir, "tests", "calc.go"))
+	assertFileNotExists(t, filepath.Join(req.GenDir, "calc.go"))
 }
 ```

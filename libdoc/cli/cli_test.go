@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bytes"
-	"io"
 	"os"
 	"strings"
 	"testing"
@@ -116,25 +115,10 @@ func TestRunAgentGenerateParsesIdeaAndFlags(t *testing.T) {
 	}
 }
 
+// captureStdout captures CLI user-facing text via withTestStdout.
+// Never reassigns os.Stdout (Parallel-safe).
 func captureStdout(fn func() error) (string, error) {
-	old := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		return "", err
-	}
-	os.Stdout = w
-	defer func() { os.Stdout = old }()
-
-	err = fn()
-	closeErr := w.Close()
 	var buf bytes.Buffer
-	_, copyErr := io.Copy(&buf, r)
-	_ = r.Close()
-	if err != nil {
-		return buf.String(), err
-	}
-	if closeErr != nil {
-		return buf.String(), closeErr
-	}
-	return buf.String(), copyErr
+	err := withTestStdout(&buf, fn)
+	return buf.String(), err
 }

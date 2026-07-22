@@ -11,19 +11,19 @@ Verify that errors from `os.Stdin.Stat()` and `io.ReadAll()` inside
 ## DSN (Domain Specific Notion)
 
 ### Participants
-- **`cli.Run`** — dispatches doctest subcommands from `req.Args`.
+- **`cli.Run` / `cli.TestExported_RunWithStdin`** — dispatches doctest subcommands from `req.Args` with inject stdin.
 - **`readStdinIfPresent`** — reads optional stdin when no positional prompt is given.
 - **`runAgentDesign` / `runAgentImplement`** — agent entrypoints that call `readStdinIfPresent`.
 
 ### Behaviors
-- **stdin replacement** — tests swap `os.Stdin` with a controlled file/pipe/directory.
+- **stdin inject** — tests pass a controlled file/directory via `TestExported_RunWithStdin` (never reassign process stdin).
 - **error propagation** — `Stat`/`ReadAll` failures must surface through `cli.Run`, not be swallowed.
 
 ## Decision Tree
 
 ```
 tests/read-stdin-error/                          [Request{Args, StdinFile}]
-│                                                Run: replaces os.Stdin, calls cli.Run(args)
+│                                                Run: TestExported_RunWithStdin(args, stdin)
 ├── implement/                                   [prepends "agent","implement" to args]
 │   │                                            (via runAgentImplement → readStdinIfPresent)
 │   ├── stat-error/                              → err != nil (Stat on closed file propagated)
@@ -48,6 +48,7 @@ tests/read-stdin-error/                          [Request{Args, StdinFile}]
 - Happy paths (terminal, pipe with data, empty pipe) are covered by `agent-stdin/`.
 - This tree fills the gap for **error propagation** — the two ignored errors in `readStdinIfPresent()`.
 - Both callers (`runAgentImplement` and `runAgentDesign`) are tested for both error sources.
+- Harness never reassigns `os.Stdin`/`Stdout`/`Stderr` (P5).
 
 ## How to Run
 
@@ -57,8 +58,6 @@ doctest test ./libdoc/cli/tests/read-stdin-error/
 
 ```go
 import (
-	"bytes"
-	"io"
 	"os"
 	"testing"
 	"github.com/xhd2015/doctest/libdoc/cli"
@@ -74,46 +73,12 @@ type Response struct {
 	Stderr	string
 }
 func Run(t *testing.T, req *Request) (*Response, error) {
-	oldStdin := os.Stdin
-	if req.StdinFile != nil {
-		os.Stdin = req.StdinFile
-		defer func() { os.Stdin = oldStdin }()
-	}
-
-	oldStdout := os.Stdout
-	rOut, wOut, err := os.Pipe()
-	if err != nil {
-		return nil, err
-	}
-	os.Stdout = wOut
-
-	oldStderr := os.Stderr
-	rErr, wErr, err := os.Pipe()
-	if err != nil {
-		wOut.Close()
-		rOut.Close()
-		return nil, err
-	}
-	os.Stderr = wErr
-
-	cliErr := cli.Run(req.Args)
-
-	wOut.Close()
-	wErr.Close()
-
-	var stdoutBuf, stderrBuf bytes.Buffer
-	io.Copy(&stdoutBuf, rOut)
-	io.Copy(&stderrBuf, rErr)
-	rOut.Close()
-	rErr.Close()
-
-	os.Stdout = oldStdout
-	os.Stderr = oldStderr
-
+	// Inject stdin via TestExported_RunWithStdin — never reassign os.Stdin/Stdout/Stderr.
+	// Error-path leaves fail before agent implement/design produce output, so
+	// stdout/stderr capture is unnecessary.
+	cliErr := cli.TestExported_RunWithStdin(req.Args, req.StdinFile)
 	return &Response{
-		Err:	cliErr,
-		Stdout:	stdoutBuf.String(),
-		Stderr:	stderrBuf.String(),
+		Err: cliErr,
 	}, nil
 }
 ```

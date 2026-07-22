@@ -13,26 +13,27 @@ doctest agent show-status <session-id> -> session state -> stdout
 ## Preconditions
 - The `Logf` function is in `agent-pro/agent/subagent` and writes timestamped output to `os.Stdout`.
 - Each leaf provides a format string and optional args via environment variables.
-- This is a standalone root with its own `DOCTEST.md` because `subagent.Logf` is called in-process.
+- This is a standalone root with its own `DOCTEST.md` because `subagent.Logf` is probed via subprocess.
+- Parent never reassigns `os.Stdout`; capture is child-only.
 
 ## Steps
-1. Read `LOGF_FORMAT` from `req.Env` as the format string (default: `"default"`).
-2. Read `req.Args` as variadic format arguments (all strings).
-3. Redirect `os.Stdout` to a pipe, call `subagent.Logf(format, args...)`.
-4. Restore `os.Stdout`, read captured output, return as `resp.Stdout`.
+1. Resolve module root onto `req.ModuleRoot` for `go list` / probe module replace.
+2. Read `LOGF_FORMAT` from `req.Env` as the format string (default: `"default"`).
+3. Read `req.Args` as variadic format arguments (all strings).
+4. Run a temp `go run` probe that calls `subagent.Logf`; capture child stdout.
 
 ```go
 import (
-	"bytes"
-	"fmt"
-	"os"
-	"strings"
+	"path/filepath"
 	"testing"
-	"github.com/xhd2015/agent-pro/agent/subagent"
+
+	"github.com/xhd2015/doctest/session"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Env = append(req.Env, "TEST_GROUP=logf")
+	// logf/ -> agent-logf/ -> tests/ -> module root
+	req.ModuleRoot = filepath.Clean(filepath.Join(d.DOCTEST_ROOT, "..", "..", ".."))
 	return nil
 }
 ```

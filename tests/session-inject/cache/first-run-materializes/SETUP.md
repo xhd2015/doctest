@@ -27,9 +27,9 @@ import (
 func Setup(t *testing.T, req *Request) error {
 	cacheDir := expectedSessionCacheDir(t)
 	_ = os.RemoveAll(cacheDir)
-	createPublicModuleProject(t, "", defaultSessionAssertGo(), true)
+	createPublicModuleProject(t, req, "", defaultSessionAssertGo(), true)
 	setupModuleEnv(t, req)
-	req.Args = []string{"test", testDir, "-v"}
+	req.Args = []string{"test", req.TestDir, "-v"}
 	return nil
 }
 ```

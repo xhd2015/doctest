@@ -28,9 +28,13 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("expected exit 0, got %d\nstderr:\n%s", resp.ExitCode, resp.Stderr)
 	}
 
-	// Verify per-leaf directory structure
-	leafA := filepath.Join(genDir, "tests", "category", "leaf_a")
-	leafB := filepath.Join(genDir, "tests", "category", "leaf_b")
+	if req.GenDir == "" {
+		t.Fatal("req.GenDir is empty; grouping Setup must set request-local gen dir")
+	}
+
+	// Verify per-leaf directory structure (req-local path, Parallel-safe)
+	leafA := filepath.Join(req.GenDir, "tests", "category", "leaf_a")
+	leafB := filepath.Join(req.GenDir, "tests", "category", "leaf_b")
 
 	// Unified mode: non-test leaf packages (leaf.go), not classic *_test.go.
 	assertFileExists(t, filepath.Join(leafA, "leaf.go"))
@@ -41,10 +45,10 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	assertFileNotExists(t, filepath.Join(leafB, "go.mod"))
 
 	// Shared go.mod at project root level in generated tree
-	assertFileExists(t, filepath.Join(genDir, "go.mod"))
+	assertFileExists(t, filepath.Join(req.GenDir, "go.mod"))
 
-	// No doctest.hash file anywhere in genDir
-	filepath.Walk(genDir, func(path string, info os.FileInfo, err error) error {
+	// No doctest.hash file anywhere in gen dir
+	filepath.Walk(req.GenDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}

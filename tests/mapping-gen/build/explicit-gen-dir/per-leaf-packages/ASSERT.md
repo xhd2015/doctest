@@ -28,8 +28,13 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("expected exit 0, got %d\nstderr:\n%s", resp.ExitCode, resp.Stderr)
 	}
 
-	case1 := filepath.Join(genDir, "tests", "feature", "case1")
-	case2 := filepath.Join(genDir, "tests", "feature", "case2")
+	if req.GenDir == "" {
+		t.Fatal("req.GenDir is empty; grouping Setup must set request-local gen dir")
+	}
+
+	// req-local path, Parallel-safe
+	case1 := filepath.Join(req.GenDir, "tests", "feature", "case1")
+	case2 := filepath.Join(req.GenDir, "tests", "feature", "case2")
 
 	// Unified mode: non-test leaf packages (leaf.go), not classic *_test.go.
 	assertFileExists(t, filepath.Join(case1, "leaf.go"))
@@ -45,10 +50,10 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	}
 
 	// Shared go.mod at project root
-	assertFileExists(t, filepath.Join(genDir, "go.mod"))
+	assertFileExists(t, filepath.Join(req.GenDir, "go.mod"))
 
 	// No hash file
-	filepath.Walk(genDir, func(path string, info os.FileInfo, err error) error {
+	filepath.Walk(req.GenDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}

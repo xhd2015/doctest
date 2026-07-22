@@ -1,13 +1,15 @@
 # Scenario
 
-**Feature**: auto mapping-gen cache dir displays with `~/...mapping-gen...`
+**Feature**: auto mapping-gen cache dir displays with `~/...mapping-gen...` without Chdir
 
 ```
 # gen-dir modes
 auto gen-dir -> mapping-gen cache under home
 
-# stderr call sites
-announceRoots -> DisplayPath(genRoot) | cd preview -> DisplayPath(runDir)
+# stderr call sites (display-only Short; process cwd unchanged)
+announceRoots -> pathfmt.Short(genRoot)
+cd preview -> pathfmt.Short(runDir)   # ~/.../mapping-gen/...
+doctest: -> pathfmt.Short(testRoot)   # abs temp when sandbox outside cwd
 ```
 
 ## Steps

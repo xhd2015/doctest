@@ -132,7 +132,7 @@ func TestSharedGenRootAlwaysAssertReplace(t *testing.T) {
 		t.Fatalf("expected parent module replace:\n%s", goMod)
 	}
 	// Tidy must not hit ambiguous session (would if assert resolved via doctest@vX).
-	if err := core.CondTidyGoMod(genDir); err != nil {
+	if err := core.CondTidyGoMod(genDir, ""); err != nil {
 		t.Fatalf("CondTidyGoMod: %v", err)
 	}
 }

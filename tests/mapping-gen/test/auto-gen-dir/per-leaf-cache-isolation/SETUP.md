@@ -34,11 +34,6 @@ import (
 	"time"
 )
 
-var (
-	firstResp  *Response
-	secondResp *Response
-)
-
 func doRun(t *testing.T, bin string, args []string) *Response {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
@@ -69,8 +64,9 @@ func doRun(t *testing.T, bin string, args []string) *Response {
 }
 
 func Setup(t *testing.T, req *Request) error {
-	firstResp = nil
-	secondResp = nil
+	// Request-local multi-run state (no package vars).
+	req.MRFirst = nil
+	req.MRSecond = nil
 
 	testDir := doPerLeafCacheIsolation(t, req)
 	req.Args = append(req.Args, testDir)
@@ -119,8 +115,8 @@ func doPerLeafCacheIsolation(t *testing.T, req *Request) string {
 
 	resp2 := doRun(t, req.Bin, baseArgs)
 
-	firstResp = resp1
-	secondResp = resp2
+	req.MRFirst = resp1
+	req.MRSecond = resp2
 	return testDir
 }
 ```

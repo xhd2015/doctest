@@ -5,8 +5,10 @@ label: heavy
 ## Expected
 
 - `build.Test` succeeds (`resp.TestErr` is nil).
-- `resp.HeaderLine` starts with `doctest: tests/` (test tree under cwd, no `./` prefix).
-- `resp.CdLine` contains `~/` and `mapping-gen` (gen run dir under home cache).
+- Process cwd is unchanged (`CwdBefore == CwdAfter`) — no process Chdir in Run.
+- `resp.HeaderLine` equals `doctest: ` + `pathfmt.Short(resp.TestRoot)` + ` (1 tests)`
+  (sandbox is usually outside process cwd → absolute; still names `tests/feature`).
+- `resp.CdLine` contains `~/` and `mapping-gen` (home cache shortening; valid without Chdir).
 - `resp.CdLine` does **not** contain the raw absolute home path.
 
 ## Exit Code
@@ -15,9 +17,12 @@ label: heavy
 
 ```go
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/xhd2015/dot-pkgs/go-pkgs/pathfmt"
 )
 
 func Assert(t *testing.T, req *Request, resp *Response, err error) {
@@ -27,19 +32,24 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if resp.TestErr != nil {
 		t.Fatalf("expected build.Test to succeed, got: %v\nstderr:\n%s", resp.TestErr, resp.Stderr)
 	}
+	assertNoProcessChdir(t, resp)
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp.HeaderLine == "" {
-		t.Fatalf("missing doctest line in stderr:\n%s", resp.Stderr)
+
+	wantHeader := fmt.Sprintf("doctest: %s (1 tests)", pathfmt.Short(resp.TestRoot))
+	if resp.HeaderLine != wantHeader {
+		t.Fatalf("header must be pathfmt.Short(testRoot) form\nwant %q\ngot  %q\nstderr:\n%s",
+			wantHeader, resp.HeaderLine, resp.Stderr)
 	}
-	if !strings.HasPrefix(resp.HeaderLine, "doctest: tests/") {
-		t.Fatalf("doctest line must use cwd-relative path without ./ prefix, got %q", resp.HeaderLine)
+	// Still identify the fixture tree segment (compact relative or abs suffix).
+	if !strings.Contains(resp.HeaderLine, "tests/feature") &&
+		!strings.Contains(resp.HeaderLine, "tests"+string(os.PathSeparator)+"feature") {
+		t.Fatalf("header must name tests/feature, got %q", resp.HeaderLine)
 	}
-	if !strings.Contains(resp.HeaderLine, "(1 tests)") {
-		t.Fatalf("header must include test count, got %q", resp.HeaderLine)
-	}
+
 	if resp.CdLine == "" {
 		t.Fatalf("missing cd line in stderr:\n%s", resp.Stderr)
 	}

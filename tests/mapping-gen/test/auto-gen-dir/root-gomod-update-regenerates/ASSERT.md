@@ -27,14 +27,14 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 			resp.ExitCode, resp.Stderr, resp.Stdout)
 	}
 
-	if rootGoModState.WarmResp == nil {
+	if req.MRFirst == nil {
 		t.Fatal("warm run state not set by Setup")
 	}
-	if rootGoModState.WarmResp.ExitCode != 0 {
-		t.Fatalf("warm run expected exit 0, got %d\nstderr:\n%s", rootGoModState.WarmResp.ExitCode, rootGoModState.WarmResp.Stderr)
+	if req.MRFirst.ExitCode != 0 {
+		t.Fatalf("warm run expected exit 0, got %d\nstderr:\n%s", req.MRFirst.ExitCode, req.MRFirst.Stderr)
 	}
 
-	genRoot := rootGoModState.GenRoot
+	genRoot := req.MRGenDir
 	if strings.HasPrefix(genRoot, "~/") {
 		home, err := os.UserHomeDir()
 		if err != nil {

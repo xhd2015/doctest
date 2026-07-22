@@ -2,6 +2,7 @@ package agent
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -31,18 +32,23 @@ func TestGenerateCreatesExpectedFiles(t *testing.T) {
 }
 
 func TestGenerateDefaultDirUsesWorkingDirectory(t *testing.T) {
-	tmp := t.TempDir()
-	oldWD, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
+	// Empty Dir defaults to relative "doctest-test-cases" against process cwd.
+	// Verify via subprocess + cmd.Dir (never os.Chdir — Parallel-safe).
+	const childEnv = "AGENT_GEN_DEFAULT_DIR_CHILD"
+	if os.Getenv(childEnv) == "1" {
+		if err := Generate(GenerateOptions{Idea: "default dir"}); err != nil {
+			t.Fatalf("Generate: %v", err)
+		}
+		return
 	}
-	if err := os.Chdir(tmp); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = os.Chdir(oldWD) }()
 
-	if err := Generate(GenerateOptions{Idea: "default dir"}); err != nil {
-		t.Fatalf("Generate: %v", err)
+	tmp := t.TempDir()
+	cmd := exec.Command(os.Args[0], "-test.run=^TestGenerateDefaultDirUsesWorkingDirectory$", "-test.v=false", "-test.count=1")
+	cmd.Dir = tmp
+	cmd.Env = append(os.Environ(), childEnv+"=1")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("child Generate: %v\n%s", err, out)
 	}
 	if _, err := os.Stat(filepath.Join(tmp, "doctest-test-cases", "DOCTEST.md")); err != nil {
 		t.Fatalf("default README missing: %v", err)

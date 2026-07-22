@@ -128,7 +128,7 @@ func runWorkspaceSingleGen(preps []TreePrep, genRoot string, stats TestRunStats,
 	if err := core.WriteWorkspaceExtras(genRoot, treeRels); err != nil {
 		return stats, err
 	}
-	if err := core.CondTidyGoMod(genRoot); err != nil {
+	if err := core.CondTidyGoMod(genRoot, opts.GoCache); err != nil {
 		return stats, err
 	}
 
@@ -175,7 +175,7 @@ func runWorkspaceMultiModHub(preps []TreePrep, byGen map[string][]TreePrep, genO
 				return stats, err
 			}
 		}
-		if err := core.CondTidyGoMod(genRoot); err != nil {
+		if err := core.CondTidyGoMod(genRoot, opts.GoCache); err != nil {
 			return stats, err
 		}
 		unique := uniqueWorkModulePath(genRoot)
@@ -211,7 +211,7 @@ func runWorkspaceMultiModHub(preps []TreePrep, byGen map[string][]TreePrep, genO
 		return stats, fmt.Errorf("workspace multi-mod: empty toplevel gen root")
 	}
 	// If toplevel is only a common parent without go.mod, still OK — hub lives under it.
-	hubDir, err := writeMultiModHub(toplevel, members, replaceByMod)
+	hubDir, err := writeMultiModHub(toplevel, members, replaceByMod, opts.GoCache)
 	if err != nil {
 		return stats, fmt.Errorf("workspace multi-mod hub: %w", err)
 	}
@@ -316,7 +316,7 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 		fmt.Fprintf(w, "cd %s && go %s\n", pathfmt.Short(runDir), strings.Join(displayArgs, " "))
 	}
 
-	sessionID := core.DoctestSessionIDForRun()
+	sessionID := core.SessionIDFromOpts(opts)
 	goCache := opts.GoCache
 	style := newColorStyle(opts.Color, stdout)
 

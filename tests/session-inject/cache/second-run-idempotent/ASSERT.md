@@ -4,7 +4,7 @@ label: heavy
 
 ## Expected
 
-- After second run, `go.mod` bytes equal pre-run snapshot.
+- After second run, `go.mod` bytes equal pre-run snapshot on `req.GoModBefore`.
 - Session-mod layout remains complete.
 
 ```go
@@ -21,8 +21,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if readErr != nil {
 		t.Fatalf("read go.mod after second run: %v\nstdout:\n%s\nstderr:\n%s", readErr, resp.Stdout, resp.Stderr)
 	}
-	if !bytes.Equal(goModBefore, after) {
-		t.Fatalf("session-mod go.mod changed on second run:\nbefore:\n%s\nafter:\n%s", goModBefore, after)
+	if !bytes.Equal(req.GoModBefore, after) {
+		t.Fatalf("session-mod go.mod changed on second run:\nbefore:\n%s\nafter:\n%s", req.GoModBefore, after)
 	}
 	assertSessionCacheLayout(t, cacheDir)
 }

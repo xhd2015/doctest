@@ -33,11 +33,6 @@ import (
 	"time"
 )
 
-var rootGoModState struct {
-	WarmResp *Response
-	GenRoot  string
-}
-
 func doRun(t *testing.T, bin string, args []string) *Response {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
@@ -68,8 +63,9 @@ func doRun(t *testing.T, bin string, args []string) *Response {
 }
 
 func Setup(t *testing.T, req *Request) error {
-	rootGoModState.WarmResp = nil
-	rootGoModState.GenRoot = ""
+	// Request-local multi-phase state (no package vars).
+	req.MRFirst = nil
+	req.MRGenDir = ""
 
 	if req.Bin == "" {
 		t.Fatalf("req.Bin is not set")
@@ -120,8 +116,8 @@ func Setup(t *testing.T, req *Request) error {
 		t.Fatalf("remove dep dir: %v", err)
 	}
 
-	rootGoModState.WarmResp = warmResp
-	rootGoModState.GenRoot = genRoot
+	req.MRFirst = warmResp
+	req.MRGenDir = genRoot
 	req.Args = append(req.Args, "-count=1", "-v", testDir)
 	return nil
 }

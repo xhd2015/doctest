@@ -14,7 +14,7 @@ first materialize -> second doctest test -> same bytes / still complete layout
 ## Steps
 
 1. Ensure cache exists via first run (or leave if warm).
-2. Record content of go.mod.
+2. Record content of go.mod on `req.GoModBefore` (request-local).
 3. Run doctest test again.
 4. Assert go.mod unchanged and layout still valid.
 
@@ -27,13 +27,11 @@ import (
 	"github.com/xhd2015/doctest/session"
 )
 
-var goModBefore []byte
-
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	// Ensure warm: materialize via first subprocess if needed.
-	createPublicModuleProject(t, "", defaultSessionAssertGo(), true)
+	createPublicModuleProject(t, req, "", defaultSessionAssertGo(), true)
 	setupModuleEnv(t, req)
-	req.Args = []string{"test", testDir, "-v"}
+	req.Args = []string{"test", req.TestDir, "-v"}
 	// Warm-up run
 	warm := *req
 	if _, err := Run(t, d, &warm); err != nil {
@@ -42,7 +40,7 @@ func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	}
 	cacheDir := expectedSessionCacheDir(t)
 	var err error
-	goModBefore, err = os.ReadFile(filepath.Join(cacheDir, "go.mod"))
+	req.GoModBefore, err = os.ReadFile(filepath.Join(cacheDir, "go.mod"))
 	if err != nil {
 		t.Fatalf("warm cache missing go.mod: %v", err)
 	}

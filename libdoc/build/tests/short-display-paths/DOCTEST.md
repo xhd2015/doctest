@@ -3,10 +3,10 @@
 ## Version
 0.0.2
 
-
-Integration doc tests verifying that `build.Test` stderr uses `DisplayPath` at
-the real call sites: `→` gen-root announcement, `doctest:` header, and `cd`
-command preview.
+Integration doc tests verifying that `build.Test` stderr uses `pathfmt.Short`
+(display-only) at the real call sites: `→` gen-root announcement, `doctest:`
+header, and `cd` command preview — **without process `os.Chdir` / `t.Chdir`**
+so both leaves are **Parallel-safe** (`t.Parallel`, `-count=1` full tree).
 
 ## DSN (Domain Specific Notion)
 
@@ -15,40 +15,54 @@ command preview.
 - **`build.Test`** — discovers doctest leaves, generates Go tests under a gen
   root, prints progress to stderr.
 - **`announceRoots`** — prints `→ <genRoot>` as the first stderr line.
-- **Progress header** — prints `doctest: <dir>` and `─── N test cases`.
+- **Progress header** — prints `doctest: <dir>` and test count.
 - **`cd` preview** — prints `cd <runDir> && go test ...` before executing.
-- **`DisplayPath`** — display-only formatter applied at each stderr path print.
+- **`pathfmt.Short` (DisplayPath)** — display-only formatter at each stderr path
+  print: relative to **process cwd** when under cwd, else `~/...` under home,
+  else absolute. **Not** Parallel-safe to fake via process Chdir.
+- **Harness sandbox** — per-leaf `t.TempDir()` project + absolute `GenDir`
+  under that project when explicit; never mutates process cwd.
 
 ### Behaviors
 
-- **Auto gen dir** — mapping-gen cache under home; `→` and `cd` lines use `~/...`
-  instead of `/Users/...`.
-- **Explicit gen dir under cwd** — user `--gen-dir` under project; `→` line uses
-  `_gen` when cwd is the project root.
-- **Test dir under cwd** — `doctest:` line uses cwd-relative path without `./` prefix.
+- **No process Chdir** — `Run` must not call `os.Chdir` / `t.Chdir`; process cwd
+  before and after `build.Test` is unchanged (Parallel-safe lock).
+- **Auto gen dir** — mapping-gen cache under home; `cd` line uses `~/...` and
+  `mapping-gen` (home shortening does not need project cwd).
+- **Explicit gen dir under project** — harness resolves `GenDir` to an
+  **absolute** path under the sandbox project (`projRoot/_gen`), not via Chdir
+  + relative `"_gen"`. Display is `pathfmt.Short(absGen)` (often absolute under
+  temp); still contains the `_gen` segment.
+- **Test dir display** — `doctest:` line is `pathfmt.Short(absTestRoot)` (may be
+  absolute when sandbox is outside process cwd); still names `tests/feature`.
 
 ## Decision Tree
 
 ```
 short-display-paths
-└── gen-dir-source              [how gen root is chosen]
-    ├── mapping-gen-cache       auto cache dir → ~/.../mapping-gen/...
-    └── explicit-gen-dir-under-cwd  --gen-dir _gen under project
+└── gen-dir-source                 [how gen root is chosen]
+    ├── mapping-gen-cache          auto cache dir → ~/.../mapping-gen/...
+    └── explicit-gen-dir-under-cwd absolute projRoot/_gen (no Chdir)
 ```
 
 ## Test Index
 
-| Leaf | Description |
-|------|-------------|
-| `gen-dir-source/mapping-gen-cache` | Auto gen dir stderr uses `~/...mapping-gen...`; `doctest:` uses cwd-relative path; no raw home absolute |
-| `gen-dir-source/explicit-gen-dir-under-cwd` | Explicit `_gen` under project displays as `→ _gen` |
+| Leaf | Description | Parallel / Chdir |
+|------|-------------|------------------|
+| `gen-dir-source/mapping-gen-cache` | Auto gen: `cd` uses `~/` + `mapping-gen`, no raw home; header = `pathfmt.Short(testRoot)`; cwd unchanged | GREEN after harness (no product change) |
+| `gen-dir-source/explicit-gen-dir-under-cwd` | Explicit abs `_gen` under sandbox: `cd` uses Short(gen) with `_gen` segment; header Short(testRoot); cwd unchanged | GREEN after harness |
 
 ## How to Run
 
 ```sh
-doctest vet ./libdoc/build/tests/short-display-paths/...
-doctest test ./libdoc/build/tests/short-display-paths/...
+doctest vet ./libdoc/build/tests/short-display-paths
+doctest test -count=1 --label-all ./libdoc/build/tests/short-display-paths
+# Both leaves must pass under concurrent t.Parallel (full tree, -count=1).
 ```
+
+Classic TDD / P2: product non-test code already has no `os.Chdir`. This tree
+was the known harness Chdir site. Designer removes Chdir from `Run` and locks
+DisplayPath expectations that remain valid without mutating process cwd.
 
 ```go
 import (
@@ -63,48 +77,68 @@ import (
 )
 
 type Request struct {
+	// GenDir is empty for auto mapping-gen, or a path relative to the
+	// per-leaf sandbox project root (e.g. "_gen"). Run joins relative
+	// values under projRoot — never relies on process cwd.
 	GenDir string
 }
+
 type Response struct {
-	Stderr		string
-	ArrowLine	string
-	HeaderLine	string
-	CdLine		string
-	TestErr		error
+	Stderr         string
+	ArrowLine      string
+	HeaderLine     string
+	CdLine         string
+	TestErr        error
+	ProjRoot       string
+	TestRoot       string
+	ResolvedGenDir string // absolute gen dir when explicit; empty when auto
+	CwdBefore      string
+	CwdAfter       string
 }
+
 func Run(t *testing.T, req *Request) (*Response, error) {
-	// DisplayPath shortens relative to process cwd. This tree needs a real
-	// project cwd; os.Chdir is process-global (not Parallel-safe across trees).
-	// Prefer labeling this tree out of concurrent light-tree Parallel, or
-	// redesign DisplayPath tests without cwd. Never t.Chdir.
-	wd, err := os.Getwd()
+	// Parallel-safe: never os.Chdir / t.Chdir. pathfmt.Short uses process
+	// Getwd for cwd-relative display; home (~) shortening still works for
+	// mapping-gen. Explicit gen dirs are absolute under the sandbox project.
+	cwdBefore, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = os.Chdir(wd) }()
 
 	projRoot := t.TempDir()
 	testRoot := createMinimalTree(t, projRoot)
-	if err := os.Chdir(projRoot); err != nil {
-		t.Fatal(err)
+
+	genDir := req.GenDir
+	if genDir != "" && !filepath.IsAbs(genDir) {
+		genDir = filepath.Join(projRoot, genDir)
 	}
 
 	var stderr bytes.Buffer
 	opts := core.Options{
-		GenDir:		req.GenDir,
-		RemoveTemp:	true,
-		Stderr:		&stderr,
+		GenDir:      genDir,
+		RemoveTemp:  true,
+		Stderr:      &stderr,
 	}
 	testErr := build.Test(testRoot, opts)
 	out := stderr.String()
 	arrow, header, cd := parseStderrLines(out)
 
+	cwdAfter, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	return &Response{
-		Stderr:		out,
-		ArrowLine:	arrow,
-		HeaderLine:	header,
-		CdLine:		cd,
-		TestErr:	testErr,
+		Stderr:         out,
+		ArrowLine:      arrow,
+		HeaderLine:     header,
+		CdLine:         cd,
+		TestErr:        testErr,
+		ProjRoot:       projRoot,
+		TestRoot:       testRoot,
+		ResolvedGenDir: genDir,
+		CwdBefore:      cwdBefore,
+		CwdAfter:       cwdAfter,
 	}, nil
 }
 ```

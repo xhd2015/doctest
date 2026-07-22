@@ -39,6 +39,7 @@ leaf imports session -> Once(t, key, fn) -> json.RawMessage
   `session-mod` cache.
 - Cache key comes from `sessionmod.RawSourceCacheKeyMD5()` once that package lands.
 - Until implementation exists, Setup may fail at import/build — that is the RED state.
+- Fixture paths (`ModuleRoot`, `TestDir`) live on `req` (request-local; Parallel-safe).
 
 ```go
 import (
@@ -56,14 +57,13 @@ import (
 )
 
 const (
-	modPath       = "example.com/session-app"
+	modPath        = "example.com/session-app"
 	sessionModPath = "github.com/xhd2015/doctest/session"
 )
 
 var (
-	moduleRoot string
-	testDir    string
-	bt         = string([]byte{96, 96, 96})
+	// Immutable fence marker only — not mutated across leaves.
+	bt = string([]byte{96, 96, 96})
 )
 
 func lockCacheTests(t *testing.T) {
@@ -161,20 +161,20 @@ func createDoctestLeaf(dir string, setupGo string, assertGo string) error {
 	return os.WriteFile(filepath.Join(dir, "ASSERT.md"), []byte(doctestGoBlock(assertGo)), 0644)
 }
 
-func createPublicModuleProject(t *testing.T, leafSetupGo string, leafAssertGo string, withSessionImport bool) {
+func createPublicModuleProject(t *testing.T, req *Request, leafSetupGo string, leafAssertGo string, withSessionImport bool) {
 	t.Helper()
 
-	moduleRoot = t.TempDir()
+	req.ModuleRoot = t.TempDir()
 	if err := os.WriteFile(
-		filepath.Join(moduleRoot, "go.mod"),
+		filepath.Join(req.ModuleRoot, "go.mod"),
 		[]byte("module "+modPath+"\n\ngo 1.21\n"),
 		0644,
 	); err != nil {
 		t.Fatalf("write go.mod: %v", err)
 	}
 
-	testDir = filepath.Join(moduleRoot, "tests")
-	if err := os.MkdirAll(testDir, 0755); err != nil {
+	req.TestDir = filepath.Join(req.ModuleRoot, "tests")
+	if err := os.MkdirAll(req.TestDir, 0755); err != nil {
 		t.Fatalf("mkdir tests: %v", err)
 	}
 
@@ -191,17 +191,17 @@ func createPublicModuleProject(t *testing.T, leafSetupGo string, leafAssertGo st
 			"\treturn &Response{Message: \"ok\"}, nil\n" +
 			"}"
 	}
-	if err := createDoctestRoot(testDir, extraImports, runCode); err != nil {
+	if err := createDoctestRoot(req.TestDir, extraImports, runCode); err != nil {
 		t.Fatalf("create doctest root: %v", err)
 	}
-	if err := createDoctestLeaf(filepath.Join(testDir, "leaf"), leafSetupGo, leafAssertGo); err != nil {
+	if err := createDoctestLeaf(filepath.Join(req.TestDir, "leaf"), leafSetupGo, leafAssertGo); err != nil {
 		t.Fatalf("create doctest leaf: %v", err)
 	}
 }
 
 func setupModuleEnv(t *testing.T, req *Request) {
 	t.Helper()
-	req.WorkDir = moduleRoot
+	req.WorkDir = req.ModuleRoot
 	req.Env = append(req.Env, "GOWORK=off")
 }
 
@@ -222,10 +222,10 @@ func defaultSessionAssertGo() string {
 		"}"
 }
 
-func findNestedGoMod(t *testing.T, root string) string {
+func findNestedGoMod(t *testing.T, moduleRoot string) string {
 	t.Helper()
 	var found string
-	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(moduleRoot, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}

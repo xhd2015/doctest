@@ -288,7 +288,7 @@ func (r *runRecorder) writeRunStart(dir string, opts core.Options, defaultSuite 
 	cwd, _ := os.Getwd()
 	projectID := projectIDForDir(absRoot)
 	branch, commit := gitBranchCommit(absRoot)
-	sessionID := core.DoctestSessionIDForRun()
+	sessionID := core.SessionIDFromOpts(opts)
 	ev := map[string]any{
 		"type":           "run_start",
 		"schema_version": metrics.SchemaVersion,

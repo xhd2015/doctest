@@ -19,11 +19,12 @@ func TestParentLeaf(t *testing.T) {
 	if ParentLeaf() != "" {
 		t.Fatalf("want empty after clear, got %q", ParentLeaf())
 	}
-	// Process env is ignored (parallel-safe): parent leaf is Options / d.Metrics only.
-	t.Setenv(EnvMetricsParentLeaf, "via-env")
+	// Process env is ignored (parallel-safe): ParentLeaf is Options / SetParentLeaf
+	// only — never reads EnvMetricsParentLeaf. (Do not t.Setenv in unit tests.)
 	if ParentLeaf() != "" {
 		t.Fatalf("env must not affect ParentLeaf, got %q", ParentLeaf())
 	}
+	_ = EnvMetricsParentLeaf // keep deprecated const referenced for API stability
 }
 
 func TestAppendAndReadNestSink(t *testing.T) {

@@ -33,14 +33,10 @@ import (
 	"time"
 )
 
-var nestedRenameState struct {
-	NestedFailResp *Response
-	StaleCachePath string
-}
-
 func Setup(t *testing.T, req *Request) error {
-	nestedRenameState.NestedFailResp = nil
-	nestedRenameState.StaleCachePath = ""
+	// Request-local multi-phase state (no package vars).
+	req.MRFirst = nil
+	req.StaleCachePath = ""
 
 	if req.Bin == "" {
 		t.Fatalf("req.Bin is not set")
@@ -67,12 +63,12 @@ func Setup(t *testing.T, req *Request) error {
 	createNestedTree(t, nestedDir, "verbose_leaf", staleLeafAssertGo())
 
 	nestedFailResp := doRun(t, req.Bin, []string{"test", nestedDir})
-	nestedRenameState.NestedFailResp = nestedFailResp
+	req.MRFirst = nestedFailResp
 	staleLeafDir := parseGoTestRunDir(nestedFailResp.Stderr)
 	if staleLeafDir == "" {
 		t.Fatalf("could not parse stale leaf gen dir from nested run stderr:\n%s", nestedFailResp.Stderr)
 	}
-	nestedRenameState.StaleCachePath = expandDisplayPath(staleLeafDir)
+	req.StaleCachePath = expandDisplayPath(staleLeafDir)
 
 	renamedDir := filepath.Join(parentDir, "nested-renamed")
 	if err := os.Rename(nestedDir, renamedDir); err != nil {

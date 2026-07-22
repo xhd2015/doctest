@@ -18,8 +18,11 @@ import (
 
 func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	cacheDir := expectedSessionCacheDir(t)
-	// Search genDir and moduleRoot for a go.mod with session replace.
-	roots := []string{genDir, moduleRoot}
+	if req.GenDir == "" {
+		t.Fatal("req.GenDir is empty; Setup must set request-local gen dir")
+	}
+	// Search req.GenDir and req.ModuleRoot for a go.mod with session replace.
+	roots := []string{req.GenDir, req.ModuleRoot}
 	var goModText string
 	var goModPath string
 	for _, root := range roots {
@@ -47,7 +50,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		}
 	}
 	if goModText == "" {
-		t.Fatalf("no go.mod with session replace found under genDir/moduleRoot\nstdout:\n%s\nstderr:\n%s\nrunErr=%v exit=%d",
+		t.Fatalf("no go.mod with session replace found under req.GenDir/req.ModuleRoot\nstdout:\n%s\nstderr:\n%s\nrunErr=%v exit=%d",
 			resp.Stdout, resp.Stderr, err, resp.ExitCode)
 	}
 	if !strings.Contains(goModText, "replace "+sessionModPath) &&

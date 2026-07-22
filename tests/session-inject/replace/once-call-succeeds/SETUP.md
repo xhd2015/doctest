@@ -23,9 +23,9 @@ doctest test leaf importing session
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-	createPublicModuleProject(t, "", defaultSessionAssertGo(), true)
+	createPublicModuleProject(t, req, "", defaultSessionAssertGo(), true)
 	setupModuleEnv(t, req)
-	req.Args = []string{"test", testDir, "-v"}
+	req.Args = []string{"test", req.TestDir, "-v"}
 	return nil
 }
 ```

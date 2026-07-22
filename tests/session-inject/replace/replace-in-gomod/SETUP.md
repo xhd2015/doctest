@@ -20,15 +20,15 @@ doctest test --gen-dir <dir> with session import
 
 ```go
 import (
-	"path/filepath"
 	"testing"
 )
 
 func Setup(t *testing.T, req *Request) error {
-	createPublicModuleProject(t, "", defaultSessionAssertGo(), true)
+	createPublicModuleProject(t, req, "", defaultSessionAssertGo(), true)
 	setupModuleEnv(t, req)
-	genDir = t.TempDir()
-	req.Args = []string{"test", testDir, "--gen-dir", genDir, "-v"}
+	// Request-local gen dir: Parallel-safe (no package-level var genDir).
+	req.GenDir = t.TempDir()
+	req.Args = []string{"test", req.TestDir, "--gen-dir", req.GenDir, "-v"}
 	return nil
 }
 ```

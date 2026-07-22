@@ -3,11 +3,11 @@
 **Bug**: closed stdin file causes Stat error during agent implement
 
 ```
-closed os.Stdin -> readStdinIfPresent Stat -> error returned
+closed stdin file inject -> readStdinIfPresent Stat -> error returned
 ```
 
 ## Preconditions
-- `os.Stdin` is replaced with a closed file, causing `os.Stdin.Stat()` to fail.
+- A closed file is injected as stdin, causing `Stat()` to fail.
 
 ## Steps
 1. Open `/dev/null`, close it, assign to `req.StdinFile`.

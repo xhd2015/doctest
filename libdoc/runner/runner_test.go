@@ -2,6 +2,7 @@ package runner
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -331,32 +332,18 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 `))
 
 	genDir := filepath.Join(t.TempDir(), "gen")
-	oldWd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chdir(mod); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = os.Chdir(oldWd) }()
+	// Absolute mod/... — no process os.Chdir (Parallel-safe).
+	pattern := filepath.Join(mod, "...")
 
-	// Capture stdout (summary) and leave stderr free for noise.
-	rOut, wOut, err := os.Pipe()
+	// Inject opts.Stdout — never reassign os.Stdout.
+	var outBuf bytes.Buffer
+	opts, remain, err := parseTestOptions([]string{"--gen-dir", genDir, "--no-color", pattern})
 	if err != nil {
 		t.Fatal(err)
 	}
-	oldStdout := os.Stdout
-	os.Stdout = wOut
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- Test([]string{"--gen-dir", genDir, "--no-color", "./..."})
-	}()
-	runErr := <-errCh
-	_ = wOut.Close()
-	os.Stdout = oldStdout
-	var outBuf bytes.Buffer
-	_, _ = outBuf.ReadFrom(rOut)
-	_ = rOut.Close()
+	opts.Stdout = &outBuf
+	opts.Stderr = io.Discard
+	runErr := runTest(opts, remain)
 	out := outBuf.String()
 
 	if runErr == nil {

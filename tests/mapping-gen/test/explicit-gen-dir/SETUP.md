@@ -23,14 +23,13 @@ import (
 	"testing"
 )
 
-var genDir string
-
 func Setup(t *testing.T, req *Request) error {
-	genDir = filepath.Join(t.TempDir(), "generated")
-	if err := os.MkdirAll(genDir, 0755); err != nil {
+	// Request-local gen dir: Parallel-safe (no package-level var genDir).
+	req.GenDir = filepath.Join(t.TempDir(), "generated")
+	if err := os.MkdirAll(req.GenDir, 0755); err != nil {
 		t.Fatalf("mkdir gen dir: %v", err)
 	}
-	req.Args = append(req.Args, "--gen-dir", genDir)
+	req.Args = append(req.Args, "--gen-dir", req.GenDir)
 	return nil
 }
 ```

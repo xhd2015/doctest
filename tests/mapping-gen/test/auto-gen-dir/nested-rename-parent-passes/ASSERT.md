@@ -25,23 +25,23 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("expected parent run exit 0, got %d\nstderr:\n%s", resp.ExitCode, resp.Stderr)
 	}
 
-	if nestedRenameState.NestedFailResp == nil {
+	if req.MRFirst == nil {
 		t.Fatal("phase 1 nested run was not recorded")
 	}
-	if nestedRenameState.NestedFailResp.ExitCode == 0 {
+	if req.MRFirst.ExitCode == 0 {
 		t.Fatalf("phase 1 expected nested verbose leaf to fail, got exit 0\nstderr:\n%s",
-			nestedRenameState.NestedFailResp.Stderr)
+			req.MRFirst.Stderr)
 	}
-	phase1Out := nestedRenameState.NestedFailResp.Stdout + nestedRenameState.NestedFailResp.Stderr
+	phase1Out := req.MRFirst.Stdout + req.MRFirst.Stderr
 	if !strings.Contains(phase1Out, "stale nested verbose_leaf package") {
 		t.Fatalf("phase 1 expected stale leaf failure, output:\n%s", phase1Out)
 	}
 
-	if nestedRenameState.StaleCachePath == "" {
+	if req.StaleCachePath == "" {
 		t.Fatal("stale cache path not recorded")
 	}
-	if _, err := os.Stat(nestedRenameState.StaleCachePath); err != nil {
-		t.Fatalf("expected stale generated package to remain at %s: %v", nestedRenameState.StaleCachePath, err)
+	if _, err := os.Stat(req.StaleCachePath); err != nil {
+		t.Fatalf("expected stale generated package to remain at %s: %v", req.StaleCachePath, err)
 	}
 
 	if !strings.Contains(resp.Stderr, "1 tests") {

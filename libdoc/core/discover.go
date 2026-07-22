@@ -594,17 +594,25 @@ func readExtraReplaces(modRoot, mainModPath string) string {
 	return result.String()
 }
 
-func TidyGoMod(genDir string) error {
+// TidyGoMod runs `go mod tidy` in genDir. When goCache is non-empty it is
+// applied as GOCACHE via ChildEnv (key-replace) so cold-cache isolation does
+// not require process os.Setenv.
+func TidyGoMod(genDir string, goCache string) error {
 	// Caller must hold genModMu when concurrent trees share genDir.
 	tidy := exec.Command("go", "mod", "tidy")
 	tidy.Dir = genDir
+	if goCache != "" {
+		tidy.Env = ChildEnv(nil, "GOCACHE="+goCache)
+	}
 	if out, err := tidy.CombinedOutput(); err != nil {
 		return fmt.Errorf("go mod tidy: %v\n%s", err, string(out))
 	}
 	return nil
 }
 
-func CondTidyGoMod(genDir string) error {
+// CondTidyGoMod runs TidyGoMod once per genDir (marker file), serializing via
+// genModMu. goCache is optional isolated GOCACHE for the tidy child.
+func CondTidyGoMod(genDir string, goCache string) error {
 	genModMu.Lock()
 	defer genModMu.Unlock()
 
@@ -612,7 +620,7 @@ func CondTidyGoMod(genDir string) error {
 	if _, err := os.Stat(markerFile); err == nil {
 		return nil
 	}
-	if err := TidyGoMod(genDir); err != nil {
+	if err := TidyGoMod(genDir, goCache); err != nil {
 		return err
 	}
 	f, err := os.Create(markerFile)

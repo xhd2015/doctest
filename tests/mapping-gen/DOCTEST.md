@@ -108,6 +108,14 @@ type Request struct {
 	WorkDir	string
 	Timeout	time.Duration
 	Bin	string
+	// GenDir is the absolute --gen-dir path for this leaf (request-local; no package var).
+	GenDir	string
+	// Multi-run / multi-phase harness state (request-local; Parallel-safe).
+	// Filled by leaf Setup helpers so Assert never reads package-global state.
+	MRFirst		*Response
+	MRSecond	*Response
+	MRGenDir	string
+	StaleCachePath	string
 }
 type Response struct {
 	ExitCode	int

@@ -135,8 +135,14 @@ type Options struct {
 	// startup, force -count=1 when unset, and isolate GOCACHE for the run.
 	ColdCache bool
 	// GoCache is an isolated GOCACHE directory for go test (set by --cold-cache).
-	// Empty means inherit the process GOCACHE.
+	// Empty means inherit the process GOCACHE. Passed to child go tool cmds via
+	// cmd.Env key-replace only (never process os.Setenv).
 	GoCache string
+
+	// SessionID is the DOCTEST_SESSION_ID for this CLI invocation. Set once at
+	// Test entry (inherit from process when nested, else mint). Threaded into
+	// child go test via cmd.Env key-replace; never written with os.Setenv.
+	SessionID string
 
 	// ForceWithFlagA is CLI -a: disable programmatic leaf-cache skip and forward -a
 	// to go test (force rebuild of packages that are already up-to-date).

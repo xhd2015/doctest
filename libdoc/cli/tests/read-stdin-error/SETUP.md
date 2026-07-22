@@ -12,24 +12,19 @@ broken stdin -> Stat/ReadAll error -> returned to caller
 
 ## Preconditions
 - The `cli` package is importable.
-- Tests replace `os.Stdin` with a file/pipe/directory before calling `cli.Run()`.
-- The current `readStdinIfPresent()` ignores errors; after the fix it propagates them.
+- Tests inject stdin via `cli.TestExported_RunWithStdin` (never reassign process stdin).
+- Product `readStdinIfPresent` honors the inject and propagates Stat/ReadAll errors.
 
 ## Steps
 1. Child SETUP.md files configure `req.Args` and `req.StdinFile`.
-2. Root `Run` replaces `os.Stdin` with the configured file, then calls `cli.Run(req.Args)`.
-3. Stdout/stderr are captured to keep test output clean.
+2. Root `Run` calls `cli.TestExported_RunWithStdin(req.Args, req.StdinFile)`.
+3. No process stdio swap — Parallel-safe harness.
 
 ## Context
-- These tests verify that errors from `os.Stdin.Stat()` and `io.ReadAll()` inside `readStdinIfPresent()` propagate through `cli.Run()` instead of being swallowed.
+- These tests verify that errors from stdin `Stat()` and `io.ReadAll()` inside `readStdinIfPresent()` propagate through `cli.Run()` instead of being swallowed.
 
 ```go
 import (
-	"bytes"
-	"io"
-	"os"
 	"testing"
-	"github.com/xhd2015/doctest/libdoc/cli"
 )
-
 ```

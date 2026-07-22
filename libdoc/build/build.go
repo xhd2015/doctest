@@ -84,6 +84,9 @@ func Build(dir string, opts core.Options) error {
 
 	goBuildCmd := exec.Command("go", goBuildArgs...)
 	goBuildCmd.Dir = ctx.genRoot
+	if ctx.goCache != "" {
+		goBuildCmd.Env = core.ChildEnv(nil, "GOCACHE="+ctx.goCache)
+	}
 	out, err := goBuildCmd.CombinedOutput()
 	os.Stdout.Write(out)
 	if err != nil {

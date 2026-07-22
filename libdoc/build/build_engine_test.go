@@ -2,6 +2,7 @@ package build
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -806,12 +807,8 @@ func TestDotProgressIncremental(t *testing.T) {
 			SetupGo: "import (\"testing\"; \"time\")\n\nfunc Setup(t *testing.T, req *Request) error { time.Sleep(2 * time.Second); return nil }"},
 	})
 
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stdout = w
+	// Parallel-safe streaming capture via opts.Stdout (never swap os.Stdout).
+	pr, pw := io.Pipe()
 
 	type dotInfo struct {
 		firstDot time.Duration
@@ -824,7 +821,7 @@ func TestDotProgressIncremental(t *testing.T) {
 		firstDot := time.Duration(-1)
 		tmp := make([]byte, 1)
 		for {
-			n, readErr := r.Read(tmp)
+			n, readErr := pr.Read(tmp)
 			if n > 0 {
 				buf.WriteByte(tmp[0])
 				if tmp[0] == '.' && firstDot < 0 {
@@ -838,12 +835,17 @@ func TestDotProgressIncremental(t *testing.T) {
 		ch <- dotInfo{firstDot, buf.String()}
 	}()
 
-	if err := Test(subRoot, core.Options{RemoveTemp: true, Count: 1}); err != nil {
+	err := Test(subRoot, core.Options{
+		RemoveTemp:            true,
+		Count:                 1,
+		Stdout:                pw,
+		SuppressResultSummary: true, // PASS/FAIL stays off real os.Stdout
+	})
+	_ = pw.Close()
+	info := <-ch
+	if err != nil {
 		t.Fatalf("build.Test: %v", err)
 	}
-	w.Close()
-	info := <-ch
-	os.Stdout = oldStdout
 
 	totalElapsed := time.Since(start)
 	incremental := info.firstDot >= 0 && (totalElapsed-info.firstDot) > 800*time.Millisecond

@@ -261,12 +261,22 @@ func formatResultSummary(style colorStyle, passed, total int, elapsed time.Durat
 
 // PrintSkippedSummary writes a compact skip report grouped by label set.
 // Paths and explanations appear only when verbose is true.
+// Prefer PrintSkippedSummaryTo when a harness injects opts.Stdout.
 func PrintSkippedSummary(skipped []core.SkippedCase, verbose bool) {
+	PrintSkippedSummaryTo(os.Stdout, skipped, verbose)
+}
+
+// PrintSkippedSummaryTo is like PrintSkippedSummary but writes to w
+// (nil means os.Stdout). Parallel-safe harnesses pass opts.Stdout.
+func PrintSkippedSummaryTo(w io.Writer, skipped []core.SkippedCase, verbose bool) {
+	if w == nil {
+		w = os.Stdout
+	}
 	s := FormatSkippedSummary(skipped, verbose)
 	if s == "" {
 		return
 	}
-	fmt.Print(s)
+	fmt.Fprint(w, s)
 }
 
 // FormatSkippedSummary returns the compact skip block (trailing newline included).
@@ -421,13 +431,17 @@ func PrintResultSummaryOverall(opts core.Options, stats TestRunStats, overallOK 
 	if stats.Total == 0 && stats.SkipCount == 0 && cancelled == 0 && !stats.GoTestBypassed {
 		return
 	}
-	style := newColorStyle(opts.Color, os.Stdout)
+	stdout := opts.Stdout
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+	style := newColorStyle(opts.Color, stdout)
 	if stats.GoTestBypassed {
 		planned := stats.Total
 		if stats.Planned > 0 {
 			planned = stats.Planned
 		}
-		fmt.Println(formatBypassResultSummary(style, planned, stats.Elapsed))
+		fmt.Fprintln(stdout, formatBypassResultSummary(style, planned, stats.Elapsed))
 		return
 	}
 	passed := stats.Passed
@@ -441,7 +455,7 @@ func PrintResultSummaryOverall(opts core.Options, stats TestRunStats, overallOK 
 		skipCount = 0
 		overallOK = false
 	}
-	fmt.Println(formatResultSummary(style, passed, total, stats.Elapsed, !overallOK, skipCount, cancelled))
+	fmt.Fprintln(stdout, formatResultSummary(style, passed, total, stats.Elapsed, !overallOK, skipCount, cancelled))
 }
 
 // formatBypassResultSummary is the honest end line when go test was skipped.

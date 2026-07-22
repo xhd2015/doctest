@@ -23,15 +23,15 @@ replace github.com/xhd2015/doctest/session => <session-mod cache>
 
 ```go
 import (
-	"path/filepath"
 	"testing"
 )
 
-var genDir string
-
 func Setup(t *testing.T, req *Request) error {
 	lockCacheTests(t)
-	genDir = t.TempDir()
+	// Request-local gen dir placeholder (leaf may overwrite); Parallel-safe.
+	if req.GenDir == "" {
+		req.GenDir = t.TempDir()
+	}
 	return nil
 }
 ```

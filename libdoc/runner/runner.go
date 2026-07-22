@@ -65,6 +65,12 @@ func Test(args []string) error {
 	if err != nil {
 		return err
 	}
+	return runTest(opts, remainArgs)
+}
+
+// runTest is the body of Test after CLI flag parse. Same-package unit tests
+// call it with opts.Stdout/Stderr injected (never swap process os.Stdout).
+func runTest(opts core.Options, remainArgs []string) error {
 	if len(remainArgs) < 1 {
 		return fmt.Errorf("test requires <dir>")
 	}
@@ -105,8 +111,13 @@ func Test(args []string) error {
 
 	// One session id for the whole CLI invocation so parallel trees share
 	// session.Once / testbin materialization when nested self-tests run.
-	if v, ok := syscall.Getenv(core.DoctestSessionIDEnv); !ok || v == "" {
-		_ = os.Setenv(core.DoctestSessionIDEnv, core.NewDoctestSessionID())
+	// Held on opts only — children receive it via cmd.Env key-replace (no process Setenv).
+	if opts.SessionID == "" {
+		if v, ok := syscall.Getenv(core.DoctestSessionIDEnv); ok && v != "" {
+			opts.SessionID = v
+		} else {
+			opts.SessionID = core.NewDoctestSessionID()
+		}
 	}
 
 	// Honor DOCTEST_METRICS_ROOT when MetricsRoot not set via options.
@@ -259,7 +270,11 @@ func Test(args []string) error {
 	}
 
 	if len(stats.Skipped) > 0 {
-		runnerbuild.PrintSkippedSummary(stats.Skipped, opts.Verbose)
+		sw := opts.Stdout
+		if sw == nil {
+			sw = os.Stdout
+		}
+		runnerbuild.PrintSkippedSummaryTo(sw, stats.Skipped, opts.Verbose)
 	}
 	if stats.Total > 0 || stats.SkipCount > 0 {
 		stats.Elapsed = time.Since(start)
@@ -981,8 +996,8 @@ func applyColdCache(opts *core.Options) error {
 		return fmt.Errorf("cold-cache: create isolated GOCACHE: %w", err)
 	}
 	opts.GoCache = gocacheTemp
-	// So nested child processes that inherit the environment also see cold GOCACHE.
-	_ = os.Setenv("GOCACHE", gocacheTemp)
+	// Isolation is via opts.GoCache → child go tool cmd.Env (key-replace).
+	// Do not mutate process env for GOCACHE (races under parallel suite leaves).
 
 	w := opts.Stderr
 	if w == nil {
