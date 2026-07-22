@@ -39,7 +39,7 @@ import (
 
 func Setup(t *testing.T, req *Request) error {
     sessID := "status-resumed-test"
-    sessHome := sessionsDir()
+    sessHome := sessionsDir(req)
 
     now := time.Now()
     dateDir := now.Format("2006/01/02")

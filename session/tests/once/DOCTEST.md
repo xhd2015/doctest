@@ -10,10 +10,11 @@
 - **Caller** — integration leaf or helper (e.g. `testbin.Ensure`) that needs a
   value computed at most once per `doctest test` run on this machine.
 - **Session Once** (`github.com/xhd2015/doctest/session`) — public package API
-  `Once(t, key, fn) (json.RawMessage, error)`.
-- **Session environment** — process env `DOCTEST_SESSION_ID`, read only via
-  `syscall.Getenv` (never `os.Getenv`, so Go's test result cache is not keyed
-  on the session id).
+  `Once(t, key, fn)` (production: sid from process env) and
+  `OnceSession(t, sessionID, key, fn)` (Parallel-safe: explicit sid, no env).
+- **Session environment** — production suite children get `DOCTEST_SESSION_ID`
+  via child `cmd.Env`; product `Once` reads it with `syscall.Getenv` only
+  (never `os.Getenv`). Harness tests use **`OnceSession`** and never Setenv.
 - **Disk scratch** — under `t.TempDir()/session-once/<slug(key)>/` (not
   UserCacheDir) so opens do not bust go package testcache when session id
   changes; files `lock`, `value`, `error` as needed.
@@ -23,7 +24,8 @@
 
 **Behaviors**
 
-- Missing or empty `DOCTEST_SESSION_ID` → error; `fn` is not run.
+- Missing session id (`Once` with empty env, or `OnceSession` with empty sid) →
+  error; `fn` is not run.
 - Empty `key` → error; `fn` is not run.
 - First success for `(session, key)` runs `fn` once, memos the JSON, returns
   the same bytes to every later caller with the same pair **in this process**.
@@ -73,20 +75,20 @@ go test ./session/
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
-	"syscall"
 	"testing"
+	"time"
 
 	"github.com/xhd2015/doctest/session"
 )
 
 // Request configures one Once scenario. Leaves set fields via Setup.
 type Request struct {
-	// SessionID is written into the process env before Once.
-	// Empty string means unset DOCTEST_SESSION_ID (missing-session case).
+	// SessionID is passed to OnceSession (never process Setenv). Empty = missing-session case.
 	SessionID string
 	// Key is the Once key (may be empty for validation leaves).
 	Key string
@@ -114,23 +116,7 @@ type Response struct {
 
 func Run(t *testing.T, req *Request) (*Response, error) {
 	t.Helper()
-	// Control product session id via syscall.Setenv (not t.Setenv/os.Setenv).
-	// t.Setenv uses os.LookupEnv which is recorded in go's testlog and would
-	// pin the whole workspace package cache to the outer DOCTEST_SESSION_ID.
-	// Product Once reads via syscall.Getenv only.
-	prev, had := syscall.Getenv(session.DoctestSessionIDEnv)
-	if req.SessionID == "" {
-		_ = syscall.Unsetenv(session.DoctestSessionIDEnv)
-	} else {
-		_ = syscall.Setenv(session.DoctestSessionIDEnv, req.SessionID)
-	}
-	t.Cleanup(func() {
-		if had {
-			_ = syscall.Setenv(session.DoctestSessionIDEnv, prev)
-		} else {
-			_ = syscall.Unsetenv(session.DoctestSessionIDEnv)
-		}
-	})
+	// Parallel-safe: OnceSession with explicit sid — never Setenv/Unsetenv.
 
 	resp := &Response{}
 	var calls atomic.Int32
@@ -161,20 +147,30 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 		}
 	}
 
+	// Empty SessionID exercises missing-session without touching process env.
+	// Non-empty: suffix with nano so -count=N / prior processMemo hits do not skip fn.
+	sid := req.SessionID
+	if sid != "" {
+		sid = fmt.Sprintf("%s-%d", sid, time.Now().UnixNano())
+	}
+	call := func(key string, f session.OnceFn) (json.RawMessage, error) {
+		return session.OnceSession(t, sid, key, f)
+	}
+
 	key := req.Key
-	v1, err1 := session.Once(t, key, fn)
+	v1, err1 := call(key, fn)
 	resp.Value = v1
 	resp.Err = err1
 	resp.CacheDir = seenCache
 
 	if req.CallTwice {
-		v2, err2 := session.Once(t, key, fn)
+		v2, err2 := call(key, fn)
 		resp.SecondValue = v2
 		resp.SecondErr = err2
 	}
 
 	if req.SecondKey != "" {
-		vB, errB := session.Once(t, req.SecondKey, func(tb testing.TB, cacheDir string) (json.RawMessage, error) {
+		vB, errB := call(req.SecondKey, func(tb testing.TB, cacheDir string) (json.RawMessage, error) {
 			calls.Add(1)
 			return json.RawMessage(`{"key":"B"}`), nil
 		})
@@ -197,8 +193,4 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 	// Never fail Run on Once errors — Assert owns expectations.
 	return resp, nil
 }
-
-// ensureSyscallSees is a harness note: product must use syscall.Getenv.
-// Do not read DOCTEST_SESSION_ID via os.Getenv in this tree.
-var _ = syscall.Getenv
 ```

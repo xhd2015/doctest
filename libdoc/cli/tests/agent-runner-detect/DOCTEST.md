@@ -20,7 +20,7 @@ The CLI defaults (`runAgentImplement`, `runAgentDesign`) are changed from `{Agen
 
 ```
 tests/agent-runner-detect/                    [Request{Args, Env}, Response{Stdout, Stderr, Err}]
-│                                              Run: calls cli.Run(args), captures output and error
+│                                              Run: subprocess doctest with cmd.Env only (no parent Setenv)
 ├── explicit-runner/                           [--agent-runner=idonotexist → no auto-detection]
 │   ├── SETUP.md                               [prepends agent,implement,test,--agent-runner=idonotexist]
 │   └── ASSERT.md                              → err "unknown agent runner id: idonotexist"
@@ -59,79 +59,101 @@ doctest test ./libdoc/cli/tests/agent-runner-detect/
 ```go
 import (
 	"bytes"
+	"context"
 	"errors"
-	"io"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 	"testing"
-	"github.com/xhd2015/doctest/libdoc/cli"
+	"time"
 )
 
 type Request struct {
-	Args	[]string
-	Env	[]string
+	Args    []string
+	Env     []string // KEY=VAL for the *child* doctest process only (never parent Setenv)
+	Bin     string
+	Timeout time.Duration
 }
 type Response struct {
-	ExitCode	int
-	Stdout		string
-	Stderr		string
-	Err		error
+	ExitCode int
+	Stdout   string
+	Stderr   string
+	Err      error // reconstructed from child stderr when exit != 0 (assert compatibility)
 }
-func Run(t *testing.T, req *Request) (*Response, error) {
-	// t.Setenv restores env when this test ends (required under workspace suite:
-	// os.Setenv(PATH=tmpdir) would poison later trees in the same process).
-	for _, e := range req.Env {
-		parts := strings.SplitN(e, "=", 2)
-		if len(parts) == 2 {
-			t.Setenv(parts[0], parts[1])
+
+// mergeChildEnv builds an isolated child environment: start from os.Environ(),
+// then apply overrides (including empty values). Does not mutate the parent process.
+func mergeChildEnv(overrides []string) []string {
+	m := make(map[string]string, 64)
+	for _, e := range os.Environ() {
+		k, v, _ := strings.Cut(e, "=")
+		m[k] = v
+	}
+	for _, e := range overrides {
+		k, v, ok := strings.Cut(e, "=")
+		if !ok {
+			continue
 		}
+		m[k] = v
 	}
-
-	oldStdout := os.Stdout
-	rOut, wOut, err := os.Pipe()
-	if err != nil {
-		return nil, err
+	out := make([]string, 0, len(m))
+	for k, v := range m {
+		out = append(out, k+"="+v)
 	}
-	os.Stdout = wOut
-	defer func() { os.Stdout = oldStdout }()
+	return out
+}
 
-	oldStderr := os.Stderr
-	rErr, wErr, err := os.Pipe()
-	if err != nil {
-		wOut.Close()
-		rOut.Close()
-		return nil, err
+func Run(t *testing.T, req *Request) (*Response, error) {
+	// Subprocess isolation: product code may read env; parent process env stays untouched.
+	bin := req.Bin
+	if bin == "" {
+		return nil, fmt.Errorf("req.Bin is not set")
 	}
-	os.Stderr = wErr
-	defer func() { os.Stderr = oldStderr }()
+	timeout := req.Timeout
+	if timeout == 0 {
+		timeout = 60 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 
-	cliErr := cli.Run(req.Args)
-
-	wOut.Close()
-	wErr.Close()
-
-	var stdoutBuf, stderrBuf bytes.Buffer
-	io.Copy(&stdoutBuf, rOut)
-	io.Copy(&stderrBuf, rErr)
-	rOut.Close()
-	rErr.Close()
-
-	os.Stdout = oldStdout
-	os.Stderr = oldStderr
+	cmd := exec.CommandContext(ctx, bin, req.Args...)
+	cmd.Env = mergeChildEnv(req.Env)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	runErr := cmd.Run()
 
 	resp := &Response{
-		Stdout:	stdoutBuf.String(),
-		Stderr:	stderrBuf.String(),
-		Err:	cliErr,
+		Stdout: stdout.String(),
+		Stderr: stderr.String(),
 	}
-	if cliErr == nil {
-		return resp, nil
+	if cmd.ProcessState != nil {
+		resp.ExitCode = cmd.ProcessState.ExitCode()
 	}
-	var exitErr *exec.ExitError
-	if errors.As(cliErr, &exitErr) {
-		resp.ExitCode = exitErr.ExitCode()
-		return resp, nil
+	if runErr != nil {
+		var exitErr *exec.ExitError
+		if errors.As(runErr, &exitErr) {
+			// CLI prints errors to stderr then exits 1 — surface as resp.Err for asserts.
+			msg := strings.TrimSpace(resp.Stderr)
+			if msg == "" {
+				msg = runErr.Error()
+			}
+			// Prefer last non-empty line (usage may be multi-line).
+			lines := strings.Split(msg, "\n")
+			for i := len(lines) - 1; i >= 0; i-- {
+				if s := strings.TrimSpace(lines[i]); s != "" {
+					msg = s
+					break
+				}
+			}
+			resp.Err = errors.New(msg)
+			return resp, nil
+		}
+		if ctx.Err() != nil {
+			return resp, ctx.Err()
+		}
+		return resp, runErr
 	}
 	return resp, nil
 }

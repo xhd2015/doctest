@@ -25,9 +25,9 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("exit code = %d, want 0\nstderr:\n%s", resp.ExitCode, resp.Stderr)
     }
 
-    qFile := os.Getenv("TEST_Q_FILE")
+    qFile := req.TestQFile
     if qFile == "" {
-        t.Fatal("TEST_Q_FILE not set")
+        t.Fatal("req.TestQFile not set")
     }
 
     data, readErr := os.ReadFile(qFile)

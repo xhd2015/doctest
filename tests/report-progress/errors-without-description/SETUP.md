@@ -27,7 +27,7 @@ import (
 func Setup(t *testing.T, req *Request) error {
     tf := filepath.Join(t.TempDir(), "progress.jsonl")
     req.Env = append(req.Env, "PROGRESS_FILE="+tf)
-    os.Setenv("TEST_PROGRESS_FILE", tf)
+    req.ProgressFile = tf
     req.Args = nil // no description
     return nil
 }

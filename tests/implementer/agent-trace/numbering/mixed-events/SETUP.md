@@ -34,7 +34,7 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
-    sessHome := sessionsDir()
+    sessHome := sessionsDir(req)
     now := time.Now()
     dateDir := now.Format("2006/01/02")
     sessName := fmt.Sprintf("sess_%s_%d", now.Format("150405"), now.UnixNano())

@@ -18,6 +18,7 @@ import (
 )
 
 type Request struct {
+	RunType string
 	Input		string
 	BasePath	string
 }
@@ -30,7 +31,7 @@ type Response struct {
 	ErrResult	string
 }
 func Run(t *testing.T, req *Request) (*Response, error) {
-	switch runType {
+	switch req.RunType {
 	case "extract_base_path":
 		result := path_resolve.ExtractBasePath(req.Input)
 		return &Response{StringResult: result}, nil
@@ -47,7 +48,7 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 		root, ok := path_resolve.ResolveRoot(req.Input)
 		return &Response{RootResult: root, RootOkResult: ok}, nil
 	default:
-		t.Fatalf("unknown runType: %s", runType)
+		t.Fatalf("unknown runType: %s", req.RunType)
 		return nil, nil
 	}
 }

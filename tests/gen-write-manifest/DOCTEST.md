@@ -129,6 +129,14 @@ type Request struct {
 	RelPath         string
 	FileContent     string
 	SecondFileContent string // if set, second write uses this instead of FileContent
+
+	// Per-leaf "before" snapshots for warm/second-call Asserts (Parallel-safe; not package vars).
+	SnapGoModMtimeBefore      time.Time
+	SnapManifestMtimeBefore   time.Time
+	SnapTargetMtimeBefore     time.Time
+	SnapManifestEntryBefore   string
+	SnapGoModContentBefore    string
+	SnapManifestContentBefore string
 }
 
 // Response captures gen-root artifacts and mtimes around the measured write.

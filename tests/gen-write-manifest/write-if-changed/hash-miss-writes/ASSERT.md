@@ -30,7 +30,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if resp.ManifestEntryAfter == "" {
 		t.Fatalf("manifest must list %s after hash-miss write:\n%s", req.RelPath, resp.ManifestContent)
 	}
-	if snapManifestEntryBefore != "" && resp.ManifestEntryAfter == snapManifestEntryBefore {
+	if req.SnapManifestEntryBefore != "" && resp.ManifestEntryAfter == req.SnapManifestEntryBefore {
 		t.Fatalf("expected manifest entry to change on content update:\n%s", resp.ManifestEntryAfter)
 	}
 }

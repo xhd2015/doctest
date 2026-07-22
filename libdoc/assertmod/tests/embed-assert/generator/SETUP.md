@@ -19,7 +19,7 @@ assert/*.go (sorted, no *_test.go) -> single assert.go bytes
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-	runKind = "embed-script"
+    req.RunKind = "embed-script"
 	req.OutputPath = ""
 	return nil
 }

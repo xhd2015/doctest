@@ -153,7 +153,7 @@ Examples:
   doctest edit ./tests/feature/ui-leaf/ASSERT.md --add-label manual
 `
 
-const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [-a] [--no-leaf-cache] [-timeout DURATION] [--color] [--no-color] [--changed] [--label EXPR]... [--label-all] [--metrics-on] [--cold-cache] [-cpuprofile FILE] [-memprofile FILE] [-memprofilerate N] [-blockprofile FILE] [-blockprofilerate N] [-mutexprofile FILE] [-mutexprofilefraction N] [-trace FILE] [-outputdir DIR] [-coverprofile FILE] [-cover] <dir>
+const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [-a] [--no-leaf-cache] [-timeout DURATION] [--color] [--no-color] [--changed] [--label EXPR]... [--label-all] [--metrics-on] [--cold-cache] [-cpuprofile FILE] [-memprofile FILE] [-memprofilerate N] [-blockprofile FILE] [-blockprofilerate N] [-mutexprofile FILE] [-mutexprofilefraction N] [-trace FILE] [-outputdir DIR] [-coverprofile FILE] [-cover] [-race] <dir>
 
 Run executable Go snippets from a doc-style test directory, allow ./... patterns like go test.
 
@@ -198,6 +198,9 @@ Options:
   -coverprofile FILE
                     Forward cover profile path to go test (relative paths abs-resolved)
   -cover            Enable coverage analysis (forward -cover to go test)
+  -race             Enable data race detection (forward -race to go test).
+                    Opt-in; slower and often 0 Cached. Nested child doctest
+                    processes do not inherit -race unless their Args pass it.
   -h, --help        Show help
 
 Env:

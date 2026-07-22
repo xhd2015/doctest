@@ -27,10 +27,10 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("first run exit code = %d, want 0\nstderr:\n%s", resp.ExitCode, resp.Stderr)
     }
 
-    tf := os.Getenv("TEST_PROGRESS_FILE")
-    if tf == "" {
-        t.Fatal("TEST_PROGRESS_FILE not set")
-    }
+    tf := req.ProgressFile
+	if tf == "" {
+		t.Fatal("req.ProgressFile not set")
+	}
 
     // Second invocation with a different description
     rpBin := filepath.Join(t.TempDir(), "report-progress")

@@ -58,6 +58,7 @@ import (
 )
 
 type Request struct {
+	RunKind	string
 	ModuleRoot	string
 	AssertDir	string
 	OutputPath	string
@@ -74,7 +75,7 @@ type Response struct {
 	Err		error
 }
 func Run(t *testing.T, req *Request) (*Response, error) {
-	switch runKind {
+	switch req.RunKind {
 	case "embed-script":
 		return runEmbedScript(t, req)
 	case "embed-cache-key":
@@ -91,7 +92,7 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 			ContentMD5:	assertmod.ContentMD5(),
 		}, nil
 	default:
-		t.Fatalf("unknown runKind: %s", runKind)
+		t.Fatalf("unknown req.RunKind: %s", req.RunKind)
 		return nil, nil
 	}
 }

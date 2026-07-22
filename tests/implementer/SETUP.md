@@ -63,6 +63,8 @@ func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     }
 
     sessionHome := filepath.Join(tmp, "sessions")
+    req.SessionHome = sessionHome
+    req.YieldPQBin = yieldPQ
     req.Env = append(req.Env,
         "DOCTEST_BIN="+doctestBin,
         "AGENT_RUNNER_FAKE_CODEX_PATH="+fakeCodex,
@@ -70,8 +72,7 @@ func Setup(t *testing.T, d *session.Doctest, req *Request) error {
         "DOCTEST_DEBUG_SESSION_HOME="+sessionHome,
     )
     req.Bin = doctestBin
-    os.Setenv("YIELD_PQ_BIN", yieldPQ)
-    os.Setenv("DOCTEST_DEBUG_SESSION_HOME", sessionHome)
+    // Child-only env via req.Env — never parent os.Setenv (Parallel-unsafe).
     return nil
 }
 
@@ -85,17 +86,17 @@ func writeMockConfig(t *testing.T, req *Request, body string) string {
     return path
 }
 
-func sessionsDir() string {
-    if v := os.Getenv("DOCTEST_DEBUG_SESSION_HOME"); v != "" {
-        return v
+func sessionsDir(req *Request) string {
+    if req != nil && req.SessionHome != "" {
+        return req.SessionHome
     }
     home, _ := os.UserHomeDir()
     return filepath.Join(home, ".doctest", "implementer", "sessions")
 }
 
-func findSessionMeta(t *testing.T, field string, value string) string {
+func findSessionMeta(t *testing.T, req *Request, field string, value string) string {
     t.Helper()
-    base := sessionsDir()
+    base := sessionsDir(req)
     today := time.Now()
     for i := 0; i < 7; i++ {
         dateDir := today.AddDate(0, 0, -i).Format("2006/01/02")
@@ -140,9 +141,9 @@ func readMetaJSON(t *testing.T, path string) map[string]any {
     return m
 }
 
-func countSessionDirs(t *testing.T, field string, value string) int {
+func countSessionDirs(t *testing.T, req *Request, field string, value string) int {
     t.Helper()
-    base := sessionsDir()
+    base := sessionsDir(req)
     count := 0
     today := time.Now()
     for i := 0; i < 7; i++ {
@@ -175,9 +176,9 @@ func countSessionDirs(t *testing.T, field string, value string) int {
     return count
 }
 
-func getSessionDir(t *testing.T, field string, value string) (string, string) {
+func getSessionDir(t *testing.T, req *Request, field string, value string) (string, string) {
     t.Helper()
-    base := sessionsDir()
+    base := sessionsDir(req)
     today := time.Now()
     for i := 0; i < 7; i++ {
         dateDir := today.AddDate(0, 0, -i).Format("2006/01/02")

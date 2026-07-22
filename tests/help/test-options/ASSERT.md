@@ -26,6 +26,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         "-mutexprofile", "-mutexprofilefraction",
         "-trace", "-outputdir",
         "-coverprofile", "-cover",
+        "-race",
     } {
         if !strings.Contains(resp.Stdout, want) {
             t.Fatalf("stdout missing %q:\n%s", want, resp.Stdout)

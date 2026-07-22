@@ -41,9 +41,9 @@ func Setup(t *testing.T, req *Request) error {
 	seedTidyDone(t, req.GenDir)
 	// Snapshot pre-change manifest line for go.mod (if present).
 	man := readFileOrEmpty(manifestPath(req.GenDir))
-	snapManifestEntryBefore = findManifestLine(man, "go.mod")
-	snapManifestContentBefore = man
-	snapGoModContentBefore = readFileOrEmpty(filepath.Join(req.GenDir, "go.mod"))
+	req.SnapManifestEntryBefore = findManifestLine(man, "go.mod")
+	req.SnapManifestContentBefore = man
+	req.SnapGoModContentBefore = readFileOrEmpty(filepath.Join(req.GenDir, "go.mod"))
 	req.ChangeSourceGoMod = "module example.com/app\n\ngo 1.21\n"
 	return nil
 }

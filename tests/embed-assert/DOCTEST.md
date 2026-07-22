@@ -103,6 +103,9 @@ type Request struct {
 	Timeout		time.Duration
 	Bin		string
 	OutsideGenDir	string
+	// CacheHome is the isolated DOCTEST_CACHE_HOME for this leaf (child Env + parent path asserts).
+	// Never applied via parent process Setenv.
+	CacheHome	string
 }
 type Response struct {
 	ExitCode	int

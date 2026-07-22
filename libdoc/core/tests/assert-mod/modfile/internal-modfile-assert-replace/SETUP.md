@@ -20,7 +20,7 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
-	runKind = "internal-modfile"
+    req.RunKind = "internal-modfile"
 	req.ModRoot = t.TempDir()
 	parentGoMod := "module example.com/app\n\ngo 1.21\n\nreplace example.com/dep => ../dep\n"
 	if err := os.WriteFile(filepath.Join(req.ModRoot, "go.mod"), []byte(parentGoMod), 0644); err != nil {

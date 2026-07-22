@@ -340,7 +340,7 @@ func testDotDotDotWorkspace(arg string, opts core.Options, rec *runRecorder, sta
 		roots = append(roots, root)
 	}
 
-	// Parallel prepare (generate-only), same light/heavy scheduling as RunForDirs.
+	// Parallel prepare (generate-only), same worker pool as RunForDirs.
 	type prepResult struct {
 		prep runnerbuild.TreePrep
 		err  error
@@ -746,6 +746,7 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 		String("-outputdir", &opts.OutputDir).
 		String("-coverprofile", &opts.CoverProfile).
 		Bool("-cover", &opts.Cover).
+		Bool("-race", &opts.Race).
 		Parse(args)
 	if err != nil {
 		return core.Options{}, nil, err

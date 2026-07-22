@@ -26,7 +26,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     }
 
     // Verify the first session exists with explicit_session_id
-    sessDirA, _ := getSessionDir(t, "explicit_session_id", "sess-A")
+    sessDirA, _ := getSessionDir(t, req, "explicit_session_id", "sess-A")
     if sessDirA == "" {
         t.Fatal("first call did not create session with explicit_session_id=sess-A")
     }
@@ -79,21 +79,21 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     }
 
     // Verify TWO separate sessions exist
-    if findSessionMeta(t, "explicit_session_id", "sess-A") == "" {
+    if findSessionMeta(t, req, "explicit_session_id", "sess-A") == "" {
         t.Fatal("first session with explicit_session_id=sess-A was lost")
     }
-    if findSessionMeta(t, "main_agent_codex_thread_id", "sess-B") == "" {
+    if findSessionMeta(t, req, "main_agent_codex_thread_id", "sess-B") == "" {
         t.Fatal("second session with main_agent_codex_thread_id=sess-B not found (should not match explicit_session_id)")
     }
 
     // First session should still only have explicit_session_id=sess-A, not codex
-    metaA := readMetaJSON(t, findSessionMeta(t, "explicit_session_id", "sess-A"))
+    metaA := readMetaJSON(t, findSessionMeta(t, req, "explicit_session_id", "sess-A"))
     if _, ok := metaA["main_agent_codex_thread_id"]; ok {
         t.Fatalf("first session should not have main_agent_codex_thread_id, got %v", metaA["main_agent_codex_thread_id"])
     }
 
     // Second session should have main_agent_codex_thread_id=sess-B
-    metaB := readMetaJSON(t, findSessionMeta(t, "main_agent_codex_thread_id", "sess-B"))
+    metaB := readMetaJSON(t, findSessionMeta(t, req, "main_agent_codex_thread_id", "sess-B"))
     if v, _ := metaB["main_agent_codex_thread_id"].(string); v != "sess-B" {
         t.Fatalf("second session main_agent_codex_thread_id = %v, want sess-B", metaB["main_agent_codex_thread_id"])
     }

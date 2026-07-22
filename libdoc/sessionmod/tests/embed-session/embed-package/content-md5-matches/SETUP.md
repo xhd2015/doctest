@@ -14,7 +14,7 @@ ContentMD5() -> hex matches file hash of sessionmod embedded blob
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-	runKind = "sessionmod-md5"
+    req.RunKind = "sessionmod-md5"
 	return nil
 }
 ```

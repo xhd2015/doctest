@@ -31,7 +31,9 @@ import (
 
 func Setup(t *testing.T, req *Request) error {
 	isolated := t.TempDir()
-	t.Setenv(core.DoctestCacheHomeEnv, isolated)
+	// Child-only isolation via req.Env (subprocess). Never t.Setenv / parent Setenv.
+	// Parent-side cache path checks use req.CacheHome, not process env.
+	req.CacheHome = isolated
 	req.Env = append(req.Env,
 		"GOWORK=off",
 		core.DoctestCacheHomeEnv+"="+isolated,

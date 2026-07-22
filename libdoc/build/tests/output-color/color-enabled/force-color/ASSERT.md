@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - `build.Test` succeeds.
 - Summary contains green-wrapped `1 Pass` and gray-wrapped `0 Fail` segments.

@@ -21,7 +21,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("first call exit code = %d, want 0\nstderr:\n%s", resp.ExitCode, resp.Stderr)
     }
 
-    sessDir, metaPath := getSessionDir(t, "main_agent_codex_thread_id", "flag-fallback-test")
+    sessDir, metaPath := getSessionDir(t, req, "main_agent_codex_thread_id", "flag-fallback-test")
     if sessDir == "" {
         t.Fatal("first call did not create a session dir with main_agent_codex_thread_id=flag-fallback-test")
     }
@@ -82,12 +82,12 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("second call stdout missing expected text:\n%s", string(out2))
     }
 
-    sessDirExplicit, _ := getSessionDir(t, "explicit_session_id", "flag-fallback-test")
+    sessDirExplicit, _ := getSessionDir(t, req, "explicit_session_id", "flag-fallback-test")
     if sessDirExplicit != "" && sessDirExplicit != sessDir {
         t.Fatalf("second call created a NEW session via explicit_session_id instead of reusing existing one.\n  existing (codex): %s\n  new (explicit): %s", sessDir, sessDirExplicit)
     }
 
-    _, metaPath2 := getSessionDir(t, "main_agent_codex_thread_id", "flag-fallback-test")
+    _, metaPath2 := getSessionDir(t, req, "main_agent_codex_thread_id", "flag-fallback-test")
     if metaPath2 == "" {
         t.Fatal("original session not found after second call")
     }

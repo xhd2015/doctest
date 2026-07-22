@@ -37,8 +37,6 @@ import (
 	"github.com/xhd2015/doctest/libdoc/assertmod"
 )
 
-var runKind string
-
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.ModuleRoot = filepath.Join(d.DOCTEST_ROOT, "..", "..", "..", "..")
 	req.AssertDir = filepath.Join(req.ModuleRoot, "assert")

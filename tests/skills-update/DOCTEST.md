@@ -79,6 +79,10 @@ type Request struct {
 	Args        []string // argv after binary name, e.g. []string{"skills", "update"}
 	PreInstalls []PreInstallCLI
 	WorkDir     string // set by Setup; subprocess cwd
+	// Home is isolated $HOME for global skill installs; passed via child Env only
+	// (never t.Setenv — Parallel-incompatible). Asserts use this path too.
+	Home string
+	Env  []string // extra KEY=VAL for subprocess (e.g. HOME=...)
 
 	Timeout time.Duration
 	Bin     string
@@ -104,21 +108,25 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 	}
 
 	for _, pre := range req.PreInstalls {
-		if err := runCLI(t, req.Bin, req.WorkDir, timeout, pre.Args); err != nil {
+		if err := runCLI(t, req.Bin, req.WorkDir, timeout, pre.Args, req.Env); err != nil {
 			return nil, fmt.Errorf("pre-install %v: %w", pre.Args, err)
 		}
 	}
 
-	return runCLICapture(t, req.Bin, req.WorkDir, timeout, req.Args)
+	return runCLICapture(t, req.Bin, req.WorkDir, timeout, req.Args, req.Env)
 }
 
-func runCLI(t *testing.T, bin, dir string, timeout time.Duration, args []string) error {
+func childEnv(extra []string) []string {
+	return append(append([]string(nil), os.Environ()...), extra...)
+}
+
+func runCLI(t *testing.T, bin, dir string, timeout time.Duration, args, env []string) error {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = dir
-	cmd.Env = os.Environ()
+	cmd.Env = childEnv(env)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%w\n%s", err, out)
@@ -126,13 +134,13 @@ func runCLI(t *testing.T, bin, dir string, timeout time.Duration, args []string)
 	return nil
 }
 
-func runCLICapture(t *testing.T, bin, dir string, timeout time.Duration, args []string) (*Response, error) {
+func runCLICapture(t *testing.T, bin, dir string, timeout time.Duration, args, env []string) (*Response, error) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = dir
-	cmd.Env = os.Environ()
+	cmd.Env = childEnv(env)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

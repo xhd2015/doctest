@@ -4,9 +4,9 @@
 
 ```
 # caller invokes Once with session env and key
-Caller -> session.Once(t, key, fn)
-session.Once -> syscall.Getenv(DOCTEST_SESSION_ID)
-session.Once -> t.TempDir()/session-once/<slug>/  (not UserCacheDir; keeps go testcache warm)
+Caller -> session.OnceSession(t, sessionID, key, fn)  // harness: explicit sid, no Setenv
+session.OnceSession -> t.TempDir()/session-once/<slug>/  (not UserCacheDir; keeps go testcache warm)
+# production leaves still use Once(t, key, fn) with suite cmd.Env DOCTEST_SESSION_ID
 
 # success path
 fn(cacheDir) -> json.RawMessage
@@ -33,7 +33,7 @@ session.Once -> processMemo error; later Once returns error without re-running f
 ## Steps
 
 1. Leaf `Setup` sets `req.SessionID`, `req.Key`, `req.Mode`, and call flags.
-2. Root `Run` applies session env with `t.Setenv`, invokes `session.Once`, and
+2. Root `Run` calls `session.OnceSession(t, req.SessionID, key, fn)` (no process Setenv), and
    records values, errors, fn call count, and optional cache file bytes.
 3. Leaf `Assert` checks errors, JSON equality, layout, or unmarshal as specified.
 
@@ -44,7 +44,7 @@ session.Once -> processMemo error; later Once returns error without re-running f
 - Harness must not call `os.Getenv("DOCTEST_SESSION_ID")` for product behavior;
   product uses `syscall.Getenv` only.
 - `DOCTEST_SESSION_ID` injected variable is for harness session-scoped caching
-  only; product session id is controlled via `req.SessionID` + `t.Setenv`.
+  only; product session id is controlled via `req.SessionID` + `OnceSession` (Parallel-safe).
 
 ```go
 import (

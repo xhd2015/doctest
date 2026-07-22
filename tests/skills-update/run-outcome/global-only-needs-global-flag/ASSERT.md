@@ -38,11 +38,10 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if strings.Contains(resp.Stdout, "Skill is up to date") || strings.Contains(resp.Stdout, "Update skill at") {
 		t.Fatalf("expected no per-skill update lines without --global:\n%s", resp.Stdout)
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("home: %v", err)
+	if req.Home == "" {
+		t.Fatal("req.Home unset (isolated HOME for global install)")
 	}
-	globalSkill := filepath.Join(home, ".agents", "skills", "doctest-tdd", "SKILL.md")
+	globalSkill := filepath.Join(req.Home, ".agents", "skills", "doctest-tdd", "SKILL.md")
 	if _, err := os.Stat(globalSkill); err != nil {
 		t.Fatalf("expected global install at %s: %v", globalSkill, err)
 	}

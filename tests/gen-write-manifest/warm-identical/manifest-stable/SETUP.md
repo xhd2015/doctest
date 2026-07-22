@@ -22,7 +22,7 @@ func Setup(t *testing.T, req *Request) error {
 	}
 	// Prefer snapshot when first write already created the manifest.
 	// If missing (RED), Assert still requires ManifestExists after Run.
-	if fileExists(manifestPath(req.GenDir)) && snapManifestMtimeBefore.IsZero() {
+	if fileExists(manifestPath(req.GenDir)) && req.SnapManifestMtimeBefore.IsZero() {
 		snapshotManifestMtime(t, req)
 	}
 	return nil

@@ -81,8 +81,7 @@ import (
 
 // TreeEntry is one DOCTEST root registered under the workspace suite.
 type TreeEntry struct {
-	Path  string // treeRel relative to module root (e.g. "libdoc/build/tests")
-	Heavy bool   // when true, suite runs this tree without t.Parallel
+	Path string // treeRel relative to module root (e.g. "libdoc/build/tests")
 	// Run executes all leaves for this tree (typically via the tree registry).
 	Run func(*testing.T)
 }
@@ -107,8 +106,8 @@ func All() []TreeEntry {
 
 // AssembleTreeWregSource emits <treeRel>/__wreg that registers into the workspace.
 // treeRelSlash is the slash-separated tree path stored on TreeEntry.Path (may be ".").
-// heavy controls whether the workspace suite skips t.Parallel for this tree.
-func AssembleTreeWregSource(treeRelSlash string, heavy bool, treeRegistryImport, treeAllLeavesImport, workspaceRegistryImport string) string {
+// Every leaf subtest calls t.Parallel().
+func AssembleTreeWregSource(treeRelSlash string, treeRegistryImport, treeAllLeavesImport, workspaceRegistryImport string) string {
 	if treeRelSlash == "" {
 		treeRelSlash = "."
 	}
@@ -132,12 +131,9 @@ func AssembleTreeWregSource(treeRelSlash string, heavy bool, treeRegistryImport,
 	buf.WriteString(")\n\n")
 	buf.WriteString("func init() {\n")
 	buf.WriteString("\twsreg.Register(wsreg.TreeEntry{\n")
-	buf.WriteString("\t\tPath:  ")
+	buf.WriteString("\t\tPath: ")
 	buf.WriteString(strconvQuote(treeRelSlash))
 	buf.WriteString(",\n")
-	if heavy {
-		buf.WriteString("\t\tHeavy: true,\n")
-	}
 	// Leaf nest parent is d.Metrics.ParentLeaf inside RunTestLeaf — no process env.
 	// Warm leaf-cache skips use DOCTEST_LEAF_CACHE_SKIP_PATHS (same as tree suite RunAll).
 	buf.WriteString("\t\tRun: func(t *testing.T) {\n")
@@ -155,6 +151,7 @@ func AssembleTreeWregSource(treeRelSlash string, heavy bool, treeRegistryImport,
 	buf.WriteString("\t\t\t\t// Encode \"/\" as \"__\" so go test does not nest path segments.\n")
 	buf.WriteString("\t\t\t\tname := strings.ReplaceAll(e.Path, \"/\", \"__\")\n")
 	buf.WriteString("\t\t\t\tt.Run(name, func(t *testing.T) {\n")
+	buf.WriteString("\t\t\t\t\tt.Parallel()\n")
 	buf.WriteString("\t\t\t\t\tif _, hit := skip[e.Path]; hit {\n")
 	buf.WriteString("\t\t\t\t\t\treturn\n")
 	buf.WriteString("\t\t\t\t\t}\n")
@@ -193,9 +190,7 @@ func AssembleWorkspaceAllTreesSource(wregImports []string) string {
 }
 
 // AssembleWorkspaceRunAllSource emits __workspace/suite/runall.go (importable).
-// Trees run serially in v1. t.Parallel on light trees is deferred: many nested
-// selftests hijack os.Stdout / process env and are not process-safe concurrently.
-// TreeEntry.Heavy is still registered for a future parallel policy.
+// Every tree subtest calls t.Parallel(); leaves Parallel inside each tree Run.
 func AssembleWorkspaceRunAllSource(workspaceRegistryImport, allTreesImport string) string {
 	var buf strings.Builder
 	buf.WriteString("package ")
@@ -219,9 +214,8 @@ func AssembleWorkspaceRunAllSource(workspaceRegistryImport, allTreesImport strin
 	buf.WriteString("\t\ttr := tr\n")
 	buf.WriteString("\t\t// Encode \"/\" as \"__\" so go test does not invent intermediate nodes.\n")
 	buf.WriteString("\t\tname := strings.ReplaceAll(tr.Path, \"/\", \"__\")\n")
-	buf.WriteString("\t\t// Serial trees (v1). _ = tr.Heavy reserved for future Parallel policy.\n")
-	buf.WriteString("\t\t_ = tr.Heavy\n")
 	buf.WriteString("\t\tt.Run(name, func(t *testing.T) {\n")
+	buf.WriteString("\t\t\tt.Parallel()\n")
 	buf.WriteString("\t\t\ttr.Run(t)\n")
 	buf.WriteString("\t\t})\n")
 	buf.WriteString("\t}\n")
@@ -245,7 +239,7 @@ func AssembleWorkspaceSuiteTestSource(workspaceRegistryImport, allTreesImport st
 }
 
 // WriteTreeWreg writes <treeRel>/__wreg for workspace registration.
-func WriteTreeWreg(genRoot, treeRel string, heavy bool) error {
+func WriteTreeWreg(genRoot, treeRel string) error {
 	treeRelSlash := filepath.ToSlash(filepath.Clean(treeRel))
 	if treeRelSlash == "" {
 		treeRelSlash = "."
@@ -256,7 +250,6 @@ func WriteTreeWreg(genRoot, treeRel string, heavy bool) error {
 	}
 	src := AssembleTreeWregSource(
 		treeRelSlash,
-		heavy,
 		UnifiedRegistryImportForTree(treeRel),
 		UnifiedAllLeavesImportForTree(treeRel),
 		WorkspaceRegistryImport(),

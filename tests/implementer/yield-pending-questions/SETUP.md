@@ -29,7 +29,7 @@ import (
 
 func Setup(t *testing.T, req *Request) error {
     req.Env = append(req.Env, "TEST_GROUP=yield-pending-questions")
-    req.Bin = os.Getenv("YIELD_PQ_BIN")
+    req.Bin = req.YieldPQBin
     return nil
 }
 ```

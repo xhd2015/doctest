@@ -14,7 +14,7 @@ import (
 
 func Setup(t *testing.T, req *Request) error {
     _ = req
-    runType = "find_dot_dot_dot_dirs"
+    req.RunType = "find_dot_dot_dot_dirs"
     return nil
 }
 ```

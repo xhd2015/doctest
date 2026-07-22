@@ -19,7 +19,7 @@ ContentMD5() == md5(libdoc/assertmod/assert.go)
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-	runKind = "assertmod-md5"
+    req.RunKind = "assertmod-md5"
 	req.SecondRun = false
 	return nil
 }

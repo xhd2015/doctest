@@ -7,7 +7,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 
 	"github.com/xhd2015/doctest/libdoc/core"
@@ -379,8 +378,7 @@ func (ctx *generateContext) writeUnifiedCases(cases []core.TreeCase, compileOnly
 	}
 	// Workspace registration plane: each tree's __wreg registers into
 	// __workspace/__registry (fan-in rewritten when multi-root runs).
-	heavy := pathLooksHeavySelftestTree(ctx.absRoot)
-	if err := core.WriteTreeWreg(ctx.genRoot, treeRel, heavy); err != nil {
+	if err := core.WriteTreeWreg(ctx.genRoot, treeRel); err != nil {
 		return fmt.Errorf("write tree wreg: %w", err)
 	}
 	if ctx.verbose && ctx.w != nil {
@@ -396,18 +394,6 @@ func (ctx *generateContext) writeUnifiedCases(cases []core.TreeCase, compileOnly
 		}
 	}
 	return core.FlushGenManifest(ctx.genRoot)
-}
-
-// pathLooksHeavySelftestTree mirrors path_resolve heavy trees (…/doctest/tests/…)
-// without importing path_resolve (avoid cycles). Used for TreeEntry.Heavy.
-func pathLooksHeavySelftestTree(absRoot string) bool {
-	abs, err := filepath.Abs(absRoot)
-	if err != nil {
-		return false
-	}
-	sep := string(filepath.Separator)
-	marker := sep + "doctest" + sep + "tests"
-	return strings.HasSuffix(abs, marker) || strings.Contains(abs, marker+sep)
 }
 
 func (ctx *generateContext) syncDump() error {

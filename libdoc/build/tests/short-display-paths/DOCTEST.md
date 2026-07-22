@@ -57,6 +57,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
 	"github.com/xhd2015/doctest/libdoc/build"
 	"github.com/xhd2015/doctest/libdoc/core"
 )
@@ -72,7 +73,16 @@ type Response struct {
 	TestErr		error
 }
 func Run(t *testing.T, req *Request) (*Response, error) {
-	saveAndRestoreCwd(t)
+	// DisplayPath shortens relative to process cwd. This tree needs a real
+	// project cwd; os.Chdir is process-global (not Parallel-safe across trees).
+	// Prefer labeling this tree out of concurrent light-tree Parallel, or
+	// redesign DisplayPath tests without cwd. Never t.Chdir.
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(wd) }()
+
 	projRoot := t.TempDir()
 	testRoot := createMinimalTree(t, projRoot)
 	if err := os.Chdir(projRoot); err != nil {

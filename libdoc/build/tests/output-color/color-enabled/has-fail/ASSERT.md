@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - `build.Test` fails (one failing package).
 - First dot (pass) is plain; second dot (fail) has ANSI red.

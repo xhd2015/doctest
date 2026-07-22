@@ -24,13 +24,13 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("exit code = %d\nstderr:\n%s", resp.ExitCode, resp.Stderr)
     }
 
-    sessionsDir := sessionsDir()
+    sessionsDir := sessionsDir(req)
 
     today := time.Now().Format("2006/01/02")
     dateDir := filepath.Join(sessionsDir, today)
 
     sessDir := ""
-    metaPath := findSessionMeta(t, "main_agent_codex_thread_id", "impl_test_events_match")
+    metaPath := findSessionMeta(t, req, "main_agent_codex_thread_id", "impl_test_events_match")
     if metaPath == "" {
         t.Fatal("no session found for impl_test_events_match")
     }

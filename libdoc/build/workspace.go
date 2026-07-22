@@ -292,6 +292,9 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	if opts.Cover {
 		flagArgs = append(flagArgs, "-cover")
 	}
+	if opts.Race {
+		flagArgs = append(flagArgs, "-race")
+	}
 
 	displayArgs := displayGoArgs(append(append([]string(nil), flagArgs...), packageArgs...))
 	if opts.Verbose {

@@ -43,7 +43,7 @@ func Setup(t *testing.T, req *Request) error {
     createDoctestTree(t, treeDir, true)
     runCmd(t, repoDir, nil, "git", "add", "tests/greet")
 
-    yieldPQ := os.Getenv("YIELD_PQ_BIN")
+    yieldPQ := req.YieldPQBin
     if yieldPQ == "" {
         t.Fatal("YIELD_PQ_BIN not set")
     }

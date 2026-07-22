@@ -21,7 +21,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("exit code = %d, want 0\nstderr:\n%s", resp.ExitCode, resp.Stderr)
     }
 
-    metaPath := findSessionMeta(t, "explicit_session_id", "my-sess-flag")
+    metaPath := findSessionMeta(t, req, "explicit_session_id", "my-sess-flag")
     if metaPath == "" {
         t.Fatal("no session found with explicit_session_id=my-sess-flag")
     }

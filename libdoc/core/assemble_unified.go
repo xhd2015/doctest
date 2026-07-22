@@ -146,6 +146,8 @@ func AssembleUnifiedAllLeavesSource(leafImports []string) string {
 // Warm leaf-cache hits are passed from the outer doctest process via
 // DOCTEST_LEAF_CACHE_SKIP_PATHS (newline-separated tree-relative paths). Those
 // leaves return immediately as pass without calling the leaf body.
+//
+// Every leaf subtest calls t.Parallel().
 func AssembleUnifiedRunAllSource(registryImport, allLeavesImport string) string {
 	var buf strings.Builder
 	buf.WriteString("package ")
@@ -186,6 +188,7 @@ func AssembleUnifiedRunAllSource(registryImport, allLeavesImport string) string 
 	buf.WriteString("\t\t// Encode \"/\" as \"__\" so go test does not nest path segments.\n")
 	buf.WriteString("\t\tname := strings.ReplaceAll(e.Path, \"/\", \"__\")\n")
 	buf.WriteString("\t\tt.Run(name, func(t *testing.T) {\n")
+	buf.WriteString("\t\t\tt.Parallel()\n")
 	buf.WriteString("\t\t\tif _, hit := skip[e.Path]; hit {\n")
 	buf.WriteString("\t\t\t\t// Warm leaf-cache hit: count as pass; outer process counts Cached.\n")
 	buf.WriteString("\t\t\t\treturn\n")

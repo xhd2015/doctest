@@ -159,6 +159,10 @@ type Options struct {
 	OutputDir            string
 	CoverProfile         string
 	Cover                bool
+	// Race forwards -race to go test (data race detector). Opt-in; slower and
+	// often disables go testcache hits. Nested child doctest processes do not
+	// inherit this unless their Args pass -race.
+	Race bool
 }
 
 type ValidationError struct {

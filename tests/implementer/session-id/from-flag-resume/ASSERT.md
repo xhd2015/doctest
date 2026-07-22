@@ -21,7 +21,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("first call exit code = %d, want 0\nstderr:\n%s", resp.ExitCode, resp.Stderr)
     }
 
-    sessDir, metaPath := getSessionDir(t, "explicit_session_id", "resume-flag-777")
+    sessDir, metaPath := getSessionDir(t, req, "explicit_session_id", "resume-flag-777")
     if sessDir == "" {
         t.Fatal("first call did not create a session dir with explicit_session_id=resume-flag-777")
     }
@@ -78,13 +78,13 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("second call stdout missing expected text:\n%s", string(out2))
     }
 
-    count := countSessionDirs(t, "explicit_session_id", "resume-flag-777")
+    count := countSessionDirs(t, req, "explicit_session_id", "resume-flag-777")
     if count != 1 {
         t.Fatalf("expected 1 session dir, got %d (session was not reused)", count)
     }
 
     // Verify opencode_session_id in meta.json is preserved (not overwritten on resume)
-    _, metaPath2 := getSessionDir(t, "explicit_session_id", "resume-flag-777")
+    _, metaPath2 := getSessionDir(t, req, "explicit_session_id", "resume-flag-777")
     if metaPath2 == "" {
         t.Fatal("session dir not found after second call")
     }

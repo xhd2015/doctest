@@ -24,7 +24,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("Run harness error: %v", err)
 	}
 	if resp.Err == nil {
-		t.Fatal("expected error when DOCTEST_SESSION_ID is missing")
+		t.Fatal("expected error when session id is empty")
 	}
 	msg := resp.Err.Error()
 	if !strings.Contains(msg, "DOCTEST_SESSION_ID") && !strings.Contains(strings.ToLower(msg), "session") {

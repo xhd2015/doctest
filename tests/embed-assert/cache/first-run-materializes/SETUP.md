@@ -27,7 +27,7 @@ import (
 var cacheExistedBefore bool
 
 func Setup(t *testing.T, req *Request) error {
-	cacheDir := expectedAssertCacheDir(t)
+	cacheDir := expectedAssertCacheDir(t, req.CacheHome)
 	if _, err := os.Stat(cacheDir); err == nil {
 		cacheExistedBefore = true
 	}

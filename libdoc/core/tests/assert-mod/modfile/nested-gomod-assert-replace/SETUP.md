@@ -20,7 +20,7 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
-	runKind = "write-gomod"
+    req.RunKind = "write-gomod"
 	req.GenDir = t.TempDir()
 	req.ModRoot = t.TempDir()
 	if err := os.WriteFile(filepath.Join(req.ModRoot, "go.mod"), []byte("module example.com/app\n\ngo 1.21\n"), 0644); err != nil {

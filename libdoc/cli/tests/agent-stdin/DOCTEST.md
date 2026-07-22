@@ -56,86 +56,92 @@ doctest test ./libdoc/cli/tests/agent-stdin/
 ```go
 import (
 	"bytes"
-	"io"
+	"context"
+	"errors"
+	"fmt"
 	"os"
+	"os/exec"
+	"strings"
 	"testing"
-	"github.com/xhd2015/doctest/libdoc/cli"
+	"time"
+
 )
 
 type Request struct {
-	Args		[]string
-	Stdin		string
-	StdinSource	string
-	ReqContent	string
+	Args        []string
+	Stdin       string
+	StdinSource string // "pipe" | "devnull" | ""
+	ReqContent  string
+	Bin         string
+	Timeout     time.Duration
 }
 type Response struct {
-	Err	error
-	Stdout	string
-	Stderr	string
+	Err    error
+	Stdout string
+	Stderr string
+	ExitCode int
 }
-func Run(t *testing.T, req *Request) (*Response, error) {
-	oldStdin := os.Stdin
-	defer func() { os.Stdin = oldStdin }()
 
+func Run(t *testing.T, req *Request) (*Response, error) {
+	// Subprocess isolation: feed stdin via cmd.Stdin; never mutate os.Stdin/Stdout/Stderr.
+	bin := req.Bin
+	if bin == "" {
+		return nil, fmt.Errorf("req.Bin is not set")
+	}
+	timeout := req.Timeout
+	if timeout == 0 {
+		timeout = 60 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, bin, req.Args...)
 	switch req.StdinSource {
 	case "pipe":
-		r, w, err := os.Pipe()
-		if err != nil {
-			return nil, err
-		}
-		if req.Stdin != "" {
-			if _, err := w.WriteString(req.Stdin); err != nil {
-				w.Close()
-				r.Close()
-				return nil, err
-			}
-		}
-		w.Close()
-		os.Stdin = r
-		defer r.Close()
+		cmd.Stdin = strings.NewReader(req.Stdin)
 	case "devnull":
 		f, err := os.Open(os.DevNull)
 		if err != nil {
 			return nil, err
 		}
-		os.Stdin = f
 		defer f.Close()
+		cmd.Stdin = f
+	default:
+		cmd.Stdin = nil
 	}
-
-	oldStdout := os.Stdout
-	rOut, wOut, err := os.Pipe()
-	if err != nil {
-		return nil, err
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	runErr := cmd.Run()
+	resp := &Response{
+		Stdout: stdout.String(),
+		Stderr: stderr.String(),
 	}
-	os.Stdout = wOut
-
-	oldStderr := os.Stderr
-	rErr, wErr, err := os.Pipe()
-	if err != nil {
-		wOut.Close()
-		rOut.Close()
-		return nil, err
+	if cmd.ProcessState != nil {
+		resp.ExitCode = cmd.ProcessState.ExitCode()
 	}
-	os.Stderr = wErr
-
-	cliErr := cli.Run(req.Args)
-
-	wOut.Close()
-	wErr.Close()
-
-	var stdoutBuf, stderrBuf bytes.Buffer
-	io.Copy(&stdoutBuf, rOut)
-	io.Copy(&stderrBuf, rErr)
-	rOut.Close()
-	rErr.Close()
-
-	os.Stdout = oldStdout
-	os.Stderr = oldStderr
-
-	return &Response{
-		Err:	cliErr,
-		Stdout:	stdoutBuf.String(),
-		Stderr:	stderrBuf.String(),
-	}, nil
+	if runErr != nil {
+		var exitErr *exec.ExitError
+		if errors.As(runErr, &exitErr) {
+			msg := strings.TrimSpace(resp.Stderr)
+			if msg == "" {
+				msg = runErr.Error()
+			}
+			lines := strings.Split(msg, "\n")
+			for i := len(lines) - 1; i >= 0; i-- {
+				if s := strings.TrimSpace(lines[i]); s != "" {
+					msg = s
+					break
+				}
+			}
+			resp.Err = errors.New(msg)
+			return resp, nil
+		}
+		if ctx.Err() != nil {
+			return resp, ctx.Err()
+		}
+		return resp, runErr
+	}
+	return resp, nil
 }
 ```

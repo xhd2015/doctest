@@ -227,6 +227,9 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	if opts.Cover {
 		flagArgs = append(flagArgs, "-cover")
 	}
+	if opts.Race {
+		flagArgs = append(flagArgs, "-race")
+	}
 
 	displayArgs := displayGoArgs(append(append([]string(nil), flagArgs...), packageArgs...))
 	if opts.Verbose {
@@ -678,7 +681,7 @@ func lockGoTestModule(runDir string) func() {
 func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionID, goCache, nestSink, leafSkipPaths string, stdout io.Writer, style colorStyle, verbose bool) (goTestJSONResult, error) {
 	// Single go test process per tree. Package sharding multiplies nested
 	// self-test fan-out and has raced go.mod; wall cut is tree concurrency +
-	// heavy/light scheduling in path_resolve.
+	// suite-level t.Parallel.
 	workers := 1
 	shards := packageTestShards(packageArgs, workers)
 	if len(shards) <= 1 {

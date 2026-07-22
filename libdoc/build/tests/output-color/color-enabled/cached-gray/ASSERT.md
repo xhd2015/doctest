@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - Second `build.Test` run reports `1 Cached` in the summary.
 - The `1 Cached` and `0 Fail` segments are wrapped in gray ANSI codes.

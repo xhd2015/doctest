@@ -19,7 +19,7 @@
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-	runKind = "detect"
+    req.RunKind = "detect"
 	req.ModPath = "example.com/app"
 	return nil
 }

@@ -66,6 +66,7 @@ import (
 )
 
 type Request struct {
+	RunKind	string
 	Cases		[]core.TreeCase
 	GenDir		string
 	ModRoot		string
@@ -87,7 +88,7 @@ type Response struct {
 	ModfileContent	string
 }
 func Run(t *testing.T, req *Request) (*Response, error) {
-	switch runKind {
+	switch req.RunKind {
 	case "detect":
 		return &Response{Detected: core.CasesImportAssertPackage(req.Cases, req.ModPath)}, nil
 	case "materialize":
@@ -116,7 +117,7 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 		}
 		return &Response{ModfilePath: path, ModfileContent: string(data)}, nil
 	default:
-		t.Fatalf("unknown runKind: %s", runKind)
+		t.Fatalf("unknown req.RunKind: %s", req.RunKind)
 		return nil, nil
 	}
 }

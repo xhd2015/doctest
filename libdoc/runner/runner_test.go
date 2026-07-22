@@ -238,6 +238,26 @@ func TestParseTestOptionsTimeoutInvalid(t *testing.T) {
 	}
 }
 
+func TestParseTestOptionsRace(t *testing.T) {
+	opts, remain, err := parseTestOptions([]string{"-race", "somedir"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !opts.Race {
+		t.Fatal("expected Race true")
+	}
+	if len(remain) != 1 || remain[0] != "somedir" {
+		t.Fatalf("remain=%v", remain)
+	}
+	optsOff, _, err := parseTestOptions([]string{"somedir"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if optsOff.Race {
+		t.Fatal("expected Race false by default")
+	}
+}
+
 func TestParseTestOptionsLabelAll(t *testing.T) {
 	opts, remain, err := parseTestOptions([]string{"--label-all", "somedir"})
 	if err != nil {

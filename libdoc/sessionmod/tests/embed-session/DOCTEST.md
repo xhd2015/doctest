@@ -59,6 +59,7 @@ import (
 )
 
 type Request struct {
+	RunKind	string
 	ModuleRoot string
 }
 
@@ -71,7 +72,7 @@ type Response struct {
 }
 
 func Run(t *testing.T, req *Request) (*Response, error) {
-	switch runKind {
+	switch req.RunKind {
 	case "sessionmod-md5":
 		// Prefer generated session.go (or equivalent) next to embed.go.
 		candidates := []string{
@@ -101,7 +102,7 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 			ContentLen:      len(sessionmod.Content()),
 		}, nil
 	default:
-		t.Fatalf("unknown runKind: %s", runKind)
+		t.Fatalf("unknown req.RunKind: %s", req.RunKind)
 		return nil, nil
 	}
 }

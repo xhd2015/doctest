@@ -17,5 +17,4 @@ import (
 	"github.com/xhd2015/doctest/libdoc/path_resolve"
 )
 
-var runType string
 ```

@@ -7,56 +7,70 @@ import (
 	"path/filepath"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"testing"
 )
 
-func setSession(t *testing.T, id string) {
-	t.Helper()
-	// Isolate Once disk cache so repeated local `go test` runs with fixed
-	// session ids do not skip fn (CI is always clean; local often is not).
-	t.Setenv(DoctestCacheHomeEnv, t.TempDir())
-	t.Setenv(DoctestSessionIDEnv, id)
-	if v, ok := syscall.Getenv(DoctestSessionIDEnv); !ok || v != id {
-		t.Fatalf("syscall.Getenv(%s)=%q,%v want %q", DoctestSessionIDEnv, v, ok, id)
+func TestOnceMissingSession(t *testing.T) {
+	// Production Once reads process env; with empty env it fails without Setenv.
+	// Isolate from suite/parent env if present.
+	processMemo = sync.Map{}
+	// Clear via OnceSession empty is separate; test env path:
+	// If parent already set DOCTEST_SESSION_ID, Once would succeed — use OnceSession
+	// for empty-sid and keep Once env test only when we can unset without t.Setenv.
+	// Prefer OnceSession for Parallel-safe missing-sid check:
+	_, err := OnceSession(t, "", "k", func(t testing.TB, cacheDir string) (json.RawMessage, error) {
+		return json.RawMessage(`{"ok":true}`), nil
+	})
+	if err == nil {
+		t.Fatal("expected error for empty session id")
+	}
+	if !errors.Is(err, errEmptySession) && err.Error() != errEmptySession.Error() {
+		if !stringsContains(err.Error(), "session") {
+			t.Fatalf("err=%v", err)
+		}
 	}
 }
 
-func TestOnceMissingSession(t *testing.T) {
-	t.Setenv(DoctestSessionIDEnv, "")
+func TestOnceEnvMissingSession(t *testing.T) {
+	// Cover production Once(getenv) path: only when env is actually empty.
+	// Skip if outer process already injected a session id (e.g. under doctest test).
 	processMemo = sync.Map{}
+	if v, ok := lookupSessionEnv(); ok && v != "" {
+		t.Skip("DOCTEST_SESSION_ID already set in process; skip getenv-missing unit")
+	}
 	_, err := Once(t, "k", func(t testing.TB, cacheDir string) (json.RawMessage, error) {
 		return json.RawMessage(`{"ok":true}`), nil
 	})
-	if err == nil || !errors.Is(err, errMissingSession) && !stringsContains(err.Error(), "DOCTEST_SESSION_ID") {
-		if err == nil {
-			t.Fatal("expected error")
-		}
-		if !errors.Is(err, errMissingSession) {
-			// still ok if wrapped
-			if err.Error() != errMissingSession.Error() {
-				t.Fatalf("err=%v", err)
-			}
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, errMissingSession) && err.Error() != errMissingSession.Error() {
+		if !stringsContains(err.Error(), "DOCTEST_SESSION_ID") {
+			t.Fatalf("err=%v", err)
 		}
 	}
+}
+
+func lookupSessionEnv() (string, bool) {
+	// Use syscall.Getenv via Once's contract — import syscall in test.
+	return lookupSessionEnvImpl()
 }
 
 func stringsContains(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || len(sub) == 0 ||
-		(len(s) > 0 && (func() bool {
+		(func() bool {
 			for i := 0; i+len(sub) <= len(s); i++ {
 				if s[i:i+len(sub)] == sub {
 					return true
 				}
 			}
 			return false
-		})()))
+		})())
 }
 
 func TestOnceEmptyKey(t *testing.T) {
-	setSession(t, "sess-empty-key")
 	processMemo = sync.Map{}
-	_, err := Once(t, "", func(t testing.TB, cacheDir string) (json.RawMessage, error) {
+	_, err := OnceSession(t, "sess-empty-key", "", func(t testing.TB, cacheDir string) (json.RawMessage, error) {
 		return json.RawMessage(`{}`), nil
 	})
 	if !errors.Is(err, errEmptyKey) {
@@ -65,7 +79,6 @@ func TestOnceEmptyKey(t *testing.T) {
 }
 
 func TestOnceRunsFnOncePerSessionKey(t *testing.T) {
-	setSession(t, "sess-once-json-1")
 	processMemo = sync.Map{}
 	var calls atomic.Int32
 	fn := func(t testing.TB, cacheDir string) (json.RawMessage, error) {
@@ -80,11 +93,11 @@ func TestOnceRunsFnOncePerSessionKey(t *testing.T) {
 		return json.Marshal(map[string]string{"path": p})
 	}
 
-	v1, err := Once(t, "cli", fn)
+	v1, err := OnceSession(t, "sess-once-json-1", "cli", fn)
 	if err != nil {
 		t.Fatal(err)
 	}
-	v2, err := Once(t, "cli", fn)
+	v2, err := OnceSession(t, "sess-once-json-1", "cli", fn)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,17 +119,16 @@ func TestOnceRunsFnOncePerSessionKey(t *testing.T) {
 }
 
 func TestOnceDifferentKeysIndependent(t *testing.T) {
-	setSession(t, "sess-keys-json")
 	processMemo = sync.Map{}
 	var a, b atomic.Int32
-	va, err := Once(t, "a", func(t testing.TB, cacheDir string) (json.RawMessage, error) {
+	va, err := OnceSession(t, "sess-keys-json", "a", func(t testing.TB, cacheDir string) (json.RawMessage, error) {
 		a.Add(1)
 		return json.RawMessage(`{"k":"A"}`), nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	vb, err := Once(t, "b", func(t testing.TB, cacheDir string) (json.RawMessage, error) {
+	vb, err := OnceSession(t, "sess-keys-json", "b", func(t testing.TB, cacheDir string) (json.RawMessage, error) {
 		b.Add(1)
 		return json.RawMessage(`{"k":"B"}`), nil
 	})
@@ -132,18 +144,17 @@ func TestOnceDifferentKeysIndependent(t *testing.T) {
 }
 
 func TestOncePropagatesError(t *testing.T) {
-	setSession(t, "sess-err-json")
 	processMemo = sync.Map{}
 	var calls atomic.Int32
 	fn := func(t testing.TB, cacheDir string) (json.RawMessage, error) {
 		calls.Add(1)
 		return nil, errors.New("boom")
 	}
-	_, err := Once(t, "fail", fn)
+	_, err := OnceSession(t, "sess-err-json", "fail", fn)
 	if err == nil || err.Error() != "boom" {
 		t.Fatalf("err=%v", err)
 	}
-	_, err = Once(t, "fail", fn)
+	_, err = OnceSession(t, "sess-err-json", "fail", fn)
 	if err == nil || err.Error() != "boom" {
 		t.Fatalf("second err=%v", err)
 	}

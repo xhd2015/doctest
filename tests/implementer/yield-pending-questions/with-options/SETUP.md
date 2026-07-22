@@ -33,7 +33,7 @@ import (
 func Setup(t *testing.T, req *Request) error {
     qFile := filepath.Join(t.TempDir(), "questions.jsonl")
     req.Env = append(req.Env, "QUESTION_FIFO="+qFile)
-    os.Setenv("TEST_Q_FILE", qFile)
+    req.TestQFile = qFile
     req.Args = []string{`{"id":"1","question":"What is the target port?","options":[{"option":"3000","explanation":"default development port"},{"option":"8080","explanation":"common HTTP alternative"}]}`}
     return nil
 }

@@ -18,7 +18,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("exit code = %d, want 0\nstderr:\n%s", resp.ExitCode, resp.Stderr)
     }
 
-    metaPath := findSessionMeta(t, "doctest_agent_implementer_session_id", "store-prio-1")
+    metaPath := findSessionMeta(t, req, "doctest_agent_implementer_session_id", "store-prio-1")
     if metaPath == "" {
         t.Fatal("no session found with doctest_agent_implementer_session_id=store-prio-1")
     }

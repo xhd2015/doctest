@@ -63,29 +63,11 @@ const (
 	tidyDoneName    = "doctest.tidy-done"
 )
 
-// Package snapshots: Setup records "before" state for warm/second-call leaves;
-// fillResponse copies them into Response for Assert.
-var (
-	snapGoModMtimeBefore    time.Time
-	snapManifestMtimeBefore time.Time
-	snapTargetMtimeBefore   time.Time
-	snapManifestEntryBefore string
-	snapGoModContentBefore  string
-	snapManifestContentBefore string
-)
-
-func resetSnapshots() {
-	snapGoModMtimeBefore = time.Time{}
-	snapManifestMtimeBefore = time.Time{}
-	snapTargetMtimeBefore = time.Time{}
-	snapManifestEntryBefore = ""
-	snapGoModContentBefore = ""
-	snapManifestContentBefore = ""
-}
+// Snapshots live on req (Snap* fields) so Parallel leaves do not share package state.
 
 func Setup(t *testing.T, req *Request) error {
-	resetSnapshots()
 	// Defaults; leaves override Mode / paths / flags.
+	// Do not wipe Snap* here — each leaf's req starts zeroed; ancestors set what they need.
 	if req.ModPath == "" {
 		req.ModPath = "example.com/app"
 	}
@@ -211,10 +193,10 @@ func fillResponse(t *testing.T, req *Request, resp *Response) {
 	resp.ManifestExists = fileExists(manFile)
 	resp.GomodFpExists = fileExists(filepath.Join(req.GenDir, gomodFpName))
 	resp.TidyDoneExists = fileExists(filepath.Join(req.GenDir, tidyDoneName))
-	resp.GoModMtimeBefore = snapGoModMtimeBefore
-	resp.ManifestMtimeBefore = snapManifestMtimeBefore
-	resp.TargetMtimeBefore = snapTargetMtimeBefore
-	resp.ManifestEntryBefore = snapManifestEntryBefore
+	resp.GoModMtimeBefore = req.SnapGoModMtimeBefore
+	resp.ManifestMtimeBefore = req.SnapManifestMtimeBefore
+	resp.TargetMtimeBefore = req.SnapTargetMtimeBefore
+	resp.ManifestEntryBefore = req.SnapManifestEntryBefore
 	if st, err := os.Stat(modFile); err == nil {
 		resp.GoModMtimeAfter = st.ModTime()
 	}
@@ -270,8 +252,8 @@ func firstWriteGoMod(t *testing.T, req *Request) {
 func snapshotGoModMtime(t *testing.T, req *Request) {
 	t.Helper()
 	p := filepath.Join(req.GenDir, "go.mod")
-	snapGoModMtimeBefore = forceOldMtime(t, p)
-	snapGoModContentBefore = readFileOrEmpty(p)
+	req.SnapGoModMtimeBefore = forceOldMtime(t, p)
+	req.SnapGoModContentBefore = readFileOrEmpty(p)
 }
 
 func snapshotManifestMtime(t *testing.T, req *Request) {
@@ -281,9 +263,9 @@ func snapshotManifestMtime(t *testing.T, req *Request) {
 		// Pre-implementation: leave zero; Assert fails on existence/mtime.
 		return
 	}
-	snapManifestMtimeBefore = forceOldMtime(t, p)
-	snapManifestContentBefore = readFileOrEmpty(p)
-	snapManifestEntryBefore = findManifestLine(snapManifestContentBefore, "go.mod")
+	req.SnapManifestMtimeBefore = forceOldMtime(t, p)
+	req.SnapManifestContentBefore = readFileOrEmpty(p)
+	req.SnapManifestEntryBefore = findManifestLine(req.SnapManifestContentBefore, "go.mod")
 }
 
 func snapshotTargetMtime(t *testing.T, req *Request) {
@@ -292,12 +274,12 @@ func snapshotTargetMtime(t *testing.T, req *Request) {
 		t.Fatalf("snapshotTargetMtime: RelPath required")
 	}
 	abs := filepath.Join(req.GenDir, filepath.FromSlash(req.RelPath))
-	snapTargetMtimeBefore = forceOldMtime(t, abs)
+	req.SnapTargetMtimeBefore = forceOldMtime(t, abs)
 	man := readFileOrEmpty(manifestPath(req.GenDir))
-	snapManifestEntryBefore = findManifestLine(man, req.RelPath)
-	snapManifestContentBefore = man
+	req.SnapManifestEntryBefore = findManifestLine(man, req.RelPath)
+	req.SnapManifestContentBefore = man
 	if fileExists(manifestPath(req.GenDir)) {
-		snapManifestMtimeBefore = forceOldMtime(t, manifestPath(req.GenDir))
+		req.SnapManifestMtimeBefore = forceOldMtime(t, manifestPath(req.GenDir))
 	}
 }
 

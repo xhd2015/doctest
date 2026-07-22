@@ -118,6 +118,10 @@ Return absolute paths for every tree and node you discuss.
    - For each leaf with signals, check canonical labels from the design spec:
      `slow`, `heavy`, `flaky`, `manual`, `ui-automation` (domain labels like `integration`
      are fine but do not replace run-profile labels).
+   - **Parallel hazard (scan Setup/Run/Assert Go):** `t.Setenv`, `t.Chdir`,
+     `os.Setenv`/`os.Unsetenv`, `os.Chdir` (and same-class `syscall.Setenv` /
+     `syscall.Unsetenv`) — see **NOTE: no process-global env/cwd in suite harness**
+     below. Flag **major**.
    - Severity rules:
      - Signals present, no `label` → **major** (runs in discovery when it should skip)
      - `label: flaky` or `label: manual` with empty `explanation` → **major**
@@ -179,6 +183,73 @@ Return absolute paths for every tree and node you discuss.
 - [ ] Expensive leaves grouped under `e2e/`, `slow/`, `integration/`, or similar — not mixed unlabeled among fast siblings
 - [ ] Root **How to Run** documents discovery skip and `--label` / explicit-leaf run commands when labeled leaves exist
 
+### Parallel safety (suite)
+- [ ] Setup/Run/Assert and harness helpers avoid `t.Setenv`, `t.Chdir`, `os.Setenv` /
+      `os.Unsetenv`, `os.Chdir` (see **NOTE** below)
+- [ ] Same-class `syscall.Setenv` / `syscall.Unsetenv` avoided (or flagged **major**)
+- [ ] Env isolation uses child-process `cmd.Env` only — never parent process Setenv
+- [ ] Working-directory needs use explicit paths on `req` / `cmd.Dir`, not Chdir
+- [ ] Race-sensitive changes validated with `doctest test … -race` when practical
+
+## NOTE: no process-global env/cwd in suite harness (suite is parallel)
+
+**Do not use process-global env or cwd mutation in doctest trees** (root/ancestor
+`SETUP.md`, leaf Setup, `Run`, Assert, or shared harness helpers).
+
+**Suite harness code must assume concurrent leaves/trees.** Process-global
+mutation is never a valid isolation model — whether or not a given run currently
+calls `t.Parallel()` on every subtest. Prepare already multi-workers light trees;
+workspace suites may Parallel light trees; leaves may Parallel. Code that only
+“works when serial” is a bug.
+
+### Forbidden APIs (hard ban — **major**)
+
+| API | Why |
+|-----|-----|
+| **`t.Setenv`** | Process env + testing restore; **panics** with `t.Parallel` |
+| **`t.Chdir`** | Process cwd + testing restore; **panics** with `t.Parallel` |
+| **`os.Setenv` / `os.Unsetenv`** | Process env races under concurrent leaves/trees |
+| **`os.Chdir`** | Process cwd races under concurrent leaves/trees |
+
+Go panic (t-forms only):
+
+```text
+panic: testing: test using t.Setenv or t.Chdir can not use t.Parallel
+```
+
+**Same class (flag major):** `syscall.Setenv` / `syscall.Unsetenv` — still
+process-global env races (common loophole when avoiding `t.Setenv` for testlog
+reasons). Prefer rewrite over “special-case serial forever.”
+
+### Prefer
+
+- Pass env to **child processes only** (`exec.Cmd.Env`) when spawning `doctest` /
+  `go test` / product binaries — **do not** mutate the parent test process env
+- Prefer **absolute paths** and `cmd.Dir` / `req.WorkDir` over changing cwd
+- For parent-side Assert path checks, put paths on **`req` fields** (e.g. `req.Home`,
+  `req.SessionHome`, `req.CacheHome`), not process env Assert re-reads via `os.Getenv`
+- For true shared package state, use **mutex / `sync.Once`**, or better **per-leaf
+  fields on `req`** — never Setenv as “safe isolation”
+
+### Wrong “fix” (do not do this)
+
+```text
+// BAD — still process-global; still races Parallel; still wrong architecture
+os.Setenv(k, v); defer os.Setenv(k, old)   // or t.Setenv / syscall.Setenv
+// under mutex or not — if the product is only testable by mutating parent env,
+// run it as a subprocess with cmd.Env instead.
+```
+
+**Review severity:** any of the forbidden APIs in Setup/Run/Assert → **major**.
+Prefer rewriting over “run this tree serial forever.”
+
+**Detect races:** `doctest test <scope> -race` forwards `-race` to the suite
+`go test` (opt-in; slower / often 0 Cached). Nested child `doctest test` inside
+a leaf does **not** inherit `-race` unless that leaf passes it.
+
+**Related:** default-suite wall-clock and race hygiene live under
+`doctest skill review-perf --show` / `doc/DOCTEST_REVIEW_PERF.md`.
+
 ## Guidelines
 
 - Prefer evidence over opinion — cite dir names, DSN quotes, and sibling lists.
@@ -203,6 +274,9 @@ Return absolute paths for every tree and node you discuss.
 - `explanation` describing manual/slow intent but no `label` — leaf still runs in discovery
 - `label: [slow, ui]` YAML sequence instead of comma-separated scalar — wrong frontmatter shape
 - Expensive leaves at the same tree level as fast unit-style leaves without labels or grouping
+- **`t.Setenv` / `t.Chdir` / `os.Setenv` / `os.Unsetenv` / `os.Chdir` in Setup/Run/Assert**
+  (and same-class `syscall.Setenv`) — process-global env/cwd; suite is parallel;
+  see **NOTE** above — **major**
 - Product output must include doctest matcher DSL syntax to satisfy a test — likely assertion bug, **major**
 - `## Expected Output` is not a plausible terminal transcript or user-facing output sketch — **major**
 

@@ -28,7 +28,7 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
-    sessHome := sessionsDir()
+    sessHome := sessionsDir(req)
     os.MkdirAll(sessHome, 0755)
     os.RemoveAll(sessHome)
     os.MkdirAll(sessHome, 0755)

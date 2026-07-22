@@ -55,22 +55,9 @@ func RunForDirsLimit(basePath string, workers int, fn func(dir string) error) er
 	if len(dirs) == 0 {
 		return ErrNoTestsFound
 	}
-	// Two-phase scheduling: light trees first (high fan-out), then heavy
-	// nested-CLI trees (serialized). Mixing them inflates the main tests/
-	// tree from ~2m to 4m+ via CPU thrash.
-	var light, heavy []string
-	for _, d := range dirs {
-		if isHeavySelftestTree(d) {
-			heavy = append(heavy, d)
-		} else {
-			light = append(light, d)
-		}
-	}
-	sort.SliceStable(light, func(i, j int) bool {
-		return estimateTreeWeight(light[i]) > estimateTreeWeight(light[j])
-	})
-	sort.SliceStable(heavy, func(i, j int) bool {
-		return estimateTreeWeight(heavy[i]) > estimateTreeWeight(heavy[j])
+	// Heavier trees first so long work starts early under the worker pool.
+	sort.SliceStable(dirs, func(i, j int) bool {
+		return estimateTreeWeight(dirs[i]) > estimateTreeWeight(dirs[j])
 	})
 
 	var errs []string
@@ -81,13 +68,8 @@ func RunForDirsLimit(basePath string, workers int, fn func(dir string) error) er
 		errs = append(errs, dir+": "+err.Error())
 	}
 
-	// Phase 1: light trees in parallel.
-	if err := runDirsParallel(light, workers, fn, appendErr); err != nil {
+	if err := runDirsParallel(dirs, workers, fn, appendErr); err != nil {
 		return err
-	}
-	// Phase 2: heavy trees one at a time (full CPU for nested self-tests).
-	for _, dir := range heavy {
-		appendErr(dir, fn(dir))
 	}
 	if len(errs) > 0 {
 		sort.Strings(errs)
@@ -135,23 +117,6 @@ func runDirsParallel(dirs []string, workers int, fn func(string) error, onErr fu
 	}
 	wg.Wait()
 	return nil
-}
-
-// isHeavySelftestTree reports trees under the module's integration suite
-// (…/doctest/tests/…), which shell out to the doctest binary extensively.
-// Pure assert/libdoc/session trees are light and may run freely in parallel.
-func isHeavySelftestTree(dir string) bool {
-	abs, err := filepath.Abs(dir)
-	if err != nil {
-		return false
-	}
-	// Match …/doctest/tests and …/doctest/tests/…
-	sep := string(filepath.Separator)
-	marker := sep + "doctest" + sep + "tests"
-	if strings.HasSuffix(abs, marker) || strings.Contains(abs, marker+sep) {
-		return true
-	}
-	return false
 }
 
 // estimateTreeWeight approximates tree cost by counting ASSERT.md leaves (cheap walk).

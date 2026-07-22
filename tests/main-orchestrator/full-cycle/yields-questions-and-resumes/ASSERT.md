@@ -25,7 +25,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("stdout missing question text:\n%s", resp.Stdout)
     }
 
-    sessionHome := os.Getenv("DOCTEST_DEBUG_SESSION_HOME")
+    sessionHome := req.SessionHome
     if sessionHome == "" {
         t.Fatal("DOCTEST_DEBUG_SESSION_HOME not set")
     }

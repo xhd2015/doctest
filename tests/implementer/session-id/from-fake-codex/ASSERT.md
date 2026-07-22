@@ -20,7 +20,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("exit code = %d, want 0\nstderr:\n%s", resp.ExitCode, resp.Stderr)
     }
 
-    metaPath := findSessionMeta(t, "main_agent_codex_thread_id", "codex-tid-222")
+    metaPath := findSessionMeta(t, req, "main_agent_codex_thread_id", "codex-tid-222")
     if metaPath == "" {
         t.Fatal("no session found with main_agent_codex_thread_id=codex-tid-222")
     }

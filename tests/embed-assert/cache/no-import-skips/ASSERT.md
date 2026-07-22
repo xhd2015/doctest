@@ -16,7 +16,7 @@ import (
 )
 
 func Assert(t *testing.T, req *Request, resp *Response, err error) {
-	cacheDir := expectedAssertCacheDir(t)
+	cacheDir := expectedAssertCacheDir(t, req.CacheHome)
 	if _, statErr := os.Stat(cacheDir); statErr != nil {
 		t.Fatalf("assert-mod cache should be created even without author assert import: %s: %v\nstdout:\n%s\nstderr:\n%s",
 			cacheDir, statErr, resp.Stdout, resp.Stderr)

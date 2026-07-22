@@ -13,7 +13,7 @@ import (
 
 func Setup(t *testing.T, req *Request) error {
     _ = req
-    runType = "is_dot_dot_dot_pattern"
+    req.RunType = "is_dot_dot_dot_pattern"
     return nil
 }
 ```

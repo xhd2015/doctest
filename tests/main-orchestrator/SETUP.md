@@ -63,8 +63,9 @@ func Setup(t *testing.T, d *session.Doctest, req *Request) error {
         "DOCTEST_DEBUG_SESSION_HOME="+sessionHome,
     )
     req.Bin = doctestBin
-    os.Setenv("YIELD_PQ_BIN", yieldPQ)
-    os.Setenv("DOCTEST_DEBUG_SESSION_HOME", sessionHome)
+    req.SessionHome = sessionHome
+    req.YieldPQBin = yieldPQ
+    // Child-only env via req.Env — never parent os.Setenv.
     req.Timeout = 60 * time.Second
     return nil
 }

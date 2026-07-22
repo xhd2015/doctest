@@ -41,17 +41,7 @@ import (
 	"github.com/xhd2015/doctest/libdoc/testtree"
 )
 
-func saveAndRestoreCwd(t *testing.T) string {
-	t.Helper()
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(wd)
-	})
-	return wd
-}
+// Cwd changes for DisplayPath live in root Run under proclock.Mu (not t.Chdir).
 func writeFile(t *testing.T, root string, rel string, content string) {
 	t.Helper()
 	path := filepath.Join(root, rel)

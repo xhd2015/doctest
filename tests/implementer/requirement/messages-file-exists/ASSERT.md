@@ -14,7 +14,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("exit code = %d, want 0\nstderr:\n%s", resp.ExitCode, resp.Stderr)
 	}
 
-	sessionDir, _ := getSessionDir(t, "main_agent_codex_thread_id", "codex-tid-333")
+	sessionDir, _ := getSessionDir(t, req, "main_agent_codex_thread_id", "codex-tid-333")
 	if sessionDir == "" {
 		t.Fatal("no session found with main_agent_codex_thread_id=codex-tid-333")
 	}

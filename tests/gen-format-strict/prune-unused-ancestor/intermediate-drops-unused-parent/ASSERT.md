@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - Generate completes enough to write intermediate packages (`IntermediateSetupGo` non-empty preferred).

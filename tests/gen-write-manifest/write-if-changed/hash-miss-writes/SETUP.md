@@ -26,8 +26,8 @@ func Setup(t *testing.T, req *Request) error {
 		t.Fatalf("first writeGenRelFile: %v", err)
 	}
 	man := readFileOrEmpty(manifestPath(req.GenDir))
-	snapManifestEntryBefore = findManifestLine(man, req.RelPath)
-	snapManifestContentBefore = man
+	req.SnapManifestEntryBefore = findManifestLine(man, req.RelPath)
+	req.SnapManifestContentBefore = man
 	return nil
 }
 ```

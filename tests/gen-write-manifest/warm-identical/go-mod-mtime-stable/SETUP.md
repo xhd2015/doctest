@@ -20,7 +20,7 @@ func Setup(t *testing.T, req *Request) error {
 	if req.Mode != "write-gomod-second" {
 		t.Fatalf("go-mod-mtime-stable expects Mode write-gomod-second, got %q", req.Mode)
 	}
-	if snapGoModMtimeBefore.IsZero() {
+	if req.SnapGoModMtimeBefore.IsZero() {
 		t.Fatal("parent warm Setup must snapshot go.mod mtime")
 	}
 	return nil

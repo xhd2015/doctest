@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - `build.Test` succeeds (one passing leaf).
 - Captured stdout contains the summary line but no ANSI escape sequences.

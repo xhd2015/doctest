@@ -13,7 +13,7 @@ import (
 
 func Setup(t *testing.T, req *Request) error {
     _ = req
-    runType = "resolve_root"
+    req.RunType = "resolve_root"
     return nil
 }
 ```

@@ -76,6 +76,10 @@ type Request struct {
 	WorkDir	string
 	Timeout	time.Duration
 	Bin	string
+	// Parent-side paths for helpers/Assert (also put on child Env). Never process Setenv.
+	SessionHome	string
+	YieldPQBin	string
+	TestQFile	string // yield-pending Assert path; not process env
 }
 type Response struct {
 	ExitCode	int

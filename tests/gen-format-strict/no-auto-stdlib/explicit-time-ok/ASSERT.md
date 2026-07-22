@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - Generate + suite `go test` succeed (`resp.RunErr` empty).

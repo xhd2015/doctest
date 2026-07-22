@@ -39,8 +39,6 @@ import (
 
 const assertImportPath = "github.com/xhd2015/doctest/assert"
 
-var runKind string
-
 func Setup(t *testing.T, req *Request) error {
 	req.ModPath = "example.com/app"
 	return nil

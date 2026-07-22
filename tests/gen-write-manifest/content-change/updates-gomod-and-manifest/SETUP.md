@@ -24,8 +24,8 @@ func Setup(t *testing.T, req *Request) error {
 	if req.ChangeSourceGoMod == "" {
 		t.Fatal("parent must set ChangeSourceGoMod for content-change path")
 	}
-	if !strings.Contains(snapGoModContentBefore, "replace localdep") {
-		t.Fatalf("first gen go.mod should include replace localdep, got:\n%s", snapGoModContentBefore)
+	if !strings.Contains(req.SnapGoModContentBefore, "replace localdep") {
+		t.Fatalf("first gen go.mod should include replace localdep, got:\n%s", req.SnapGoModContentBefore)
 	}
 	return nil
 }

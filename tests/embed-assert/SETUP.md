@@ -280,12 +280,16 @@ func assertNestedGoMod(t *testing.T, dir string) {
 		t.Fatalf("expected replace directive for parent module, got:\n%s", goMod)
 	}
 }
-func assertModCacheRoot() (string, error) {
-	cacheDir, err := core.CacheHome()
-	if err != nil {
-		return "", err
+func assertModCacheRoot(cacheHome string) (string, error) {
+	if cacheHome == "" {
+		// Fallback for leaves that do not isolate cache (uses process env / user cache).
+		var err error
+		cacheHome, err = core.CacheHome()
+		if err != nil {
+			return "", err
+		}
 	}
-	return filepath.Join(cacheDir, "doctest", "assert-mod"), nil
+	return filepath.Join(cacheHome, "doctest", "assert-mod"), nil
 }
 func assertAssertReplaceInGoMod(t *testing.T, goModPath string) {
 	t.Helper()
@@ -298,7 +302,7 @@ func assertAssertReplaceInGoMod(t *testing.T, goModPath string) {
 	if !strings.Contains(goMod, needle) {
 		t.Fatalf("expected assert replace in go.mod, got:\n%s", goMod)
 	}
-	cacheRoot, cacheErr := assertModCacheRoot()
+	cacheRoot, cacheErr := assertModCacheRoot("")
 	if cacheErr != nil {
 		t.Fatalf("assert mod cache root: %v", cacheErr)
 	}
@@ -316,17 +320,17 @@ func assertNoAssertReplaceInGoMod(t *testing.T, goModPath string) {
 		t.Fatalf("expected no assert replace in go.mod, got:\n%s", string(data))
 	}
 }
-func expectedAssertCacheDir(t *testing.T) string {
+func expectedAssertCacheDir(t *testing.T, cacheHome string) string {
 	t.Helper()
-	root, err := assertModCacheRoot()
+	root, err := assertModCacheRoot(cacheHome)
 	if err != nil {
 		t.Fatalf("cache root: %v", err)
 	}
 	return filepath.Join(root, assertmod.RawSourceCacheKeyMD5())
 }
-func listAssertModCacheEntries(t *testing.T) []string {
+func listAssertModCacheEntries(t *testing.T, cacheHome string) []string {
 	t.Helper()
-	root, err := assertModCacheRoot()
+	root, err := assertModCacheRoot(cacheHome)
 	if err != nil {
 		t.Fatalf("cache root: %v", err)
 	}

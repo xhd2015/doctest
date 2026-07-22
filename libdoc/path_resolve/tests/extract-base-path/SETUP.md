@@ -13,7 +13,7 @@ import (
 
 func Setup(t *testing.T, req *Request) error {
     _ = req
-    runType = "extract_base_path"
+    req.RunType = "extract_base_path"
     return nil
 }
 ```

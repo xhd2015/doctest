@@ -28,7 +28,7 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
-	cacheDir := expectedAssertCacheDir(t)
+	cacheDir := expectedAssertCacheDir(t, req.CacheHome)
 	_ = os.RemoveAll(cacheDir)
 	createPublicModuleProject(t, "", defaultPublicAssertGo())
 	setupModuleEnv(t, req)

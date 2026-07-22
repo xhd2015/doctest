@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - `build.Test` succeeds (`resp.TestErr` is nil).

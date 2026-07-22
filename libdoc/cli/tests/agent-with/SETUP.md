@@ -1,22 +1,30 @@
 ## Preconditions
-- The `doctest agent with` subcommand is implemented in `libdoc/cli/cli.go`.
-- Tests call the CLI directly via `cli.Run()` after replacing `os.Stdout` and `os.Stderr` with pipes.
+- Integration harness runs the **doctest binary as a subprocess** (`testbin.Ensure`).
+- Scenario env is applied only via `cmd.Env` (child process). Parent process env is never mutated.
 
 ## Steps
-1. Child SETUP.md files set Args and optionally Env.
-2. Run replaces os.Stdout/os.Stderr with pipes (to capture child output), sets request env vars via os.Setenv, then calls `cli.Run(req.Args)`.
-3. Stdout, Stderr, and ExitCode are parsed from the pipes and error.
+1. Root setup resolves `req.Bin` via `testbin.Ensure`.
+2. Child SETUP.md files configure `Args` and optional `Env` (KEY=VAL for the child only).
+3. Run executes `req.Bin` with `req.Args`, `cmd.Env = merge(parentEnviron, req.Env)`, captures stdout/stderr/exit.
 
 ```go
 import (
-	"bytes"
-	"errors"
-	"io"
-	"os"
-	"os/exec"
-	"strings"
+	"path/filepath"
 	"testing"
-	"github.com/xhd2015/doctest/libdoc/cli"
+	"time"
+
+	"github.com/xhd2015/doctest/libdoc/testbin"
+	"github.com/xhd2015/doctest/session"
 )
 
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	if req.Timeout == 0 {
+		req.Timeout = 60 * time.Second
+	}
+	if req.Bin == "" {
+		mod := filepath.Join(d.DOCTEST_ROOT, "..", "..", "..", "..")
+		req.Bin = testbin.Ensure(t, mod)
+	}
+	return nil
+}
 ```

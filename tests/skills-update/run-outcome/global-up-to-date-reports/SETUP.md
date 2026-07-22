@@ -20,7 +20,9 @@ doctest skills update --global -> Skill is up to date for global target
 ```go
 func Setup(t *testing.T, req *Request) error {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	// Child-only HOME — never t.Setenv (Parallel-incompatible).
+	req.Home = home
+	req.Env = append(req.Env, "HOME="+home)
 	req.PreInstalls = []PreInstallCLI{{
 		Args: []string{"skill", "tdd", "--install", "--global"},
 	}}

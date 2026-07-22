@@ -21,7 +21,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("first call exit code = %d, want 0\nstderr:\n%s", resp.ExitCode, resp.Stderr)
     }
 
-    sessDir, metaPath := getSessionDir(t, "main_agent_codex_thread_id", "resume-codex-999")
+    sessDir, metaPath := getSessionDir(t, req, "main_agent_codex_thread_id", "resume-codex-999")
     if sessDir == "" {
         t.Fatal("first call did not create a session dir with main_agent_codex_thread_id=resume-codex-999")
     }
@@ -79,12 +79,12 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
         t.Fatalf("second call stdout missing expected text:\n%s", string(out2))
     }
 
-    count := countSessionDirs(t, "main_agent_codex_thread_id", "resume-codex-999")
+    count := countSessionDirs(t, req, "main_agent_codex_thread_id", "resume-codex-999")
     if count != 1 {
         t.Fatalf("expected 1 session dir, got %d (session was not reused)", count)
     }
 
-    _, metaPath2 := getSessionDir(t, "main_agent_codex_thread_id", "resume-codex-999")
+    _, metaPath2 := getSessionDir(t, req, "main_agent_codex_thread_id", "resume-codex-999")
     if metaPath2 == "" {
         t.Fatal("session dir not found after second call")
     }

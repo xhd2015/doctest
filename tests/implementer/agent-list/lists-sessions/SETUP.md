@@ -32,7 +32,7 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
-    sessHome := sessionsDir()
+    sessHome := sessionsDir(req)
     now := time.Now()
 
     sessions := []struct {

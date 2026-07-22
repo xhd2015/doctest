@@ -23,7 +23,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
     }
 
     // Verify session was created
-    sessionHome := os.Getenv("DOCTEST_DEBUG_SESSION_HOME")
+    sessionHome := req.SessionHome
     if sessionHome == "" {
         t.Fatal("DOCTEST_DEBUG_SESSION_HOME not set")
     }

@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - `WriteFormattedGo` does **not** inject `github.com/xhd2015/doctest/session`.

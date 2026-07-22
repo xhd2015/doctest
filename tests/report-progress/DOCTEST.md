@@ -38,6 +38,7 @@ import (
 )
 
 type Request struct {
+	ProgressFile	string // parent-side path for Assert; also PROGRESS_FILE in child Env
 	Args	[]string
 	Env	[]string
 	Timeout	time.Duration

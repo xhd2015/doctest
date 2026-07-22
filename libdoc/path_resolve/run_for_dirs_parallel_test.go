@@ -72,25 +72,6 @@ func TestRunForDirsLimitRunsAllDirsConcurrently(t *testing.T) {
 	}
 }
 
-func TestIsHeavySelftestTree(t *testing.T) {
-	// Paths that look like the module integration suite.
-	if !isHeavySelftestTree("/Users/x/proj/doctest/tests") {
-		t.Fatal("expected doctest/tests root heavy")
-	}
-	if !isHeavySelftestTree("/Users/x/proj/doctest/tests/changed") {
-		t.Fatal("expected doctest/tests/changed heavy")
-	}
-	if isHeavySelftestTree("/Users/x/proj/doctest/assert/tests/output-assert-v3") {
-		t.Fatal("assert trees are light")
-	}
-	if isHeavySelftestTree("/Users/x/proj/doctest/libdoc/core/tests/assert-mod") {
-		t.Fatal("libdoc trees are light")
-	}
-	if isHeavySelftestTree("/Users/x/proj/doctest/session/tests/once") {
-		t.Fatal("session trees are light")
-	}
-}
-
 func TestRunForDirsLimitSerialWhenWorkersOne(t *testing.T) {
 	root := t.TempDir()
 	for _, name := range []string{"x", "y"} {
@@ -102,18 +83,19 @@ func TestRunForDirsLimitSerialWhenWorkersOne(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+
 	var order []string
 	var mu sync.Mutex
 	err := RunForDirsLimit(root, 1, func(dir string) error {
 		mu.Lock()
-		order = append(order, filepath.Base(dir))
+		order = append(order, dir)
 		mu.Unlock()
 		return nil
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("RunForDirsLimit: %v", err)
 	}
 	if len(order) != 2 {
-		t.Fatalf("order=%v", order)
+		t.Fatalf("visited %d dirs, want 2", len(order))
 	}
 }

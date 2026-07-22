@@ -14,7 +14,7 @@ RawSourceCacheKeyMD5() -> non-empty hex used as session-mod/<md5>/
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-	runKind = "sessionmod-cache-key"
+    req.RunKind = "sessionmod-cache-key"
 	return nil
 }
 ```

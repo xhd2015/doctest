@@ -42,7 +42,7 @@ func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 		t.Fatalf("first doctest run failed: %v", err)
 	}
 
-	cacheDir := expectedAssertCacheDir(t)
+	cacheDir := expectedAssertCacheDir(t, req.CacheHome)
 	assertCacheLayout(t, cacheDir)
 	beforeAssertMtime, beforeAssertDigest = snapshotFileState(t, filepath.Join(cacheDir, "assert.go"))
 	beforeGoModMtime, beforeGoModDigest = snapshotFileState(t, filepath.Join(cacheDir, "go.mod"))

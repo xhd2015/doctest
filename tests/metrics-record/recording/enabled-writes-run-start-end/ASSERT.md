@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - At least one new run JSONL under MetricsRoot.
