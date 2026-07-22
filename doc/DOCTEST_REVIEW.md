@@ -118,10 +118,11 @@ Return absolute paths for every tree and node you discuss.
    - For each leaf with signals, check canonical labels from the design spec:
      `slow`, `heavy`, `flaky`, `manual`, `ui-automation` (domain labels like `integration`
      are fine but do not replace run-profile labels).
-   - **Parallel hazard (scan Setup/Run/Assert Go):** `t.Setenv`, `t.Chdir`,
-     `os.Setenv`/`os.Unsetenv`, `os.Chdir` (and same-class `syscall.Setenv` /
-     `syscall.Unsetenv`) — see **NOTE: no process-global env/cwd in suite harness**
-     below. Flag **major**.
+   - **Parallel hazard (scan Setup/Run/Assert Go):** process-global mutation —
+     `t.Setenv` / `t.Chdir`, `os.Setenv`/`os.Unsetenv` / `os.Chdir`, same-class
+     `syscall.Setenv`/`Unsetenv`, `os.Stdout`/`Stderr`/`Stdin` reassignment, and
+     **package-level mutable vars** shared by Parallel leaves (e.g. `var genDir`)
+     — see **NOTE: no process-global mutation in suite harness** below. Flag **major**.
    - Severity rules:
      - Signals present, no `label` → **major** (runs in discovery when it should skip)
      - `label: flaky` or `label: manual` with empty `explanation` → **major**
@@ -184,17 +185,25 @@ Return absolute paths for every tree and node you discuss.
 - [ ] Root **How to Run** documents discovery skip and `--label` / explicit-leaf run commands when labeled leaves exist
 
 ### Parallel safety (suite)
-- [ ] Setup/Run/Assert and harness helpers avoid `t.Setenv`, `t.Chdir`, `os.Setenv` /
-      `os.Unsetenv`, `os.Chdir` (see **NOTE** below)
-- [ ] Same-class `syscall.Setenv` / `syscall.Unsetenv` avoided (or flagged **major**)
-- [ ] Env isolation uses child-process `cmd.Env` only — never parent process Setenv
-- [ ] Working-directory needs use explicit paths on `req` / `cmd.Dir`, not Chdir
-- [ ] Race-sensitive changes validated with `doctest test … -race` when practical
+- [ ] Setup/Run/Assert and harness helpers avoid process-global mutation (see **NOTE**
+      below): no `t.Setenv` / `t.Chdir`, `os.Setenv` / `os.Unsetenv` / `os.Chdir`,
+      `syscall.Setenv` / `Unsetenv`, or `os.Stdout` / `Stderr` / `Stdin` reassignment
+- [ ] No package-level **mutable** vars shared by Parallel leaves (`var genDir`,
+      multi-step `firstResp`, etc.); put state on **`req` fields**
+- [ ] Env isolation uses child-process `cmd.Env` only (**key-replace**, not blind
+      append) — never parent process Setenv
+- [ ] Working-directory needs use absolute paths / `cmd.Dir` / `req` fields, not Chdir
+- [ ] Capture product output via inject writers / `opts.Stdout` or a **subprocess**,
+      not process stdio reassignment
+- [ ] Unit tests (`*_test.go`) follow the same rules
+- [ ] Race-sensitive changes validated with `doctest test … -race` and/or
+      `-count=1 --label-all` stress when practical
 
-## NOTE: no process-global env/cwd in suite harness (suite is parallel)
+## NOTE: no process-global mutation in suite harness (suite is parallel)
 
-**Do not use process-global env or cwd mutation in doctest trees** (root/ancestor
-`SETUP.md`, leaf Setup, `Run`, Assert, or shared harness helpers).
+**Do not use process-global mutation in doctest trees** (root/ancestor `SETUP.md`,
+leaf Setup, `Run`, Assert, or shared harness helpers) — env, cwd, stdio globals,
+or package memory shared across Parallel leaves.
 
 **Suite harness code must assume concurrent leaves/trees.** Process-global
 mutation is never a valid isolation model — whether or not a given run currently
@@ -210,6 +219,8 @@ workspace suites may Parallel light trees; leaves may Parallel. Code that only
 | **`t.Chdir`** | Process cwd + testing restore; **panics** with `t.Parallel` |
 | **`os.Setenv` / `os.Unsetenv`** | Process env races under concurrent leaves/trees |
 | **`os.Chdir`** | Process cwd races under concurrent leaves/trees |
+| **`os.Stdout` / `os.Stderr` / `os.Stdin` reassignment** | Process-wide I/O; concurrent leaves capture or corrupt the wrong stream |
+| **Package-level mutable vars** shared by Parallel leaves (e.g. `var genDir`, multi-step response holders) | Goroutines race on the same package memory; Assert can read another leaf’s path |
 
 Go panic (t-forms only):
 
@@ -221,15 +232,41 @@ panic: testing: test using t.Setenv or t.Chdir can not use t.Parallel
 process-global env races (common loophole when avoiding `t.Setenv` for testlog
 reasons). Prefer rewrite over “special-case serial forever.”
 
+Immutable package helpers are fine (`var bt = "```"`, compiled `regexp`s). Mutable
+**state** belongs on `req` / leaf locals.
+
 ### Prefer
 
 - Pass env to **child processes only** (`exec.Cmd.Env`) when spawning `doctest` /
   `go test` / product binaries — **do not** mutate the parent test process env
 - Prefer **absolute paths** and `cmd.Dir` / `req.WorkDir` over changing cwd
 - For parent-side Assert path checks, put paths on **`req` fields** (e.g. `req.Home`,
-  `req.SessionHome`, `req.CacheHome`), not process env Assert re-reads via `os.Getenv`
-- For true shared package state, use **mutex / `sync.Once`**, or better **per-leaf
-  fields on `req`** — never Setenv as “safe isolation”
+  `req.SessionHome`, `req.CacheHome`, `req.GenDir`), not process env Assert re-reads
+  via `os.Getenv`
+- Multi-step or multi-leaf Setup state: **per-leaf fields on `req`** (or leaf-private
+  packages) — never package `var` written in Setup under Parallel
+- Capture output with inject `io.Writer` / `opts.Stdout` / API hooks, or run the
+  code under test in a **subprocess** and capture the child’s pipes — never
+  `os.Stdout = …`
+- For true shared package coordination, use **mutex / `sync.Once`** only when the
+  resource is intentionally process-wide (e.g. materialize-once cache with flock);
+  still never Setenv as “safe isolation”
+
+### Product CLI / engine (same process rules)
+
+Harness bans apply to **product** code that runs in the same process model:
+
+- Values that exist only so a **subprocess** sees them (`DOCTEST_SESSION_ID`, cold
+  `GOCACHE`, nest sink, …) must be applied on **`cmd.Env`**, never `os.Setenv`
+- Hold a stable session id **once per CLI run** (e.g. `opts.SessionID`): inherit
+  from parent process env if already set (nested CLI), else generate once — do
+  not mint a new UUID on every helper call
+- Cold-cache `GOCACHE`: keep on `opts.GoCache` and plumb into **every** relevant
+  `go` tool exec under that run (`go test`, `go mod tidy`, `go build`, …), not
+  only `go test`
+- When merging env for a child, **key-replace** (strip existing `KEY=` then set
+  `KEY=val`). Blind `append(os.Environ(), "GOCACHE=…")` can fail to override: on
+  Unix `getenv` typically returns the **first** match
 
 ### Wrong “fix” (do not do this)
 
@@ -238,17 +275,46 @@ reasons). Prefer rewrite over “special-case serial forever.”
 os.Setenv(k, v); defer os.Setenv(k, old)   // or t.Setenv / syscall.Setenv
 // under mutex or not — if the product is only testable by mutating parent env,
 // run it as a subprocess with cmd.Env instead.
+
+// BAD — first-wins: may not override user/parent GOCACHE or SESSION_ID
+cmd.Env = append(os.Environ(), "GOCACHE="+temp, "DOCTEST_SESSION_ID="+sid)
+
+// BAD — Parallel leaves share package memory
+var genDir string
+func Setup(...) { genDir = t.TempDir(); ... }
+// Assert reads genDir  → can observe another leaf’s path
+
+// BAD — process-wide I/O
+old := os.Stdout; os.Stdout = w; ...; os.Stdout = old
 ```
 
-**Review severity:** any of the forbidden APIs in Setup/Run/Assert → **major**.
-Prefer rewriting over “run this tree serial forever.”
+**Review severity:** any forbidden API or package-mutable race in Setup/Run/Assert
+→ **major**. Prefer rewriting over “run this tree serial forever.”
 
-**Detect races:** `doctest test <scope> -race` forwards `-race` to the suite
-`go test` (opt-in; slower / often 0 Cached). Nested child `doctest test` inside
-a leaf does **not** inherit `-race` unless that leaf passes it.
+### Detect
+
+```sh
+# Race detector on suite go test (opt-in; slower / often 0 Cached)
+doctest test <scope> -race -count=1
+
+# Warm leaf-cache can hide Parallel races; force execution
+doctest test <scope> -count=1 --label-all
+
+# Living gate: product must not process-Setenv SESSION_ID / GOCACHE
+doctest test ./tests/parallel-safe/env-no-setenv/...
+
+# Static greps (product + harness)
+rg -n 'os\.(Setenv|Unsetenv|Clearenv)\(|t\.Setenv\(|syscall\.Setenv\(' --glob '*.go'
+rg -n 'os\.Chdir\(|t\.Chdir\(' --glob '*.go'
+rg -n 'os\.(Stdout|Stderr|Stdin)\s*=' --glob '*.go'
+```
+
+Nested child `doctest test` inside a leaf does **not** inherit `-race` unless that
+leaf’s Args pass it.
 
 **Related:** default-suite wall-clock and race hygiene live under
-`doctest skill review-perf --show` / `doc/DOCTEST_REVIEW_PERF.md`.
+`doctest skill review-perf --show` / `doc/DOCTEST_REVIEW_PERF.md`. Code authoring:
+`doc/DOC_STYLE_TEST_CODE_SPECIFICATION.md` (working directory + Parallel-safe harness).
 
 ## Guidelines
 
@@ -274,9 +340,14 @@ a leaf does **not** inherit `-race` unless that leaf passes it.
 - `explanation` describing manual/slow intent but no `label` — leaf still runs in discovery
 - `label: [slow, ui]` YAML sequence instead of comma-separated scalar — wrong frontmatter shape
 - Expensive leaves at the same tree level as fast unit-style leaves without labels or grouping
-- **`t.Setenv` / `t.Chdir` / `os.Setenv` / `os.Unsetenv` / `os.Chdir` in Setup/Run/Assert**
-  (and same-class `syscall.Setenv`) — process-global env/cwd; suite is parallel;
-  see **NOTE** above — **major**
+- **Process-global mutation in Setup/Run/Assert** (`t.Setenv` / `t.Chdir`,
+  `os.Setenv` / `Unsetenv` / `os.Chdir`, `syscall.Setenv`, stdio reassignment, or
+  package-level mutable state shared by Parallel leaves) — suite is parallel; see
+  **NOTE** above — **major**
+- Product `os.Setenv` for child-only values (session id, cold GOCACHE) instead of
+  `cmd.Env` / opts — same class as harness Setenv — **major**
+- Blind `append(os.Environ(), "KEY=val")` without stripping `KEY` (first-wins trap)
+  — **major** when used for isolation
 - Product output must include doctest matcher DSL syntax to satisfy a test — likely assertion bug, **major**
 - `## Expected Output` is not a plausible terminal transcript or user-facing output sketch — **major**
 

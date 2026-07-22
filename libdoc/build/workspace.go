@@ -305,14 +305,15 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	}
 
 	displayArgs := displayGoArgs(append(append([]string(nil), flagArgs...), packageArgs...))
+	// Always print planned trees/tests before go test, including Verbose.
+	label := "workspace"
+	if strings.Contains(runDir, HubDirName) {
+		label = "workspace hub"
+	}
+	fmt.Fprintf(w, "doctest: %s (%d trees, %d tests)\n", label, treeCount, stats.Total)
 	if opts.Verbose {
 		fmt.Fprintf(w, "cd %s && go %s\n\n", pathfmt.Short(runDir), strings.Join(displayArgs, " "))
 	} else {
-		label := "workspace"
-		if strings.Contains(runDir, HubDirName) {
-			label = "workspace hub"
-		}
-		fmt.Fprintf(w, "doctest: %s (%d trees, %d tests)\n", label, treeCount, stats.Total)
 		fmt.Fprintf(w, "cd %s && go %s\n", pathfmt.Short(runDir), strings.Join(displayArgs, " "))
 	}
 

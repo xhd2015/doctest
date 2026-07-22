@@ -108,7 +108,16 @@ func discoverTreeCasesInternal(root string, w io.Writer) ([]TreeCase, error) {
 					}
 				}
 			}
+			// Intermediate dirs: missing SETUP.md is OK (pure nested-tree parents,
+			// empty grouping dirs). When SETUP.md exists, require Go Setup.
 			setupPath := filepath.Join(path, "SETUP.md")
+			if _, statErr := os.Stat(setupPath); os.IsNotExist(statErr) {
+				return nil
+			} else if statErr != nil {
+				rel, _ := filepath.Rel(root, setupPath)
+				verrs = append(verrs, ValidationError{Path: rel, Msg: statErr.Error()})
+				return nil
+			}
 			doc, readErr := readSetupCached(setupPath, setupCache)
 			if readErr != nil {
 				rel, _ := filepath.Rel(root, setupPath)

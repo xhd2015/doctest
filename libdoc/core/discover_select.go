@@ -157,13 +157,18 @@ func HydrateTreeCases(root string, cases []TreeCase) ([]TreeCase, error) {
 			continue
 		}
 		// Mirror full-discover WalkDir rules for SETUP on the leaf's ancestor
-		// path: root SETUP.md is optional and need not define Setup; every
-		// non-root SETUP.md must have a Go block with func Setup.
+		// path: root SETUP.md is optional and need not define Setup; missing
+		// intermediate SETUP.md is OK; when a non-root SETUP.md exists it must
+		// have a Go block with func Setup.
 		for _, doc := range setupDocs {
 			if doc.Path == "DOCTEST.md" || doc.Path == "SETUP.md" {
 				continue
 			}
 			if !strings.HasSuffix(doc.Path, "SETUP.md") {
+				continue
+			}
+			setupAbs := filepath.Join(root, filepath.FromSlash(doc.Path))
+			if _, statErr := os.Stat(setupAbs); os.IsNotExist(statErr) {
 				continue
 			}
 			if doc.GoBlock == nil {

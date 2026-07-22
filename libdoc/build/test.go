@@ -113,10 +113,10 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		} else {
 			fmt.Fprintf(w, "doctest: %s\n\n", pathfmt.Short(dir))
 		}
-		if _, err := core.DiscoverTreeCasesVerbose(dir, w); err != nil {
-			stats.Phases = phases
-			return stats, err
-		}
+		// Verbose re-walk is presentation only. Light→filter→Hydrate already
+		// selected the run set; do not hard-fail prepare if full rediscover
+		// hits intermediate dirs (or other paths) outside that set.
+		_, _ = core.DiscoverTreeCasesVerbose(dir, w)
 		fmt.Fprintf(w, "─── %d test cases\n\n", len(cases))
 	} else if !opts.ChangedOnly {
 		fmt.Fprintf(w, "doctest: %s (%d tests)\n", pathfmt.Short(dir), len(cases))

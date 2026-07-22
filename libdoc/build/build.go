@@ -57,9 +57,9 @@ func Build(dir string, opts core.Options) error {
 
 	if opts.Verbose {
 		fmt.Fprintf(w, "doctest: %s\n\n", pathfmt.Short(dir))
-		if _, err := core.DiscoverTreeCasesVerbose(dir, w); err != nil {
-			return err
-		}
+		// Verbose re-walk is presentation only; full discover already selected
+		// cases above — do not hard-fail prepare on rediscover errors.
+		_, _ = core.DiscoverTreeCasesVerbose(dir, w)
 		fmt.Fprintf(w, "─── %d test cases\n\n", len(cases))
 	} else {
 		fmt.Fprintf(w, "doctest: %s\n", pathfmt.Short(dir))

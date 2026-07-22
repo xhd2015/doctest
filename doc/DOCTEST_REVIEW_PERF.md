@@ -139,23 +139,29 @@ Discovery stays fast; CI nightlies or release jobs use **`--label-all`**.
 
 ### 3b. Parallel / race safety (default suite)
 
-Suite harness must assume **concurrent leaves/trees**. Process-global env/cwd
-mutation is forbidden and is a **must-fix** for default-suite Parallel and race
-CI — not only a design nit.
+Suite harness must assume **concurrent leaves/trees**. Process-global mutation
+(env, cwd, stdio, package memory) is forbidden and is a **must-fix** for
+default-suite Parallel and race CI — not only a design nit.
 
-**Banned in Setup / Run / Assert / tree helpers:**
+**Banned in Setup / Run / Assert / tree helpers (and unit tests):**
 
 | Forbidden | Why |
 |-----------|-----|
 | `t.Setenv`, `t.Chdir` | Panic with `t.Parallel`; process-global |
 | `os.Setenv` / `os.Unsetenv`, `os.Chdir` | Process-global races under concurrency |
 | `syscall.Setenv` / `syscall.Unsetenv` | Same class as `os.Setenv` (major) |
+| `os.Stdout` / `Stderr` / `Stdin` reassignment | Process-wide I/O races |
+| Package-level **mutable** vars shared by Parallel leaves (e.g. `var genDir`) | Assert can observe another leaf’s state |
 
-**Prefer:** child `cmd.Env` / `cmd.Dir`, absolute paths, paths on **`req` fields**.
+**Prefer:** child `cmd.Env` (**key-replace**, not blind append) / `cmd.Dir`,
+absolute paths, paths and multi-step state on **`req` fields**, inject writers
+or subprocess capture. Product: child-only values on `cmd.Env` / opts — never
+process `Setenv` for session id or cold `GOCACHE`.
+
 **Never:** setenv+restore (with or without mutex) as “isolation.”
 
 Full design rule: **`doctest skill review --show`** /
-`doc/DOCTEST_REVIEW.md` section **NOTE: no process-global env/cwd in suite harness**.
+`doc/DOCTEST_REVIEW.md` section **NOTE: no process-global mutation in suite harness**.
 
 **Validate concurrency:**
 
@@ -163,6 +169,12 @@ Full design rule: **`doctest skill review --show`** /
 # Opt-in race detector on the generated suite go test (not the host doctest process)
 doctest test ./... -race -count=1
 doctest test ./path/to/tree -race -count=1
+
+# Warm leaf-cache can hide races — force re-run
+doctest test ./path/to/tree -count=1 --label-all
+
+# Living product gate (no process Setenv of SESSION_ID / GOCACHE)
+doctest test ./tests/parallel-safe/env-no-setenv/...
 ```
 
 Race builds are slower and often report **0 Cached**. Nested `doctest test`
@@ -228,10 +240,11 @@ actions). Clear or note absence of the slow-suite **WARNING**.
 - [ ] Root How to Run explains discovery skip vs full suite
 
 ### Parallel / race safety
-- [ ] No `t.Setenv` / `t.Chdir` / `os.Setenv` / `os.Unsetenv` / `os.Chdir` (or
-      `syscall.Setenv`) in default-suite harness paths
-- [ ] Env/cwd isolation via child `cmd.Env` / `cmd.Dir` and `req` fields
-- [ ] Concurrency-sensitive changes checked with `doctest test … -race` when practical
+- [ ] No process-global mutation in harness or unit tests: Setenv/Chdir/stdio
+      reassignment / package mutable shared state (see §3b)
+- [ ] Env/cwd isolation via child `cmd.Env` (key-replace) / `cmd.Dir` and `req` fields
+- [ ] Concurrency-sensitive changes checked with `doctest test … -race` and/or
+      `-count=1 --label-all` when practical
 
 ## Anti-patterns
 
@@ -244,13 +257,13 @@ actions). Clear or note absence of the slow-suite **WARNING**.
   cold times as if they were steady-state
 - Labeling every leaf “just in case” (empty discovery) without a real full-suite
   job using **`--label-all`**
-- **`t.Setenv` / `t.Chdir` / `os.Setenv` / `os.Unsetenv` / `os.Chdir` (or
-  `syscall.Setenv`) in leaf harness code** — process-global env/cwd; suite must
-  assume concurrent leaves/trees. Prefer child `Cmd.Env` / absolute paths /
-  `req` fields. Full rule: **`doctest skill review --show`** /
-  `doc/DOCTEST_REVIEW.md` section **NOTE: no process-global env/cwd in suite harness**.
-- Claiming suite Parallel/race safety without ever running **`doctest test -race`**
-  on the trees you changed
+- **Process-global mutation in leaf harness code** (Setenv/Chdir/stdio
+  reassignment, package-level mutable state under Parallel) — suite must assume
+  concurrent leaves/trees. Prefer child `Cmd.Env` (key-replace) / absolute paths /
+  `req` fields / inject writers. Full rule: **`doctest skill review --show`** /
+  `doc/DOCTEST_REVIEW.md` section **NOTE: no process-global mutation in suite harness**.
+- Claiming suite Parallel/race safety without **`doctest test -race`** or
+  **`-count=1 --label-all`** stress on the trees you changed
 
 ## Quick command card
 

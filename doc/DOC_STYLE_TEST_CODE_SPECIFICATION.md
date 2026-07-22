@@ -525,6 +525,28 @@ leaf case directory. Harness code must not assume cwd is the leaf, the tree root
 or the shell directory where `doctest` was invoked. Use absolute paths from the
 inject object instead.
 
+### Parallel-safe harness (suite is concurrent)
+
+Workspace and tree suites may run leaves with `t.Parallel()`. Author Setup / Run /
+Assert (and package helpers) as if other leaves run in the same process at the
+same time.
+
+**Do not:**
+
+| Anti-pattern | Prefer |
+|--------------|--------|
+| `os.Chdir` / `t.Chdir` | Absolute paths; `cmd.Dir` for children only |
+| `os.Setenv` / `t.Setenv` / `syscall.Setenv` on the parent process | Child `cmd.Env` only (replace-key merge when overriding `GOCACHE`, session id, …) |
+| `os.Stdout` / `Stderr` / `Stdin` reassignment | Inject `io.Writer` / product options, or capture a **subprocess** |
+| Package-level **mutable** vars shared by Parallel leaves (`var genDir`, multi-step holders) | Fields on **`Request`** (e.g. `req.GenDir`); Assert reads `req`, not package state |
+
+Immutable package helpers are fine (`var bt`, compiled regexes). Multi-step state
+that used to live in `var firstResp` belongs on `req` (or a leaf-private package).
+
+Full review rule and product CLI notes (session id / cold GOCACHE on opts +
+`cmd.Env`): **`doc/DOCTEST_REVIEW.md`** section **NOTE: no process-global mutation
+in suite harness**.
+
 ### `d *session.Doctest`
 
 Every generated test constructs a single value and passes it to Setup, Run, and
