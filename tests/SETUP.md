@@ -40,7 +40,10 @@ import (
 )
 
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-	req.Timeout = 30 * time.Second
+	// Nested doctest test + go test under full --label-all suite can exceed 30s
+	// on contended CI runners (many parallel leaves thrash GOCACHE/CPU). 30s
+	// caused false FAIL with exit -1 (CommandContext kill) and empty capture.
+	req.Timeout = 2 * time.Minute
 
 	req.Bin = testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, ".."))
 	return nil

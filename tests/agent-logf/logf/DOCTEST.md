@@ -124,6 +124,15 @@ func main() {
 		return nil, err
 	}
 
+	// go run requires a tidy module graph/go.sum; without tidy, modern Go
+	// fails with "updates to go.mod needed; to update it: go mod tidy".
+	tidy := exec.Command("go", "mod", "tidy")
+	tidy.Dir = dir
+	tidy.Env = append(os.Environ(), "GOWORK=off")
+	if out, err := tidy.CombinedOutput(); err != nil {
+		return nil, fmt.Errorf("logf probe go mod tidy: %w\n%s", err, out)
+	}
+
 	cmdArgs := append([]string{"run", "."}, req.Args...)
 	cmd := exec.Command("go", cmdArgs...)
 	cmd.Dir = dir
