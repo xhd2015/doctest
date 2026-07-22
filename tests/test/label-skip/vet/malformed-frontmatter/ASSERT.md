@@ -1,5 +1,6 @@
 ---
 label: heavy
+explanation: CLI vet contract via doctest binary
 ---
 
 ## Expected

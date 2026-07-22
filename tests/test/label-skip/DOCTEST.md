@@ -4,6 +4,32 @@
 
 0.0.2
 
+## Layer model (L2 in-process vs L3 e2e)
+
+Coverage-backfill layer split. **Default discovery** runs **L2 only** (unlabeled
+`select/**`). Product CLI leaves under `test/`, `vet/`, `edit/`, `build/` are
+**`label: heavy`** and opt-in via `--label heavy`.
+
+| Layer | Subtrees | Run model | Labels |
+|-------|----------|-----------|--------|
+| **L2 in-process** | `select/` (nested) | `DiscoverTreeCasesLight` + `FilterCasesByLabel` / `ParseAssertFrontmatter` — **no** `testbin` | unlabeled |
+| **L3 e2e** | `test/**`, `vet/**`, `edit/**`, `build/**` | Product binary subprocess | **`label: heavy`** |
+
+| L2 surface | API | Branch |
+|------------|-----|--------|
+| Discovery skip / label-all / explicit | `FilterCasesByLabel`, `FilterBySubDir` | `select/*` (except frontmatter/) |
+| Frontmatter parse | `ParseAssertFrontmatter` | `select/frontmatter/**` |
+
+| L3 surface (sparse process contracts) | Branch |
+|---------------------------------------|--------|
+| Skip summary stdout + all-skip no PASS | `test/discovery/mixed-fast-labeled`, `all-labeled` |
+| `./...` pattern, multi-arg | `test/discovery/dotdotdot-pattern`, `multi-arg-mixed` |
+| `--label-all` vs `--label` mutual exclusion | `test/discovery/label-all-conflicts-label` |
+| Explicit leaf / ASSERT.md path run | `test/explicit-leaf/**` |
+| `doctest vet` frontmatter validation | `vet/**` |
+| `doctest edit` mutations | `edit/**` |
+| `doctest build` compiles labeled | `build/**` |
+
 # DSN (Domain Specific Notion)
 
 ### Participants
@@ -13,6 +39,7 @@
 - **`doctest vet`** — validates ASSERT.md frontmatter YAML on every leaf.
 - **`doctest edit`** — updates frontmatter on a single concrete leaf ASSERT.md.
 - **Temp test tree** — programmatic fixture with fast and/or labeled leaves.
+- **core selection APIs** — in-process discover/filter used by L2 `select/`.
 
 ### Behaviors
 
@@ -29,77 +56,97 @@
 
 | Rank | Factor | Splits at |
 |------|--------|-----------|
-| 1 | CLI command | `test/`, `vet/`, `edit/`, `build/` |
-| 2 | Invocation mode (test only) | `discovery/` vs `explicit-leaf/` |
-| 3 | Discovery outcome | mixed, all-labeled, unlabeled-only, explanation-only, grouping dir, `...` pattern, multi-arg |
-| 4 | Vet input validity | valid frontmatter, explanation-only, malformed YAML |
-| 5 | Edit mutation / input | add label, append label, append explanation, idempotent warn, ASSERT.md path, reject `...` |
-| 6 | Build tree shape | labeled-only, mixed fast+labeled |
+| 1 | Layer | `select/` (L2) vs CLI commands (L3) |
+| 2 | CLI command | `test/`, `vet/`, `edit/`, `build/` |
+| 3 | Invocation mode (test only) | `discovery/` vs `explicit-leaf/` |
+| 4 | Discovery outcome | mixed, all-labeled, `...` pattern, multi-arg, flag conflicts |
+| 5 | Vet / edit / build | validity, mutation, tree shape |
 
 ## Decision Tree
 
 ```
 label-skip/
-├── test/                                 COMMAND: doctest test
-│   ├── discovery/                        MODE: tree root, grouping, ./.../, or multi-arg
-│   │   ├── mixed-fast-labeled/           OUTCOME: 1 run + 1 skipped
-│   │   ├── all-labeled/                  OUTCOME: 0 run, all skipped, exit 0
-│   │   ├── unlabeled-only/               OUTCOME: PASS, no skip block
-│   │   ├── explanation-only-runs/        OUTCOME: explanation without label runs
-│   │   ├── grouping-dir/                 OUTCOME: grouping dir skips labeled child
-│   │   ├── dotdotdot-pattern/            OUTCOME: ./mod/... skips labeled
-│   │   ├── multi-arg-mixed/              OUTCOME: ./mod/... + explicit leaf, aggregated skip
-│   │   ├── label-all-runs-all/           OUTCOME: --label-all runs labeled+fast
-│   │   └── label-all-conflicts-label/    OUTCOME: --label-all + --label → error
-│   └── explicit-leaf/                    MODE: concrete leaf dir or ASSERT.md
-│       ├── runs-labeled/                 OUTCOME: labeled leaf dir executes
-│       └── assert-md-path/               OUTCOME: labeled leaf via ASSERT.md path
-├── vet/                                  COMMAND: doctest vet
-│   ├── valid-frontmatter/                INPUT: label+explanation → exit 0
-│   ├── explanation-only/                 INPUT: explanation without label → exit 0
-│   └── malformed-frontmatter/            INPUT: broken YAML → non-zero exit
-├── edit/                                 COMMAND: doctest edit
-│   ├── add-label/                        MUTATION: create frontmatter with label
-│   ├── set-label-on-existing-frontmatter/ MUTATION: append second label
-│   ├── append-explanation/               MUTATION: append with "; "
-│   ├── idempotent-label-warn/            MUTATION: duplicate label warns, no change
-│   ├── assert-md-path/                   INPUT: ASSERT.md path accepted
-│   └── rejects-dotdotdot/                INPUT: ... path → error
-└── build/                                COMMAND: doctest build
-    ├── compiles-labeled/                 OUTCOME: labeled-only tree compiles
-    └── mixed-tree/                       OUTCOME: fast + labeled both compile
+├── select/                               [L2] core partition/filter + frontmatter parse
+│   ├── mixed-fast-labeled/
+│   ├── all-labeled/
+│   ├── unlabeled-only/
+│   ├── explanation-only-runs/
+│   ├── label-all-runs-all/
+│   ├── grouping-dir/
+│   ├── explicit-leaf-runs/
+│   └── frontmatter/
+│       ├── explanation-only/
+│       └── labeled/
+├── test/                                 [L3 heavy] doctest test
+│   ├── discovery/
+│   │   ├── mixed-fast-labeled/           OUTCOME: 1 run + skip summary format
+│   │   ├── all-labeled/                  OUTCOME: 0 run, skip summary, no PASS
+│   │   ├── dotdotdot-pattern/            OUTCOME: ./mod/... path pattern
+│   │   ├── multi-arg-mixed/              OUTCOME: multi-arg aggregation
+│   │   └── label-all-conflicts-label/    OUTCOME: mutual exclusion error
+│   └── explicit-leaf/
+│       ├── runs-labeled/
+│       └── assert-md-path/
+├── vet/                                  [L3 heavy] doctest vet
+│   ├── valid-frontmatter/
+│   ├── explanation-only/
+│   └── malformed-frontmatter/
+├── edit/                                 [L3 heavy] doctest edit
+│   ├── add-label/
+│   ├── set-label-on-existing-frontmatter/
+│   ├── append-explanation/
+│   ├── idempotent-label-warn/
+│   ├── assert-md-path/
+│   └── rejects-dotdotdot/
+└── build/                                [L3 heavy] doctest build
+    ├── compiles-labeled/
+    └── mixed-tree/
 ```
 
 ## Test Index
 
-| # | Leaf | Expected |
-|---|------|----------|
-| 1 | `test/discovery/mixed-fast-labeled/` | PASS(1/1) + exact skip block for labeled leaf |
-| 2 | `test/discovery/all-labeled/` | exit 0, exact skip block, no PASS/FAIL line |
-| 3 | `test/discovery/unlabeled-only/` | PASS(1/1), no skip block |
-| 4 | `test/discovery/explanation-only-runs/` | PASS(1/1), no skip block |
-| 5 | `test/discovery/grouping-dir/` | PASS(1/1) + skip labeled child under grouping dir |
-| 6 | `test/discovery/dotdotdot-pattern/` | PASS(1/1) + skip block via `./mod/...` |
-| 7 | `test/discovery/multi-arg-mixed/` | PASS(2/2) + aggregated skip from discovery pass |
-| 7a | `test/discovery/label-all-runs-all/` | PASS(2/2), no skip block |
-| 7b | `test/discovery/label-all-conflicts-label/` | non-zero, mutually exclusive |
-| 8 | `test/explicit-leaf/runs-labeled/` | PASS(1/1), no skip block |
-| 9 | `test/explicit-leaf/assert-md-path/` | PASS(1/1) via ASSERT.md path, no skip block |
-| 10 | `vet/valid-frontmatter/` | exit 0 |
-| 11 | `vet/explanation-only/` | exit 0 |
-| 12 | `vet/malformed-frontmatter/` | non-zero exit |
-| 13 | `edit/add-label/` | ASSERT.md exact frontmatter after edit |
-| 14 | `edit/set-label-on-existing-frontmatter/` | `label: ui-automation, manual` exact |
-| 15 | `edit/append-explanation/` | explanation `first; second` exact |
-| 16 | `edit/idempotent-label-warn/` | stderr warning exact, ASSERT.md unchanged |
-| 17 | `edit/assert-md-path/` | edit via ASSERT.md path, exact frontmatter |
-| 18 | `edit/rejects-dotdotdot/` | non-zero exit |
-| 19 | `build/compiles-labeled/` | exit 0, compiles labeled-only tree |
-| 20 | `build/mixed-tree/` | exit 0, compiles fast + labeled tree |
+| # | Leaf | Layer | Expected |
+|---|------|-------|----------|
+| 1 | `select/mixed-fast-labeled/` | L2 | run fast; skip labeled |
+| 2 | `select/all-labeled/` | L2 | all skipped |
+| 3 | `select/unlabeled-only/` | L2 | all run |
+| 4 | `select/explanation-only-runs/` | L2 | explanation w/o label runs |
+| 5 | `select/label-all-runs-all/` | L2 | LabelAll runs both |
+| 6 | `select/grouping-dir/` | L2 | SubDir e2e skips labeled child |
+| 7 | `select/explicit-leaf-runs/` | L2 | ExplicitLeaf runs labeled |
+| 8 | `select/frontmatter/explanation-only/` | L2 | parse: empty labels |
+| 9 | `select/frontmatter/labeled/` | L2 | parse: labels set |
+| 10 | `test/discovery/mixed-fast-labeled/` | L3 | PASS(1/1) + compact skip block |
+| 11 | `test/discovery/all-labeled/` | L3 | exit 0, skip block, no PASS line |
+| 12 | `test/discovery/dotdotdot-pattern/` | L3 | `./mod/...` skip format |
+| 13 | `test/discovery/multi-arg-mixed/` | L3 | multi-arg PASS + skip |
+| 14 | `test/discovery/label-all-conflicts-label/` | L3 | mutual exclusion error |
+| 15 | `test/explicit-leaf/runs-labeled/` | L3 | labeled leaf dir executes |
+| 16 | `test/explicit-leaf/assert-md-path/` | L3 | ASSERT.md path executes |
+| 17 | `vet/valid-frontmatter/` | L3 | exit 0 |
+| 18 | `vet/explanation-only/` | L3 | exit 0 |
+| 19 | `vet/malformed-frontmatter/` | L3 | non-zero exit |
+| 20 | `edit/add-label/` | L3 | exact frontmatter after edit |
+| 21 | `edit/set-label-on-existing-frontmatter/` | L3 | comma-separated labels |
+| 22 | `edit/append-explanation/` | L3 | `first; second` |
+| 23 | `edit/idempotent-label-warn/` | L3 | stderr warning, no change |
+| 24 | `edit/assert-md-path/` | L3 | edit via ASSERT.md path |
+| 25 | `edit/rejects-dotdotdot/` | L3 | non-zero exit |
+| 26 | `build/compiles-labeled/` | L3 | labeled-only tree compiles |
+| 27 | `build/mixed-tree/` | L3 | fast + labeled both compile |
 
 ## How to Run
 
-Run `doctest vet ./tests/test/label-skip` then `doctest test ./tests/test/label-skip`.
+```sh
+doctest vet ./tests/test/label-skip
+# default discovery: L2 select only (skips label: heavy CLI)
+doctest test ./tests/test/label-skip
+doctest test ./tests/test/label-skip/select/...
+# L3 CLI e2e
+doctest test --label heavy ./tests/test/label-skip/...
+# full suite
+doctest test --label-all ./tests/test/label-skip/...
+```
 
 ```go
 import (

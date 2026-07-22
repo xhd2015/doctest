@@ -1,5 +1,6 @@
 ---
 label: heavy
+explanation: CLI filter contract via doctest binary
 ---
 
 ## Expected

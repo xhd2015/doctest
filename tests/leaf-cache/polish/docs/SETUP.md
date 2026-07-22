@@ -1,34 +1,38 @@
 # Scenario
 
-**Feature**: CLI help documents leaf-cache control flags
+**Feature**: product CLI help mentions leaf-cache flags (**L3 e2e**, `label: heavy`)
 
 ```
 doctest test --help
-  -> mentions -a
-  -> mentions --no-leaf-cache
+  -> usage includes -a and --no-leaf-cache
 ```
 
 ## Preconditions
 
-- Binary from polish root Setup (testbin.Ensure).
+- Builds selftest binary (`testbin.Ensure`) — nested product path.
+- Leaf labeled `heavy` so default discovery skips it.
 
 ## Steps
 
-1. Op=`runtime_once` with Args `test --help` (or `test`, `-h`).
-2. Assert stdout/stderr contain flag names.
-
-## Context
-
-- Documentation contract so users discover disable knobs.
+1. Ensure binary; isolate env not required for help.
+2. Child sets Op=`runtime_once` with `test --help`.
 
 ```go
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+	"time"
 
-func Setup(t *testing.T, req *Request) error {
+	"github.com/xhd2015/doctest/libdoc/testbin"
+	"github.com/xhd2015/doctest/session"
+)
+
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
-	req.Op = "runtime_once"
-	req.Args = []string{"test", "--help"}
-	// Help should not need leaf-cache env isolation, but Env is already set.
+	req.Timeout = 60 * time.Second
+	// tests/leaf-cache -> tests -> module root
+	modRoot := filepath.Clean(filepath.Join(d.DOCTEST_ROOT, "..", ".."))
+	req.Bin = testbin.Ensure(t, modRoot)
 	return nil
 }
 ```

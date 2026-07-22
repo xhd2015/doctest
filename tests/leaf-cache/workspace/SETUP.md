@@ -1,6 +1,6 @@
 # Scenario
 
-**Feature**: multi-tree `__workspace` `go test` uses the same leaf-cache warm skip + PutPass + Cached as single-tree
+**Feature**: multi-tree `__workspace` leaf-cache product path (**L3 e2e**, `label: heavy`)
 
 ```
 # P2 product path (not library-only multi-prep)
@@ -14,6 +14,7 @@ module with tree-a/ + tree-b/ (two DOCTEST.md roots)
 
 ## Preconditions
 
+- **Layer L3** — nested multi-tree product; every leaf has `label: heavy`.
 - Product **GREEN**: `finishWorkspaceGoTest` prepares skip env, records passes,
   and reports summary **Cached** as programmatic leaf-cache skip count.
 - Nested CLI: same `runtime_multi` Op as `runtime/**` (fresh GOCACHE per run).
@@ -22,7 +23,7 @@ module with tree-a/ + tree-b/ (two DOCTEST.md roots)
   `__workspace`), not per-tree `TestWithStats`.
 - Isolated `DOCTEST_CACHE_HOME` / `DOCTEST_LEAF_CACHE`; never the user cache.
 - Requires built doctest binary (`testbin.Ensure`).
-- Labels: leaves use `heavy` (nested multi-tree compile + 2–3 runs).
+- Skipped by default discovery; run with `--label heavy`.
 
 ## Steps
 

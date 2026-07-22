@@ -1,35 +1,36 @@
 # Scenario
 
-**Feature**: edit package only leaf-d uses → peer leaves stay Cached
+**Feature**: edit package only leaf-d uses → peer leaf keys stay stable
 
 ```
-run1: -count=1 -> 3 Run, 0 Cached (seed store)
+keys0 = ComputeLeafKey(leaf-ab-1, leaf-ab-2, leaf-d)
 edit alone/d Version
-run2: no -count -> 3 Run, 2 Cached (leaf-ab-1 + leaf-ab-2 warm)
+keys1 = ComputeLeafKey(...)
+# leaf-ab-1 and leaf-ab-2 keys unchanged; leaf-d key changes
 ```
 
 ## Preconditions
 
 - `preparePartialPackageDepsFixture` layout.
-- Mutation `polish_edit_alone_d` after run1.
+- Mutation `polish_edit_alone_d`.
 
 ## Steps
 
 1. Build fixture.
-2. Args = `test -count=1 <tree>`; Args2 = `test <tree>` (no count).
-3. MutateAfterRun=1.
+2. Op=`partial_package_keys` with alone/d mutation.
+
+## Context
+
+- Library equivalent of "2 Cached" product warm: shared leaves keep prior keys.
 
 ```go
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
 	t.Helper()
-	req.Op = "runtime_multi"
-	dir := preparePartialPackageDepsFixture(t, req)
-	req.Args = []string{"test", "-count=1", dir}
-	req.Args2 = []string{"test", dir}
+	req.Op = "partial_package_keys"
+	_ = preparePartialPackageDepsFixture(t, req)
 	req.Mutation = "polish_edit_alone_d"
-	req.MutateAfterRun = 1
 	return nil
 }
 ```

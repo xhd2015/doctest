@@ -1,5 +1,6 @@
 ---
 label: heavy
+explanation: nested prepare/go test via runner.RunTest (multi-second)
 ---
 
 ## Expected

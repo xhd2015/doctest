@@ -1,57 +1,45 @@
 # Scenario
 
-**Feature**: leaf source-hash cache — library + runtime + RunSuite + workspace + multi-arg CLI plan
+**Feature**: leaf source-hash cache — L2 library mass + L3 nested product paths
 
 ```
-# Library: compute stable leaf key from local content DAG
+# L2 library (unlabeled; default discovery)
 module + tree + leaf + goVersion
   -> spine Go + local pkgs + go.mod/sum + local replace
   -> hex key (abs TreeRoot mixed in)
 Caller -> Store.PutPass(key) -> GetPass(key)=true
+partial multi-leaf / polish selective keys via ComputeLeafKey only
 
-# Runtime: doctest test wires store into skip + summary Cached
-doctest test fixture (DOCTEST_LEAF_CACHE / DOCTEST_CACHE_HOME; fresh GOCACHE/run)
-  -> on Action:pass stream PutPass (interrupt-safe)
-  -> warm second run GetPass hit -> Cached > 0; quiet+color grey progress .
-  -> -count | -a | --no-leaf-cache -> no skip / no grey leaf-cache dots
-
-# RunSuite P1 extract: multi-prep identity + prepare/record
+# L2 RunSuite extract (nested DOCTEST.md)
 FormatLeafIdentity / PreparePassPlan / RecordPasses
   -> tree-qualified skip/fail map identities
 
-# RunSuite P2 product: multi-tree workspace leaf-cache
-doctest test <mod>/... (tree-a + tree-b)
-  -> RunWorkspace / finishWorkspaceGoTest
-  -> multi-prep skip env + RecordPasses + Cached
-
-# CLI one plan P3: multi-arg same leaf-cache policy
-doctest test tree-a tree-b
-  -> union roots / shared store + SkipEnabled
-  -> warm Cached + -count bypass (parity with single + ./...)
+# L3 e2e (label: heavy) — nested product binary
+doctest test fixture / <mod>/... / tree-a tree-b
+  -> PutPass / warm Cached / -count|-a|--no-leaf-cache bypass
+  -> stream PutPass + grey progress dots (runtime/**)
 ```
 
 ## Preconditions
 
 - Package under test: `github.com/xhd2015/doctest/libdoc/leafcache`.
-- Key/store/runtime leaves set `req.Op`, optional `req.Flavor` / `req.Mutation`.
-- Runtime leaves set `Op=runtime_multi`, build `req.Bin`, fixture dir, and Args/Args2.
-- RunSuite multi-prep leaves set `format_identity*` / `multi_prep_*` and twin trees.
-- Workspace P2 leaves set `Op=runtime_multi` with multi-tree `<mod>/...` Args
-  (helpers under `workspace/SETUP.md`).
-- CLI one plan P3 leaves set `Op=runtime_multi` with multi-arg
-  `test tree-a tree-b` Args (helpers under `cli-plan/SETUP.md`; same fixture).
+- **L2** leaves (`key/`, `store/`, `partial-package-deps/`, `polish/selective|isolation/`):
+  set `req.Op` to library ops; **no** `testbin`.
+- **L3** leaves (`runtime/`, `workspace/`, `cli-plan/`, `polish/docs/`):
+  `Op=runtime_multi|runtime_once`, `testbin.Ensure`, `label: heavy`.
+- Nested `runsuite/` is its own L2 root (own Request/Run).
 - All fixtures and store roots use `t.TempDir()` — never write into the user cache.
-- Product default store path: `$CacheHome/doctest/leaf-cache/v1`; tests isolate via
+- Product default store path: `$CacheHome/doctest/leaf-cache/v1`; L3 tests isolate via
   `DOCTEST_CACHE_HOME` and/or `DOCTEST_LEAF_CACHE`.
 
 ## Steps
 
-1. Library: leaf/group `Setup` builds a mini module + doctest tree via helpers; Run calls APIs.
-2. Runtime: `Setup` builds doctest binary, writes a mini fixture tree, runs `doctest test` twice.
-3. RunSuite multi-prep: twin trees + store seed; Run calls FormatLeafIdentity / PreparePassPlan / RecordPasses.
-4. Workspace P2: multi-tree module fixture; nested `doctest test <mod>/...` (warm / partial-fail / count / isolation).
-5. CLI P3: same fixture; nested `doctest test tree-a tree-b` (warm / count bypass).
-6. Assert key equality, store hits, summary Cached counts, multi-prep outcomes, workspace, or multi-arg Cached.
+1. L2 library: leaf/group `Setup` builds fixtures; Run calls leafcache APIs only.
+2. L3 runtime: `Setup` builds doctest binary + mini fixture; nested `doctest test` ×N.
+3. L2 runsuite: twin trees + store seed; FormatLeafIdentity / PreparePassPlan / RecordPasses.
+4. L3 workspace: multi-tree module; nested `doctest test <mod>/...`.
+5. L3 cli-plan: multi-arg `doctest test tree-a tree-b`.
+6. Assert keys, store hits, or summary Cached (L3 only).
 
 ## Context
 

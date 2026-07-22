@@ -1,5 +1,6 @@
 ---
 label: heavy
+explanation: CLI edit contract via doctest binary
 ---
 
 ## Expected

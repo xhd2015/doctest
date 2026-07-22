@@ -3,14 +3,13 @@
 ## Version
 0.0.2
 
-Nested product tree for extractable multi-prep leaf-cache helpers (identity,
-prepare skip list, record passes). **GREEN** — APIs sealed under
-`libdoc/leafcache`. Does **not** end-to-end wire workspace `./...` leaf-cache
-(that product path is sealed under parent `workspace/**`).
+**Layer L2 in-process** — nested library tree for extractable multi-prep
+leaf-cache helpers (identity, prepare skip list, record passes). **GREEN** —
+APIs sealed under `libdoc/leafcache`. No product binary; no `label: heavy`.
 
-Parent tree `tests/leaf-cache/` owns full product surfaces: key/store/runtime
-(single-tree), workspace (`./...`), and multi-arg (`cli-plan/**`). This nested
-root stays independent for classic multi-prep unit isolation.
+Does **not** end-to-end wire workspace `./...` leaf-cache (that **L3** product
+path is under parent `workspace/**`). Parent tree owns L2 key/store/partial and
+L3 runtime/workspace/cli-plan.
 
 # DSN (Domain Specific Notion)
 
@@ -78,9 +77,10 @@ runsuite/
 
 ```sh
 doctest vet ./tests/leaf-cache/runsuite/
+# L2 — always discovered (no heavy labels)
 doctest test ./tests/leaf-cache/runsuite/ -count=1
-# Full parent product (includes workspace + multi-arg + single-tree):
-# doctest test ./tests/leaf-cache/ --label-all -count=1
+# Parent L2 mass:  doctest test ./tests/leaf-cache/...
+# Parent L3 e2e:   doctest test --label heavy ./tests/leaf-cache/...
 ```
 
 ## Expected public API (sealed)

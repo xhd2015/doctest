@@ -1,13 +1,8 @@
----
-label: heavy
-explanation: nested 3× doctest test on 2-leaf fixture with mid mutation
----
-
 ## Expected
 
-- All three runs exit 0.
-- Run2 warm: **Cached == 2** (both leaves skipped).
-- Run3 after editing leaf_a: **Cached == 1** (leaf_b still hit; leaf_a re-ran).
+- No harness error; keys are lowercase hex.
+- After editing leaf_a: **Hit == true** (sibling leaf_b key stable).
+- **HitB == false** (leaf_a key changed).
 
 ```go
 import "testing"
@@ -16,22 +11,17 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if resp.ExitCode != 0 {
-		t.Fatalf("run1 exit %d\n%s\n%s", resp.ExitCode, resp.Stdout, resp.Stderr)
+	if resp.Err != "" {
+		t.Fatalf("resp.Err: %s", resp.Err)
 	}
-	if resp.ExitCode2 != 0 {
-		t.Fatalf("run2 exit %d\n%s\n%s", resp.ExitCode2, resp.Stdout2, resp.Stderr2)
+	if !hexKey(resp.Key) || !hexKey(resp.Key2) {
+		t.Fatalf("expected hex keys; Key=%q Key2=%q", resp.Key, resp.Key2)
 	}
-	if resp.ExitCode3 != 0 {
-		t.Fatalf("run3 exit %d\n%s\n%s", resp.ExitCode3, resp.Stdout3, resp.Stderr3)
+	if !resp.Hit {
+		t.Fatalf("expected sibling leaf_b key stable (Hit=true)")
 	}
-	c2 := cachedCount(resp.Stdout2)
-	if c2 != 2 {
-		t.Fatalf("run2 warm expected Cached==2, got %d\nstdout2:\n%s", c2, resp.Stdout2)
-	}
-	c3 := cachedCount(resp.Stdout3)
-	if c3 != 1 {
-		t.Fatalf("run3 after leaf_a edit expected Cached==1 (sibling only), got %d\nstdout3:\n%s", c3, resp.Stdout3)
+	if resp.HitB {
+		t.Fatalf("expected leaf_a key to change after ASSERT edit (HitB=false)")
 	}
 }
 ```

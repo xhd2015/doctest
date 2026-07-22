@@ -4,6 +4,33 @@
 
 0.0.2
 
+## Layer model (L2 in-process vs L3 e2e)
+
+Coverage-backfill layer split. **Default discovery** runs **L2 only** (unlabeled,
+fast library mass). Nested product CLI leaves are **`label: heavy`** and opt-in
+via `--label heavy` (or `--label-all`).
+
+| Layer | Subtrees | Run model | Labels |
+|-------|----------|-----------|--------|
+| **L2 in-process** | `matcher/` (nested), `select/` (nested) | Call `core.EvalLabelExpr`, `DiscoverTreeCasesLight`, `FilterCasesByLabel` — **no** `testbin` | unlabeled |
+| **L3 e2e** | `cli/**` | Nested product binary (`testbin.Ensure` + `doctest test`) | **`label: heavy`** + explanation “CLI filter contract via doctest binary” |
+
+| L2 surface | API | Branch |
+|------------|-----|--------|
+| Expression evaluator | `EvalLabelExpr` | `matcher/**` |
+| Discover + selection | `DiscoverTreeCasesLight` + `FilterCasesByLabel` (+ `FilterBySubDir`) | `select/**` |
+
+| L3 surface (sparse) | Contract | Branch |
+|---------------------|----------|--------|
+| Help text | `doctest test --help` documents `--label` | `cli/help/**` |
+| Parse error CLI | invalid EXPR → non-zero, stderr parse/syntax | `cli/parse-error/**` |
+| Discovery e2e smoke | full run + compact skip stdout | `cli/discovery/filter-single/` |
+| Explicit leaf e2e | path + `--label` runs | `cli/explicit-leaf/filter-match/` |
+| Changed + label | `--changed` then label filter | `cli/with-changed/**` |
+
+Pure expression semantics and selection policy live in L2. CLI keeps only
+process-boundary contracts (help text, full stdout format, --changed interaction).
+
 # DSN (Domain Specific Notion)
 
 ### Participants
@@ -13,6 +40,7 @@
 - **Label expression parser** — parses `&&`, `||`, parentheses; combines repeatable `--label` flags with OR.
 - **Fixture mod tree** — temp tree with `fast` (unlabeled), `slow`, `ui`, `both`, `heavy` leaves.
 - **Git fixture** — ephemeral repo for `--changed` then `--label` ordering.
+- **core selection APIs** — in-process discover/filter used by L2 `select/`.
 
 ### Behaviors
 
@@ -21,22 +49,23 @@
 - **Invalid EXPR** — non-zero exit and parse error on stderr before any leaf runs.
 - **Help** — `doctest test --help` documents `--label`.
 - **Matcher** — `core.EvalLabelExpr(expr, labels)` returns match bool or parse error (library contract).
+- **Select** — light discover + `FilterCasesByLabel` yields run/skipped path sets (library contract).
 
 ## Parameter Ranking
 
 | Rank | Factor | Splits at |
 |------|--------|-----------|
-| 1 | Test surface | `matcher/` (library) vs `cli/` (subprocess) |
-| 2 | CLI outcome | `parse-error/` vs `help/` vs `discovery/` vs `explicit-leaf/` vs `with-changed/` |
-| 3 | Expression shape | single, AND, OR, precedence, parentheses, whitespace, multi-flag OR |
-| 4 | Selection outcome | partial match, single match, no match, skip reason lines |
+| 1 | Layer / surface | `matcher/` + `select/` (L2) vs `cli/` (L3) |
+| 2 | L2 contract | expression shape vs discover+filter selection |
+| 3 | CLI outcome | `parse-error/` vs `help/` vs `discovery/` vs `explicit-leaf/` vs `with-changed/` |
+| 4 | Expression shape | single, AND, OR, multi-flag OR, no-match |
 | 5 | Invocation | tree root discovery vs explicit leaf path |
 
 ## Decision Tree
 
 ```
 label-filter/
-├── matcher/                              SURFACE: EvalLabelExpr (nested DOCTEST.md)
+├── matcher/                              [L2] EvalLabelExpr (nested DOCTEST.md)
 │   ├── single-label/
 │   ├── and/
 │   ├── or/
@@ -44,56 +73,68 @@ label-filter/
 │   ├── parentheses/
 │   ├── whitespace/
 │   └── invalid-syntax/
-├── cli/                                  SURFACE: doctest test subprocess
-│   ├── parse-error/
-│   │   └── trailing-and/
-│   ├── help/
-│   │   └── documents-label/
-│   ├── discovery/
-│   │   ├── filter-single/
-│   │   ├── filter-and/
-│   │   ├── filter-or/
-│   │   ├── no-match/
-│   │   ├── multi-flag-or/
-│   │   └── skip-reason/
-│   ├── explicit-leaf/
-│   │   ├── filter-match/
-│   │   └── filter-miss/
-│   └── with-changed/
-│       └── changed-then-label/
+├── select/                               [L2] DiscoverTreeCasesLight + FilterCasesByLabel
+│   ├── filter-single/
+│   ├── filter-and/
+│   ├── filter-or/
+│   ├── multi-flag-or/
+│   ├── no-match/
+│   ├── skip-reason/
+│   └── explicit-leaf/
+│       ├── filter-match/
+│       └── filter-miss/
+└── cli/                                  [L3 heavy] doctest binary subprocess
+    ├── parse-error/
+    │   └── trailing-and/
+    ├── help/
+    │   └── documents-label/
+    ├── discovery/
+    │   └── filter-single/                e2e smoke: PASS + compact skip
+    ├── explicit-leaf/
+    │   └── filter-match/
+    └── with-changed/
+        └── changed-then-label/
 ```
 
 ## Test Index
 
-| # | Leaf | Expected |
-|---|------|----------|
-| 1 | `matcher/single-label/` | `slow` matches `{slow}`; not `{}` or `{fast}` |
-| 2 | `matcher/and/` | `slow && ui` matches `{slow,ui}`; not `{slow}` |
-| 3 | `matcher/or/` | `slow \|\| heavy` matches `{slow}` and `{heavy}`; not `{fast}` |
-| 4 | `matcher/precedence/` | `a \|\| b && c` ≡ `a \|\| (b && c)` |
-| 5 | `matcher/parentheses/` | `(slow \|\| heavy) && ui` only when both constraints hold |
-| 6 | `matcher/whitespace/` | trimmed ` slow && ui ` parses and matches |
-| 7 | `matcher/invalid-syntax/` | `slow &&` parse error |
-| 8 | `cli/parse-error/trailing-and/` | non-zero exit, stderr parse error, no PASS line |
-| 9 | `cli/help/documents-label/` | stdout includes `--label` |
-| 10 | `cli/discovery/filter-single/` | runs `slow` + `both`; skips others |
-| 11 | `cli/discovery/filter-and/` | runs `both` only |
-| 12 | `cli/discovery/filter-or/` | runs `slow`, `both`, `heavy` |
-| 13 | `cli/discovery/no-match/` | exit 0, all skipped, no PASS line |
-| 14 | `cli/discovery/multi-flag-or/` | `--label slow --label heavy` ≡ OR expr |
-| 15 | `cli/discovery/skip-reason/` | skipped entries include `reason: label filter` |
-| 16 | `cli/explicit-leaf/filter-match/` | explicit `slow` + `--label slow` runs |
-| 17 | `cli/explicit-leaf/filter-miss/` | explicit `slow` + `--label heavy` skipped |
-| 18 | `cli/with-changed/changed-then-label/` | `--changed` then label filter on changed subset |
+| # | Leaf | Layer | Expected |
+|---|------|-------|----------|
+| 1 | `matcher/single-label/` | L2 | `slow` matches `{slow}`; not `{}` or `{fast}` |
+| 2 | `matcher/and/` | L2 | `slow && ui` matches `{slow,ui}`; not `{slow}` |
+| 3 | `matcher/or/` | L2 | `slow \|\| heavy` matches `{slow}` and `{heavy}`; not `{fast}` |
+| 4 | `matcher/precedence/` | L2 | `a \|\| b && c` ≡ `a \|\| (b && c)` |
+| 5 | `matcher/parentheses/` | L2 | `(slow \|\| heavy) && ui` only when both constraints hold |
+| 6 | `matcher/whitespace/` | L2 | trimmed ` slow && ui ` parses and matches |
+| 7 | `matcher/invalid-syntax/` | L2 | `slow &&` parse error |
+| 8 | `select/filter-single/` | L2 | run slow+both |
+| 9 | `select/filter-and/` | L2 | run both only |
+| 10 | `select/filter-or/` | L2 | run slow, both, heavy |
+| 11 | `select/multi-flag-or/` | L2 | LabelExprs OR ≡ single OR expr |
+| 12 | `select/no-match/` | L2 | empty run, 5 skips |
+| 13 | `select/skip-reason/` | L2 | Reason == "label filter" |
+| 14 | `select/explicit-leaf/filter-match/` | L2 | subdir slow matches |
+| 15 | `select/explicit-leaf/filter-miss/` | L2 | subdir slow miss → skip |
+| 16 | `cli/parse-error/trailing-and/` | L3 | non-zero exit, stderr parse error |
+| 17 | `cli/help/documents-label/` | L3 | stdout includes `--label` |
+| 18 | `cli/discovery/filter-single/` | L3 | PASS(2/2) + compact skip buckets |
+| 19 | `cli/explicit-leaf/filter-match/` | L3 | explicit slow + `--label slow` runs |
+| 20 | `cli/with-changed/changed-then-label/` | L3 | `--changed` then label on changed subset |
 
-Regression for behavior **without** `--label` lives in `tests/test/label-skip/` (run separately after implementation).
+Regression for behavior **without** `--label` lives in `tests/test/label-skip/` (run separately).
 
 ## How to Run
 
 ```sh
 doctest vet ./tests/test/label-filter
+# default discovery: L2 matcher + select (skips label: heavy CLI)
 doctest test ./tests/test/label-filter
-doctest test ./tests/test/label-filter/matcher
+doctest test ./tests/test/label-filter/matcher/...
+doctest test ./tests/test/label-filter/select/...
+# L3 CLI e2e
+doctest test --label heavy ./tests/test/label-filter/...
+# full suite
+doctest test --label-all ./tests/test/label-filter/...
 # regression without --label:
 doctest test ./tests/test/label-skip
 ```

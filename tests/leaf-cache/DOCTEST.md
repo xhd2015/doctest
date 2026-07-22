@@ -4,32 +4,44 @@
 0.0.2
 
 Specification for `github.com/xhd2015/doctest/libdoc/leafcache` and its
-wiring into `doctest test` across **all product invocation shapes**:
+wiring into `doctest test` across **all product invocation shapes**.
 
-| Invocation shape | Example | Product branch |
-|------------------|---------|----------------|
-| **Single-tree** | `doctest test ./path/to/tree` | `runtime/**`, `polish/**`, … |
-| **Workspace / `./...`** | `doctest test <mod>/...` (multi-root module) | `workspace/**` |
+## Layer model (L2 in-process vs L3 e2e)
+
+Coverage-backfill layer split. **Default discovery** runs **L2 only** (unlabeled,
+fast library mass). Nested product paths are **`label: heavy`** and opt-in via
+`--label heavy` (or `--label-all`).
+
+| Layer | Subtrees | Run model | Labels |
+|-------|----------|-----------|--------|
+| **L2 in-process** | `key/`, `store/`, `runsuite/` (nested root), `partial-package-deps/`, most of `polish/` (selective + isolation) | Call `libdoc/leafcache` APIs directly — **no** `testbin` / nested `doctest test` | unlabeled |
+| **L3 e2e** | `runtime/`, `workspace/`, `cli-plan/`, `polish/docs/` | Nested product binary (`testbin.Ensure` + `runtime_multi` / `runtime_once`) | **`label: heavy`** + short explanation |
+
+| Invocation shape (L3) | Example | Branch |
+|-----------------------|---------|--------|
+| **Single-tree** | `doctest test ./path/to/tree` | `runtime/**` |
+| **Workspace / `./...`** | `doctest test <mod>/...` | `workspace/**` |
 | **Multi-arg** | `doctest test treeA treeB` | `cli-plan/**` |
+| **Help docs** | `doctest test --help` | `polish/docs/**` |
 
 Leaf-cache is **not** single-tree only. Warm skip, PutPass, disable flags
 (`-count` / `-a` / `--no-leaf-cache`), and summary **Cached** apply on every
-shape above. **Cached** in the suite summary is the **programmatic leaf-cache
-skip count** (GetPass hits), not go testcache alone — product leaves isolate
-`GOCACHE` so observed `N Cached` is leaf-cache only.
+product shape above. **Cached** is the **programmatic leaf-cache skip count**
+(GetPass hits), not go testcache alone — L3 leaves isolate `GOCACHE`.
 
-| Phase | Surface | Status |
-|-------|---------|--------|
-| **Library** | `ComputeLeafKey` + `Store` GetPass/PutPass | sealed `key/**`, `store/**` (**GREEN**) |
-| **Runtime** | suite skip, CLI disable flags, summary **Cached** | sealed warm/disable/fail (**GREEN**); stream PutPass + grey dots **RED** under `runtime/stream-pass/**`, `runtime/progress-dots/**` |
-| **Polish** | selective invalidation, tree isolation, help docs | sealed `polish/**` + `key/tree-identity/**` + `partial-package-deps/**` (**GREEN**) |
-| **RunSuite extract** | multi-prep identity + `PreparePassPlan` / `RecordPasses` | sealed nested `runsuite/**` (**GREEN**) |
-| **Workspace product** | multi-tree `__workspace` (hub shares finish path) warm + PutPass + Cached | sealed `workspace/**` (**GREEN**) |
-| **CLI multi-arg** | multi-arg `a b` same leaf-cache policy as single + `./...` | sealed `cli-plan/**` (**GREEN**) |
+| Phase | Surface | Layer | Status |
+|-------|---------|-------|--------|
+| **Library key/store** | `ComputeLeafKey` + `Store` | **L2** `key/**`, `store/**` | **GREEN** |
+| **Partial package DAG** | multi-leaf key stability | **L2** `partial-package-deps/**` | **GREEN** |
+| **Polish (keys)** | selective + isolation via ComputeLeafKey | **L2** `polish/selective/**`, `polish/isolation/**` | **GREEN** |
+| **RunSuite extract** | FormatLeafIdentity / PreparePassPlan / RecordPasses | **L2** nested `runsuite/**` | **GREEN** |
+| **Runtime product** | suite skip, disable flags, stream PutPass, grey dots | **L3 heavy** `runtime/**` | **GREEN** |
+| **Workspace product** | multi-tree `__workspace` Cached | **L3 heavy** `workspace/**` | **GREEN** |
+| **CLI multi-arg** | multi-arg `a b` Cached policy | **L3 heavy** `cli-plan/**` | **GREEN** |
+| **Help docs** | `test --help` flags | **L3 heavy** `polish/docs/**` | **GREEN** |
 
-P1–P3 production + product leaves are sealed. P4 is **docs / How to Run
-alignment** only — no new production features; hub multi-mod has no separate
-leaf (same `finishWorkspaceGoTest` as single-module workspace).
+Target share: **in-process (L2) ≥ ~60%** of leaf count; remaining e2e labeled
+`heavy` so CI default discovery stays cheap.
 
 # DSN (Domain Specific Notion)
 
@@ -185,7 +197,7 @@ doctest test treeA treeB
 
 ```
 tests/leaf-cache/
-├── key/                                      [library ComputeLeafKey]
+├── key/                                      [L2 library ComputeLeafKey]
 │   ├── stable/identical-twice
 │   ├── spine/{leaf-assert-change,ancestor-setup-change}
 │   ├── local-package/{imported-source-change,unrelated-source-stable}
@@ -193,31 +205,22 @@ tests/leaf-cache/
 │   ├── remote/source-not-hashed
 │   ├── go-version/different-differs
 │   └── tree-identity/different-abs-roots/    same content, different TreeRoot → keys≠
-├── store/                                    [library GetPass/PutPass]
+├── store/                                    [L2 library GetPass/PutPass]
 │   ├── put-then-get
 │   ├── missing-false
 │   └── root-isolation
-├── runtime/                                  [doctest test + leaf cache]
-│   ├── warm/second-run-cached/
-│   ├── disable/{count,force-a,no-leaf-cache}-bypasses/
-│   ├── fail-path/fail-not-stored/
-│   ├── stream-pass/interrupt-partial-cached/ SIGINT after pass dots → next Cached>=1
-│   └── progress-dots/
-│       ├── warm-grey-dots/                   quiet+--color warm → grey progress dots
-│       ├── fail-still-red/                   --color pass+fail → red fail dot
-│       └── count-no-grey-cached/             warm grey then -count=1 → 0 grey dots
-├── partial-package-deps/                     [partial leaf-cache across packages]
-│   ├── edit-alone-d-two-cached/              edit alone/d → 2 Cached (shared leaves warm)
-│   └── edit-shared-a-one-cached/             edit shared/a → 1 Cached (leaf-d warm)
-├── polish/                                   [runtime polish]
-│   ├── selective/
-│   │   ├── sibling-stays-cached/             edit leaf_a ASSERT → sibling still Cached
-│   │   └── local-dep-invalidates/            edit imported pkg → leaf re-runs (0 Cached)
-│   ├── isolation/
-│   │   └── same-relpath-two-trees/           warm treeA; treeB cold (no cross-tree hit)
-│   └── docs/
+├── partial-package-deps/                     [L2 multi-leaf key DAG]
+│   ├── edit-alone-d-two-cached/              alone/d edit → ab keys stable, d changes
+│   └── edit-shared-a-one-cached/             shared/a edit → ab keys change, d stable
+├── polish/                                   [mix: L2 keys + L3 help]
+│   ├── selective/                            [L2]
+│   │   ├── sibling-stays-cached/             leaf_a ASSERT edit → sibling key stable
+│   │   └── local-dep-invalidates/            imported pkg edit → leaf key changes
+│   ├── isolation/                            [L2]
+│   │   └── same-relpath-two-trees/           twin TreeRoots → distinct keys
+│   └── docs/                                 [L3 heavy]
 │       └── test-help-mentions-flags/         test --help lists -a / no-leaf-cache
-├── runsuite/                                 [nested DOCTEST.md — multi-prep extract]
+├── runsuite/                                 [L2 nested DOCTEST.md — multi-prep extract]
 │   ├── identity/
 │   │   ├── same-relpath-two-trees/           FormatLeafIdentity distinct across trees
 │   │   └── stable-roundtrip/                 stable + distinguishes leaf rels
@@ -226,21 +229,29 @@ tests/leaf-cache/
 │       ├── prepare-one-warm-only/            only A warm → skip = [idA]
 │       ├── prepare-skip-disabled/            skipEnabled=false → empty Skip
 │       └── record-partial-fail/              failed id not PutPass; other is
-├── workspace/                                [./... multi-tree product path]
+├── runtime/                                  [L3 heavy — nested doctest test]
+│   ├── warm/second-run-cached/
+│   ├── disable/{count,force-a,no-leaf-cache}-bypasses/
+│   ├── fail-path/fail-not-stored/
+│   ├── stream-pass/interrupt-partial-cached/ SIGINT after pass dots → next Cached>=1
+│   └── progress-dots/
+│       ├── warm-grey-dots/                   quiet+--color warm → grey progress dots
+│       ├── fail-still-red/                   --color pass+fail → red fail dot
+│       └── count-no-grey-cached/             warm grey then -count=1 → 0 grey dots
+├── workspace/                                [L3 heavy — ./... multi-tree product]
 │   ├── warm/second-run-cached/               two trees all pass; run2 Cached >= 2
 │   ├── partial-fail/fail-one-others-cached/  pass+fail trees; run2 Cached >= 1, still fail
 │   ├── disable/count-bypasses/               warm then -count=1 → 0 Cached
 │   └── isolation/same-relpath-no-cross-skip/ warm tree-a; workspace must not false-skip tree-b
-└── cli-plan/                                 [multi-arg product path]
+└── cli-plan/                                 [L3 heavy — multi-arg product]
     └── multi-arg/
         ├── warm/second-run-cached/           test treeA treeB twice; sum Cached >= 2
         └── disable/count-bypasses/           warm then multi-arg -count=1 → 0 Cached
 ```
 
-> **Nested root:** `tests/leaf-cache/runsuite/DOCTEST.md` is a self-contained tree
-> (own Request/Response/Run) so classic multi-prep APIs stay isolated from parent
-> compile. **Workspace** (`./...`) and **CLI multi-arg** product leaves live under
-> the parent tree (same `runtime_multi` nested-CLI harness as `runtime/**`).
+> **Nested root:** `tests/leaf-cache/runsuite/DOCTEST.md` is a self-contained **L2**
+> tree (own Request/Response/Run). **L3** product leaves (`runtime/`, `workspace/`,
+> `cli-plan/`, `polish/docs/`) share the parent harness and are labeled `heavy`.
 
 ## Test Index
 
@@ -261,7 +272,7 @@ tests/leaf-cache/
 | `store/missing-false` | Missing key → false |
 | `store/root-isolation` | Root A invisible under B |
 
-### Runtime (single-tree product — sealed GREEN + new RED)
+### Runtime (L3 e2e single-tree product — sealed GREEN, `label: heavy`)
 
 | Leaf | Scenario | Expect |
 |------|----------|--------|
@@ -270,22 +281,22 @@ tests/leaf-cache/
 | `runtime/disable/force-a-bypasses` | Run1 store; run2 warm Cached>0; run3 `-a` → `0 Cached` | **GREEN** |
 | `runtime/disable/no-leaf-cache-bypasses` | Run1 store; run2 warm Cached>0; run3 `--no-leaf-cache` → `0 Cached` | **GREEN** |
 | `runtime/fail-path/fail-not-stored` | Failing fixture twice; both exit ≠0 and `0 Cached` | **GREEN** |
-| `runtime/stream-pass/interrupt-partial-cached` | Multi-leaf + hang; SIGINT after 2 pass dots; unhang; run2 Cached >= 1 | **RED** (stream PutPass) |
-| `runtime/progress-dots/warm-grey-dots` | 2-leaf warm second run with `--color` → grey progress dots >= 2 | **RED** (grey skip dots) |
-| `runtime/progress-dots/fail-still-red` | 1-pass+1-fail `--color` → red progress dot present | **GREEN** (lock-in; fail dots already red) |
-| `runtime/progress-dots/count-no-grey-cached` | Warm grey then `-count=1 --color` → 0 Cached, 0 grey dots | **RED** (depends on grey) |
+| `runtime/stream-pass/interrupt-partial-cached` | Multi-leaf + hang; SIGINT after pass dots; unhang; run2 Cached >= 1 | **GREEN** |
+| `runtime/progress-dots/warm-grey-dots` | 2-leaf warm second run with `--color` → grey progress dots >= 2 | **GREEN** |
+| `runtime/progress-dots/fail-still-red` | 1-pass+1-fail `--color` → red progress dot present | **GREEN** |
+| `runtime/progress-dots/count-no-grey-cached` | Warm grey then `-count=1 --color` → 0 Cached, 0 grey dots | **GREEN** |
 
-### Polish / isolation / partial deps
+### Polish / partial deps (mostly L2 library; docs L3)
 
-| Leaf | Scenario | Expect |
-|------|----------|--------|
-| `key/tree-identity/different-abs-roots` | Identical content under two abs TreeRoots → distinct keys | **GREEN** (TreeRoot mixed into key) |
-| `polish/selective/sibling-stays-cached` | 2-pass tree; warm both; edit leaf_a; re-run → Cached == 1 | **GREEN** |
-| `polish/selective/local-dep-invalidates` | Pass leaf imports local pkg; warm; edit pkg; re-run → 0 Cached | **GREEN** |
-| `partial-package-deps/edit-alone-d-two-cached` | 3 leaves / 4 pkgs; edit alone/d; run2 → **2 Cached** | **GREEN** |
-| `partial-package-deps/edit-shared-a-one-cached` | same fixture; edit shared/a; run2 → **1 Cached** | **GREEN** |
-| `polish/isolation/same-relpath-two-trees` | Warm treeA; first run treeB same relpath → 0 Cached | **GREEN** |
-| `polish/docs/test-help-mentions-flags` | `doctest test --help` mentions `-a` and `--no-leaf-cache` | **GREEN** |
+| Leaf | Layer | Scenario | Expect |
+|------|-------|----------|--------|
+| `key/tree-identity/different-abs-roots` | L2 | Identical content under two abs TreeRoots → distinct keys | **GREEN** |
+| `partial-package-deps/edit-alone-d-two-cached` | L2 | alone/d edit → ab keys stable, leaf-d key changes | **GREEN** |
+| `partial-package-deps/edit-shared-a-one-cached` | L2 | shared/a edit → ab keys change, leaf-d stable | **GREEN** |
+| `polish/selective/sibling-stays-cached` | L2 | edit leaf_a ASSERT → sibling key stable | **GREEN** |
+| `polish/selective/local-dep-invalidates` | L2 | edit imported pkg → leaf key changes | **GREEN** |
+| `polish/isolation/same-relpath-two-trees` | L2 | twin TreeRoots → distinct keys | **GREEN** |
+| `polish/docs/test-help-mentions-flags` | **L3 heavy** | `doctest test --help` mentions `-a` and `--no-leaf-cache` | **GREEN** |
 
 ### RunSuite P1 (multi-prep extract — sealed GREEN)
 
@@ -298,7 +309,7 @@ tests/leaf-cache/
 | `runsuite/multi-prep/prepare-skip-disabled` | skipEnabled=false → empty Skip; keys still set | **GREEN** |
 | `runsuite/multi-prep/record-partial-fail` | failed A not stored; B PutPass'd | **GREEN** |
 
-### Workspace multi-tree product (`./...` / `<mod>/...` — sealed GREEN)
+### Workspace multi-tree product (L3 heavy — sealed GREEN)
 
 | Leaf | Scenario | Expect |
 |------|----------|--------|
@@ -307,51 +318,51 @@ tests/leaf-cache/
 | `workspace/disable/count-bypasses` | warm then workspace `-count=1` → 0 Cached | **GREEN** |
 | `workspace/isolation/same-relpath-no-cross-skip` | warm tree-a; workspace Cached==1 and tree-b still fails | **GREEN** |
 
-### CLI multi-arg product (sealed GREEN)
+### CLI multi-arg product (L3 heavy — sealed GREEN)
 
 | Leaf | Scenario | Expect |
 |------|----------|--------|
 | `cli-plan/multi-arg/warm/second-run-cached` | `test treeA treeB` twice; sum Cached >= 2 | **GREEN** |
 | `cli-plan/multi-arg/disable/count-bypasses` | warm then multi-arg `-count=1` → 0 Cached | **GREEN** |
 
-Single-tree warm/disable remain under `runtime/**` (no duplicate leaves).
-`./...` / multi-root workspace remains under `workspace/**`. Multi-arg remains
-under `cli-plan/**`. Summary **Cached** on all three paths is the leaf-cache
-product counter (skip hits), not go package cache.
+Summary **Cached** on L3 paths is the leaf-cache product counter (skip hits),
+not go package cache. L2 key/store/partial/polish-keys never invoke the product binary.
 
 ## How to Run
 
-Product leaves under `runtime/**`, `polish/**`, `partial-package-deps/**`,
-`workspace/**`, and `cli-plan/**` are labeled `heavy` — use **`--label-all`**
-(or an explicit path + label opt-in) for the full product tree. Nested
-`runsuite/` has no labels and is always discovered.
+**Discovery (default)** runs unlabeled **L2** library mass only — skips `label: heavy`.
+**L3** nested product paths require `--label heavy` (or `--label-all`).
+
+| Command | What runs |
+|---------|-----------|
+| `doctest test ./tests/leaf-cache/...` | L2: key, store, partial, polish keys, … |
+| `doctest test --label heavy ./tests/leaf-cache/...` | L3: runtime, workspace, cli-plan, polish/docs |
+| `doctest test --label-all ./tests/leaf-cache/...` | All leaves (L2 + L3) |
+| Nested `runsuite/` | Always L2 (own root; no heavy labels) |
 
 ```sh
-# Structure check (parent tree + nested runsuite roots)
+# Structure check (parent tree + nested runsuite root)
 doctest vet ./tests/leaf-cache/
 doctest vet ./tests/leaf-cache/runsuite/
 
-# Full leaf-cache product suite (library + single + workspace + multi-arg)
-doctest test ./tests/leaf-cache/ --label-all -count=1
-
-# By surface (all must stay GREEN)
+# L2 library mass (default discovery — fast)
+doctest test ./tests/leaf-cache/...
 doctest test ./tests/leaf-cache/key/...
 doctest test ./tests/leaf-cache/store/...
-doctest test ./tests/leaf-cache/runtime/... --label-all -count=1     # single-tree product
-# New RED surfaces (stream PutPass + grey progress dots):
-doctest test ./tests/leaf-cache/runtime/stream-pass/... --label-all -count=1
-doctest test ./tests/leaf-cache/runtime/progress-dots/... --label-all -count=1
-doctest test ./tests/leaf-cache/polish/... --label-all -count=1
-doctest test ./tests/leaf-cache/partial-package-deps/... --label-all -count=1
-doctest test ./tests/leaf-cache/runsuite/ -count=1                  # multi-prep extract
-doctest test ./tests/leaf-cache/workspace/... --label-all -count=1  # ./... multi-tree product
-doctest test ./tests/leaf-cache/cli-plan/... --label-all -count=1   # multi-arg product
-
-# Minimum exit-criteria product set (P4)
+doctest test ./tests/leaf-cache/partial-package-deps/...
+doctest test ./tests/leaf-cache/polish/selective/...
+doctest test ./tests/leaf-cache/polish/isolation/...
 doctest test ./tests/leaf-cache/runsuite/ -count=1
-doctest test ./tests/leaf-cache/workspace/... --label-all -count=1
-doctest test ./tests/leaf-cache/cli-plan/... --label-all -count=1
-doctest test ./tests/leaf-cache/runtime/... --label-all -count=1
+
+# L3 e2e product paths (opt-in heavy)
+doctest test --label heavy ./tests/leaf-cache/...
+doctest test --label heavy ./tests/leaf-cache/runtime/...
+doctest test --label heavy ./tests/leaf-cache/workspace/...
+doctest test --label heavy ./tests/leaf-cache/cli-plan/...
+doctest test --label heavy ./tests/leaf-cache/polish/docs/...
+
+# Full tree (library + product)
+doctest test --label-all ./tests/leaf-cache/... -count=1
 ```
 
 **Multi-path policy reminder:** leaf-cache applies to single-tree, workspace
@@ -421,6 +432,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -432,8 +444,12 @@ import (
 
 // Request selects one leaf-cache surface. Leaves set Op and related fields.
 // RunSuite multi-prep lives in nested tree tests/leaf-cache/runsuite/ (own DOCTEST.md).
+//
+// Layer model (see ## Layer model above):
+//   L2 library ops: compute_*, store_*, partial_package_keys, two_sibling_keys
+//   L3 e2e ops:     runtime_multi, runtime_once (product binary)
 type Request struct {
-	Op string // compute_twice | compute_mutate | compute_go_versions | store_put_get | store_missing | store_isolate | compute_two_inputs | runtime_multi | runtime_once
+	Op string // compute_twice | compute_mutate | compute_go_versions | store_put_get | store_missing | store_isolate | compute_two_inputs | partial_package_keys | two_sibling_keys | runtime_multi | runtime_once
 
 	// --- library fixture / store ---
 	WorkDir    string
@@ -645,6 +661,125 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 			return resp, err
 		}
 		resp.Key, resp.Key2 = k1, k2
+		return resp, nil
+
+	case "partial_package_keys":
+		// Multi-leaf key DAG: leaf-ab-1, leaf-ab-2 (shared a/b/c) + leaf-d (alone/d).
+		// Hit = both ab leaves stable across Mutation; HitB = leaf-d stable.
+		// L2 library — no product binary.
+		if req.ModuleRoot == "" || req.TreeRoot == "" {
+			return nil, fmt.Errorf("partial_package_keys: ModuleRoot/TreeRoot not set")
+		}
+		if req.Mutation == "" {
+			return nil, fmt.Errorf("partial_package_keys: Mutation is empty")
+		}
+		ab1 := filepath.Join(req.TreeRoot, "leaf-ab-1")
+		ab2 := filepath.Join(req.TreeRoot, "leaf-ab-2")
+		dLeaf := filepath.Join(req.TreeRoot, "leaf-d")
+		keyOf := func(leafDir string) (string, error) {
+			return leafcache.ComputeLeafKey(leafcache.KeyInput{
+				ModuleRoot: req.ModuleRoot,
+				TreeRoot:   req.TreeRoot,
+				LeafDir:    leafDir,
+				GoVersion:  req.GoVersion,
+			})
+		}
+		kAB1, err := keyOf(ab1)
+		if err != nil {
+			resp.Err = err.Error()
+			return resp, err
+		}
+		kAB2, err := keyOf(ab2)
+		if err != nil {
+			resp.Err = err.Error()
+			return resp, err
+		}
+		kD, err := keyOf(dLeaf)
+		if err != nil {
+			resp.Err = err.Error()
+			return resp, err
+		}
+		if err := applyPolishMutation(t, req); err != nil {
+			resp.Err = err.Error()
+			return resp, err
+		}
+		kAB1b, err := keyOf(ab1)
+		if err != nil {
+			resp.Err = err.Error()
+			return resp, err
+		}
+		kAB2b, err := keyOf(ab2)
+		if err != nil {
+			resp.Err = err.Error()
+			return resp, err
+		}
+		kDb, err := keyOf(dLeaf)
+		if err != nil {
+			resp.Err = err.Error()
+			return resp, err
+		}
+		resp.Key = kAB1
+		resp.Key2 = kD
+		resp.Hit = kAB1 == kAB1b && kAB2 == kAB2b
+		resp.HitB = kD == kDb
+		return resp, nil
+
+	case "two_sibling_keys":
+		// leaf_a + leaf_b under FixtureDir; Mutation (polish_edit_leaf_a) between keys.
+		// Hit = leaf_b stable; HitB = leaf_a stable. L2 library — no product binary.
+		if req.FixtureDir == "" {
+			return nil, fmt.Errorf("two_sibling_keys: FixtureDir not set")
+		}
+		if req.Mutation == "" {
+			return nil, fmt.Errorf("two_sibling_keys: Mutation is empty")
+		}
+		// Mini trees use FixtureDir as both module and tree root (no go.mod).
+		modRoot := req.ModuleRoot
+		if modRoot == "" {
+			modRoot = req.FixtureDir
+		}
+		treeRoot := req.TreeRoot
+		if treeRoot == "" {
+			treeRoot = req.FixtureDir
+		}
+		leafA := filepath.Join(req.FixtureDir, "leaf_a")
+		leafB := filepath.Join(req.FixtureDir, "leaf_b")
+		keyOf := func(leafDir string) (string, error) {
+			return leafcache.ComputeLeafKey(leafcache.KeyInput{
+				ModuleRoot: modRoot,
+				TreeRoot:   treeRoot,
+				LeafDir:    leafDir,
+				GoVersion:  req.GoVersion,
+			})
+		}
+		kA, err := keyOf(leafA)
+		if err != nil {
+			resp.Err = err.Error()
+			return resp, err
+		}
+		kB, err := keyOf(leafB)
+		if err != nil {
+			resp.Err = err.Error()
+			return resp, err
+		}
+		if err := applyPolishMutation(t, req); err != nil {
+			resp.Err = err.Error()
+			return resp, err
+		}
+		kAb, err := keyOf(leafA)
+		if err != nil {
+			resp.Err = err.Error()
+			return resp, err
+		}
+		kBb, err := keyOf(leafB)
+		if err != nil {
+			resp.Err = err.Error()
+			return resp, err
+		}
+		resp.Key = kA
+		resp.Key2 = kB
+		resp.Hit = kB == kBb   // sibling stable
+		resp.HitB = kA == kAb  // mutated leaf stable?
 		return resp, nil
 
 	case "runtime_once":

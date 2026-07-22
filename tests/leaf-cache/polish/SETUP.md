@@ -1,45 +1,41 @@
 # Scenario
 
-**Feature**: P3 polish — selective invalidation, tree isolation, help docs
+**Feature**: P3 polish — selective key invalidation (L2) + help docs (L3)
 
 ```
-# selective: edit one leaf, sibling stays Cached
-# local dep: edit imported package, leaf re-runs
-# isolation: warm treeA does not warm treeB
-# docs: test --help lists leaf-cache flags
+# L2 library (no nested doctest):
+# selective: edit one leaf ASSERT → sibling key stable
+# local dep: edit imported package → leaf key changes
+# isolation: twin trees same relpath → distinct keys
+
+# L3 e2e (label: heavy):
+# docs: test --help lists leaf-cache flags (product binary)
 ```
 
 ## Preconditions
 
-- Nested CLI via testbin (same as runtime/).
-- Isolated DOCTEST_LEAF_CACHE + fresh GOCACHE per run.
-- Leaves labeled `heavy` where nested compile is required.
+- **Most leaves are L2** — `ComputeLeafKey` only; no `testbin` at this node.
+- **Docs** child builds the product binary for `runtime_once` help.
+- Selective / isolation / local-dep are unlabeled (discovery).
 
 ## Steps
 
-1. Ensure binary; isolate env.
-2. Child selects fixture and Args multi-run sequence.
+1. Default GoVersion for library leaves.
+2. Child selects fixture + Op (library or `runtime_once` for docs).
 
 ## Context
 
-- Extends P2 warm-skip with multi-leaf and multi-tree scenarios.
+- Key-level selective invalidation and tree isolation live here as L2 mass.
+- Full product warm **Cached** wiring remains under L3 `runtime/**`.
 
 ```go
-import (
-	"path/filepath"
-	"testing"
-	"time"
+import "testing"
 
-	"github.com/xhd2015/doctest/libdoc/testbin"
-	"github.com/xhd2015/doctest/session"
-)
-
-func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+func Setup(t *testing.T, req *Request) error {
 	t.Helper()
-	req.Timeout = 240 * time.Second
-	modRoot := filepath.Clean(filepath.Join(d.DOCTEST_ROOT, "..", ".."))
-	req.Bin = testbin.Ensure(t, modRoot)
-	req.Env = isolateRuntimeEnv(t)
+	if req.GoVersion == "" {
+		req.GoVersion = "go1.25.0"
+	}
 	return nil
 }
 ```

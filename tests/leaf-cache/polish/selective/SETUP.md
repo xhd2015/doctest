@@ -1,33 +1,27 @@
 # Scenario
 
-**Feature**: invalidation is per-leaf / per-DAG, not whole-tree wipe
+**Feature**: selective leaf-key invalidation (L2 library)
 
 ```
-# sibling path
-warm both leaves -> edit leaf_a ASSERT -> sibling still Cached
-
-# local-dep path
-warm leaf importing pkg -> edit pkg -> leaf re-runs (0 Cached)
+# sibling: mutate leaf_a ASSERT → leaf_b key stable, leaf_a key changes
+# local dep: mutate imported pkg → leaf key changes
 ```
 
 ## Preconditions
 
-- Children choose sibling vs local-dep fixture (MECE).
+- In-process `ComputeLeafKey` only (no product binary).
+- Unlabeled.
 
 ## Steps
 
-1. Child builds fixture and 3-run Args sequence with MutateAfterRun=2.
-
-## Context
-
-- Significance: selective miss is the main correctness property for multi-leaf suites.
+1. Child builds fixture and sets Op/Mutation.
+2. Assert key stability / change flags.
 
 ```go
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
 	t.Helper()
-	req.Op = "runtime_multi"
 	return nil
 }
 ```

@@ -1,31 +1,34 @@
-# Metrics Record — doctest test JSONL + default-suite WARNING (P2)
+# Metrics Record — doctest test JSONL + default-suite WARNING
 
 ## Version
 0.0.2
 
-Classic-TDD specification for **Phase P2**: wire recording from `doctest test`
-and the non-fatal default-suite slow WARNING. Depends on P1 package
-`github.com/xhd2015/doctest/libdoc/metrics` (writer, paths, project id).
+**Layer model (coverage backfill):** this tree is **L2 doctest in-process**.
+Leaves call pure `libdoc/metrics` helpers, `runner.ParseTestOptions`, and
+`runner.RunTest` in the same process as the harness — **no product binary
+spawn**. Recording leaves may still take multi-second wall time (nested
+prepare / go test via `RunTest`) and carry `label: heavy` accordingly.
 
-These tests exercise pure warn helpers and suite-level recording options. They
-do **not** implement production wiring — expect **RED** until the implementer
-adds helpers, `core.Options` fields, runner/CLI flags, and suite hooks.
+Coverage for metrics recording and the default-suite slow WARNING. Depends on
+package `github.com/xhd2015/doctest/libdoc/metrics` (writer, paths, project id)
+and runner/core options (`MetricsOn`, `MetricsRoot`).
 
-Out of scope: `doctest metrics` analyze (P3), review-perf skill docs (P4),
-env silence for WARNING, fail-on-slow-suite.
+Out of scope: `doctest metrics` analyze (`tests/metrics-cli`), review-perf skill
+docs, env silence for WARNING, fail-on-slow-suite.
 
 # DSN (Domain Specific Notion)
 
 ### Participants
 
-- **Caller** — `doctest test` (CLI or package entry) that owns one suite wall clock.
+- **Caller** — package entry `runner.RunTest` (or pure helpers) that owns one
+  suite wall clock.
 - **Warn helpers** — pure functions deciding whether to emit the default-suite
   slow WARNING and formatting its fixed message (no real 3-minute sleep in tests).
-- **Metrics options** — `MetricsOn` (CLI `--metrics-on`) and injectable
-  `MetricsRoot` (test cache root; production uses the user cache layout from P1).
+- **Metrics options** — `MetricsOn` (CLI `--metrics-on` / `ParseTestOptions`) and
+  injectable `MetricsRoot` (test cache root; production uses the user cache layout).
 - **Run recorder** — opens one exclusive JSONL run file under
   `$MetricsRoot/doctest/metrics/<project_id>/runs/`, writes `run_start` /
-  leaf events / `run_end` via the P1 buffered writer, closes on suite end.
+  leaf events / `run_end` via the buffered writer, closes on suite end.
 - **Default suite** — discovery with `!LabelAll && len(LabelExprs)==0`.
 - **Stderr** — receives non-fatal `WARNING:` after the result summary when the
   warn predicate fires; process exit is never driven solely by this warning.
@@ -50,9 +53,10 @@ env silence for WARNING, fail-on-slow-suite.
 ### Pipeline sketch
 
 ```
-doctest test [flags] <dir>
-  -> parse --metrics-on / labels -> Options
-  -> if MetricsOn: open run JSONL under MetricsRoot (or user cache)
+ParseTestOptions / core.Options
+  -> MetricsOn, MetricsRoot, labels
+  -> runner.RunTest(dir, opts)   # in-process
+  -> if MetricsOn: open run JSONL under MetricsRoot
   -> run_start
   -> execute leaves -> leaf_start / leaf_end*
   -> run_end (+ warnings)
@@ -63,49 +67,55 @@ doctest test [flags] <dir>
 ## Decision Tree
 
 ```
-tests/metrics-record/
-├── warn-predicate/                      [pure ShouldWarnDefaultSuiteSlow]
-│   ├── fires-default-over-threshold/    default + total>0 + elapsed>3m → true
-│   ├── no-fire-elapsed-at-or-under/     default + elapsed≤3m → false
-│   ├── no-fire-label-all/               LabelAll + slow → false
-│   ├── no-fire-label-exprs/             LabelExprs set + slow → false
-│   └── no-fire-total-zero/              total==0 + slow → false
-├── warning-message/                     [FormatDefaultSuiteSlowWarning]
-│   └── required-phrases/                WARNING:, skill, review-perf --show, 3 minutes
-├── flags/                               [CLI / ParseTestOptions]
-│   ├── default-metrics-on/              omit --metrics-on → MetricsOn=false
-│   └── no-metrics-sets-opt-out/         --metrics-on → MetricsOn=true
-└── recording/                           [suite run under injectable MetricsRoot]
-    ├── no-metrics-writes-nothing/       default MetricsOn=false → no new *.jsonl
-    ├── enabled-writes-run-start-end/    MetricsOn=true → run_start + run_end present
-    └── enabled-writes-leaf-events/      MetricsOn=true + 1 leaf → leaf_start/end present
+tests/metrics-record/                          [L2 in-process]
+├── warn-predicate/                            [pure ShouldWarnDefaultSuiteSlow]
+│   ├── fires-default-over-threshold/          default + total>0 + elapsed>3m → true
+│   ├── no-fire-elapsed-at-or-under/           default + elapsed≤3m → false
+│   ├── no-fire-label-all/                     LabelAll + slow → false
+│   ├── no-fire-label-exprs/                   LabelExprs set + slow → false
+│   └── no-fire-total-zero/                    total==0 + slow → false
+├── warning-message/                           [FormatDefaultSuiteSlowWarning]
+│   └── required-phrases/                      WARNING:, skill, review-perf --show, 3 minutes
+├── flags/                                     [ParseTestOptions]
+│   ├── default-metrics-on/                    omit --metrics-on → MetricsOn=false
+│   └── no-metrics-sets-opt-out/               --metrics-on → MetricsOn=true
+└── recording/                                 [runner.RunTest + MetricsRoot]
+    ├── no-metrics-writes-nothing/             MetricsOn=false → no new *.jsonl
+    ├── enabled-writes-run-start-end/          MetricsOn=true → run_start + run_end  [heavy]
+    ├── enabled-writes-leaf-events/            MetricsOn=true + 1 leaf → leaf_*      [heavy]
+    └── phases/                                phase events via RunTest
+        ├── emits-tree-phases/
+        └── leaf-not-full-tree-wall/
 ```
 
 ## Test Index
 
-| Leaf | Focus | Expected |
+| Leaf | Layer | Expected |
 |------|--------|----------|
-| `warn-predicate/fires-default-over-threshold` | pure | `ShouldWarn...` true |
-| `warn-predicate/no-fire-elapsed-at-or-under` | pure | false at 3m and under 3m |
-| `warn-predicate/no-fire-label-all` | pure | false when not default (label-all) |
-| `warn-predicate/no-fire-label-exprs` | pure | false when LabelExprs non-empty |
-| `warn-predicate/no-fire-total-zero` | pure | false when total=0 |
-| `warning-message/required-phrases` | pure | fixed message substrings |
-| `flags/default-metrics-on` | parse | `MetricsOn == false` by default |
-| `flags/no-metrics-sets-opt-out` | parse | `--metrics-on` → `MetricsOn == true` |
-| `recording/no-metrics-writes-nothing` | integration | MetricsRoot has no new run JSONL |
-| `recording/enabled-writes-run-start-end` | integration | JSONL has run_start then run_end |
-| `recording/enabled-writes-leaf-events` | integration | leaf_start + leaf_end for executed leaf |
+| `warn-predicate/fires-default-over-threshold` | L2 pure | `ShouldWarn...` true |
+| `warn-predicate/no-fire-elapsed-at-or-under` | L2 pure | false at 3m and under 3m |
+| `warn-predicate/no-fire-label-all` | L2 pure | false when not default (label-all) |
+| `warn-predicate/no-fire-label-exprs` | L2 pure | false when LabelExprs non-empty |
+| `warn-predicate/no-fire-total-zero` | L2 pure | false when total=0 |
+| `warning-message/required-phrases` | L2 pure | fixed message substrings |
+| `flags/default-metrics-on` | L2 parse | `MetricsOn == false` by default |
+| `flags/no-metrics-sets-opt-out` | L2 parse | `--metrics-on` → `MetricsOn == true` |
+| `recording/no-metrics-writes-nothing` | L2 RunTest | MetricsRoot has no new run JSONL |
+| `recording/enabled-writes-run-start-end` | L2 RunTest (heavy) | JSONL has run_start then run_end |
+| `recording/enabled-writes-leaf-events` | L2 RunTest (heavy) | leaf_start + leaf_end for executed leaf |
+| `recording/phases/emits-tree-phases` | L2 RunTest | discover/generate/go_test phase events |
+| `recording/phases/leaf-not-full-tree-wall` | L2 RunTest | leaf elapsed not full-tree clone |
 
 ## How to Run
 
 ```sh
 doctest vet ./tests/metrics-record/
-doctest test ./tests/metrics-record/                 # RED until P2 wired
-doctest test ./tests/metrics-record/warn-predicate/...
-doctest test ./tests/metrics-record/warning-message/...
-doctest test ./tests/metrics-record/flags/...
-doctest test ./tests/metrics-record/recording/...
+# default discovery: pure + flags + unlabeled recording (skips label: heavy)
+doctest test ./tests/metrics-record/
+# heavy recording leaves (nested prepare/go test via runner.RunTest)
+doctest test --label heavy ./tests/metrics-record/...
+# full suite
+doctest test --label-all ./tests/metrics-record/...
 ```
 
 ```go
@@ -115,7 +125,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -127,7 +136,8 @@ import (
 	"github.com/xhd2015/doctest/libdoc/testtree"
 )
 
-// Request selects one P2 surface. Leaves set Op and related fields.
+// Request selects one surface. Leaves set Op and related fields.
+// All Ops are in-process (no product binary).
 type Request struct {
 	Op string // should_warn | format_warn | parse_flags | record_run
 
@@ -149,9 +159,6 @@ type Request struct {
 	Dir         string // fixture tree; empty → Run builds a 1-leaf pass tree
 	LabelAll    bool
 	LabelExprs  []string
-	ExtraArgs   []string // appended to `test` argv when using CLI path
-	UseCLI      bool     // if true, invoke doctest binary; else package RunTest
-	Bin         string   // set by Setup when UseCLI
 }
 
 type WarnCase struct {
@@ -165,8 +172,8 @@ type WarnCase struct {
 
 type Response struct {
 	// pure warn
-	ShouldWarn bool
-	Message    string
+	ShouldWarn  bool
+	Message     string
 	WarnResults []bool // parallel to req.WarnCases
 
 	// flags
@@ -213,7 +220,6 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 		return resp, nil
 
 	case "parse_flags":
-		// Implementer exports ParseTestOptions (or TestExported_ParseTestOptions).
 		opts, remain, err := runner.ParseTestOptions(req.Args)
 		if err != nil {
 			resp.ParseErr = err.Error()
@@ -237,60 +243,24 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 
 		before := listRunJSONL(t, root)
 
-		if req.UseCLI {
-			if req.Bin == "" {
-				return nil, fmt.Errorf("record_run UseCLI requires req.Bin")
-			}
-			args := []string{"test"}
-			if req.MetricsOn {
-				args = append(args, "--metrics-on")
-			}
-			if req.LabelAll {
-				args = append(args, "--label-all")
-			}
-			for _, e := range req.LabelExprs {
-				args = append(args, "--label", e)
-			}
-			args = append(args, req.ExtraArgs...)
-			args = append(args, dir)
-
-			cmd := exec.Command(req.Bin, args...)
-			cmd.Env = append(os.Environ(), "DOCTEST_METRICS_ROOT="+root)
-			var stdout, stderr bytes.Buffer
-			cmd.Stdout = &stdout
-			cmd.Stderr = &stderr
-			err := cmd.Run()
-			resp.Stdout = stdout.String()
-			resp.Stderr = stderr.String()
-			if err != nil {
-				resp.RunErr = err.Error()
-				if ee, ok := err.(*exec.ExitError); ok {
-					resp.ExitCode = ee.ExitCode()
-				} else {
-					resp.ExitCode = -1
-				}
-			}
-		} else {
-			opts := core.Options{
-				Stderr:      &bytes.Buffer{},
-				Stdout:      &bytes.Buffer{},
-				RemoveTemp:  true,
-				MetricsOn:   req.MetricsOn,
-				MetricsRoot: root,
-				LabelAll:    req.LabelAll,
-				LabelExprs:  append([]string(nil), req.LabelExprs...),
-			}
-			// Implementer provides suite entry that records metrics + optional WARNING.
-			err := runner.RunTest(dir, opts)
-			if buf, ok := opts.Stdout.(*bytes.Buffer); ok {
-				resp.Stdout = buf.String()
-			}
-			if buf, ok := opts.Stderr.(*bytes.Buffer); ok {
-				resp.Stderr = buf.String()
-			}
-			if err != nil {
-				resp.RunErr = err.Error()
-			}
+		opts := core.Options{
+			Stderr:      &bytes.Buffer{},
+			Stdout:      &bytes.Buffer{},
+			RemoveTemp:  true,
+			MetricsOn:   req.MetricsOn,
+			MetricsRoot: root,
+			LabelAll:    req.LabelAll,
+			LabelExprs:  append([]string(nil), req.LabelExprs...),
+		}
+		err := runner.RunTest(dir, opts)
+		if buf, ok := opts.Stdout.(*bytes.Buffer); ok {
+			resp.Stdout = buf.String()
+		}
+		if buf, ok := opts.Stderr.(*bytes.Buffer); ok {
+			resp.Stderr = buf.String()
+		}
+		if err != nil {
+			resp.RunErr = err.Error()
 		}
 
 		after := listRunJSONL(t, root)
@@ -311,7 +281,7 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 
 func createOnePassTree(t *testing.T) string {
 	t.Helper()
-	// Process-shared fixture so 5 recording leaves reuse gen/GOCACHE.
+	// Process-shared fixture so recording leaves reuse gen/GOCACHE.
 	return testtree.SharedPassFailTree(t, 1, 0)
 }
 

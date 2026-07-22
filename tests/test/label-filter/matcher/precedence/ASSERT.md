@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - `a || b && c` matches `{a}` and `{b,c}` but not `{b}` alone.

@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - Parentheses require `ui` and at least one of `slow` or `heavy`.

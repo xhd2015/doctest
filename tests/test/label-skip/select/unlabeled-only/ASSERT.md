@@ -1,0 +1,17 @@
+## Expected
+
+- Run plain_leaf; no skips.
+
+```go
+import "testing"
+
+func Assert(t *testing.T, req *Request, resp *Response, err error) {
+	if err != nil {
+		t.Fatal(err)
+	}
+	requirePaths(t, resp.RunPaths, []string{"plain_leaf"}, "run")
+	if len(resp.SkippedPaths) != 0 {
+		t.Fatalf("skipped=%v", resp.SkippedPaths)
+	}
+}
+```

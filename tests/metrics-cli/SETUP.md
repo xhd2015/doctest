@@ -1,43 +1,46 @@
 # Scenario
 
-**Feature**: analyze recorded metrics via `doctest metrics` against fixture JSONL
+**Feature**: analyze recorded metrics via `libdoc/metrics` APIs (default) or sparse CLI e2e
 
 ```
-# build CLI once
-go build ./cmd/doctest -> req.Bin
+# L2 default: in-process analyze against fixture JSONL
+MetricsRoot=<temp> + ProjectID
+  -> write runs/*.jsonl fixtures
+  -> metrics.ListRunFiles / RankLeaves / SelectRun / AggregateRuns / …
+  -> Response{Stdout, ExitCode, RunFiles}
 
-# inject metrics root; resolve project from cwd origin
+# L3 e2e (e2e/ only, label: heavy)
+go build ./cmd/doctest -> req.Bin
 DOCTEST_METRICS_ROOT=<temp>
-cwd (git origin) -> project_id
-  -> $root/doctest/metrics/<project_id>/runs/*.jsonl
-  -> doctest metrics <subcmd> [flags]
+  -> doctest metrics <subcmd>
 ```
 
 ## Preconditions
 
-- Module root is `DOCTEST_ROOT/../..`.
+- Module root is `DOCTEST_ROOT/../..` (e2e binary build only).
 - P1 layout and P2 event shapes are fixed; this tree only reads fixtures.
-- Env `DOCTEST_METRICS_ROOT` overrides the metrics cache root for the CLI
-  (same as P2 recording tests).
+- L2 injects MetricsRoot / ProjectID on `Request` — no env or binary required.
+- L3 e2e uses env `DOCTEST_METRICS_ROOT` with the product binary.
 - Prune retention under test: keep newest **30** run files per project.
 - Leaves never invoke long `doctest test` suites to populate metrics; they
   write JSONL fixtures under a temp MetricsRoot.
 
 ## Steps
 
-1. Build (or reuse) the doctest binary via `testbin.Ensure`.
-2. Descendants create WorkDir + MetricsRoot, seed `runs/*.jsonl`, set `Args`.
-3. `Run` executes `req.Bin` with `DOCTEST_METRICS_ROOT` and captures I/O.
+1. Root Setup is a no-op (no binary by default).
+2. Descendants create MetricsRoot, seed `runs/*.jsonl`, set `Args`.
+3. Default `Run` dispatches in-process to `libdoc/metrics`.
+4. `e2e/` Setup sets `UseCLI`, builds binary once via `testbin.Ensure`.
 
 ## Context
 
-- Shared helpers live in this root `SETUP.md` Go block (fixture writers, git cwd).
+- Shared helpers live in this root `SETUP.md` Go block (fixture writers).
 - `Request` / `Response` / `Run` are defined only in `DOCTEST.md`.
 - Parallel-safe: each leaf uses `t.TempDir()` for MetricsRoot and WorkDir.
+- **Layer**: L2 in-process is the mass; L3 e2e is sparse and labeled `heavy`.
 
 ```go
 import (
-"github.com/xhd2015/doctest/session"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -45,24 +48,19 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/xhd2015/doctest/libdoc/metrics"
-	"github.com/xhd2015/doctest/libdoc/testbin"
+	"github.com/xhd2015/doctest/session"
 )
 
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-	if req.Timeout == 0 {
-		req.Timeout = 45 * time.Second
-	}
-	if req.Bin == "" {
-		req.Bin = testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, "..", ".."))
-	}
+	// Default: in-process. e2e/ subtree Setup sets UseCLI + Bin.
+	_ = d
 	return nil
 }
 
-// ensureFixtureProject creates a temp git cwd with FixtureOrigin and sets
-// req.WorkDir, req.ProjectID, and (if empty) req.MetricsRoot.
+// ensureFixtureProject creates a temp MetricsRoot + ProjectID (and optional git
+// cwd for e2e/ProjectIDForDir). Sets req.WorkDir, req.ProjectID, req.MetricsRoot.
 func ensureFixtureProject(t *testing.T, req *Request) {
 	t.Helper()
 	if req.MetricsRoot == "" {
@@ -74,11 +72,10 @@ func ensureFixtureProject(t *testing.T, req *Request) {
 	if req.ProjectID == "" {
 		req.ProjectID = metrics.ProjectIDFromOrigin(FixtureOrigin)
 	}
-	// git init + origin (ignore errors if already initialized)
+	// git init + origin (harmless for L2; required if ProjectIDForDir is used)
 	runQuiet(t, req.WorkDir, "git", "init")
 	runQuiet(t, req.WorkDir, "git", "remote", "remove", "origin")
 	if out, err := exec.Command("git", "-C", req.WorkDir, "remote", "add", "origin", FixtureOrigin).CombinedOutput(); err != nil {
-		// if origin already correct, ok; else fail
 		got, _ := exec.Command("git", "-C", req.WorkDir, "remote", "get-url", "origin").Output()
 		if strings.TrimSpace(string(got)) != FixtureOrigin {
 			t.Fatalf("git remote add origin: %v\n%s", err, out)
@@ -210,13 +207,13 @@ func fixtureRunDefault(runID string) []map[string]any {
 			"cached":     false,
 		},
 		{
-			"type":      "run_end",
-			"wall_ns":   int64(11_000_000_000),
-			"passed":    4,
-			"total":     4,
-			"skipped":   0,
-			"exit_ok":   true,
-			"warnings":  []any{},
+			"type":     "run_end",
+			"wall_ns":  int64(11_000_000_000),
+			"passed":   4,
+			"total":    4,
+			"skipped":  0,
+			"exit_ok":  true,
+			"warnings": []any{},
 		},
 	}
 }

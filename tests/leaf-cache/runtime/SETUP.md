@@ -1,6 +1,6 @@
 # Scenario
 
-**Feature**: doctest test wires leaf-cache into skip + summary Cached
+**Feature**: doctest test wires leaf-cache into skip + summary Cached (**L3 e2e**)
 
 ```
 # isolated env
@@ -12,10 +12,11 @@ DOCTEST_LEAF_CACHE + DOCTEST_CACHE_HOME; fresh GOCACHE per run
 
 ## Preconditions
 
-- Nested CLI integration — single-tree leaf-cache product path (**GREEN**).
+- **Layer L3** — nested CLI product path (`label: heavy` on every leaf).
 - Requires a freshly built doctest binary (`testbin.Ensure`).
 - Fixture trees are temp mini doctest projects (not this tree's key/store leaves).
 - Fresh `GOCACHE` per invocation so `N Cached` means programmatic leaf-cache skips only.
+- Skipped by default discovery; run with `--label heavy`.
 
 ## Steps
 
@@ -27,7 +28,7 @@ DOCTEST_LEAF_CACHE + DOCTEST_CACHE_HOME; fresh GOCACHE per run
 
 - Significance: single-tree product surface; workspace `./...` is under
   `workspace/**`, multi-arg under `cli-plan/**` — same Cached/disable policy.
-- Labels: leaves use `heavy` (nested compile + two runs).
+- Labels: **all leaves `heavy`** (nested compile + multi-run product path).
 
 ```go
 import (

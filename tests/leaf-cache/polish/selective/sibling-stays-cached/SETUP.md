@@ -1,40 +1,38 @@
 # Scenario
 
-**Feature**: editing one leaf ASSERT re-runs only that leaf; sibling stays Cached
+**Feature**: editing one leaf ASSERT changes only that leaf's key; sibling key stable
 
 ```
-run1: test 2-leaf tree -> store both
-run2: warm -> Cached == 2
-mutate leaf_a ASSERT
-run3: Cached == 1 (leaf_b only)
+keys0 = ComputeLeafKey(leaf_a), ComputeLeafKey(leaf_b)
+mutate leaf_a ASSERT Go
+keys1 = ...
+# leaf_a key changes; leaf_b key unchanged
 ```
 
 ## Preconditions
 
-- Fixture with `leaf_a` and `leaf_b`.
-- Mutation `polish_edit_leaf_a` after run2.
+- Fixture with `leaf_a` and `leaf_b` (`prepareTwoSiblingPassLeaves`).
+- Mutation `polish_edit_leaf_a`.
 
 ## Steps
 
-1. prepareTwoSiblingPassLeaves.
-2. Args/Args2/Args3 = `test <fixture>`; MutateAfterRun=2.
+1. Prepare two-sibling fixture.
+2. Op=`two_sibling_keys`.
 
 ## Context
 
-- Proves keys are leaf-scoped, not tree-scoped wipe on any edit.
+- Library proof that keys are leaf-scoped (product Cached==1 is the L3 consequence under runtime warm + multi-leaf).
 
 ```go
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
 	t.Helper()
-	req.Op = "runtime_multi"
+	req.Op = "two_sibling_keys"
 	req.FixtureDir = prepareTwoSiblingPassLeaves(t)
-	req.Args = []string{"test", req.FixtureDir}
-	req.Args2 = []string{"test", req.FixtureDir}
-	req.Args3 = []string{"test", req.FixtureDir}
+	req.TreeRoot = req.FixtureDir
+	req.ModuleRoot = req.FixtureDir
 	req.Mutation = "polish_edit_leaf_a"
-	req.MutateAfterRun = 2
 	return nil
 }
 ```
