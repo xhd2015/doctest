@@ -581,8 +581,10 @@ func runRunner(io stdio, args []string, usage string, fn func([]string) error) e
 		return nil
 	}
 	err := fn(args)
-	if errors.Is(err, runner.ErrNoTestsFound) {
-		// Prefer injected stderr (RunWithWriters) so nested harnesses capture "no tests".
+	// Soft no-tests: exit 0 + "no tests" on stderr. Match the sentinel and the
+	// historical plain errors.New("no tests") text so discovery empty paths never
+	// hard-fail (CI vs local must agree).
+	if err != nil && (errors.Is(err, runner.ErrNoTestsFound) || err.Error() == runner.ErrNoTestsFound.Error()) {
 		fmt.Fprintln(io.Err(), "no tests")
 		return nil
 	}

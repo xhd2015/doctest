@@ -145,7 +145,8 @@ func FindDotDotDotDirs(basePath string) ([]string, error) {
 		dirs, err := FindDOCTestDirsWithBase(".", ".")
 		if err == nil {
 			if len(dirs) == 0 {
-				return nil, errors.New("no tests")
+				// Must be the sentinel so cli runRunner soft-exits 0 ("no tests").
+				return nil, ErrNoTestsFound
 			}
 			return dirs, nil
 		}
@@ -210,7 +211,8 @@ func FindDotDotDotDirs(basePath string) ([]string, error) {
 				return []string{absBase}, nil
 			}
 		}
-		return nil, errors.New("no tests")
+		// Must be the sentinel so cli runRunner soft-exits 0 ("no tests").
+		return nil, ErrNoTestsFound
 	}
 	return dirs, nil
 }
