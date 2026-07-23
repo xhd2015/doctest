@@ -60,14 +60,12 @@ doctest test -v ./tests/skills-update
 
 ```go
 import (
-	"github.com/xhd2015/doctest/libdoc/cli"
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"testing"
 	"time"
 )
@@ -87,7 +85,6 @@ type Request struct {
 
 	Timeout time.Duration
 	Bin     string
-	UseCLI	bool
 }
 
 type Response struct {
@@ -98,54 +95,25 @@ type Response struct {
 }
 
 func Run(t *testing.T, req *Request) (*Response, error) {
-	t.Helper()
-	if !req.UseCLI {
-		var stdout bytes.Buffer
-		err := cli.RunWithWriter(&stdout, req.Args)
-		resp := &Response{Stdout: stdout.String(), Err: err}
-		if err != nil {
-			resp.ExitCode = 1
-			resp.Stderr = err.Error()
-			return resp, nil
-		}
-		return resp, nil
+	if req.Bin == "" {
+		return nil, fmt.Errorf("doctest binary path is required")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), req.Timeout)
-	if req.Timeout <= 0 {
-		cancel()
-		ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)
+	if req.WorkDir == "" {
+		return nil, fmt.Errorf("WorkDir is required")
 	}
-	defer cancel()
-	bin := req.Bin
-	if bin == "" {
-		return nil, fmt.Errorf("UseCLI requires req.Bin")
+	timeout := req.Timeout
+	if timeout == 0 {
+		timeout = 60 * time.Second
 	}
-	cmd := exec.CommandContext(ctx, bin, req.Args...)
-	if req.WorkDir != "" {
-		cmd.Dir = req.WorkDir
-	}
-	if len(req.Env) > 0 {
-		cmd.Env = append(os.Environ(), req.Env...)
-	}
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	resp := &Response{Stdout: stdout.String(), Stderr: stderr.String(), Err: err}
-	if err == nil {
-		return resp, nil
-	}
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
-		resp.ExitCode = exitErr.ExitCode()
-		return resp, nil
-	}
-	if ctx.Err() != nil {
-		return resp, ctx.Err()
-	}
-	return resp, err
-}
 
+	for _, pre := range req.PreInstalls {
+		if err := runCLI(t, req.Bin, req.WorkDir, timeout, pre.Args, req.Env); err != nil {
+			return nil, fmt.Errorf("pre-install %v: %w", pre.Args, err)
+		}
+	}
+
+	return runCLICapture(t, req.Bin, req.WorkDir, timeout, req.Args, req.Env)
+}
 
 func childEnv(extra []string) []string {
 	return append(append([]string(nil), os.Environ()...), extra...)

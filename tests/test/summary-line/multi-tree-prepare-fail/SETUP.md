@@ -28,6 +28,8 @@ import (
 func Setup(t *testing.T, req *Request) error {
 	mod := createPrepareFailMultiTree(t)
 	genDir := filepath.Join(t.TempDir(), "gen")
+	// WorkDir + ./... needs subprocess isolation (L2 ignores WorkDir).
+	req.UseCLI = true
 	req.WorkDir = mod
 	req.Args = []string{"test", "--gen-dir", genDir, "--no-color", "./..."}
 	return nil

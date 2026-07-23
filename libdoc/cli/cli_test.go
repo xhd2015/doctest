@@ -38,9 +38,7 @@ func TestRunHelpOutput(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stdout, err := captureStdout(func() error {
-				return Run(tt.args)
-			})
+			stdout, err := captureRun(tt.args)
 			if err != nil {
 				t.Fatalf("Run(%v): %v", tt.args, err)
 			}
@@ -84,9 +82,7 @@ func TestRunErrorCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := captureStdout(func() error {
-				return Run(tt.args)
-			})
+			_, err := captureRun(tt.args)
 			if err == nil {
 				t.Fatalf("Run(%v): expected error containing %q", tt.args, tt.wantErr)
 			}
@@ -100,9 +96,7 @@ func TestRunErrorCases(t *testing.T) {
 func TestRunAgentGenerateParsesIdeaAndFlags(t *testing.T) {
 	tmp := t.TempDir()
 	outDir := tmp + string(os.PathSeparator) + "generated"
-	stdout, err := captureStdout(func() error {
-		return Run([]string{"agent", "generate", "invoice", "cli", "--dir", outDir, "--agent-runner", "fake-codex"})
-	})
+	stdout, err := captureRun([]string{"agent", "generate", "invoice", "cli", "--dir", outDir, "--agent-runner", "fake-codex"})
 	if err != nil {
 		t.Fatalf("Run generate: %v\nstdout:\n%s", err, stdout)
 	}
@@ -115,10 +109,10 @@ func TestRunAgentGenerateParsesIdeaAndFlags(t *testing.T) {
 	}
 }
 
-// captureStdout captures CLI user-facing text via withTestStdout.
-// Never reassigns os.Stdout (Parallel-safe).
-func captureStdout(fn func() error) (string, error) {
+// captureRun runs the CLI with stdout+stderr directed at a buffer (no process
+// stdio swap; safe under t.Parallel).
+func captureRun(args []string) (string, error) {
 	var buf bytes.Buffer
-	err := withTestStdout(&buf, fn)
+	err := RunWithWriters(&buf, &buf, args)
 	return buf.String(), err
 }

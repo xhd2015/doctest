@@ -61,41 +61,40 @@ import (
 )
 
 type Request struct {
-	Args	[]string
-	Env	[]string
-	WorkDir	string
-	Timeout	time.Duration
-	Bin	string
+	Args    []string
+	Env     []string
+	WorkDir string
+	Timeout time.Duration
+	Bin     string
 	// UseCLI: when true, spawn req.Bin (true e2e). Default false = in-process CLI.
-	// Required when Env or WorkDir must be isolated — never use os.Setenv/Chdir
-	// under t.Parallel() leaves.
-	UseCLI	bool
+	// WorkDir or Env forces subprocess (cmd.Dir/cmd.Env) — never process Setenv/Chdir.
+	UseCLI bool
 	// Parent-side paths for helpers/Assert (also put on child Env). Never process Setenv.
-	SessionHome	string
-	YieldPQBin	string
-	TestQFile	string // yield-pending Assert path; not process env
+	SessionHome string
+	YieldPQBin  string
+	TestQFile   string // yield-pending Assert path; not process env
 
 	// Multi-run harness results (parallel-safe). Filled by leaf Setup helpers
 	// (doMultiRun) so Assert never reads package-global state under t.Parallel().
 	// Each multi-run uses a unique DOCTEST_SESSION_ID for its warmup/measured pair.
-	MRFirst		*Response
-	MRSecond	*Response
-	MRGenDir	string
+	MRFirst  *Response
+	MRSecond *Response
+	MRGenDir string
 
 	// Cold-cache sandbox paths (parallel-safe). Filled by cold-cache Setup helpers
 	// instead of a package-global `st` struct.
-	CCCacheHome	string
-	CCWarmHome	string
-	CCColdHome	string
-	CCGenDir	string
-	CCTestDir	string
-	CCMarker	string
+	CCCacheHome string
+	CCWarmHome  string
+	CCColdHome  string
+	CCGenDir    string
+	CCTestDir   string
+	CCMarker    string
 }
 type Response struct {
-	ExitCode	int
-	Stdout		string
-	Stderr		string
-	Err		error
+	ExitCode int
+	Stdout   string
+	Stderr   string
+	Err      error
 }
 
 func Run(t *testing.T, req *Request) (*Response, error) {
@@ -104,28 +103,28 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 		req.Timeout = 2 * time.Minute
 	}
 
-	// Env / WorkDir need process isolation. Never os.Setenv or os.Chdir here —
-	// leaves run under t.Parallel(). Force the subprocess path.
-	if !req.UseCLI && (len(req.Env) > 0 || req.WorkDir != "") {
-		return nil, fmt.Errorf("Env/WorkDir require UseCLI (subprocess isolation; no process Setenv/Chdir under Parallel)")
-	}
-
-	// Default L2: in-process CLI. No process-global env/cwd mutation.
-	if !req.UseCLI {
-		var stdout bytes.Buffer
-		err := cli.RunWithWriter(&stdout, req.Args)
-		resp := &Response{Stdout: stdout.String(), Err: err}
+	// L2 pure in-process when no WorkDir/Env (no process cwd/env mutation).
+	// WorkDir or Env → subprocess with cmd.Dir/cmd.Env (Parallel-safe; Bin from root Setup).
+	// Prefer subprocess over L2 path-rewrite for WorkDir so ./... discovery keeps
+	// the same module-boundary semantics as a real cwd (nested go.mod, etc.).
+	needProc := req.UseCLI || len(req.Env) > 0 || req.WorkDir != ""
+	if !needProc {
+		var stdout, stderr bytes.Buffer
+		err := cli.RunWithWriters(&stdout, &stderr, req.Args)
+		resp := &Response{Stdout: stdout.String(), Stderr: stderr.String(), Err: err}
 		if err != nil {
 			resp.ExitCode = 1
-			resp.Stderr = err.Error()
+			if resp.Stderr == "" {
+				resp.Stderr = err.Error()
+			}
 			return resp, nil
 		}
 		return resp, nil
 	}
 
-	// L3 e2e: real product binary; Env/Dir only on cmd (child process).
+	// Subprocess: real product binary; Env/Dir only on cmd (child process).
 	if req.Bin == "" {
-		return nil, fmt.Errorf("UseCLI requires req.Bin")
+		return nil, fmt.Errorf("UseCLI/WorkDir/Env require req.Bin (root Setup should Ensure; Parallel-safe)")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), req.Timeout)
 	defer cancel()

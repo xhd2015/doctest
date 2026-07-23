@@ -133,23 +133,22 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 	if req.Timeout <= 0 {
 		req.Timeout = 120 * time.Second
 	}
-	// Env/WorkDir require subprocess isolation — never parent Setenv/Chdir.
-	if !req.UseCLI && (len(req.Env) > 0 || req.WorkDir != "") {
-		return nil, fmt.Errorf("Env/WorkDir require UseCLI (subprocess isolation; Parallel-safe)")
-	}
-	if !req.UseCLI {
-		var stdout bytes.Buffer
-		err := cli.RunWithWriter(&stdout, req.Args)
-		resp := &Response{Stdout: stdout.String(), Err: err}
+	needProc := req.UseCLI || len(req.Env) > 0 || req.WorkDir != ""
+	if !needProc {
+		var stdout, stderr bytes.Buffer
+		err := cli.RunWithWriters(&stdout, &stderr, req.Args)
+		resp := &Response{Stdout: stdout.String(), Stderr: stderr.String(), Err: err}
 		if err != nil {
 			resp.ExitCode = 1
-			resp.Stderr = err.Error()
+			if resp.Stderr == "" {
+				resp.Stderr = err.Error()
+			}
 			return resp, nil
 		}
 		return resp, nil
 	}
 	if req.Bin == "" {
-		return nil, fmt.Errorf("UseCLI requires req.Bin")
+		return nil, fmt.Errorf("UseCLI/WorkDir/Env require req.Bin (root Setup should Ensure; Parallel-safe)")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), req.Timeout)
 	defer cancel()

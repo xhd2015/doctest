@@ -92,13 +92,18 @@ type Response struct {
 }
 func Run(t *testing.T, req *Request) (*Response, error) {
 	t.Helper()
-	if !req.UseCLI {
-		var stdout bytes.Buffer
-		err := cli.RunWithWriter(&stdout, req.Args)
-		resp := &Response{Stdout: stdout.String(), Err: err}
+	// Env (e.g. DOCTEST_DEBUG_SESSION_HOME) needs a child process — never Setenv.
+	// WorkDir alone can stay L2 but these leaves almost always set Env.
+	needProc := req.UseCLI || len(req.Env) > 0 || req.WorkDir != ""
+	if !needProc {
+		var stdout, stderr bytes.Buffer
+		err := cli.RunWithWriters(&stdout, &stderr, req.Args)
+		resp := &Response{Stdout: stdout.String(), Stderr: stderr.String(), Err: err}
 		if err != nil {
 			resp.ExitCode = 1
-			resp.Stderr = err.Error()
+			if resp.Stderr == "" {
+				resp.Stderr = err.Error()
+			}
 			return resp, nil
 		}
 		return resp, nil
@@ -111,7 +116,7 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 	defer cancel()
 	bin := req.Bin
 	if bin == "" {
-		return nil, fmt.Errorf("UseCLI requires req.Bin")
+		return nil, fmt.Errorf("UseCLI/Env require req.Bin")
 	}
 	cmd := exec.CommandContext(ctx, bin, req.Args...)
 	if req.WorkDir != "" {

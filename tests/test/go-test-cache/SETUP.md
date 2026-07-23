@@ -37,7 +37,9 @@ import (
     "testing"
     "time"
 
+    "github.com/xhd2015/doctest/libdoc/testbin"
     "github.com/xhd2015/doctest/libdoc/testtree"
+    "github.com/xhd2015/doctest/session"
 )
 
 var bt = "`" + "`" + "`"
@@ -416,8 +418,14 @@ func modifiedRunCode() string {
     return runCodeWithLog("run-edited")
 }
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     req.Timeout = 120 * time.Second
+    // Multi-run helpers (doMultiRun / doRunWithEnv) always exec the product
+    // binary with isolated GOCACHE — need Bin even when leaf UseCLI is false.
+    // This tree sits under the product `tests/` DOCTEST root → module is parent.
+    if req.Bin == "" {
+        req.Bin = testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, ".."))
+    }
     return nil
 }
 ```

@@ -54,9 +54,9 @@ Examples:
   doctest metrics prune
 `
 
-func runMetrics(args []string) error {
+func runMetrics(io stdio, args []string) error {
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
-		fmt.Fprint(cliStdout(), metricsUsage)
+		fmt.Fprint(io.Out(), metricsUsage)
 		return nil
 	}
 	sub := args[0]
@@ -77,7 +77,7 @@ func runMetrics(args []string) error {
 	case "prune":
 		return metricsPrune(rest)
 	case "help":
-		fmt.Fprint(cliStdout(), metricsUsage)
+		fmt.Fprint(io.Out(), metricsUsage)
 		return nil
 	default:
 		return fmt.Errorf("unknown metrics subcommand: %s\n\n%s", sub, metricsUsage)

@@ -1,6 +1,7 @@
 package build
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -290,33 +291,15 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	// Prefer JSON suite-leaf accounting when available. actual_run = pass+fail
 	// (exclude runtime t.Skip from denominator). SkipCount is separate.
 	// On timeout: never invent phantom passes from planned − failCount.
-	actualRun := result.passCount + result.failCount
-	if stats.TimedOut {
-		stats.Passed = result.passCount
-		stats.Total = actualRun
-		stats.SkipCount = result.skipCount
-	} else if actualRun > 0 || result.skipCount > 0 {
-		stats.Passed = result.passCount
-		stats.Total = actualRun
-		stats.SkipCount = result.skipCount
-	} else {
-		stats.Passed = passedCases(stats.Total, result.failCount)
-	}
+	// On build failed with no leaf events: do not treat package fail as 1 Run
+	// or pre-planned leaf-cache skips as Cached.
+	applyGoTestLeafStats(&stats, &result, len(cases), skipPaths, opts)
 	if ctx.unifiedMode {
 		stats.LeafTimings = leafTimingsFromSubtests(cases, result, goTestElapsed)
 	} else {
 		stats.LeafTimings = leafTimingsFromPackages(cases, packageArgs, isSingleLeaf, result, goTestElapsed)
 	}
-
-	// Summary Cached is leaf-cache-only:
-	//   - Cached = number of warm leaf-cache skips (GetPass hits used for skip)
-	//   - full go package (cached) expands to N only when every leaf key also
-	//     hits (otherwise go DCE/testcache can stay warm while spine text
-	//     changed and leaf keys miss — product wants 0 Cached then)
-	//   - leaf-cache bypass (-count / -a / --no-leaf-cache): always 0
-	result.cachedCount = leafCachedSummary(len(cases), skipPaths, result.anyPackageCached(),
-		leafcache.SkipEnabled(opts.Count, opts.ForceWithFlagA, opts.NoLeafCache))
-	recordLeafCachePasses(leafKeys, result.suiteLeafFailed, goTestErr == nil && result.failCount == 0)
+	recordLeafCachePasses(leafKeys, result.suiteLeafFailed, goTestErr == nil && result.failCount == 0 && !result.buildFailed)
 
 	// Quiet path: compact progress summary. Verbose already streamed Output events.
 	// Progress stays finished-only (no Cancelled segment).
@@ -514,10 +497,16 @@ type goTestJSONResult struct {
 	// timeoutError is a clear user-facing line when go test panics with
 	// "test timed out after <d>" (JSON Output events are otherwise buffered
 	// under the test name and dropped because timeout emits no per-test fail).
-	timeoutError  string
-	pkgElapsedNs  map[string]int64 // import path -> package-level Elapsed from -json
-	pkgCached     map[string]bool
-	testElapsedNs map[string]int64 // full test name (incl. subtests) -> Elapsed
+	timeoutError string
+	// buildFailed is true when go test reported [build failed] and no suite
+	// leaf subtests were observed (package never linked/ran leaves).
+	buildFailed bool
+	// suiteLeafEvents is pass+fail+skip countable suite leaves (for late
+	// build-failed collapse; distinct from suiteLeafFailed which is fails only).
+	suiteLeafEvents int
+	pkgElapsedNs    map[string]int64 // import path -> package-level Elapsed from -json
+	pkgCached       map[string]bool
+	testElapsedNs   map[string]int64 // full test name (incl. subtests) -> Elapsed
 	// suiteLeafFailed maps tree-relative leaf paths (slash form) that failed.
 	suiteLeafFailed map[string]bool
 }
@@ -536,6 +525,14 @@ func mergeGoTestJSONResult(dst *goTestJSONResult, src goTestJSONResult) {
 	dst.failCount += src.failCount
 	dst.skipCount += src.skipCount
 	dst.cachedCount += src.cachedCount
+	dst.suiteLeafEvents += src.suiteLeafEvents
+	if src.buildFailed {
+		dst.buildFailed = true
+	}
+	// Any suite leaves in the merge ⇒ not a pure build-failed summary.
+	if dst.suiteLeafEvents > 0 {
+		dst.buildFailed = false
+	}
 	dst.failLines = append(dst.failLines, src.failLines...)
 	dst.detailLines = append(dst.detailLines, src.detailLines...)
 	dst.stderrData = append(dst.stderrData, src.stderrData...)
@@ -976,6 +973,11 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 						packageCached[ev.Package] = true
 					}
 				}
+				// Package never linked: go test prints "FAIL\tpkg [build failed]".
+				// Mark early so package-level fail is not treated as 1 leaf Run.
+				if strings.Contains(trimmed, "[build failed]") {
+					res.buildFailed = true
+				}
 				// Quiet path buffers fail details for post-run print. Verbose already
 				// streamed above — still track package FAIL lines for accounting paths.
 				if !verbose {
@@ -1040,6 +1042,12 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 					}
 					continue
 				}
+				// Build-failed packages never ran suite leaves: keep failLines
+				// for display but do not count package fail as a leaf Run.
+				if res.buildFailed && suiteLeafPass+suiteLeafFail+suiteLeafSkip == 0 {
+					recordPkg(ev.Package, ev.Elapsed, false)
+					continue
+				}
 				res.failCount++
 				recordPkg(ev.Package, ev.Elapsed, false)
 				if suiteLeafPass+suiteLeafFail+suiteLeafSkip == 0 {
@@ -1059,10 +1067,14 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 		}
 		// Prefer leaf-level counts for unified suite so multi-leaf trees report
 		// N Run / N Pass instead of a single package result.
-		if suiteLeafPass+suiteLeafFail+suiteLeafSkip > 0 {
+		leafN := suiteLeafPass + suiteLeafFail + suiteLeafSkip
+		res.suiteLeafEvents = leafN
+		if leafN > 0 {
 			res.passCount = suiteLeafPass
 			res.failCount = suiteLeafFail
 			res.skipCount = suiteLeafSkip
+			// Leaves ran — not a pure build-failed presentation.
+			res.buildFailed = false
 			anyCached := false
 			for _, c := range packageCached {
 				if c {
@@ -1075,6 +1087,12 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 			} else {
 				res.cachedCount = 0
 			}
+		} else if res.buildFailed {
+			// Honest zero: package did not execute any suite leaf.
+			res.passCount = 0
+			res.failCount = 0
+			res.skipCount = 0
+			res.cachedCount = 0
 		}
 	}()
 
@@ -1086,6 +1104,26 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 	if res.timeoutError == "" {
 		if msg := goTestTimeoutErrorLine(string(stderrData)); msg != "" {
 			res.timeoutError = msg
+		}
+	}
+	// Build-failed marker may appear only on stderr / late fail lines.
+	if res.suiteLeafEvents == 0 {
+		if !res.buildFailed && bytes.Contains(stderrData, []byte("[build failed]")) {
+			res.buildFailed = true
+		}
+		if !res.buildFailed {
+			for _, line := range res.failLines {
+				if strings.Contains(line, "[build failed]") {
+					res.buildFailed = true
+					break
+				}
+			}
+		}
+		if res.buildFailed {
+			res.passCount = 0
+			res.failCount = 0
+			res.skipCount = 0
+			res.cachedCount = 0
 		}
 	}
 	// Avoid false suite-level timeout when nested fail dumps contain
@@ -1244,6 +1282,35 @@ func leafCachedSummary(nCases int, skipPaths []string, anyPkgCached, skipEnabled
 		return nCases
 	}
 	return nSkip
+}
+
+// applyGoTestLeafStats rewrites stats + result counts after go test -json.
+// Build-failed packages (no suite leaves) must not report package fail as 1 Run
+// or pre-planned leaf-cache skipPaths as Cached.
+func applyGoTestLeafStats(stats *TestRunStats, result *goTestJSONResult, nCases int, skipPaths []string, opts core.Options) {
+	if result.buildFailed && result.passCount+result.failCount+result.skipCount == 0 {
+		// Consumer already zeroed package-level inflation when no leaves ran.
+		stats.BuildFailed = true
+		stats.Passed = 0
+		stats.Total = 0
+		stats.SkipCount = 0
+		result.cachedCount = 0
+		return
+	}
+	actualRun := result.passCount + result.failCount
+	if stats.TimedOut {
+		stats.Passed = result.passCount
+		stats.Total = actualRun
+		stats.SkipCount = result.skipCount
+	} else if actualRun > 0 || result.skipCount > 0 {
+		stats.Passed = result.passCount
+		stats.Total = actualRun
+		stats.SkipCount = result.skipCount
+	} else {
+		stats.Passed = passedCases(stats.Total, result.failCount)
+	}
+	result.cachedCount = leafCachedSummary(nCases, skipPaths, result.anyPackageCached(),
+		leafcache.SkipEnabled(opts.Count, opts.ForceWithFlagA, opts.NoLeafCache))
 }
 
 // prepareLeafCache computes leaf keys and warm skip paths for this tree run.

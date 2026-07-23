@@ -43,7 +43,10 @@ func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	if req.Timeout <= 0 {
 		req.Timeout = 2 * time.Minute
 	}
-	if req.UseCLI {
+	// Always warm the shared product binary (testbin session cache). Leaves may
+	// set UseCLI/Env after this Setup; WorkDir-only L2 path does not require Bin
+	// but multi-run helpers and Env/UseCLI subprocesses do.
+	if req.Bin == "" {
 		req.Bin = testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, ".."))
 	}
 	return nil

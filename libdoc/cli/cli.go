@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	lessflags "github.com/xhd2015/less-flags"
 
@@ -289,41 +288,52 @@ Options:
   -h, --help              Show help
 `
 
-// testStdout, when non-nil, receives CLI help/list output instead of os.Stdout.
-// Set only via withTestStdout so unit tests never reassign os.Stdout.
-// Guarded by testStdoutMu so concurrent RunWithWriter/withTestStdout callers
-// do not interleave writers (suite leaves run with t.Parallel).
-var (
-	testStdout   io.Writer
-	testStdoutMu sync.Mutex
-)
+// stdio is per-invocation writers for CLI user-facing text and nested runner
+// opts. No package globals — concurrent RunWithWriters stay independent.
+type stdio struct {
+	stdout io.Writer
+	stderr io.Writer
+}
 
-func cliStdout() io.Writer {
-	if testStdout != nil {
-		return testStdout
+func (s stdio) Out() io.Writer {
+	if s.stdout != nil {
+		return s.stdout
 	}
 	return os.Stdout
 }
 
-// withTestStdout runs fn with CLI user-facing text directed to w.
-// Does not reassign os.Stdout (Parallel-safe under concurrent packages).
-// Serializes concurrent callers so package-level testStdout is not racy.
-func withTestStdout(w io.Writer, fn func() error) error {
-	testStdoutMu.Lock()
-	defer testStdoutMu.Unlock()
-	prev := testStdout
-	testStdout = w
-	defer func() { testStdout = prev }()
-	return fn()
+func (s stdio) Err() io.Writer {
+	if s.stderr != nil {
+		return s.stderr
+	}
+	return os.Stderr
 }
 
-// RunWithWriter runs the CLI with user-facing text directed to w
-// (Parallel-safe; does not reassign os.Stdout).
+// RunWithWriter runs the CLI with user-facing text directed to w for both
+// stdout and stderr. Prefer RunWithWriters for split capture.
 func RunWithWriter(w io.Writer, args []string) error {
-	return withTestStdout(w, func() error { return Run(args) })
+	return RunWithWriters(w, w, args)
 }
 
+// RunWithWriters runs the CLI with explicit stdout/stderr. Nested
+// test/vet/build use the same writers via runner.TestWithWriters (etc.) so
+// progress/summaries land in the buffers without process-global inject state.
+func RunWithWriters(stdout, stderr io.Writer, args []string) error {
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+	return run(stdio{stdout: stdout, stderr: stderr}, args)
+}
+
+// Run is the process entry path (os.Stdout / os.Stderr).
 func Run(args []string) error {
+	return run(stdio{}, args)
+}
+
+func run(io stdio, args []string) error {
 	if filepath.Base(os.Args[0]) == "yield-pending-questions" {
 		return subagent.HandleYieldPendingQuestions(args)
 	}
@@ -331,34 +341,40 @@ func Run(args []string) error {
 		return subagent.HandleReportProgress(args)
 	}
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
-		fmt.Fprint(cliStdout(), usage)
+		fmt.Fprint(io.Out(), usage)
 		return nil
 	}
 	switch args[0] {
 	case "agent":
-		return runAgent(args[1:])
+		return runAgent(io, args[1:])
 	case "vet":
-		return runRunner(args[1:], vetUsage, runner.VetArgs)
+		return runRunner(io, args[1:], vetUsage, func(a []string) error {
+			return runner.VetArgsWithWriters(a, io.Out(), io.Err())
+		})
 	case "build":
-		return runRunner(args[1:], buildUsage, runner.BuildArgs)
+		return runRunner(io, args[1:], buildUsage, func(a []string) error {
+			return runner.BuildArgsWithWriters(a, io.Out(), io.Err())
+		})
 	case "test":
-		return runRunner(args[1:], testUsage, runner.Test)
+		return runRunner(io, args[1:], testUsage, func(a []string) error {
+			return runner.TestWithWriters(a, io.Out(), io.Err())
+		})
 	case "edit":
-		return runEdit(args[1:])
+		return runEdit(io, args[1:])
 	case "skill":
-		return runSkill(args[1:])
+		return runSkill(io, args[1:])
 	case "skills":
-		return runSkills(args[1:])
+		return runSkills(io, args[1:])
 	case "metrics":
-		return runMetrics(args[1:])
+		return runMetrics(io, args[1:])
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
 	}
 }
 
-func runAgent(args []string) error {
+func runAgent(io stdio, args []string) error {
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
-		fmt.Fprint(cliStdout(), `Usage: doctest agent <command> [options]
+		fmt.Fprint(io.Out(), `Usage: doctest agent <command> [options]
 
 Commands:
   generate <idea> [-d|--dir <target-dir>]
@@ -371,10 +387,10 @@ Commands:
 	}
 	switch args[0] {
 	case "generate":
-		return runAgentGenerate(args[1:])
+		return runAgentGenerate(io, args[1:])
 	case "fill-code":
 		if len(args) > 1 && (args[1] == "-h" || args[1] == "--help") {
-			fmt.Fprint(cliStdout(), "Usage: doctest agent fill-code <target-dir>\n")
+			fmt.Fprint(io.Out(), "Usage: doctest agent fill-code <target-dir>\n")
 			return nil
 		}
 		if len(args) != 2 {
@@ -382,19 +398,19 @@ Commands:
 		}
 		return agent.FillCode(args[1])
 	case "implement":
-		return runAgentImplement(args[1:])
+		return runAgentImplement(io, args[1:])
 	case "design":
-		return runAgentDesign(args[1:])
+		return runAgentDesign(io, args[1:])
 	case "with":
-		return runAgentWith(args[1:])
+		return runAgentWith(io, args[1:])
 	default:
 		return fmt.Errorf("unknown agent command: %s", args[0])
 	}
 }
 
-func runAgentGenerate(args []string) error {
+func runAgentGenerate(io stdio, args []string) error {
 	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
-		fmt.Fprint(cliStdout(), agentGenerateUsage)
+		fmt.Fprint(io.Out(), agentGenerateUsage)
 		return nil
 	}
 	opts := agent.GenerateOptions{AgentRunner: "opencode"}
@@ -416,9 +432,9 @@ func runAgentGenerate(args []string) error {
 	return agent.Generate(opts)
 }
 
-func runAgentImplement(args []string) error {
+func runAgentImplement(io stdio, args []string) error {
 	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
-		fmt.Fprint(cliStdout(), agentImplementUsage)
+		fmt.Fprint(io.Out(), agentImplementUsage)
 		return nil
 	}
 	opts := implementer.Options{}
@@ -458,9 +474,9 @@ func runAgentImplement(args []string) error {
 	return implementer.Run(opts)
 }
 
-func runAgentDesign(args []string) error {
+func runAgentDesign(io stdio, args []string) error {
 	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
-		fmt.Fprint(cliStdout(), agentDesignerUsage)
+		fmt.Fprint(io.Out(), agentDesignerUsage)
 		return nil
 	}
 	opts := designer.Options{}
@@ -500,9 +516,9 @@ func runAgentDesign(args []string) error {
 	return designer.Run(opts)
 }
 
-func runAgentWith(args []string) error {
+func runAgentWith(io stdio, args []string) error {
 	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
-		fmt.Fprint(cliStdout(), `Usage: doctest agent with --agent-runner=RUNNER [--model=MODEL] <prog> [args...]
+		fmt.Fprint(io.Out(), `Usage: doctest agent with --agent-runner=RUNNER [--model=MODEL] <prog> [args...]
 
 Execute a program with DOCTEST_SUBAGENT_AGENT_RUNNER and optionally DOCTEST_SUBAGENT_MODEL set in its environment.
 
@@ -559,22 +575,23 @@ Options:
 	return nil
 }
 
-func runRunner(args []string, usage string, fn func([]string) error) error {
+func runRunner(io stdio, args []string, usage string, fn func([]string) error) error {
 	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
-		fmt.Fprint(cliStdout(), usage)
+		fmt.Fprint(io.Out(), usage)
 		return nil
 	}
 	err := fn(args)
 	if errors.Is(err, runner.ErrNoTestsFound) {
-		fmt.Fprintln(os.Stderr, "no tests")
+		// Prefer injected stderr (RunWithWriters) so nested harnesses capture "no tests".
+		fmt.Fprintln(io.Err(), "no tests")
 		return nil
 	}
 	return err
 }
 
-func runSkills(args []string) error {
+func runSkills(io stdio, args []string) error {
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
-		fmt.Fprint(cliStdout(), skillsUsage)
+		fmt.Fprint(io.Out(), skillsUsage)
 		return nil
 	}
 	switch args[0] {
@@ -667,9 +684,9 @@ func parseSkillArgs(args []string) (parsedSkillArgs, error) {
 	return parsedSkillArgs{Action: action, Header: header, Rest: rest}, nil
 }
 
-func runSkill(args []string) error {
+func runSkill(io stdio, args []string) error {
 	if len(args) == 0 {
-		fmt.Fprint(cliStdout(), skillUsage)
+		fmt.Fprint(io.Out(), skillUsage)
 		return nil
 	}
 	parsed, err := parseSkillArgs(args)
@@ -678,7 +695,7 @@ func runSkill(args []string) error {
 	}
 	switch parsed.Action {
 	case skillActionHelp:
-		fmt.Fprint(cliStdout(), skillUsage)
+		fmt.Fprint(io.Out(), skillUsage)
 		return nil
 	case skillActionList:
 		for _, name := range []string{
@@ -695,7 +712,7 @@ func runSkill(args []string) error {
 			"implementer",
 			"designer",
 		} {
-			fmt.Fprintln(cliStdout(), name)
+			fmt.Fprintln(io.Out(), name)
 		}
 		return nil
 	case skillActionShow:
@@ -714,10 +731,10 @@ func runSkill(args []string) error {
 			if err != nil {
 				return err
 			}
-			fmt.Fprint(cliStdout(), out)
+			fmt.Fprint(io.Out(), out)
 			return nil
 		}
-		fmt.Fprint(cliStdout(), content)
+		fmt.Fprint(io.Out(), content)
 		return nil
 	case skillActionInstall:
 		name, installArgs, err := splitSkillName(parsed.Rest)
@@ -745,9 +762,9 @@ func splitSkillName(rest []string) (name string, installArgs []string, err error
 	return "", nil, fmt.Errorf("missing skill name")
 }
 
-func runEdit(args []string) error {
+func runEdit(io stdio, args []string) error {
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
-		fmt.Fprint(cliStdout(), editUsage)
+		fmt.Fprint(io.Out(), editUsage)
 		return nil
 	}
 	var addLabel, addExplanation string

@@ -100,7 +100,6 @@ planned-header leaves until implementer lands the three fixes. `quiet-ok` and
 
 ```go
 import (
-	"github.com/xhd2015/doctest/libdoc/cli"
 	"bytes"
 	"context"
 	"errors"
@@ -110,11 +109,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xhd2015/doctest/libdoc/cli"
 	"github.com/xhd2015/doctest/libdoc/core"
 )
 
 // Op selects Run strategy:
-//   "" / "cli"  — subprocess doctest (req.Args)
+//   "" / "cli"  — CLI (in-process when no Env/WorkDir; else subprocess)
 //   "dual_cli"  — quiet then verbose CLI (QuietArgs / VerboseArgs → Quiet / Verbose)
 //   "discover_full" — core.DiscoverTreeCases(DiscoverRoot)
 type Request struct {
@@ -124,7 +124,6 @@ type Request struct {
 	WorkDir      string
 	Timeout      time.Duration
 	Bin          string
-	UseCLI	bool
 	DiscoverRoot string
 	QuietArgs    []string
 	VerboseArgs  []string
@@ -147,53 +146,18 @@ type Response struct {
 
 func Run(t *testing.T, req *Request) (*Response, error) {
 	t.Helper()
-	if !req.UseCLI {
-		var stdout bytes.Buffer
-		err := cli.RunWithWriter(&stdout, req.Args)
-		resp := &Response{Stdout: stdout.String(), Err: err}
-		if err != nil {
-			resp.ExitCode = 1
-			resp.Stderr = err.Error()
-			return resp, nil
-		}
-		return resp, nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), req.Timeout)
 	if req.Timeout <= 0 {
-		cancel()
-		ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)
+		req.Timeout = 2 * time.Minute
 	}
-	defer cancel()
-	bin := req.Bin
-	if bin == "" {
-		return nil, fmt.Errorf("UseCLI requires req.Bin")
+	switch req.Op {
+	case "discover_full":
+		return runDiscoverFull(t, req)
+	case "dual_cli":
+		return runDualCLI(t, req)
+	default:
+		return runCLI(t, req, req.Args)
 	}
-	cmd := exec.CommandContext(ctx, bin, req.Args...)
-	if req.WorkDir != "" {
-		cmd.Dir = req.WorkDir
-	}
-	if len(req.Env) > 0 {
-		cmd.Env = append(os.Environ(), req.Env...)
-	}
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	resp := &Response{Stdout: stdout.String(), Stderr: stderr.String(), Err: err}
-	if err == nil {
-		return resp, nil
-	}
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
-		resp.ExitCode = exitErr.ExitCode()
-		return resp, nil
-	}
-	if ctx.Err() != nil {
-		return resp, ctx.Err()
-	}
-	return resp, err
 }
-
 
 func runDiscoverFull(t *testing.T, req *Request) (*Response, error) {
 	t.Helper()
@@ -210,6 +174,19 @@ func runDiscoverFull(t *testing.T, req *Request) (*Response, error) {
 
 func runCLI(t *testing.T, req *Request, args []string) (*Response, error) {
 	t.Helper()
+	// L2 in-process when no Env/WorkDir; else product binary (needs Bin).
+	if len(req.Env) == 0 && req.WorkDir == "" {
+		var stdout, stderr bytes.Buffer
+		err := cli.RunWithWriters(&stdout, &stderr, args)
+		resp := &Response{Stdout: stdout.String(), Stderr: stderr.String(), Err: err}
+		if err != nil {
+			resp.ExitCode = 1
+			if resp.Stderr == "" {
+				resp.Stderr = err.Error()
+			}
+		}
+		return resp, nil
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), req.Timeout)
 	defer cancel()
 
@@ -219,7 +196,6 @@ func runCLI(t *testing.T, req *Request, args []string) (*Response, error) {
 	}
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = req.WorkDir
-	// Child-only env: never process Setenv; append leaf Env on a copy of environ.
 	cmd.Env = append(os.Environ(), req.Env...)
 
 	var stdout bytes.Buffer
@@ -255,13 +231,11 @@ func runDualCLI(t *testing.T, req *Request) (*Response, error) {
 	}
 	verbose, err := runCLI(t, req, req.VerboseArgs)
 	if err != nil {
-		// Still attach quiet so Assert can compare partial results.
 		req.Quiet = quiet
 		return verbose, err
 	}
 	req.Quiet = quiet
 	req.Verbose = verbose
-	// Aggregate response mirrors verbose (primary under-test mode) with both attached on req.
 	agg := &Response{
 		ExitCode: verbose.ExitCode,
 		Stdout:   verbose.Stdout,
@@ -271,3 +245,4 @@ func runDualCLI(t *testing.T, req *Request) (*Response, error) {
 	return agg, nil
 }
 ```
+

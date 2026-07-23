@@ -127,6 +127,10 @@ type TestRunStats struct {
 	// TimedOut is true when this run surfaced a go test timeout Error
 	// ("test timed out after …"). Enables FAIL (p/planned, N cancelled).
 	TimedOut bool
+	// BuildFailed is true when go test reported [build failed] with no suite
+	// leaf events. Summary must not invent Run/Cached from package fail +
+	// pre-planned leaf-cache skips; footer uses planned denom.
+	BuildFailed bool
 	// Phases are filled by TestWithStats when the tree actually runs.
 	Phases []PhaseTiming
 	// LeafTimings map leaf paths to go-test package elapsed when available.
@@ -424,11 +428,14 @@ func PrintResultSummary(opts core.Options, stats TestRunStats) {
 //
 // On timeout (stats.TimedOut) with cancelled > 0, the fraction uses Planned
 // as denom and appends ", N cancelled" (orange when color on).
+//
+// On BuildFailed, prints FAIL (build failed; 0/planned executed) even when
+// Total==0 (no suite leaves ran).
 func PrintResultSummaryOverall(opts core.Options, stats TestRunStats, overallOK bool) {
 	cancelled := timeoutCancelled(stats)
 	// Timeout with all leaves cancelled may leave Total==0 (actual_run=0);
-	// still print FAIL (0/planned, N cancelled).
-	if stats.Total == 0 && stats.SkipCount == 0 && cancelled == 0 && !stats.GoTestBypassed {
+	// still print FAIL (0/planned, N cancelled). BuildFailed likewise.
+	if stats.Total == 0 && stats.SkipCount == 0 && cancelled == 0 && !stats.GoTestBypassed && !stats.BuildFailed {
 		return
 	}
 	stdout := opts.Stdout
@@ -442,6 +449,14 @@ func PrintResultSummaryOverall(opts core.Options, stats TestRunStats, overallOK 
 			planned = stats.Planned
 		}
 		fmt.Fprintln(stdout, formatBypassResultSummary(style, planned, stats.Elapsed))
+		return
+	}
+	if stats.BuildFailed {
+		planned := stats.Planned
+		if planned <= 0 {
+			planned = stats.Total
+		}
+		fmt.Fprintln(stdout, formatBuildFailedResultSummary(style, planned, stats.Elapsed))
 		return
 	}
 	passed := stats.Passed
@@ -465,6 +480,17 @@ func formatBypassResultSummary(style colorStyle, planned int, elapsed time.Durat
 	if style.enabled {
 		// Neutral accent (same as muted info) — not green PASS.
 		return token + suffix
+	}
+	return token + suffix
+}
+
+// formatBuildFailedResultSummary is the honest end line when the suite package
+// failed to compile (no leaf subtests ran). Planned is discovery leaf count.
+func formatBuildFailedResultSummary(style colorStyle, planned int, elapsed time.Duration) string {
+	token := fmt.Sprintf("FAIL (build failed; 0/%d executed)", planned)
+	suffix := fmt.Sprintf(" in %s", formatDisplayDuration(elapsed))
+	if style.enabled {
+		return style.red("FAIL") + fmt.Sprintf(" (build failed; 0/%d executed)", planned) + suffix
 	}
 	return token + suffix
 }

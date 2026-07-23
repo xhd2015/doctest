@@ -124,12 +124,14 @@ type Response struct {
 func Run(t *testing.T, req *Request) (*Response, error) {
 	t.Helper()
 	if !req.UseCLI {
-		var stdout bytes.Buffer
-		err := cli.RunWithWriter(&stdout, req.Args)
-		resp := &Response{Stdout: stdout.String(), Err: err}
+		var stdout, stderr bytes.Buffer
+		err := cli.RunWithWriters(&stdout, &stderr, req.Args)
+		resp := &Response{Stdout: stdout.String(), Stderr: stderr.String(), Err: err}
 		if err != nil {
 			resp.ExitCode = 1
-			resp.Stderr = err.Error()
+			if resp.Stderr == "" {
+				resp.Stderr = err.Error()
+			}
 			return resp, nil
 		}
 		return resp, nil

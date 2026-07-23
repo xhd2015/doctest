@@ -342,29 +342,15 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	// Prefer JSON suite-leaf accounting. actual_run = pass+fail (exclude
 	// runtime t.Skip from denominator). SkipCount is separate from label skips.
 	// On timeout: never invent phantom passes from planned − failCount.
-	actualRun := result.passCount + result.failCount
-	if stats.TimedOut {
-		stats.Passed = result.passCount
-		stats.Total = actualRun
-		stats.SkipCount = result.skipCount
-	} else if actualRun > 0 || result.skipCount > 0 {
-		stats.Passed = result.passCount
-		stats.Total = actualRun
-		stats.SkipCount = result.skipCount
-	} else {
-		stats.Passed = passedCases(stats.Total, result.failCount)
-	}
-
-	// Summary Cached is leaf-cache skip count (not go package cache inflate).
+	// On build failed with no leaf events: honest 0 Run / 0 Cached.
 	nCases := 0
 	for _, p := range preps {
 		nCases += len(p.Cases)
 	}
-	result.cachedCount = leafCachedSummary(nCases, skipPaths, result.anyPackageCached(),
-		leafcache.SkipEnabled(opts.Count, opts.ForceWithFlagA, opts.NoLeafCache))
+	applyGoTestLeafStats(&stats, &result, nCases, skipPaths, opts)
 	// Map suite fail bare leaf paths → FormatLeafIdentity for RecordPasses.
 	failed := workspaceFailedIdentities(preps, result.suiteLeafFailed)
-	recordLeafCachePasses(leafKeys, failed, runErr == nil && result.failCount == 0)
+	recordLeafCachePasses(leafKeys, failed, runErr == nil && result.failCount == 0 && !result.buildFailed)
 
 	// Quiet path: compact progress summary. Verbose already streamed Output events.
 	// Print order: progress → fail dumps → Error/hint (PASS/FAIL is printed by

@@ -209,35 +209,40 @@ func runE2E(t *testing.T, req *Request) (*Response, error) {
 func runInProcess(t *testing.T, req *Request) (*Response, error) {
 	t.Helper()
 	resp := &Response{ExitCode: 0}
+	var stdout, stderr bytes.Buffer
 
 	args := append([]string(nil), req.Args...)
 	if len(args) == 0 {
-		// Treat as bare "vet" with no positional — same as runner.VetArgs(nil).
-		if err := runner.VetArgs(nil); err != nil {
-			resp.ExitCode = 1
-			resp.Stderr = err.Error() + "\n"
-			resp.Err = err
-		}
-		return resp, nil
+		args = []string{"vet"}
 	}
 
-	// Non-vet top-level commands (e.g. renamed "validate") exercise cli.Run.
-	if args[0] != "vet" {
-		err := cli.Run(args)
+	// Non-vet top-level (e.g. "validate") or help → full CLI capture.
+	if args[0] != "vet" || len(args) == 1 ||
+		(len(args) > 1 && (args[1] == "-h" || args[1] == "--help")) {
+		err := cli.RunWithWriters(&stdout, &stderr, args)
+		resp.Stdout = stdout.String()
+		resp.Stderr = stderr.String()
 		if err != nil {
 			resp.ExitCode = 1
-			resp.Stderr = err.Error() + "\n"
+			if resp.Stderr == "" {
+				resp.Stderr = err.Error() + "\n"
+			}
 			resp.Err = err
 		}
 		return resp, nil
 	}
 
 	// Strip leading "vet"; rewrite relative path args against WorkDir.
+	// Capture verbose progress on opts.Stdout (Parallel-safe; no process stdout).
 	vetArgs := rewriteVetArgs(args[1:], req.WorkDir)
-	err := runner.VetArgs(vetArgs)
+	err := runner.VetArgsWithWriters(vetArgs, &stdout, &stderr)
+	resp.Stdout = stdout.String()
+	resp.Stderr = stderr.String()
 	if err != nil {
 		resp.ExitCode = 1
-		resp.Stderr = err.Error() + "\n"
+		if resp.Stderr == "" {
+			resp.Stderr = err.Error() + "\n"
+		}
 		resp.Err = err
 	}
 	return resp, nil

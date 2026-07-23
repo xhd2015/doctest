@@ -91,8 +91,6 @@ doctest test ./tests/gen-format-strict/
 
 ```go
 import (
-	"context"
-	"github.com/xhd2015/doctest/libdoc/cli"
 	"bytes"
 	"fmt"
 	"go/format"
@@ -110,12 +108,6 @@ import (
 
 // Request selects the measured operation. Leaves build fixtures or source in Setup.
 type Request struct {
-	UseCLI	bool
-	Args	[]string
-	Bin	string
-	Timeout	time.Duration
-	WorkDir	string
-	Env	[]string
 	// Op:
 	//   "run_fixture"        — write FixtureDir tree, runner.RunTest with GenDir
 	//   "write_format_build" — WriteFormattedGo(Source) then optional go test/build
@@ -129,9 +121,9 @@ type Request struct {
 	GenDir     string // abs gen root; empty → t.TempDir()
 
 	// write_format_build
-	Source     string // raw Go source (package clause included)
-	OutGoName  string // file name under GenDir; default "pkg.go"
-	WantBuild  bool   // if true, run `go build .` on written package
+	Source    string // raw Go source (package clause included)
+	OutGoName string // file name under GenDir; default "pkg.go"
+	WantBuild bool   // if true, run `go build .` on written package
 }
 
 // Response captures generate/run outcomes and key generated texts.
@@ -383,54 +375,10 @@ type Request struct{}
 type Response struct{}
 
 func Run(t *testing.T, req *Request) (*Response, error) {
-	t.Helper()
-	if !req.UseCLI {
-		var stdout bytes.Buffer
-		err := cli.RunWithWriter(&stdout, req.Args)
-		resp := &Response{Stdout: stdout.String(), Err: err}
-		if err != nil {
-			resp.ExitCode = 1
-			resp.Stderr = err.Error()
-			return resp, nil
-		}
-		return resp, nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), req.Timeout)
-	if req.Timeout <= 0 {
-		cancel()
-		ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)
-	}
-	defer cancel()
-	bin := req.Bin
-	if bin == "" {
-		return nil, fmt.Errorf("UseCLI requires req.Bin")
-	}
-	cmd := exec.CommandContext(ctx, bin, req.Args...)
-	if req.WorkDir != "" {
-		cmd.Dir = req.WorkDir
-	}
-	if len(req.Env) > 0 {
-		cmd.Env = append(os.Environ(), req.Env...)
-	}
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	resp := &Response{Stdout: stdout.String(), Stderr: stderr.String(), Err: err}
-	if err == nil {
-		return resp, nil
-	}
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
-		resp.ExitCode = exitErr.ExitCode()
-		return resp, nil
-	}
-	if ctx.Err() != nil {
-		return resp, ctx.Err()
-	}
-	return resp, err
-}
-`
+	_ = t
+	_ = req
+	return &Response{}, nil
+}`
 }
 
 func rootRunGoWithHelper() string {

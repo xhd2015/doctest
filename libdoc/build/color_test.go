@@ -203,6 +203,68 @@ func TestPrintResultSummaryOverallTimeoutCancelled(t *testing.T) {
 	}
 }
 
+func TestFormatBuildFailedResultSummary(t *testing.T) {
+	style := colorStyle{enabled: false}
+	got := formatBuildFailedResultSummary(style, 807, 2*time.Second)
+	if !strings.HasPrefix(got, "FAIL (build failed; 0/807 executed) in ") {
+		t.Fatalf("plain: got %q", got)
+	}
+	// Must not look like FAIL (0/1) package-level inflation.
+	if strings.Contains(got, "0/1") {
+		t.Fatalf("must not use package fail denom: %q", got)
+	}
+
+	colored := colorStyle{enabled: true}
+	cgot := formatBuildFailedResultSummary(colored, 3, time.Second)
+	if !strings.Contains(cgot, ansiRed+"FAIL"+ansiReset) {
+		t.Fatalf("expected red FAIL token, got %q", cgot)
+	}
+	if !strings.Contains(cgot, "(build failed; 0/3 executed)") {
+		t.Fatalf("expected build failed phrase, got %q", cgot)
+	}
+}
+
+func TestPrintResultSummaryOverallBuildFailed(t *testing.T) {
+	var buf bytes.Buffer
+	st := TestRunStats{
+		Passed:      0,
+		Total:       0,
+		Planned:     807,
+		BuildFailed: true,
+		Elapsed:     time.Second,
+	}
+	PrintResultSummaryOverall(core.Options{Stdout: &buf, Color: core.ColorNever}, st, false)
+	got := buf.String()
+	if !strings.Contains(got, "FAIL (build failed; 0/807 executed)") {
+		t.Fatalf("expected build-failed footer, got %q", got)
+	}
+	if strings.Contains(got, "PASS") {
+		t.Fatalf("must not PASS on build failed: %q", got)
+	}
+}
+
+func TestApplyGoTestLeafStatsBuildFailed(t *testing.T) {
+	// Pre-planned leaf-cache skips must not become Cached when build failed.
+	stats := TestRunStats{Total: 10, Planned: 10}
+	result := goTestJSONResult{buildFailed: true, passCount: 0, failCount: 0}
+	skipPaths := []string{"a", "b", "c", "d", "e"} // would be 5 Cached if suite ran
+	opts := core.Options{}
+	applyGoTestLeafStats(&stats, &result, 10, skipPaths, opts)
+	if !stats.BuildFailed {
+		t.Fatal("expected BuildFailed")
+	}
+	if stats.Passed != 0 || stats.Total != 0 {
+		t.Fatalf("executed counts: passed=%d total=%d", stats.Passed, stats.Total)
+	}
+	if result.cachedCount != 0 {
+		t.Fatalf("Cached must be 0 on build failed, got %d", result.cachedCount)
+	}
+	sum := formatSummary(colorStyle{}, result.passCount+result.failCount, result.passCount, result.failCount, result.cachedCount, time.Second)
+	if !strings.Contains(sum, "0 Run") || !strings.Contains(sum, "0 Cached") {
+		t.Fatalf("progress summary must be zeroed, got %q", sum)
+	}
+}
+
 func TestResolveColorMode(t *testing.T) {
 	t.Run("always and never unchanged", func(t *testing.T) {
 		var buf bytes.Buffer

@@ -38,6 +38,9 @@ func mergeRunStats(dst *runnerbuild.TestRunStats, src runnerbuild.TestRunStats) 
 	if src.TimedOut {
 		dst.TimedOut = true
 	}
+	if src.BuildFailed {
+		dst.BuildFailed = true
+	}
 	if src.GoTestBypassed {
 		dst.GoTestBypassed = true
 	}
@@ -51,20 +54,33 @@ func Build(dir string) error {
 }
 
 func BuildArgs(args []string) error {
-	return processArgs(args, "build", parseBuildOptions, func(dir string, opts core.Options) error {
+	return BuildArgsWithWriters(args, nil, nil)
+}
+
+// BuildArgsWithWriters is BuildArgs with explicit stdout/stderr (no process globals).
+func BuildArgsWithWriters(args []string, stdout, stderr io.Writer) error {
+	return processArgsWithWriters(args, "build", parseBuildOptions, func(dir string, opts core.Options) error {
 		err := runnerbuild.Build(dir, opts)
 		if err != nil && strings.Contains(err.Error(), "no runnable test cases found") {
 			return ErrNoTestsFound
 		}
 		return err
-	})
+	}, stdout, stderr)
 }
 
 func Test(args []string) error {
+	return TestWithWriters(args, nil, nil)
+}
+
+// TestWithWriters runs doctest test with optional stdout/stderr capture.
+// Non-nil writers override parse defaults (including Stderr: os.Stderr).
+// Safe for concurrent nested harnesses — no package-level inject state.
+func TestWithWriters(args []string, stdout, stderr io.Writer) error {
 	opts, remainArgs, err := parseTestOptions(args)
 	if err != nil {
 		return err
 	}
+	applyWriters(&opts, stdout, stderr)
 	return runTest(opts, remainArgs)
 }
 
@@ -276,7 +292,7 @@ func runTest(opts core.Options, remainArgs []string) error {
 		}
 		runnerbuild.PrintSkippedSummaryTo(sw, stats.Skipped, opts.Verbose)
 	}
-	if stats.Total > 0 || stats.SkipCount > 0 {
+	if stats.Total > 0 || stats.SkipCount > 0 || stats.BuildFailed {
 		stats.Elapsed = time.Since(start)
 		// Soft "no tests" is not an overall failure for the summary line.
 		// Any other runErr (prepare, go test, multi-tree) must not print PASS
@@ -328,16 +344,26 @@ func runTest(opts core.Options, remainArgs []string) error {
 }
 
 func VetArgs(args []string) error {
-	return processArgs(args, "vet", parseVetOptions, func(dir string, opts core.Options) error {
+	return VetArgsWithWriters(args, nil, nil)
+}
+
+// VetArgsWithWriters is VetArgs with explicit stdout/stderr (no process globals).
+func VetArgsWithWriters(args []string, stdout, stderr io.Writer) error {
+	return processArgsWithWriters(args, "vet", parseVetOptions, func(dir string, opts core.Options) error {
 		return validate.RunWithOptions(dir, opts)
-	})
+	}, stdout, stderr)
 }
 
 func processArgs(args []string, cmdName string, parseFn func([]string) (core.Options, []string, error), processDirFn func(string, core.Options) error) error {
+	return processArgsWithWriters(args, cmdName, parseFn, processDirFn, nil, nil)
+}
+
+func processArgsWithWriters(args []string, cmdName string, parseFn func([]string) (core.Options, []string, error), processDirFn func(string, core.Options) error, stdout, stderr io.Writer) error {
 	opts, remainArgs, err := parseFn(args)
 	if err != nil {
 		return err
 	}
+	applyWriters(&opts, stdout, stderr)
 	if len(remainArgs) < 1 {
 		return fmt.Errorf("%s requires <dir>", cmdName)
 	}
