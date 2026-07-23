@@ -24,8 +24,8 @@ jobs:
       # label e2e = full integration only. Prefer discovery for PR signal; e2e on full push.
       - name: Doctest discovery (in-process mass)
         # Unlabeled leaves only — skips label:e2e / heavy. Fast PR feedback.
-        run: doctest test ./... -timeout=30m
+        run: doctest test --label '!e2e' ./...
       - name: Doctest e2e (full integration)
         # True process-boundary / nested-product leaves (label: e2e).
         # Multi-run nested selftests can be multi-minute; allow full timeout.
-        run: doctest test --label e2e ./... -timeout=30m
+        run: doctest test --label e2e ./...
