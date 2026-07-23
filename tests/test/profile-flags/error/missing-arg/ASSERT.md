@@ -1,12 +1,8 @@
 ## Expected
+
 - Non-zero exit code.
-- Combined stdout/stderr mentions `cpuprofile` (flag name).
-
-## Errors
-- Parse-time rejection of missing flag argument.
-
-## Exit Code
-- Non-zero.
+- Combined error mentions `cpuprofile` (flag name).
+- Parse-time rejection of missing flag argument (not unknown-flag).
 
 ```go
 import (
@@ -15,7 +11,7 @@ import (
 )
 
 func Assert(t *testing.T, req *Request, resp *Response, err error) {
-	combined := resp.Stdout + resp.Stderr
+	combined := resp.Stdout + resp.Stderr + resp.ParseErr
 	lower := strings.ToLower(combined)
 
 	if resp.ExitCode == 0 {

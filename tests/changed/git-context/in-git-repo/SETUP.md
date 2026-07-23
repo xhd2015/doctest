@@ -1,10 +1,12 @@
 # Scenario
 
-**Feature**: `--changed` filters doctest leaves by git working-tree changes
+**Feature**: L2 policy selection with fixture trees + synthetic changed path lists
 
 ```
-# ephemeral git repo with fixture tree
-git init -> commit baseline -> modify paths -> doctest --changed
+# ephemeral fixture tree (no real git required)
+write DOCTEST/SETUP/ASSERT leaves
+  -> req.TreeDir + req.GitRoot + req.ChangedFiles
+  -> core.FilterByChangedFiles | ChangedRunInfoForTree | ChangedDoctestMarkdownFiles
 
 # map changed files to leaves
 changed ASSERT.md -> one leaf | changed group SETUP.md -> descendant leaves
@@ -12,26 +14,26 @@ changed ASSERT.md -> one leaf | changed group SETUP.md -> descendant leaves
 
 ## Preconditions
 
-- Git is available on PATH.
-- Fixture trees use valid `DOCTEST.md` with `Request`, `Response`, and `Run`.
+- L2: fixture trees use valid `DOCTEST.md` with `Request`, `Response`, and `Run`.
+- Changed path lists are relative to `GitRoot` (typically the temp parent of `tests/fixture`).
+- No product binary; no `git init` for pure filter policy.
 
 ## Steps
 
-1. Create an ephemeral git repository with a committed fixture tree.
-2. Apply the leaf-specific file change (staged, unstaged, or untracked).
-3. Run the doctest subcommand with `--changed` from the repo root.
+1. Create an ephemeral fixture tree under `t.TempDir()`.
+2. Set synthetic `ChangedFiles` paths for the leaf scenario.
+3. `Run` applies core filter / vet-md APIs in-process.
 
 ## Context
 
-- Helpers `initGitRepo`, `createFlatTwoLeafTree`, and `createSharedParentTwoLeafTree`
-  build reproducible fixtures.
-- Summary line parsing verifies how many leaves ran.
+- Helpers `createFlatTwoLeafTree`, `createSharedParentTwoLeafTree`, and path
+  builders produce reproducible fixtures.
+- `relUnderTree` builds changed paths relative to the synthetic git root.
 
 ```go
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -47,9 +49,11 @@ const leafAssertGo = "import \"testing\"\n\nfunc Assert(t *testing.T, req *Reque
 
 const fixtureSetupGo = "import \"testing\"\n\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }"
 
-type gitFixture struct {
-	RepoDir string
-	TreeDir string
+// policyFixture is a temp layout whose GitRoot is the synthetic repo parent and
+// TreeDir is tests/fixture under it. No real git repository is required.
+type policyFixture struct {
+	RepoDir string // GitRoot
+	TreeDir string // doctest root
 }
 
 func goFence(n int) string {
@@ -64,28 +68,6 @@ func goBlock(code string) string {
 func scenarioHeader(feature, snippet string) string {
 	fence := goFence(3)
 	return fmt.Sprintf("# Scenario\n\n**Feature**: %s\n\n%s\n%s\n%s\n\n", feature, fence, snippet, fence)
-}
-
-func runGit(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git %s in %s: %v\n%s", strings.Join(args, " "), dir, err, string(out))
-	}
-}
-
-func initGitRepo(t *testing.T, dir string) {
-	t.Helper()
-	runGit(t, dir, "init")
-	runGit(t, dir, "config", "user.email", "changed@test.com")
-	runGit(t, dir, "config", "user.name", "Changed Test")
-}
-
-func gitAddCommitAll(t *testing.T, dir, msg string) {
-	t.Helper()
-	runGit(t, dir, "add", "-A")
-	runGit(t, dir, "commit", "-m", msg)
 }
 
 func writeLeaf(t *testing.T, root, name string) {
@@ -120,19 +102,17 @@ func writeRootTree(t *testing.T, root string, withRootSetup bool) {
 	}
 }
 
-func createFlatTwoLeafTree(t *testing.T) gitFixture {
+func createFlatTwoLeafTree(t *testing.T) policyFixture {
 	t.Helper()
 	repoDir := t.TempDir()
 	treeDir := filepath.Join(repoDir, "tests", "fixture")
 	writeRootTree(t, treeDir, true)
 	writeLeaf(t, treeDir, "leaf_a")
 	writeLeaf(t, treeDir, "leaf_b")
-	initGitRepo(t, repoDir)
-	gitAddCommitAll(t, repoDir, "baseline two leaves")
-	return gitFixture{RepoDir: repoDir, TreeDir: treeDir}
+	return policyFixture{RepoDir: repoDir, TreeDir: treeDir}
 }
 
-func createSharedParentTwoLeafTree(t *testing.T) gitFixture {
+func createSharedParentTwoLeafTree(t *testing.T) policyFixture {
 	t.Helper()
 	repoDir := t.TempDir()
 	treeDir := filepath.Join(repoDir, "tests", "fixture")
@@ -147,40 +127,24 @@ func createSharedParentTwoLeafTree(t *testing.T) gitFixture {
 	}
 	writeLeaf(t, groupDir, "leaf_a")
 	writeLeaf(t, groupDir, "leaf_b")
-	initGitRepo(t, repoDir)
-	gitAddCommitAll(t, repoDir, "baseline shared parent")
-	return gitFixture{RepoDir: repoDir, TreeDir: treeDir}
+	return policyFixture{RepoDir: repoDir, TreeDir: treeDir}
 }
 
-func findInlineSummaryLine(stdout string) string {
-	for _, line := range strings.Split(stdout, "\n") {
-		if strings.Contains(line, " Run, ") && strings.Contains(line, " Pass, ") {
-			return line
-		}
-	}
-	return ""
+// treeRel returns a changed-file path relative to the synthetic git root for a
+// path under the fixture tree (e.g. leaf_a/ASSERT.md -> tests/fixture/leaf_a/ASSERT.md).
+func treeRel(fx policyFixture, parts ...string) string {
+	elems := append([]string{"tests", "fixture"}, parts...)
+	return filepath.ToSlash(filepath.Join(elems...))
 }
 
-func countGeneratedTestGoFiles(t *testing.T, genDir string) int {
-	t.Helper()
-	count := 0
-	err := filepath.Walk(genDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() && strings.HasSuffix(info.Name(), "_test.go") {
-			count++
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("walk gen dir: %v", err)
-	}
-	return count
+func applyPolicyBase(req *Request, fx policyFixture) {
+	req.TreeDir = fx.TreeDir
+	req.GitRoot = fx.RepoDir
+	req.UseCLI = false
 }
 
 func Setup(t *testing.T, req *Request) error {
-	req.Env = append(req.Env, "CHANGED_TEST_GROUP=in-git-repo")
+	req.UseCLI = false
 	return nil
 }
 ```

@@ -1,5 +1,6 @@
 ---
-label: heavy
+label: e2e, heavy
+ heavy
 ---
 
 ## Expected

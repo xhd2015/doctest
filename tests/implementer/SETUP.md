@@ -46,10 +46,13 @@ import (
 )
 
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+    // True e2e: agent binary + fake-codex process boundary.
+    req.UseCLI = true
     req.Timeout = 60 * time.Second
 
     tmp := t.TempDir()
     doctestBin := testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, ".."))
+    req.Bin = doctestBin
 
     fakeCodex, err := exec.LookPath("fake-codex")
     if err != nil {

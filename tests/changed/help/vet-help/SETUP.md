@@ -4,12 +4,12 @@
 
 ```
 # user reads help for vet subcommand
-doctest vet --help -> stdout lists --changed
+cli.RunWithWriter -> doctest vet --help -> stdout lists --changed
 ```
 
 ## Preconditions
 
-- The doctest binary is built.
+- In-process CLI via `cli.RunWithWriter` (no product binary).
 
 ## Steps
 

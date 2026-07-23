@@ -15,7 +15,8 @@ fast library mass). Nested product paths are **`label: heavy`** and opt-in via
 | Layer | Subtrees | Run model | Labels |
 |-------|----------|-----------|--------|
 | **L2 in-process** | `key/`, `store/`, `runsuite/` (nested root), `partial-package-deps/`, most of `polish/` (selective + isolation) | Call `libdoc/leafcache` APIs directly — **no** `testbin` / nested `doctest test` | unlabeled |
-| **L3 e2e** | `runtime/`, `workspace/`, `cli-plan/`, `polish/docs/` | Nested product binary (`testbin.Ensure` + `runtime_multi` / `runtime_once`) | **`label: heavy`** + short explanation |
+| **L3 e2e** | `runtime/`, `workspace/`, `cli-plan/` | Nested product binary (`testbin.Ensure` + `runtime_multi` / `runtime_once`+Bin) | **`label: e2e, heavy`** |
+| **L2 help** | `polish/docs/` | `runtime_once` without Bin → `cli.RunWithWriter` | unlabeled |
 
 | Invocation shape (L3) | Example | Branch |
 |-----------------------|---------|--------|
@@ -38,7 +39,7 @@ product shape above. **Cached** is the **programmatic leaf-cache skip count**
 | **Runtime product** | suite skip, disable flags, stream PutPass, grey dots | **L3 heavy** `runtime/**` | **GREEN** |
 | **Workspace product** | multi-tree `__workspace` Cached | **L3 heavy** `workspace/**` | **GREEN** |
 | **CLI multi-arg** | multi-arg `a b` Cached policy | **L3 heavy** `cli-plan/**` | **GREEN** |
-| **Help docs** | `test --help` flags | **L3 heavy** `polish/docs/**` | **GREEN** |
+| **Help docs** | `test --help` flags | **L2 in-process** `polish/docs/**` | **GREEN** |
 
 Target share: **in-process (L2) ≥ ~60%** of leaf count; remaining e2e labeled
 `heavy` so CI default discovery stays cheap.
@@ -439,6 +440,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xhd2015/doctest/libdoc/cli"
 	"github.com/xhd2015/doctest/libdoc/leafcache"
 )
 
@@ -447,7 +449,8 @@ import (
 //
 // Layer model (see ## Layer model above):
 //   L2 library ops: compute_*, store_*, partial_package_keys, two_sibling_keys
-//   L3 e2e ops:     runtime_multi, runtime_once (product binary)
+//   L2 in-process:  runtime_once with Bin empty (help / short path via cli.RunWithWriter)
+//   L3 e2e ops:     runtime_multi, runtime_once with Bin set (product binary)
 type Request struct {
 	Op string // compute_twice | compute_mutate | compute_go_versions | store_put_get | store_missing | store_isolate | compute_two_inputs | partial_package_keys | two_sibling_keys | runtime_multi | runtime_once
 
@@ -783,11 +786,19 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 		return resp, nil
 
 	case "runtime_once":
-		if req.Bin == "" {
-			return nil, fmt.Errorf("runtime_once: req.Bin is not set")
-		}
 		if len(req.Args) == 0 {
 			return nil, fmt.Errorf("runtime_once: req.Args is empty")
+		}
+		// L2 short path (help/docs): Bin empty → in-process CLI, Parallel-safe.
+		if req.Bin == "" {
+			var stdout bytes.Buffer
+			err := cli.RunWithWriter(&stdout, req.Args)
+			resp.Stdout = stdout.String()
+			if err != nil {
+				resp.ExitCode = 1
+				resp.Stderr = err.Error()
+			}
+			return resp, nil
 		}
 		timeout := req.Timeout
 		if timeout <= 0 {

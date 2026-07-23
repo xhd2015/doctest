@@ -1,30 +1,25 @@
 # Scenario
 
-**Feature**: `doctest test` color flags are parsed at the CLI boundary
+**Feature**: `doctest test` color flags are parsed at the library boundary (L2)
 
 ```
-# build and run test binary, report results
-doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
-
-# output
-progress dots -> . F | verbose -> go test -v | count -> N tests
+runner.ParseTestOptions([--color, --no-color, .])
+  -> mutual exclusion error
 ```
 
 ## Preconditions
-- The doctest binary is built by the root `tests/SETUP.md` harness.
-- Color flags are mutually exclusive when both `--color` and `--no-color` are passed.
+
+- Nested L2 root: `ParseTestOptions` only; no product binary.
 
 ## Steps
-1. Configure `req.Args` for the color-flag scenario under test.
+
+1. Leaves set `req.Args` for the color-flag scenario under test.
 
 ```go
-import (
-	"testing"
-	"time"
-)
+import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-	req.Timeout = 20 * time.Second
+	_ = req
 	return nil
 }
 ```

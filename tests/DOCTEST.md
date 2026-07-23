@@ -5,37 +5,26 @@
 
 
 These doc-style tests specify the command-level contract for the doctest CLI.
-They are executable integration tests: each runnable leaf invokes the real
-doctest command, captures stdout, stderr, and exit status, and asserts concrete
-observable behavior.
+**Default execution is in-process CLI** (`cli.RunWithWriter`) so the suite mass
+stays L2. Leaves that set `UseCLI` invoke a real product binary (true e2e) and
+must carry `label: e2e`.
 
-The tests intentionally use the public command boundary. Agent-oriented cases
-configure fake Codex so no real LLM or network backend is required.
+Agent-oriented cases configure fake Codex so no real LLM or network backend is required.
 
 ### Default `./...` vs full self-test (labels)
 
-Cold module-wide runs (`doctest test -count=1 ./...`) keep a **default** self-test
-entry point that finishes in a few minutes on a typical laptop. Leaves labeled
-`heavy` are **skipped** under discovery (same as other labels) so nested-CLI and
-large cookbook trees do not dominate wall time.
-
-- **Default (fast)**: `doctest test -count=1 ./...` — core CLI/libdoc/assert unit
-  coverage without the heavy cookbook (labeled leaves skipped).
-- **Full suite (all leaves)**: `doctest test -count=1 ./... --label-all` —
-  runs unlabeled **and** labeled leaves (not combined with `--label`).
-- **Heavy-only**: `doctest test -count=1 ./... --label heavy` (and/or explicit
-  tree paths such as `./tests/implementer/...`).
-
-Secondary trees under `tests/*` (for example `changed`, `embed-assert`,
-`label-skip`) and large suites (assert v1 cookbook, v3 real-world, implementer,
-main-orchestrator, nested `tests/test/*`) use `label: heavy` on ASSERT.md.
+- **Default (discovery)**: `doctest test ./...` — unlabeled in-process mass;
+  skips `label: e2e` / `heavy` / other labels.
+- **Full integration e2e**: `doctest test --label e2e ./...` — process-boundary
+  smokes only (sparse).
+- **All leaves**: `doctest test --label-all ./...`.
 
 ## DSN (Domain Specific Notion)
 
 ### Participants
-- **`doctest`** — the CLI binary under test; leaves share one binary from
-  `testbin.Ensure` (stable cache path; rebuild only when sources change), then
-  invoke it as a subprocess. It is the single entry point for all behaviors.
+- **`doctest` CLI surface** — default: in-process via `cli.RunWithWriter` (same
+  dispatch as production, no subprocess). Optional `UseCLI` builds one shared
+  binary via `testbin.Ensure` and runs it as a subprocess (true e2e).
 - **Test tree** — a directory hierarchy of `.md` files (DOCTEST.md, SETUP.md,
   ASSERT.md) that the CLI reads, interprets, and executes. It models a decision
   tree of scenarios.
@@ -65,9 +54,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/xhd2015/doctest/libdoc/cli"
 )
 
 type Request struct {
@@ -76,6 +66,10 @@ type Request struct {
 	WorkDir	string
 	Timeout	time.Duration
 	Bin	string
+	// UseCLI: when true, spawn req.Bin (true e2e). Default false = in-process CLI.
+	// Required when Env or WorkDir must be isolated — never use os.Setenv/Chdir
+	// under t.Parallel() leaves.
+	UseCLI	bool
 	// Parent-side paths for helpers/Assert (also put on child Env). Never process Setenv.
 	SessionHome	string
 	YieldPQBin	string
@@ -103,28 +97,51 @@ type Response struct {
 	Stderr		string
 	Err		error
 }
+
 func Run(t *testing.T, req *Request) (*Response, error) {
+	t.Helper()
+	if req.Timeout <= 0 {
+		req.Timeout = 2 * time.Minute
+	}
+
+	// Env / WorkDir need process isolation. Never os.Setenv or os.Chdir here —
+	// leaves run under t.Parallel(). Force the subprocess path.
+	if !req.UseCLI && (len(req.Env) > 0 || req.WorkDir != "") {
+		return nil, fmt.Errorf("Env/WorkDir require UseCLI (subprocess isolation; no process Setenv/Chdir under Parallel)")
+	}
+
+	// Default L2: in-process CLI. No process-global env/cwd mutation.
+	if !req.UseCLI {
+		var stdout bytes.Buffer
+		err := cli.RunWithWriter(&stdout, req.Args)
+		resp := &Response{Stdout: stdout.String(), Err: err}
+		if err != nil {
+			resp.ExitCode = 1
+			resp.Stderr = err.Error()
+			return resp, nil
+		}
+		return resp, nil
+	}
+
+	// L3 e2e: real product binary; Env/Dir only on cmd (child process).
+	if req.Bin == "" {
+		return nil, fmt.Errorf("UseCLI requires req.Bin")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), req.Timeout)
 	defer cancel()
-
-	bin := req.Bin
-	if bin == "" {
-		return nil, fmt.Errorf("req.Bin is not set")
-	}
-	cmd := exec.CommandContext(ctx, bin, req.Args...)
+	cmd := exec.CommandContext(ctx, req.Bin, req.Args...)
 	cmd.Dir = req.WorkDir
-	cmd.Env = append(os.Environ(), req.Env...)
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
+	if len(req.Env) > 0 {
+		cmd.Env = append(os.Environ(), req.Env...)
+	}
+	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-
 	err := cmd.Run()
 	resp := &Response{
-		Stdout:	stdout.String(),
-		Stderr:	stderr.String(),
-		Err:	err,
+		Stdout: stdout.String(),
+		Stderr: stderr.String(),
+		Err:    err,
 	}
 	if err == nil {
 		return resp, nil

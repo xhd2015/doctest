@@ -1,29 +1,29 @@
 # Scenario
 
-**Feature**: `--changed` behavior depends on git repository presence
+**Feature**: `--changed` behavior depends on git-context vs pure policy
 
 ```
-# resolve git root for change detection
-doctest --changed -> git.ShowToplevel -> error if not in repo
+# L2 policy (in-git-repo/*): synthetic changed paths, no binary
+fixture tree -> core.FilterByChangedFiles | ChangedDoctestMarkdownFiles
 
-# filter by on-disk changes
-git.GetOnDiskChangedFiles -> map paths -> affected leaves
+# L3 process (not-git-repo/*): real CLI requires git repo
+doctest --changed outside .git -> hard error
 ```
 
 ## Preconditions
 
-- The doctest binary is built.
+- Descendants choose L2 policy fixtures or L3 CLI.
 
 ## Steps
 
-1. Choose whether the working directory is inside a git repository.
-2. Configure fixture layout and subcommand args in descendant setups.
+1. Choose whether the scenario is pure selection policy (L2) or process-boundary (L3).
+2. Configure fixture layout and request fields in descendant setups.
 
 ```go
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-	req.Env = append(req.Env, "CHANGED_TEST_GROUP=git-context")
+	_ = req
 	return nil
 }
 ```

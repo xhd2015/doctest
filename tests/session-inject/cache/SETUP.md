@@ -12,17 +12,26 @@ doctest test without session import -> skip materialize
 
 - Cache tests serialize via flock so parallel leaves do not race on wipe/create.
 - Leaves may delete the expected cache dir to force cold materialize.
+- **L3 e2e**: product binary (UserCacheDir side effects / nested test).
 
 ## Steps
 
-1. Acquire cache lock.
+1. Acquire cache lock; set UseCLI + Bin.
 2. Leaf prepares module and runs doctest subprocess.
 
 ```go
-import "testing"
+import (
+	"path/filepath"
+	"testing"
 
-func Setup(t *testing.T, req *Request) error {
+	"github.com/xhd2015/doctest/session"
+	"github.com/xhd2015/doctest/libdoc/testbin"
+)
+
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	lockCacheTests(t)
+	req.UseCLI = true
+	req.Bin = testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, "..", ".."))
 	return nil
 }
 ```

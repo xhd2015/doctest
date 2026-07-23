@@ -1,26 +1,38 @@
 # Scenario
 
-**Feature**: `--changed` appears in subcommand help output
+**Feature**: `--changed` in subcommand help via in-process CLI (no product binary)
 
 ```
-# user reads help for a subcommand
-doctest <subcmd> --help -> stdout lists flags including --changed
+cli.RunWithWriter -> doctest <subcmd> --help -> stdout lists --changed
 ```
 
 ## Preconditions
 
-- The doctest binary is built and available at `req.Bin`.
+- Help is covered in-process via `cli.RunWithWriter` (same usage strings as the product binary).
+- Unlabeled (fast); no `testbin`, no `label: heavy`.
+- Policy selection stays in-process under `git-context/in-git-repo/`.
 
 ## Steps
 
-1. Configure `req.Args` to invoke `<subcmd> --help`.
-2. Run the doctest binary and capture stdout.
+1. Root help Setup is a no-op (no binary).
+2. Leaf sets `Args` to `<subcmd> --help`.
+3. `Run` calls `cli.RunWithWriter` when Args are set without TreeDir.
+
+## Context
+
+- No fixture tree required for help.
 
 ```go
-import "testing"
+import (
+	"testing"
 
-func Setup(t *testing.T, req *Request) error {
-	req.Env = append(req.Env, "CHANGED_TEST_GROUP=help")
+	"github.com/xhd2015/doctest/session"
+)
+
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	// In-process CLI: no testbin, no UseCLI binary path.
+	_ = d
+	_ = req
 	return nil
 }
 ```

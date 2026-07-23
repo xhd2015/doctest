@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - doctest test exits 0.
 - The child's Setup runs successfully, and root's Run produces the expected Echo.

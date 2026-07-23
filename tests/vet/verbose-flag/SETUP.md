@@ -1,27 +1,29 @@
 # Scenario
 
-**Feature**: a minimal valid doctest tree is available
+**Feature**: `doctest vet -v` prints directory- and file-level progress (in-process)
 
 ```
-# inspect test tree for structural issues
-doctest vet <dir> -> walk tree -> report anti-patterns
-
-# anti-patterns detected
-embedded go block | go test shellout | assert without setup | skipped testdata
+# injected opts.Stdout (validate.RunWithOptions)
+vet -v <dir> -> [vet] validating and SETUP.md lines
 ```
 
 ## Preconditions
+
 - A minimal valid doctest tree is available.
+- Verbose progress is captured via injected `opts.Stdout` (no process binary).
 
 ## Steps
-1. Run `doctest vet -v <dir>`.
+
+1. Create a minimal valid doctest tree in a temp directory.
+2. Run `vet -v <dir>` via in-process harness (validate + Stdout buffer).
 
 ```go
 import (
-    "github.com/xhd2015/doctest/libdoc/testtree"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/xhd2015/doctest/libdoc/testtree"
 )
 
 func Setup(t *testing.T, req *Request) error {
@@ -29,7 +31,10 @@ func Setup(t *testing.T, req *Request) error {
 	if err := os.WriteFile(filepath.Join(dir, "DOCTEST.md"), []byte(testtree.VetDOCTEST()), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "SETUP.md"), []byte("# Scenario\n\n**Feature**: minimal test setup\n\n\x60\x60\x60\n# minimal pipeline\nsystem -> run\n\x60\x60\x60\n\n## Setup\n"), 0644); err != nil {
+	// Write SETUP without embedding triple-backtick fences in this go block.
+	setupBody := "# Scenario\n\n**Feature**: minimal test setup\n\n" +
+		"\x60\x60\x60\n# minimal pipeline\nsystem -> run\n\x60\x60\x60\n\n## Setup\n"
+	if err := os.WriteFile(filepath.Join(dir, "SETUP.md"), []byte(setupBody), 0644); err != nil {
 		t.Fatal(err)
 	}
 	req.Args = []string{"vet", "-v", dir}

@@ -1,17 +1,24 @@
 # Scenario
 
-**Feature**: the vet command detects anti-patterns in test file content
+**Feature**: the vet command detects anti-patterns in test file content (L2 in-process)
 
 ```
-# inspect test tree for structural issues
-doctest vet <dir> -> walk tree -> report anti-patterns
+# inspect fixture tree for structural issues
+runner.VetArgs([dir]) -> validate.RunWithOptions -> report anti-patterns
 
 # anti-patterns detected
-embedded go block | go test shellout | DOCTEST_SESSION_ID env read | assert without setup | skipped testdata
+embedded go block | go test shellout | assert without setup | skipped testdata
 ```
 
 ## Preconditions
-- The vet command detects anti-patterns in test file content.
+
+- Anti-pattern leaves write bad `SETUP.md` content (or place it under `testdata/`)
+  and invoke in-process `VetArgs`.
+
+## Steps
+
+1. Child leaf builds a fixture tree under `t.TempDir()`.
+2. Run vet via shared in-process `Run` (no binary).
 
 ```go
 import "testing"

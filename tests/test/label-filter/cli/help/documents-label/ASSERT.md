@@ -1,15 +1,6 @@
----
-label: heavy
-explanation: CLI filter contract via doctest binary
----
-
 ## Expected
 
 - Exit 0; stdout includes `Usage: doctest test` and `--label`.
-
-## Exit Code
-
-0
 
 ```go
 import (
@@ -24,7 +15,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if resp.ExitCode != 0 {
 		t.Fatalf("exit code = %d\nstderr:\n%s", resp.ExitCode, resp.Stderr)
 	}
-	for _, want := range []string{"Usage: doctest test", "--label"} {
+	for _, want := range []string{"Usage: doctest test", "--label", "!"} {
 		if !strings.Contains(resp.Stdout, want) {
 			t.Fatalf("stdout missing %q:\n%s", want, resp.Stdout)
 		}

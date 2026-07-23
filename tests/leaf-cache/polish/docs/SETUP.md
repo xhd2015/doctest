@@ -1,6 +1,6 @@
 # Scenario
 
-**Feature**: product CLI help mentions leaf-cache flags (**L3 e2e**, `label: heavy`)
+**Feature**: product CLI help mentions leaf-cache flags (**L2 in-process**)
 
 ```
 doctest test --help
@@ -9,30 +9,25 @@ doctest test --help
 
 ## Preconditions
 
-- Builds selftest binary (`testbin.Ensure`) — nested product path.
-- Leaf labeled `heavy` so default discovery skips it.
+- Short-path help: no product binary (`runtime_once` with empty Bin →
+  `cli.RunWithWriter`).
+- Unlabeled so default discovery runs it.
 
 ## Steps
 
-1. Ensure binary; isolate env not required for help.
+1. Leave Bin empty; isolate env not required for help.
 2. Child sets Op=`runtime_once` with `test --help`.
 
 ```go
 import (
-	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/xhd2015/doctest/libdoc/testbin"
-	"github.com/xhd2015/doctest/session"
 )
 
-func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+func Setup(t *testing.T, req *Request) error {
 	t.Helper()
-	req.Timeout = 60 * time.Second
-	// tests/leaf-cache -> tests -> module root
-	modRoot := filepath.Clean(filepath.Join(d.DOCTEST_ROOT, "..", ".."))
-	req.Bin = testbin.Ensure(t, modRoot)
+	req.Timeout = 30 * time.Second
+	// L2: Bin stays empty → Run uses in-process CLI for runtime_once.
 	return nil
 }
 ```

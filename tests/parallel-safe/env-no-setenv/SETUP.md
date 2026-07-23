@@ -71,9 +71,12 @@ func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	if req.Op == "" {
 		req.Op = "cli"
 	}
-	// Functional leaves need the binary; static scan does not.
+	// Functional leaves: product binary e2e. static_scan: in-process only.
 	if req.Op != "static_scan" {
+		req.UseCLI = true
 		req.Bin = testbin.Ensure(t, req.ModuleRoot)
+	} else {
+		req.UseCLI = false
 	}
 	return nil
 }

@@ -1,8 +1,3 @@
----
-label: heavy
-explanation: builds selftest binary to print test --help
----
-
 ## Expected
 
 - Exit 0.

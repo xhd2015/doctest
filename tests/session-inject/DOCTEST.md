@@ -64,6 +64,7 @@ doctest test ./tests/session-inject/replace/...
 ```go
 import (
 	"bytes"
+	"github.com/xhd2015/doctest/libdoc/cli"
 	"context"
 	"errors"
 	"fmt"
@@ -79,6 +80,8 @@ type Request struct {
 	WorkDir string
 	Timeout time.Duration
 	Bin     string
+	// UseCLI: child Env isolation only. Default in-process CLI.
+	UseCLI  bool
 	// GenDir is the absolute --gen-dir path for this leaf (request-local; no package var).
 	GenDir  string
 	// ModuleRoot / TestDir are the temp fixture paths for this leaf (request-local).
@@ -96,28 +99,39 @@ type Response struct {
 }
 
 func Run(t *testing.T, req *Request) (*Response, error) {
+	t.Helper()
+	if req.Timeout <= 0 {
+		req.Timeout = 120 * time.Second
+	}
+	if !req.UseCLI && (len(req.Env) > 0 || req.WorkDir != "") {
+		return nil, fmt.Errorf("Env/WorkDir require UseCLI (subprocess isolation; Parallel-safe)")
+	}
+	if !req.UseCLI {
+		var stdout bytes.Buffer
+		err := cli.RunWithWriter(&stdout, req.Args)
+		resp := &Response{Stdout: stdout.String(), Err: err}
+		if err != nil {
+			resp.ExitCode = 1
+			resp.Stderr = err.Error()
+			return resp, nil
+		}
+		return resp, nil
+	}
+	if req.Bin == "" {
+		return nil, fmt.Errorf("UseCLI requires req.Bin")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), req.Timeout)
 	defer cancel()
-
-	bin := req.Bin
-	if bin == "" {
-		return nil, fmt.Errorf("req.Bin is not set")
-	}
-	cmd := exec.CommandContext(ctx, bin, req.Args...)
+	cmd := exec.CommandContext(ctx, req.Bin, req.Args...)
 	cmd.Dir = req.WorkDir
-	cmd.Env = append(os.Environ(), req.Env...)
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
+	if len(req.Env) > 0 {
+		cmd.Env = append(os.Environ(), req.Env...)
+	}
+	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-
 	err := cmd.Run()
-	resp := &Response{
-		Stdout: stdout.String(),
-		Stderr: stderr.String(),
-		Err:    err,
-	}
+	resp := &Response{Stdout: stdout.String(), Stderr: stderr.String(), Err: err}
 	if err == nil {
 		return resp, nil
 	}

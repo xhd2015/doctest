@@ -1,20 +1,19 @@
 # Scenario
 
-**Feature**: the vet command help should document the new `-v` flag and positional patterns
+**Feature**: the vet command help documents `-v` / multi-dir and `./...` patterns (in-process CLI)
 
 ```
-# inspect test tree for structural issues
-doctest vet <dir> -> walk tree -> report anti-patterns
-
-# anti-patterns detected
-embedded go block | go test shellout | assert without setup | skipped testdata
+cli.RunWithWriter -> doctest vet --help -> usage includes -v, --verbose, <dir...>, ./...
 ```
 
 ## Preconditions
-- The vet command help should document the new `-v` flag and positional patterns.
+
+- Vet is registered on the top-level command.
+- L2 in-process: `cli.RunWithWriter` captures usage text (no product binary).
 
 ## Steps
-1. Run `doctest vet --help`.
+
+1. Run `vet --help` via in-process CLI.
 
 ```go
 import "testing"

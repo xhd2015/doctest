@@ -26,8 +26,13 @@ matcher/                              [L2 in-process — EvalLabelExpr]
 ├── precedence/                       && binds tighter than ||
 ├── parentheses/                      grouping overrides
 ├── whitespace/                       trim around expression
-└── invalid-syntax/                   trailing && → parse error
+├── invalid-syntax/                   trailing && → parse error
+├── not-bang/                         !e2e (includes unlabeled)
+├── not-and/                          !e2e && heavy
+├── not-parens/                       !(e2e || flaky)
+└── not-invalid/                      bare ! / trailing ! / "not e2e"
 ```
+
 
 ## How to Run
 

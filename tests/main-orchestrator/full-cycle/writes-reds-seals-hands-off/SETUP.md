@@ -35,6 +35,8 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
+	req.UseCLI = true // true e2e full cycle
+	requireFakeCodex(t, req)
     repoDir := filepath.Join(t.TempDir(), "repo")
     os.MkdirAll(repoDir, 0755)
     runCmd(t, repoDir, nil, "go", "mod", "init", "test")

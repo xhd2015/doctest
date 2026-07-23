@@ -1,35 +1,26 @@
----
-label: heavy
----
-
 ## Expected
 
-- Exit code 0.
-- stderr is empty (zero-change trees are silent without `-v`).
-
-## Side Effects
-
-- No tests are executed.
-
-## Exit Code
-
-0
+- Filtered paths empty.
+- `ChangedCount` 0; `Announce` false (silent without verbose).
 
 ```go
-import (
-	"strings"
-	"testing"
-)
+import "testing"
 
 func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if err != nil {
 		t.Fatalf("run failed: %v", err)
 	}
-	if resp.ExitCode != 0 {
-		t.Fatalf("exit code = %d\nstdout:\n%s\nstderr:\n%s", resp.ExitCode, resp.Stdout, resp.Stderr)
+	if len(resp.FilteredPaths) != 0 {
+		t.Fatalf("FilteredPaths = %#v, want empty", resp.FilteredPaths)
 	}
-	if strings.TrimSpace(resp.Stderr) != "" {
-		t.Fatalf("stderr should be empty without -v, got:\n%s", resp.Stderr)
+	if resp.Info.TotalInTree != 2 {
+		t.Fatalf("TotalInTree = %d, want 2", resp.Info.TotalInTree)
+	}
+	if resp.Info.ChangedCount != 0 {
+		t.Fatalf("ChangedCount = %d, want 0", resp.Info.ChangedCount)
+	}
+	if resp.Announce {
+		t.Fatal("Announce should be false for zero-change without verbose")
 	}
 }
 ```

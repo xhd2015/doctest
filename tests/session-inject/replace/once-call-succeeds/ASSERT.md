@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - Subprocess exits 0.

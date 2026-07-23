@@ -40,6 +40,9 @@ DOCTEST_CACHE_HOME sandbox -> CacheHome() so tests never touch developer cache
 
 ```go
 import (
+	"path/filepath"
+	"github.com/xhd2015/doctest/libdoc/testbin"
+	"github.com/xhd2015/doctest/session"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,7 +54,10 @@ import (
 
 var bt = "`" + "`" + "`"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	req.UseCLI = true // true e2e cold-cache
+	// Tree inherits tests/DOCTEST.md → DOCTEST_ROOT is tests/; module is parent.
+	req.Bin = testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, ".."))
 	req.Timeout = 120 * time.Second
 	req.CCCacheHome = ""
 	req.CCWarmHome = ""

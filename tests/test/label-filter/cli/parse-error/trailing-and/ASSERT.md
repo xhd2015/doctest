@@ -1,15 +1,6 @@
----
-label: heavy
-explanation: CLI filter contract via doctest binary
----
-
 ## Expected
 
 - Non-zero exit, parse error on stderr, no PASS/FAIL summary.
-
-## Exit Code
-
-non-zero
 
 ```go
 import (
@@ -24,9 +15,13 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if resp.ExitCode == 0 {
 		t.Fatalf("expected nonzero exit\nstderr:\n%s", resp.Stderr)
 	}
-	if !strings.Contains(resp.Stderr, "parse") && !strings.Contains(resp.Stderr, "syntax") {
-		t.Fatalf("stderr must report expression parse/syntax error, not generic flag error:\n%s", resp.Stderr)
+	msg := resp.Stderr + resp.ParseErr
+	if !strings.Contains(msg, "parse") && !strings.Contains(msg, "syntax") {
+		t.Fatalf("stderr must report expression parse/syntax error, not generic flag error:\n%s", msg)
 	}
-	assertNoResultSummary(t, resp.Stdout)
+	// In-process parse never runs the suite — no PASS/FAIL summary.
+	if strings.Contains(resp.Stdout, "PASS (") || strings.Contains(resp.Stdout, "FAIL (") {
+		t.Fatalf("expected no PASS/FAIL summary\nstdout:\n%s", resp.Stdout)
+	}
 }
 ```

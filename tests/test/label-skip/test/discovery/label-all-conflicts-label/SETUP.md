@@ -1,20 +1,21 @@
 # Scenario
 
-**Feature**: --label-all rejects combination with --label
+**Feature**: --label-all rejects combination with --label (L2 parse)
 
 ```
-doctest test --label-all --label heavy <tree> -> non-zero, mutual exclusion error
+runner.ParseTestOptions([--label-all, --label, heavy, .])
+  -> mutually exclusive
 ```
 
 ## Steps
 
-1. Create any valid temp tree.
-2. Run with both flags.
+1. Parse with both flags (dir unused after parse fails).
 
 ```go
+import "testing"
+
 func Setup(t *testing.T, req *Request) error {
-	root := writeLabeledTree(t, true, "ui-automation", "heavy ui test")
-	req.Args = []string{"test", "--label-all", "--label", "heavy", root}
+	req.Args = []string{"--label-all", "--label", "heavy", "."}
 	return nil
 }
 ```

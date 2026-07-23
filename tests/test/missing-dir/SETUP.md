@@ -1,30 +1,26 @@
 # Scenario
 
-**Feature**: no target directory argument is supplied
+**Feature**: no target directory argument is supplied (L2 CLI)
 
 ```
-# build and run test binary, report results
-doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
-
-# path patterns
-.../ -> walk tree | subdir -> run subtree | multi-dir -> aggregate results
-
-# output
-progress dots -> . F | verbose -> go test -v | count -> N tests
+cli.RunWithWriter(["test"]) -> error: test requires <dir>
 ```
 
 ## Preconditions
-- No target directory argument is supplied.
+
+- Nested L2 root: in-process CLI; no product binary.
+- `doctest test` with no directory operand.
 
 ## Steps
-1. Run `doctest test`.
+
+1. Set `req.Args` to `["test"]` only.
+2. Run via `cli.RunWithWriter`; Assert checks message and non-zero exit.
 
 ```go
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-    req.Args = []string{"test"}
-    return nil
+	req.Args = []string{"test"}
+	return nil
 }
 ```
-

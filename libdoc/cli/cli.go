@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	lessflags "github.com/xhd2015/less-flags"
 
@@ -173,8 +174,11 @@ Options:
   --no-color        Disable ANSI color in non-verbose progress output
   --changed         Only run doctest leaves affected by git working-tree changes
   --label EXPR      Run only leaves whose ASSERT.md labels match EXPR (repeatable;
-                    multiple flags are OR'd). Supports &&, ||, and parentheses.
-                    Unlabeled leaves are skipped when this flag is set.
+                    multiple flags are OR'd). Supports !, &&, ||, and parentheses
+                    (precedence: ! > && > ||). Match is boolean over the leaf's
+                    label set (unlabeled = empty set; e.g. !e2e includes
+                    unlabeled and non-e2e labeled leaves). Quote bangs in the
+                    shell: --label '!e2e'.
   --label-all       Discovery mode: run all leaves including labeled ones (full
                     suite). Mutually exclusive with --label.
   --metrics-on      Opt in to suite metrics JSONL recording (off by default)
@@ -223,6 +227,7 @@ Examples:
   doctest test ./mod --label slow
   doctest test ./mod --label 'slow && ui-automation'
   doctest test ./mod --label slow --label heavy
+  doctest test ./... --label '!e2e'
   DOCTEST_DEBUG=bypass-go-test=1 doctest test ./... --cold-cache
   DOCTEST_DEBUG=bypass-go-test=1,cpuprofile=/tmp/prep.pprof,memprofile=/tmp/prep.mprof,blockprofile=/tmp/prep.block doctest test ./...
 `
@@ -286,7 +291,12 @@ Options:
 
 // testStdout, when non-nil, receives CLI help/list output instead of os.Stdout.
 // Set only via withTestStdout so unit tests never reassign os.Stdout.
-var testStdout io.Writer
+// Guarded by testStdoutMu so concurrent RunWithWriter/withTestStdout callers
+// do not interleave writers (suite leaves run with t.Parallel).
+var (
+	testStdout   io.Writer
+	testStdoutMu sync.Mutex
+)
 
 func cliStdout() io.Writer {
 	if testStdout != nil {
@@ -297,11 +307,20 @@ func cliStdout() io.Writer {
 
 // withTestStdout runs fn with CLI user-facing text directed to w.
 // Does not reassign os.Stdout (Parallel-safe under concurrent packages).
+// Serializes concurrent callers so package-level testStdout is not racy.
 func withTestStdout(w io.Writer, fn func() error) error {
+	testStdoutMu.Lock()
+	defer testStdoutMu.Unlock()
 	prev := testStdout
 	testStdout = w
 	defer func() { testStdout = prev }()
 	return fn()
+}
+
+// RunWithWriter runs the CLI with user-facing text directed to w
+// (Parallel-safe; does not reassign os.Stdout).
+func RunWithWriter(w io.Writer, args []string) error {
+	return withTestStdout(w, func() error { return Run(args) })
 }
 
 func Run(args []string) error {

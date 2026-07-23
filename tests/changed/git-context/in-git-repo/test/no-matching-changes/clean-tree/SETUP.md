@@ -1,26 +1,25 @@
 # Scenario
 
-**Feature**: clean working tree yields no-tests-changed warning
+**Feature**: empty changed list yields zero selected leaves
 
 ```
 # no modifications
-clean tree -> doctest test --changed -> warning, exit 0
+ChangedFiles=[] -> ChangedCount 0 ; Announce false
 ```
 
 ## Steps
 
-1. Create flat two-leaf tree and commit with no further changes.
-2. Run `doctest test --changed`.
+1. Create flat two-leaf tree.
+2. Leave `ChangedFiles` empty.
+3. Run filter policy.
 
 ```go
-import (
-	"testing"
-)
+import "testing"
 
 func Setup(t *testing.T, req *Request) error {
 	fx := createFlatTwoLeafTree(t)
-	req.WorkDir = fx.RepoDir
-	req.Args = []string{"test", fx.TreeDir, "--changed"}
+	applyPolicyBase(req, fx)
+	req.ChangedFiles = nil
 	return nil
 }
 ```

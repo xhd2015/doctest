@@ -1,39 +1,27 @@
 # Scenario
 
-**Feature**: vet skips unchanged root `DOCTEST.md` even when invalid
+**Feature**: vet omits unchanged root `DOCTEST.md` even when invalid
 
 ```
-# root DOCTEST.md missing Version (invalid but committed, unchanged)
+# root missing ## Version (invalid) but not in changed list
 # only leaf_a ASSERT.md changed
-doctest vet --changed -> exit 0 (root not validated)
+ChangedDoctestMarkdownFiles -> [leaf_a/ASSERT.md] (no DOCTEST.md)
 ```
 
 ## Steps
 
-1. Create tree with invalid root `DOCTEST.md` (no `## Version`) and commit.
-2. Modify only `leaf_a/ASSERT.md`.
-3. Run `doctest vet --changed`.
+1. Create tree with invalid root `DOCTEST.md` (no Version).
+2. Set changed path to `leaf_a/ASSERT.md` only.
+3. Assert root is not in the markdown list.
 
 ```go
-import (
-	"os"
-	"path/filepath"
-	"testing"
-)
+import "testing"
 
 func Setup(t *testing.T, req *Request) error {
 	fx := createVetSkipRootTree(t)
-	assertPath := filepath.Join(fx.TreeDir, "leaf_a", "ASSERT.md")
-	content, err := os.ReadFile(assertPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	content = append(content, []byte("\n<!-- vet skip root -->\n")...)
-	if err := os.WriteFile(assertPath, content, 0644); err != nil {
-		t.Fatal(err)
-	}
-	req.WorkDir = fx.RepoDir
-	req.Args = []string{"vet", fx.TreeDir, "--changed"}
+	applyPolicyBase(req, fx)
+	req.Policy = PolicyVetMD
+	req.ChangedFiles = []string{treeRel(fx, "leaf_a", "ASSERT.md")}
 	return nil
 }
 ```

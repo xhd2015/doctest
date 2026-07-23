@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - No harness error; keys are lowercase hex.

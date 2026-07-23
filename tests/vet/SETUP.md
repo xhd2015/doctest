@@ -1,31 +1,46 @@
 # Scenario
 
-**Feature**: the vet command checks doc-style tree structure (renamed from validate)
+**Feature**: validate doctest trees via `runner.VetArgs` / `validate` / `cli.RunWithWriter` (in-process)
 
 ```
-# inspect test tree for structural issues
-doctest vet <dir> -> walk tree -> report anti-patterns
-
-# anti-patterns detected
-embedded go block | go test shellout | DOCTEST_SESSION_ID env read | assert without setup | skipped testdata
+# L2: in-process vet against fixture trees
+fixture tree under t.TempDir()
+  -> runner.VetArgs | validate.RunWithOptions | cli.RunWithWriter
+  -> Response{ExitCode, Stdout, Stderr}
 ```
 
 ## Preconditions
-- The vet command checks doc-style tree structure (renamed from validate).
+
+- Nested root: does not inherit workspace binary Run from `tests/DOCTEST.md`.
+- All leaves inject fixture dirs / Args on `Request` — no product binary required.
+- Leaves write fixture trees under `t.TempDir()`; never mutate the repo tree.
+- Completeness: every prior `tests/vet` scenario remains as L2 in-process.
+- Help and verbose leaves are unlabeled (fast); no `testbin`.
 
 ## Steps
-1. Choose a target directory.
-2. Run `doctest vet`.
+
+1. Root Setup is a no-op (no binary).
+2. Descendants create fixture trees, set `Args` (and optional `WorkDir`).
+3. `Run` dispatches in-process to `runner.VetArgs`, `validate.RunWithOptions`
+   (verbose with injected Stdout), or `cli.RunWithWriter` (help / unknown).
+
+## Context
+
+- `Request` / `Response` / `Run` are defined only in `DOCTEST.md`.
+- Parallel-safe: each leaf uses `t.TempDir()`; relative Args rewritten against WorkDir.
+- **Layer**: L2 in-process for all leaves.
 
 ```go
 import (
-    "testing"
-    "time"
+	"testing"
+
+	"github.com/xhd2015/doctest/session"
 )
 
-func Setup(t *testing.T, req *Request) error {
-    req.Timeout = 20 * time.Second
-    req.Env = append(req.Env, "DOCTEST_VET_TEST=1")
-    return nil
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	// In-process only: no testbin, no UseCLI binary path.
+	_ = d
+	_ = req
+	return nil
 }
 ```

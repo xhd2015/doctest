@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 - doctest test fails with non-zero exit.
 - stderr contains an error indicating that the non-root SETUP.md must have

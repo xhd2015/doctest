@@ -40,34 +40,45 @@ import (
 )
 
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-    tmp := t.TempDir()
+	// Shared helpers only. Do not force UseCLI — short-path leaves stay L2
+	// (in-process). True e2e leaves set UseCLI=true and skip without fake-codex.
+	req.Timeout = 60 * time.Second
+	tmp := t.TempDir()
 
-    fakeCodex, err := exec.LookPath("fake-codex")
-    if err != nil {
-        t.Skip("fake-codex not in PATH; install via: go install github.com/xhd2015/agent-pro/cmd/fake-codex@latest")
-        return nil
-    }
+	doctestBin := testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, ".."))
+	req.Bin = doctestBin
 
-    doctestBin := testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, ".."))
+	yieldPQ := filepath.Join(tmp, "yield-pending-questions")
+	if out, err := exec.Command("cp", doctestBin, yieldPQ).CombinedOutput(); err != nil {
+		t.Fatalf("copy yield-pending-questions: %v\n%s", err, string(out))
+	}
+	sessionHome := filepath.Join(tmp, "sessions")
+	req.SessionHome = sessionHome
+	req.YieldPQBin = yieldPQ
 
-    yieldPQ := filepath.Join(tmp, "yield-pending-questions")
-    if out, err := exec.Command("cp", doctestBin, yieldPQ).CombinedOutput(); err != nil {
-        t.Fatalf("copy yield-pending-questions: %v\n%s", err, string(out))
-    }
+	// Stash parent-side paths; e2e leaves also push them onto child Env.
+	req.Env = append(req.Env,
+		"DOCTEST_BIN="+doctestBin,
+		"YIELD_PQ_BIN="+yieldPQ,
+		"DOCTEST_DEBUG_SESSION_HOME="+sessionHome,
+	)
 
-    sessionHome := filepath.Join(tmp, "sessions")
-    req.Env = append(req.Env,
-        "DOCTEST_BIN="+doctestBin,
-        "AGENT_RUNNER_FAKE_CODEX_PATH="+fakeCodex,
-        "YIELD_PQ_BIN="+yieldPQ,
-        "DOCTEST_DEBUG_SESSION_HOME="+sessionHome,
-    )
-    req.Bin = doctestBin
-    req.SessionHome = sessionHome
-    req.YieldPQBin = yieldPQ
-    // Child-only env via req.Env — never parent os.Setenv.
-    req.Timeout = 60 * time.Second
-    return nil
+	if fakeCodex, err := exec.LookPath("fake-codex"); err == nil {
+		req.Env = append(req.Env, "AGENT_RUNNER_FAKE_CODEX_PATH="+fakeCodex)
+	}
+	// Child-only env via req.Env — never parent os.Setenv.
+	return nil
+}
+
+// requireFakeCodex skips when fake-codex is not on PATH (true agent e2e leaves).
+func requireFakeCodex(t *testing.T, req *Request) {
+	t.Helper()
+	for _, e := range req.Env {
+		if strings.HasPrefix(e, "AGENT_RUNNER_FAKE_CODEX_PATH=") {
+			return
+		}
+	}
+	t.Skip("fake-codex not in PATH; install via: go install github.com/xhd2015/agent-pro/cmd/fake-codex@latest")
 }
 
 func writeMockConfig(t *testing.T, req *Request, body string) string {

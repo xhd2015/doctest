@@ -1,45 +1,55 @@
 # Scenario
 
-**Feature**: build the doctest binary for `--changed` integration tests
+**Feature**: `--changed` policy via core APIs (L2), help via `cli.RunWithWriter`, sparse CLI e2e (L3)
 
 ```
-# build doctest from module source
-go build ./cmd/doctest -> doctest binary
+# L2 default: in-process filter against fixture trees
+fixture tree under t.TempDir()
+  -> core.DiscoverTreeCases + FilterByChangedFiles | ChangedDoctestMarkdownFiles
+  -> Response{FilteredPaths, Info, MarkdownPaths}
 
-# invoke with --changed against ephemeral git repos
-doctest <subcmd> --changed <fixture-tree> -> filter leaves by git status
+# L2 help (help/ only): in-process CLI
+cli.RunWithWriter -> doctest <subcmd> --help
+
+# L3 e2e (not-git-repo/, label: heavy)
+testbin.Ensure -> req.Bin
+  -> doctest <subcmd> --changed <dir>
 ```
 
 ## Preconditions
 
-- The doctest module root is two levels above this tree (`DOCTEST_ROOT/../..`).
-- Each leaf configures subcommand args and git fixture layout.
+- Nested root: module root is `DOCTEST_ROOT/../..` (e2e binary build only for not-git).
+- L2 policy injects fixture trees + synthetic changed path lists — no product binary and no real git required.
+- L2 help uses `cli.RunWithWriter` — no product binary.
+- L3 e2e uses `testbin.Ensure` with the product binary (not-git-repo only).
+- Leaves write fixture trees under `t.TempDir()`; never mutate the repo tree.
+- Completeness: every prior `tests/changed` scenario remains as L2 or L3 smoke.
 
 ## Steps
 
-1. Build the doctest binary from the module root.
-2. Store the binary path in `req.Bin` for `Run` to execute.
+1. Root Setup is a no-op (no binary by default).
+2. L2 policy descendants create fixture trees and set `TreeDir`, `GitRoot`, `ChangedFiles`.
+3. L2 help descendants set `Args` only (`<subcmd> --help`).
+4. Default `Run` dispatches policy, `cli.RunWithWriter`, or binary e2e.
+5. `not-git-repo/` Setup sets `UseCLI`, builds binary once via `testbin.Ensure`.
 
 ## Context
 
-- Fixture test trees are created inside ephemeral git repos by descendant `Setup` functions.
-- `req.WorkDir` is set to the git repo root when running against fixtures.
+- `Request` / `Response` / `Run` are defined only in `DOCTEST.md`.
+- Parallel-safe: each leaf uses `t.TempDir()`.
+- **Layer**: L2 in-process policy + help is the mass; L3 e2e is sparse and labeled `heavy`.
 
 ```go
 import (
-"github.com/xhd2015/doctest/session"
-	"os/exec"
-	"path/filepath"
 	"testing"
-	"time"
 
-	"github.com/xhd2015/doctest/libdoc/testbin"
+	"github.com/xhd2015/doctest/session"
 )
 
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-	req.Timeout = 120 * time.Second
-
-	req.Bin = testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, "..", ".."))
+	// Default: in-process. not-git-repo/ Setup sets UseCLI + Bin.
+	_ = d
+	_ = req
 	return nil
 }
 ```

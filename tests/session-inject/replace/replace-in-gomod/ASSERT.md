@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - Under gen-dir (or work tree), a nested `go.mod` contains a replace for

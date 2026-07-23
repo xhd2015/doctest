@@ -20,8 +20,12 @@ jobs:
         # Run on the Ubuntu VM (not a golang container) so default VCS stamping works
         # without -buildvcs=false.
         run: go install ./cmd/doctest
-      - name: Doctest
-        # Full labeled suite is multi-run nested selftests (leaf-cache, go-test-cache).
-        # go test default 10m kills the workspace binary mid-run (~900 leaves).
-        # Quiet mode: case set is the same as -v after prepare-parity; use -v only when debugging.
-        run: doctest test --label-all ./... -timeout=30m
+      # Layer model (DOCTEST_DESIGN_PRINCIPLE): discovery = in-process mass;
+      # label e2e = full integration only. Prefer discovery for PR signal; e2e on full push.
+      - name: Doctest discovery (in-process mass)
+        # Unlabeled leaves only — skips label:e2e / heavy. Fast PR feedback.
+        run: doctest test ./... -timeout=30m
+      - name: Doctest e2e (full integration)
+        # True process-boundary / nested-product leaves (label: e2e).
+        # Multi-run nested selftests can be multi-minute; allow full timeout.
+        run: doctest test --label e2e ./... -timeout=30m

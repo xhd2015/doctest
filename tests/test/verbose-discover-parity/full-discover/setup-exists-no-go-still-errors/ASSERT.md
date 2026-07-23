@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - `DiscoverTreeCases` returns a non-empty error.

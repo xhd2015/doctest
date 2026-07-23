@@ -1,20 +1,20 @@
 # Scenario
 
-**Feature**: trailing operator in label expression is rejected
+**Feature**: trailing operator in label expression is rejected (L2 parse)
 
 ```
-doctest test <mod> --label 'slow &&' -> stderr parse error
+runner.ParseTestOptions([., --label, 'slow &&']) -> parse/syntax error
 ```
 
 ## Steps
 
-1. Create fixture mod.
-2. Run with invalid `--label`.
+1. Parse with invalid `--label` (dir unused after parse fails).
 
 ```go
+import "testing"
+
 func Setup(t *testing.T, req *Request) error {
-	mod := writeLabelFilterMod(t)
-	req.Args = []string{"test", mod, "--label", "slow &&"}
+	req.Args = []string{".", "--label", "slow &&"}
 	return nil
 }
 ```

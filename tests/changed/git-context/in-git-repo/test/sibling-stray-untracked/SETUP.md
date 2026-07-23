@@ -1,43 +1,28 @@
 # Scenario
 
-**Feature**: unrelated untracked files in a sibling leaf must not widen `--changed` runs
+**Feature**: unrelated non-doctest files in a sibling leaf must not widen selection
 
 ```
-# only leaf_a ASSERT.md modified; leaf_b has unrelated untracked file
-changed leaf_a/ASSERT.md + untracked leaf_b/stray.go -> doctest test --changed ./... -> 1 Run
+# leaf_a ASSERT + leaf_b/stray.go both "changed"
+FilterByChangedFiles -> [leaf_a] only
 ```
 
 ## Steps
 
-1. Create flat two-leaf tree and commit.
-2. Modify `leaf_a/ASSERT.md` (unstaged).
-3. Add an unrelated untracked file under `leaf_b/`.
-4. Run `doctest test --changed ./...` from the repo root.
+1. Create flat two-leaf tree (stray path need not exist on disk for path math).
+2. Set changed list to ASSERT + sibling stray.go.
+3. Assert only leaf_a is selected.
 
 ```go
-import (
-	"os"
-	"path/filepath"
-	"testing"
-)
+import "testing"
 
 func Setup(t *testing.T, req *Request) error {
 	fx := createFlatTwoLeafTree(t)
-	assertPath := filepath.Join(fx.TreeDir, "leaf_a", "ASSERT.md")
-	content, err := os.ReadFile(assertPath)
-	if err != nil {
-		t.Fatal(err)
+	applyPolicyBase(req, fx)
+	req.ChangedFiles = []string{
+		treeRel(fx, "leaf_a", "ASSERT.md"),
+		treeRel(fx, "leaf_b", "stray.go"),
 	}
-	content = append(content, []byte("\n<!-- changed -->\n")...)
-	if err := os.WriteFile(assertPath, content, 0644); err != nil {
-		t.Fatal(err)
-	}
-	strayPath := filepath.Join(fx.TreeDir, "leaf_b", "stray.go")
-	if err := os.WriteFile(strayPath, []byte("package leaf_b\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	req.WorkDir = fx.RepoDir
-	req.Args = []string{"test", "--changed", "./..."}
 	return nil
 }
 ```

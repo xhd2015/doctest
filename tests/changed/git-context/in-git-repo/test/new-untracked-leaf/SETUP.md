@@ -1,29 +1,29 @@
 # Scenario
 
-**Feature**: an untracked new leaf is the only one that runs
+**Feature**: a new leaf's files select only that leaf
 
 ```
-# new leaf directory added but not committed
-untracked leaf_c/ -> doctest test --changed -> 1 Run (new leaf only)
+# new leaf_c ASSERT + SETUP in changed list; baseline leaves unchanged
+FilterByChangedFiles -> [leaf_c]
 ```
 
 ## Steps
 
-1. Create flat two-leaf tree and commit.
-2. Add a new `leaf_c` directory (untracked).
-3. Run `doctest test --changed`.
+1. Create flat two-leaf tree and add `leaf_c` on disk (so discovery finds it).
+2. Set changed paths to leaf_c markdown only.
+3. Assert only leaf_c is selected.
 
 ```go
-import (
-	"path/filepath"
-	"testing"
-)
+import "testing"
 
 func Setup(t *testing.T, req *Request) error {
 	fx := createFlatTwoLeafTree(t)
 	writeLeaf(t, fx.TreeDir, "leaf_c")
-	req.WorkDir = fx.RepoDir
-	req.Args = []string{"test", fx.TreeDir, "--changed"}
+	applyPolicyBase(req, fx)
+	req.ChangedFiles = []string{
+		treeRel(fx, "leaf_c", "ASSERT.md"),
+		treeRel(fx, "leaf_c", "SETUP.md"),
+	}
 	return nil
 }
 ```

@@ -110,6 +110,7 @@ type Request struct {
 	WorkDir string
 	Timeout time.Duration
 	Bin     string
+	UseCLI  bool // true = product binary (functional e2e)
 
 	// ModuleRoot is the doctest module root (parent of libdoc/, tests/).
 	// Set by root Setup from d.DOCTEST_ROOT.

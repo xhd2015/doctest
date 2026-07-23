@@ -1,32 +1,45 @@
 # Scenario
 
-**Feature**: the doctest command supports top-level and scoped help output
+**Feature**: top-level and scoped help via in-process CLI (no product binary)
 
 ```
 # top-level usage
-doctest help -> list subcommands -> stdout
+cli.RunWithWriter -> doctest --help -> list subcommands -> stdout buffer
 
 # scoped help
-doctest help <subcmd> -> flags, description -> stdout
+cli.RunWithWriter -> doctest <subcmd> --help -> flags, description -> stdout buffer
 ```
 
 ## Preconditions
-- The doctest command supports top-level and scoped help output.
+
+- Nested root: does not inherit `tests/` binary `Run` or `testbin.Ensure`.
+- All leaves are in-process via `cli.RunWithWriter` + `cli.Run`.
+- No product binary build; no `label: heavy`.
+- Completeness: four leaves — top-level, test-options, build-options, agent-generate.
 
 ## Steps
-1. Choose a help command variant.
-2. Run the doctest command.
+
+1. Root Setup is a no-op (no binary).
+2. Each leaf sets `req.Args` for the help variant under test.
+3. `Run` calls `cli.RunWithWriter(&buf, req.Args)` and fills `Response.Stdout`.
+
+## Context
+
+- `Request` / `Response` / `Run` are defined only in this tree's `DOCTEST.md`.
+- Parallel-safe: capture uses `withTestStdout` under `RunWithWriter` (no `os.Stdout` swap).
+- **Layer**: in-process CLI for all leaves.
 
 ```go
 import (
-    "testing"
-    "time"
+	"testing"
+
+	"github.com/xhd2015/doctest/session"
 )
 
-func Setup(t *testing.T, req *Request) error {
-    req.Timeout = 20 * time.Second
-    req.Env = append(req.Env, "DOCTEST_HELP_TEST=1")
-    return nil
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	// In-process: no testbin, no timeout for subprocess.
+	_ = d
+	_ = req
+	return nil
 }
 ```
-

@@ -1,34 +1,28 @@
 # Scenario
 
-**Feature**: unknown runner flags should fail
+**Feature**: unknown runner flags should fail at parse time (L2)
 
 ```
-# build and run test binary, report results
-doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
-
-# path patterns
-.../ -> walk tree | subdir -> run subtree | multi-dir -> aggregate results
-
-# output
-progress dots -> . F | verbose -> go test -v | count -> N tests
+runner.ParseTestOptions([dir, --definitely-not-real])
+  -> error: unrecognized flag
 ```
 
 ## Preconditions
-- Unknown runner flags should fail.
+
+- Nested L2 root: `runner.ParseTestOptions` only; no product binary.
+- Directory operand is unused once parse fails.
 
 ## Steps
-1. Run `doctest test <dir> --definitely-not-real`.
+
+1. Set `req.Args` to a dummy dir plus an unknown flag.
+2. Run parses; Assert checks non-zero exit style and message.
 
 ```go
-import (
-"github.com/xhd2015/doctest/session"
-    "path/filepath"
-    "testing"
-)
+import "testing"
 
-func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-    exampleDir := filepath.Join(d.DOCTEST_ROOT, "testdata", "basic-request-runner")
-    req.Args = []string{"test", exampleDir, "--definitely-not-real"}
-    return nil
+func Setup(t *testing.T, req *Request) error {
+	// Dir is unused: parse rejects the unknown flag first.
+	req.Args = []string{".", "--definitely-not-real"}
+	return nil
 }
 ```

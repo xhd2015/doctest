@@ -1,31 +1,32 @@
 # Scenario
 
-**Feature**: `doctest vet --changed` validates only changed doctest files
+**Feature**: vet `--changed` selects doctest markdown via `ChangedDoctestMarkdownFiles`
 
 ```
-# vet changed files only
-doctest vet --changed <tree> -> walk changed paths -> skip unchanged siblings and root
+# vet selection is path-based, not leaf-filter
+ChangedDoctestMarkdownFiles(tree, gitRoot, changed) -> absolute markdown paths
 ```
 
 ## Preconditions
 
-- Fixture tree lives inside an initialized git repository.
+- Fixture tree under synthetic git root.
+- Vet validates only returned markdown files; root is omitted when unchanged.
 
 ## Steps
 
-1. Create and commit a baseline fixture tree.
-2. Apply leaf-specific changes to doctest markdown files.
-3. Run `doctest vet <tree> --changed`.
+1. Create fixture tree (valid or intentionally invalid root for skip-root).
+2. Set `Policy=vet-md` and synthetic changed paths.
+3. Assert relative markdown path list.
 
 ```go
 import (
-"github.com/xhd2015/doctest/session"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/xhd2015/doctest/libdoc/testtree"
+	"github.com/xhd2015/doctest/session"
 )
 
 func readAntiPatternSetup(t *testing.T, d *session.Doctest) []byte {
@@ -43,37 +44,34 @@ func writeInvalidRootDOCTEST(t *testing.T, root string) {
 		t.Fatal(err)
 	}
 	fence := strings.Repeat("\u0060", 3)
+	// Missing ## Version — invalid for full vet, but skip-root must not select it when unchanged.
 	content := "# Tests\n\n" + testtree.MinimalDSN + "\n" + fence + "go\n" + testtree.MinimalRunGo() + "\n" + fence + "\n"
 	if err := os.WriteFile(filepath.Join(root, "DOCTEST.md"), []byte(content), 0644); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func createVetFlatTwoLeafTree(t *testing.T) gitFixture {
+func createVetFlatTwoLeafTree(t *testing.T) policyFixture {
 	t.Helper()
 	repoDir := t.TempDir()
 	treeDir := filepath.Join(repoDir, "tests", "fixture")
 	writeRootTree(t, treeDir, true)
 	writeLeaf(t, treeDir, "leaf_a")
 	writeLeaf(t, treeDir, "leaf_b")
-	initGitRepo(t, repoDir)
-	gitAddCommitAll(t, repoDir, "vet baseline")
-	return gitFixture{RepoDir: repoDir, TreeDir: treeDir}
+	return policyFixture{RepoDir: repoDir, TreeDir: treeDir}
 }
 
-func createVetSkipRootTree(t *testing.T) gitFixture {
+func createVetSkipRootTree(t *testing.T) policyFixture {
 	t.Helper()
 	repoDir := t.TempDir()
 	treeDir := filepath.Join(repoDir, "tests", "fixture")
 	writeInvalidRootDOCTEST(t, treeDir)
 	writeLeaf(t, treeDir, "leaf_a")
-	initGitRepo(t, repoDir)
-	gitAddCommitAll(t, repoDir, "invalid root committed")
-	return gitFixture{RepoDir: repoDir, TreeDir: treeDir}
+	return policyFixture{RepoDir: repoDir, TreeDir: treeDir}
 }
 
 func Setup(t *testing.T, req *Request) error {
-	req.Env = append(req.Env, "CHANGED_SUBCMD=vet")
+	req.Policy = PolicyVetMD
 	return nil
 }
 ```

@@ -1,37 +1,38 @@
 # Scenario
 
-**Feature**: no test tree exists yet
+**Feature**: createDoctestTree helper writes a valid tree (**L2 helper**)
 
 ```
-# full TDD cycle: design -> RED -> seal -> implement -> GREEN
-orchestrator -> design agent -> writes tests -> RED (all fail)
-
-# seal tests, hand off to implementer
-orchestrator -> git add tests/ -> implement agent -> writes code -> GREEN (all pass)
-
-# question/answer loop
-user <--questions-- implement agent <--yields-- orchestrator -> resume
+createDoctestTree(dir, stub=false)
+  -> DOCTEST.md + SETUP.md + basic/{SETUP,ASSERT}.md on disk
 ```
 
 ## Preconditions
-- No test tree exists yet.
+
+- This leaf only exercises the fixture helper used by e2e orchestrator leaves.
+- No product binary / agent run required.
 
 ## Steps
+
 1. Call createDoctestTree to write the test tree to a temp dir.
-2. Pass the dir path to ASSERT via req.Env.
+2. Stash path on req.SessionHome for Assert (parent-side; not process Env).
+3. Run a no-op in-process short path so the harness completes.
 
 ```go
 import (
-    "os"
-    "path/filepath"
-    "testing"
+	"path/filepath"
+	"testing"
 )
 
 func Setup(t *testing.T, req *Request) error {
-    dir := filepath.Join(t.TempDir(), "test-tree")
-    createDoctestTree(t, dir, false)
-    req.Env = append(req.Env, "TEST_TREE_DIR="+dir)
-    req.Args = []string{"--help"}
-    return nil
+	dir := filepath.Join(t.TempDir(), "test-tree")
+	createDoctestTree(t, dir, false)
+	// Parent-side path for Assert — not process Env (UseCLI=false).
+	req.SessionHome = dir
+	req.UseCLI = false
+	req.Bin = ""
+	req.Env = nil
+	req.Args = []string{"help"}
+	return nil
 }
 ```

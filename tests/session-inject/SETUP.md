@@ -85,7 +85,7 @@ func lockCacheTests(t *testing.T) {
 
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Timeout = 120 * time.Second
-	req.Bin = testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, "..", ".."))
+	// Default L2: no binary. Cache leaves set UseCLI+Bin.
 	return nil
 }
 
@@ -201,8 +201,8 @@ func createPublicModuleProject(t *testing.T, req *Request, leafSetupGo string, l
 
 func setupModuleEnv(t *testing.T, req *Request) {
 	t.Helper()
-	req.WorkDir = req.ModuleRoot
-	req.Env = append(req.Env, "GOWORK=off")
+	// Parallel-safe: absolute paths in Args; no WorkDir/Env.
+	req.WorkDir = ""
 }
 
 func defaultSessionAssertGo() string {

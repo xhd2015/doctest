@@ -1,26 +1,28 @@
 # Scenario
 
-**Feature**: no doctest changes prints warning and exits 0
+**Feature**: no doctest changes yields zero selection and silent announce
 
 ```
-# no affected doctest files
-doctest test --changed -> silent stderr -> exit 0 | with -v -> stderr shows "--changed: 0 tests"
+# empty or out-of-tree changes
+FilterByChangedFiles -> [] ; ChangedCount 0 ; Announce false without -v
 ```
 
 ## Preconditions
 
-- Git repo with committed fixture tree.
+- Fixture tree present; changed list does not hit doctest leaves.
 
 ## Steps
 
-1. Prepare baseline repo (descendant leaf applies or omits extra changes).
-2. Run `doctest test --changed`.
+1. Prepare baseline tree (descendant sets ChangedFiles).
+2. Assert zero selection and silent announce.
 
 ```go
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-	req.Env = append(req.Env, "CHANGED_SCENARIO=no-matching")
+	if req.Policy == "" {
+		req.Policy = PolicyFilter
+	}
 	return nil
 }
 ```

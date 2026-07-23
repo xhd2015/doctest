@@ -1,32 +1,33 @@
 # Scenario
 
-**Feature**: `doctest agent implement` requires a prompt
+**Feature**: `doctest agent implement` requires a prompt (**L2 short path**)
 
 ```
-# full TDD cycle: design -> RED -> seal -> implement -> GREEN
-orchestrator -> design agent -> writes tests -> RED (all fail)
-
-# seal tests, hand off to implementer
-orchestrator -> git add tests/ -> implement agent -> writes code -> GREEN (all pass)
-
-# question/answer loop
-user <--questions-- implement agent <--yields-- orchestrator -> resume
+doctest agent implement --agent-runner fake-codex  # no prompt
+  -> non-zero exit; stderr mentions "requires"
 ```
 
 ## Preconditions
-- `doctest agent implement` requires a prompt.
+
+- Missing-prompt is a fast-fail short path — in-process CLI, no binary/fake-codex.
 
 ## Steps
-1. Run `doctest agent implement` with no prompt.
-2. Expect error.
+
+1. Clear parent e2e Env (Env requires UseCLI under Parallel rules).
+2. Run `agent implement` with no prompt via in-process CLI.
+3. Expect error.
 
 ```go
 import (
-    "testing"
+	"testing"
 )
 
 func Setup(t *testing.T, req *Request) error {
-    req.Args = []string{"agent", "implement", "--agent-runner", "fake-codex"}
-    return nil
+	// L2 short path: no Env isolation, no product binary.
+	req.UseCLI = false
+	req.Bin = ""
+	req.Env = nil
+	req.Args = []string{"agent", "implement", "--agent-runner", "fake-codex"}
+	return nil
 }
 ```

@@ -37,7 +37,7 @@ process-boundary contracts (help text, full stdout format, --changed interaction
 
 - **`doctest test`** — discovers leaves, applies optional `--label EXPR` filter, runs
   matching labeled leaves, skips unlabeled and non-matching labeled leaves, prints skip summary.
-- **Label expression parser** — parses `&&`, `||`, parentheses; combines repeatable `--label` flags with OR.
+- **Label expression parser** — parses `!`, `&&`, `||`, parentheses (precedence `!` > `&&` > `||`); combines repeatable `--label` flags with OR.
 - **Fixture mod tree** — temp tree with `fast` (unlabeled), `slow`, `ui`, `both`, `heavy` leaves.
 - **Git fixture** — ephemeral repo for `--changed` then `--label` ordering.
 - **core selection APIs** — in-process discover/filter used by L2 `select/`.
@@ -45,7 +45,7 @@ process-boundary contracts (help text, full stdout format, --changed interaction
 ### Behaviors
 
 - **No `--label`** — unchanged discovery skip / explicit-leaf semantics (covered by `label-skip` tree).
-- **With `--label`** — only labeled leaves matching EXPR run; others skipped in a compact label-filter summary (paths with `-v`).
+- **With `--label`** — leaves whose label set matches EXPR run (boolean; unlabeled = empty set, so `!e2e` includes them); others skipped in a compact label-filter summary (paths with `-v`).
 - **Invalid EXPR** — non-zero exit and parse error on stderr before any leaf runs.
 - **Help** — `doctest test --help` documents `--label`.
 - **Matcher** — `core.EvalLabelExpr(expr, labels)` returns match bool or parse error (library contract).
@@ -72,7 +72,11 @@ label-filter/
 │   ├── precedence/
 │   ├── parentheses/
 │   ├── whitespace/
-│   └── invalid-syntax/
+│   ├── invalid-syntax/
+│   ├── not-bang/
+│   ├── not-and/
+│   ├── not-parens/
+│   └── not-invalid/
 ├── select/                               [L2] DiscoverTreeCasesLight + FilterCasesByLabel
 │   ├── filter-single/
 │   ├── filter-and/
@@ -107,6 +111,10 @@ label-filter/
 | 5 | `matcher/parentheses/` | L2 | `(slow \|\| heavy) && ui` only when both constraints hold |
 | 6 | `matcher/whitespace/` | L2 | trimmed ` slow && ui ` parses and matches |
 | 7 | `matcher/invalid-syntax/` | L2 | `slow &&` parse error |
+| 7a | `matcher/not-bang/` | L2 | `!e2e` true on `{}`/`{heavy}`; false on `{e2e}` |
+| 7b | `matcher/not-and/` | L2 | `!e2e && heavy` only `{heavy}` |
+| 7c | `matcher/not-parens/` | L2 | `!(e2e \|\| flaky)` |
+| 7d | `matcher/not-invalid/` | L2 | bare `!` / trailing `!` / `not e2e` error |
 | 8 | `select/filter-single/` | L2 | run slow+both |
 | 9 | `select/filter-and/` | L2 | run both only |
 | 10 | `select/filter-or/` | L2 | run slow, both, heavy |
@@ -141,6 +149,7 @@ doctest test ./tests/test/label-skip
 
 ```go
 import (
+	"github.com/xhd2015/doctest/libdoc/cli"
 	"bytes"
 	"context"
 	"errors"
@@ -156,6 +165,7 @@ type Request struct {
 	WorkDir string
 	Timeout time.Duration
 	Bin     string
+	UseCLI	bool
 	Env     []string
 }
 
@@ -167,28 +177,40 @@ type Response struct {
 }
 
 func Run(t *testing.T, req *Request) (*Response, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), req.Timeout)
-	defer cancel()
-
-	if req.Bin == "" {
-		return nil, fmt.Errorf("req.Bin is not set")
+	t.Helper()
+	if !req.UseCLI {
+		var stdout bytes.Buffer
+		err := cli.RunWithWriter(&stdout, req.Args)
+		resp := &Response{Stdout: stdout.String(), Err: err}
+		if err != nil {
+			resp.ExitCode = 1
+			resp.Stderr = err.Error()
+			return resp, nil
+		}
+		return resp, nil
 	}
-	cmd := exec.CommandContext(ctx, req.Bin, req.Args...)
-	cmd.Dir = req.WorkDir
+	ctx, cancel := context.WithTimeout(context.Background(), req.Timeout)
+	if req.Timeout <= 0 {
+		cancel()
+		ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)
+	}
+	defer cancel()
+	bin := req.Bin
+	if bin == "" {
+		return nil, fmt.Errorf("UseCLI requires req.Bin")
+	}
+	cmd := exec.CommandContext(ctx, bin, req.Args...)
+	if req.WorkDir != "" {
+		cmd.Dir = req.WorkDir
+	}
 	if len(req.Env) > 0 {
 		cmd.Env = append(os.Environ(), req.Env...)
 	}
-
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-
 	err := cmd.Run()
-	resp := &Response{
-		Stdout: stdout.String(),
-		Stderr: stderr.String(),
-		Err:    err,
-	}
+	resp := &Response{Stdout: stdout.String(), Stderr: stderr.String(), Err: err}
 	if err == nil {
 		return resp, nil
 	}
@@ -202,4 +224,5 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 	}
 	return resp, err
 }
+
 ```

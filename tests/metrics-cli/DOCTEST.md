@@ -1,16 +1,17 @@
-# Metrics CLI — analyze recorded metrics (in-process + sparse e2e)
+# Metrics CLI — analyze recorded metrics (in-process)
 
 ## Version
-0.0.2
+0.0.3
 
 **Layer model (coverage backfill):**
 
 | Layer | Share | Where |
 |-------|-------|--------|
-| **L2 doctest in-process** | **mass (≥80%)** | `path/`, `last/`, `top/`, `summary/`, `show/`, `prune/` — harness `Run` calls `libdoc/metrics` analyze APIs with fixture JSONL under `t.TempDir()` |
-| **L3 doctest e2e** | **sparse (≤3)** | `e2e/` — real `doctest metrics` binary for help/argv wiring only; `label: heavy` |
+| **L2 doctest in-process** | **mass** | `path/`, `last/`, `top/`, `summary/`, `show/`, `prune/` — harness `Run` calls `libdoc/metrics` analyze APIs with fixture JSONL under `t.TempDir()` |
+| **L2 in-process CLI** | **help/unknown** | `help/` — `cli.RunWithWriter` for help/argv wiring; unlabeled, no product binary |
 
-Default discovery runs L2 only (unlabeled). Use `--label heavy` for binary smokes.
+Default discovery runs all leaves (unlabeled, fast). No product binary / `testbin`.
+No true e2e leaves in this tree.
 
 Depends on P1 layout (`$MetricsRoot/doctest/metrics/<project_id>/runs/*.jsonl`) and
 P2 event shapes (`run_start` / `leaf_*` / `run_end`, `mode.default_suite`).
@@ -26,10 +27,9 @@ review-perf skill content, metrics-foundation APIs.
 - **Harness** — default path: calls `libdoc/metrics` analyze functions in-process
   (`ListRunFiles`, `RankLeaves`, `SelectRun`, `AggregateRuns`, `PruneRuns`,
   `SummarizeRun`, `ProjectMetricsDir`, …) against fixture JSONL.
-- **e2e binary** — sparse L3 leaves spawn `doctest metrics` for help / unknown
-  subcommand wiring only.
-- **Metrics root** — cache base directory; tests inject via `Request.MetricsRoot`
-  (CLI env `DOCTEST_METRICS_ROOT` only in e2e).
+- **In-process CLI** — help / unknown leaves call `cli.RunWithWriter` (same usage
+  strings as the product binary; Parallel-safe; no `testbin`).
+- **Metrics root** — cache base directory; tests inject via `Request.MetricsRoot`.
 - **Project identity** — slug from fixture origin (or `ProjectIDForDir`); selects
   `$MetricsRoot/doctest/metrics/<project_id>/`.
 - **Run store** — directory `runs/` of append-only JSONL files named
@@ -51,12 +51,12 @@ review-perf skill content, metrics-foundation APIs.
 - **`summary`** — aggregate last N runs (`--last N`, `--default-only`, `--json`).
 - **`show [run-id]`** — dump one run (latest if id omitted). Unknown id → non-zero.
 - **`prune`** — keep newest **30** run files; delete older. Exit 0.
-- **Help / unknown** — L3 e2e only: lists subcommands; unknown → non-zero.
+- **Help / unknown** — L2 in-process CLI: lists subcommands; unknown → non-zero.
 
 ### Pipeline sketch
 
 ```
-# L2 (default)
+# L2 analyze (default)
 MetricsRoot + ProjectID + fixture JSONL
   -> ProjectRunsDir / ListRunFiles
   -> subcommand via metrics.* APIs
@@ -67,8 +67,8 @@ MetricsRoot + ProjectID + fixture JSONL
        show    -> FindRunByID / NewestRun + ReadEvents
        prune   -> PruneRuns(keep=30)
 
-# L3 (e2e/, label: heavy)
-req.Bin metrics <subcmd> + DOCTEST_METRICS_ROOT
+# L2 help/unknown (help/ path, unlabeled)
+cli.RunWithWriter(&buf, ["metrics", "--help" | "not-a-real-subcmd"])
 ```
 
 ## Decision Tree
@@ -99,7 +99,7 @@ tests/metrics-cli/
 ├── prune/                                 [L2 PruneRuns keep=30]
 │   ├── removes-old-beyond-retention/
 │   └── under-retention-no-op/
-└── e2e/                                   [L3 binary, label: heavy]
+└── help/                                  [L2 cli.RunWithWriter, unlabeled]
     ├── help-lists-subcommands/
     └── unknown-subcommand/
 ```
@@ -126,30 +126,24 @@ tests/metrics-cli/
 | `show/unknown-run-id` | L2 | exit ≠ 0 |
 | `prune/removes-old-beyond-retention` | L2 | 35 → 30 files |
 | `prune/under-retention-no-op` | L2 | count unchanged |
-| `e2e/help-lists-subcommands` | L3 heavy | exit 0; subcommand names |
-| `e2e/unknown-subcommand` | L3 heavy | exit ≠ 0 |
+| `help/help-lists-subcommands` | L2 | exit 0; subcommand names |
+| `help/unknown-subcommand` | L2 | exit ≠ 0 |
 
 ## How to Run
 
 ```sh
 doctest vet ./tests/metrics-cli/
-# default discovery: L2 in-process mass (skips label: heavy)
+# all leaves are unlabeled L2 (default discovery)
 doctest test ./tests/metrics-cli/
-# sparse binary smokes
-doctest test --label heavy ./tests/metrics-cli/...
-# full suite
-doctest test --label-all ./tests/metrics-cli/...
+doctest test ./tests/metrics-cli/...
 ```
 
 ```go
 import (
 	"bytes"
-	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -157,6 +151,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xhd2015/doctest/libdoc/cli"
 	"github.com/xhd2015/doctest/libdoc/metrics"
 )
 
@@ -167,18 +162,17 @@ const FixtureOrigin = "https://github.com/xhd2015/doctest-metrics-fixture.git"
 const DefaultRunRetention = 30
 
 // Request drives one metrics analyze scenario against fixtures.
-// Default Mode is in-process (libdoc/metrics). Set UseCLI for L3 e2e only.
+// Default Mode is in-process (libdoc/metrics analyze APIs).
+// Short CLI (help / unknown subcommand) is auto-detected from Args and uses
+// cli.RunWithWriter — no product binary, no UseCLI flag, no process Setenv.
 type Request struct {
 	Args        []string // e.g. ["metrics","top","--n","3"] — parsed for L2 dispatch
-	Env         []string // e2e only
+	Env         []string // unused (kept for leaf compatibility; never process Setenv)
 	WorkDir     string   // project cwd (git); used for ProjectIDForDir when needed
 	MetricsRoot string   // injectable cache root
 	ProjectID   string   // expected slug (usually from origin)
 	Timeout     time.Duration
-	Bin         string // e2e only: product binary
-
-	// UseCLI: when true, spawn req.Bin (L3 e2e). Default false = in-process APIs.
-	UseCLI bool
+	Bin         string // unused (no product binary)
 
 	// SnapshotRunFilesAfter: if true, Response.RunFiles lists *.jsonl basenames after op.
 	SnapshotRunFilesAfter bool
@@ -197,65 +191,50 @@ type Response struct {
 
 func Run(t *testing.T, req *Request) (*Response, error) {
 	t.Helper()
-	if req.UseCLI {
-		return runE2E(t, req)
+	// Short-path help/unknown: in-process CLI only (Parallel-safe; no Setenv/Chdir).
+	if isMetricsShortCLI(req.Args) {
+		return runCLIWriter(t, req)
 	}
 	return runInProcess(t, req)
 }
 
-func runE2E(t *testing.T, req *Request) (*Response, error) {
+// isMetricsShortCLI reports help or unknown-subcommand shapes (not analyze ops).
+func isMetricsShortCLI(args []string) bool {
+	a := append([]string(nil), args...)
+	if len(a) > 0 && a[0] == "metrics" {
+		a = a[1:]
+	}
+	if len(a) == 0 {
+		return true
+	}
+	switch a[0] {
+	case "-h", "--help", "help":
+		return true
+	}
+	switch a[0] {
+	case "path", "last", "top", "summary", "show", "prune", "phases":
+		return false
+	default:
+		return true // unknown subcommand
+	}
+}
+
+// runCLIWriter dispatches short-path CLI (help / unknown) via cli.RunWithWriter.
+// No testbin, no product binary, no process env mutation.
+func runCLIWriter(t *testing.T, req *Request) (*Response, error) {
 	t.Helper()
-	if req.Bin == "" {
-		return nil, fmt.Errorf("UseCLI requires req.Bin")
-	}
-	timeout := req.Timeout
-	if timeout == 0 {
-		timeout = 30 * time.Second
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	env := append([]string{}, os.Environ()...)
-	env = append(env, req.Env...)
-	if req.MetricsRoot != "" {
-		env = append(env, "DOCTEST_METRICS_ROOT="+req.MetricsRoot)
-	}
-
-	cmd := exec.CommandContext(ctx, req.Bin, req.Args...)
-	if req.WorkDir != "" {
-		cmd.Dir = req.WorkDir
-	}
-	cmd.Env = env
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	runErr := cmd.Run()
-
+	var buf bytes.Buffer
+	err := cli.RunWithWriter(&buf, req.Args)
 	resp := &Response{
-		Stdout:      stdout.String(),
-		Stderr:      stderr.String(),
-		Err:         runErr,
+		Stdout:      buf.String(),
+		Err:         err,
 		MetricsRoot: req.MetricsRoot,
 		ProjectID:   req.ProjectID,
 		ExitCode:    0,
 	}
-	if req.ProjectID != "" && req.MetricsRoot != "" {
-		resp.RunsDir = filepath.Join(req.MetricsRoot, "doctest", "metrics", req.ProjectID, "runs")
-	}
-	if runErr != nil {
-		var exitErr *exec.ExitError
-		if errors.As(runErr, &exitErr) {
-			resp.ExitCode = exitErr.ExitCode()
-			runErr = nil
-		} else if ctx.Err() != nil {
-			return resp, ctx.Err()
-		} else {
-			return resp, runErr
-		}
-	}
-	if req.SnapshotRunFilesAfter && resp.RunsDir != "" {
-		resp.RunFiles = listJSONLBasenames(resp.RunsDir)
+	if err != nil {
+		resp.ExitCode = 1
+		resp.Stderr = err.Error() + "\n"
 	}
 	return resp, nil
 }
@@ -276,7 +255,7 @@ func runInProcess(t *testing.T, req *Request) (*Response, error) {
 		args = args[1:]
 	}
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
-		// Help is covered by L3 e2e; still provide a usable message if invoked.
+		// Help should hit isMetricsShortCLI → runCLIWriter; stub only if mis-routed.
 		resp.Stdout = "Usage: doctest metrics <subcommand>\npath last top summary show prune\n"
 		return resp, nil
 	}
@@ -665,6 +644,10 @@ func listJSONLBasenames(dir string) []string {
 	return out
 }
 
-// compile-time touch so metrics import stays available for helpers in SETUP.
-var _ = metrics.SchemaVersion
+// compile-time touch so metrics/cli imports stay available for helpers in SETUP.
+var (
+	_ = metrics.SchemaVersion
+	_ = cli.Run
+	_ = time.Second
+)
 ```

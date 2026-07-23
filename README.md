@@ -116,6 +116,9 @@ doctest test -v ./... --label-all
 # Only leaves matching a label expression
 doctest test -v ./... --label heavy
 
+# Everything except e2e (unlabeled + non-e2e labels; quote ! for the shell)
+doctest test -v ./... --label '!e2e'
+
 # Run only tests under tests/feature-a/
 doctest test -v ./tests/feature-a/...
 ```

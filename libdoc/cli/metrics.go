@@ -56,7 +56,7 @@ Examples:
 
 func runMetrics(args []string) error {
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
-		fmt.Print(metricsUsage)
+		fmt.Fprint(cliStdout(), metricsUsage)
 		return nil
 	}
 	sub := args[0]
@@ -77,7 +77,7 @@ func runMetrics(args []string) error {
 	case "prune":
 		return metricsPrune(rest)
 	case "help":
-		fmt.Print(metricsUsage)
+		fmt.Fprint(cliStdout(), metricsUsage)
 		return nil
 	default:
 		return fmt.Errorf("unknown metrics subcommand: %s\n\n%s", sub, metricsUsage)

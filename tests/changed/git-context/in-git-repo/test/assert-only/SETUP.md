@@ -1,38 +1,25 @@
 # Scenario
 
-**Feature**: changing one leaf `ASSERT.md` runs only that leaf
+**Feature**: changing one leaf `ASSERT.md` selects only that leaf
 
 ```
-# only leaf_a ASSERT.md modified
-changed leaf_a/ASSERT.md -> doctest test --changed -> 1 Run
+# only leaf_a ASSERT.md in changed list
+changed leaf_a/ASSERT.md -> FilterByChangedFiles -> [leaf_a]
 ```
 
 ## Steps
 
-1. Create flat two-leaf tree and commit.
-2. Modify `leaf_a/ASSERT.md` (unstaged).
-3. Run `doctest test --changed`.
+1. Create flat two-leaf tree.
+2. Set `ChangedFiles` to `leaf_a/ASSERT.md` under the tree.
+3. Run filter policy.
 
 ```go
-import (
-	"os"
-	"path/filepath"
-	"testing"
-)
+import "testing"
 
 func Setup(t *testing.T, req *Request) error {
 	fx := createFlatTwoLeafTree(t)
-	assertPath := filepath.Join(fx.TreeDir, "leaf_a", "ASSERT.md")
-	content, err := os.ReadFile(assertPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	content = append(content, []byte("\n<!-- changed -->\n")...)
-	if err := os.WriteFile(assertPath, content, 0644); err != nil {
-		t.Fatal(err)
-	}
-	req.WorkDir = fx.RepoDir
-	req.Args = []string{"test", fx.TreeDir, "--changed"}
+	applyPolicyBase(req, fx)
+	req.ChangedFiles = []string{treeRel(fx, "leaf_a", "ASSERT.md")}
 	return nil
 }
 ```

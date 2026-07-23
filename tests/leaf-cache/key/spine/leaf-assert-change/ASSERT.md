@@ -1,3 +1,7 @@
+---
+label: heavy
+---
+
 ## Expected
 
 - Both keys are non-empty lowercase hex.

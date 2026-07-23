@@ -1,18 +1,11 @@
----
-label: heavy
----
-
 ## Expected
 
-- Exit code 0.
-- Root `DOCTEST.md` version check is skipped because the file is unchanged.
-
-## Exit Code
-
-0
+- Markdown path list is exactly `leaf_a/ASSERT.md`.
+- Root `DOCTEST.md` is not selected (would have failed Version check if validated).
 
 ```go
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -21,11 +14,14 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if err != nil {
 		t.Fatalf("run failed: %v", err)
 	}
-	if resp.ExitCode != 0 {
-		t.Fatalf("exit code = %d\nstdout:\n%s\nstderr:\n%s", resp.ExitCode, resp.Stdout, resp.Stderr)
+	want := []string{"leaf_a/ASSERT.md"}
+	if !reflect.DeepEqual(resp.MarkdownPaths, want) {
+		t.Fatalf("MarkdownPaths = %#v, want %#v", resp.MarkdownPaths, want)
 	}
-	if strings.Contains(resp.Stderr, "## Version") {
-		t.Fatalf("stderr should not report missing Version (root was skipped):\n%s", resp.Stderr)
+	for _, p := range resp.MarkdownPaths {
+		if strings.Contains(p, "DOCTEST.md") {
+			t.Fatalf("root DOCTEST.md must not be selected: %#v", resp.MarkdownPaths)
+		}
 	}
 }
 ```

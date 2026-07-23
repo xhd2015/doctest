@@ -1,19 +1,11 @@
----
-label: heavy
----
-
 ## Expected
 
-- Exit code 0.
-- Summary shows exactly 1 run (leaf_a only; leaf_b skipped).
-
-## Exit Code
-
-0
+- Same selection as assert-only: `[leaf_a]`, detail `1 leaf`.
+- Documents that `./tests/...` path discovery does not change filter policy.
 
 ```go
 import (
-	"strings"
+	"reflect"
 	"testing"
 )
 
@@ -21,15 +13,12 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if err != nil {
 		t.Fatalf("run failed: %v", err)
 	}
-	if resp.ExitCode != 0 {
-		t.Fatalf("exit code = %d\nstdout:\n%s\nstderr:\n%s", resp.ExitCode, resp.Stdout, resp.Stderr)
+	want := []string{"leaf_a"}
+	if !reflect.DeepEqual(resp.FilteredPaths, want) {
+		t.Fatalf("FilteredPaths = %#v, want %#v", resp.FilteredPaths, want)
 	}
-	inline := findInlineSummaryLine(resp.Stdout)
-	if inline == "" {
-		t.Fatalf("missing summary line in stdout:\n%s", resp.Stdout)
-	}
-	if !strings.Contains(inline, "(1 Run, 1 Pass, 0 Fail") {
-		t.Fatalf("expected (1 Run, 1 Pass, 0 Fail...), got %q\nstdout:\n%s", inline, resp.Stdout)
+	if resp.Info.ChangedCount != 1 || resp.Info.Detail != "1 leaf" {
+		t.Fatalf("info = %#v, want ChangedCount=1 Detail=%q", resp.Info, "1 leaf")
 	}
 }
 ```

@@ -1,7 +1,16 @@
+---
+explanation: L2 in-process capture for vet -v progress lines via opts.Stdout
+---
+
 ## Expected
-- The command succeeds with exit code 0.
+
+- Exit code 0.
 - stdout contains `[vet] validating` (directory-level output).
 - stdout contains the filename `SETUP.md` (file-level output).
+
+## Exit Code
+
+- 0
 
 ```go
 import (

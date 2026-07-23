@@ -1,19 +1,11 @@
----
-label: heavy
----
-
 ## Expected
 
-- Exit code 0.
-- Summary shows exactly 1 run (only the new untracked leaf).
-
-## Exit Code
-
-0
+- Filtered paths are exactly `[leaf_c]`.
+- TotalInTree is 3; ChangedCount is 1.
 
 ```go
 import (
-	"strings"
+	"reflect"
 	"testing"
 )
 
@@ -21,15 +13,15 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if err != nil {
 		t.Fatalf("run failed: %v", err)
 	}
-	if resp.ExitCode != 0 {
-		t.Fatalf("exit code = %d\nstdout:\n%s\nstderr:\n%s", resp.ExitCode, resp.Stdout, resp.Stderr)
+	want := []string{"leaf_c"}
+	if !reflect.DeepEqual(resp.FilteredPaths, want) {
+		t.Fatalf("FilteredPaths = %#v, want %#v", resp.FilteredPaths, want)
 	}
-	inline := findInlineSummaryLine(resp.Stdout)
-	if inline == "" {
-		t.Fatalf("missing summary line in stdout:\n%s", resp.Stdout)
+	if resp.Info.TotalInTree != 3 {
+		t.Fatalf("TotalInTree = %d, want 3", resp.Info.TotalInTree)
 	}
-	if !strings.Contains(inline, "(1 Run, 1 Pass, 0 Fail") {
-		t.Fatalf("expected (1 Run, 1 Pass, 0 Fail...), got %q\nstdout:\n%s", inline, resp.Stdout)
+	if resp.Info.ChangedCount != 1 {
+		t.Fatalf("ChangedCount = %d, want 1", resp.Info.ChangedCount)
 	}
 }
 ```

@@ -1,14 +1,8 @@
----
-label: heavy
----
-
 ## Expected
-- The command rejects `--color` and `--no-color` together with an explicit conflict error.
+
+- Parse rejects `--color` and `--no-color` together with an explicit conflict error.
 - Exit code is non-zero.
 - Error must not be a generic "unrecognized flag" message.
-
-## Errors
-- `resp.ExitCode` is non-zero.
 
 ```go
 import (
@@ -17,7 +11,7 @@ import (
 )
 
 func Assert(t *testing.T, req *Request, resp *Response, err error) {
-	combined := resp.Stdout + resp.Stderr
+	combined := resp.Stdout + resp.Stderr + resp.ParseErr
 	lower := strings.ToLower(combined)
 
 	if strings.Contains(lower, "unrecognized flag") {

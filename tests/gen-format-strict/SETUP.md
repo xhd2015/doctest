@@ -1,6 +1,6 @@
 # Scenario
 
-**Feature**: Phase A strict gen-format — no stdlib auto-add, prune unused, harness-only injects
+**Feature**: Phase A strict gen-format — no stdlib auto-add, prune unused, harness-only injects (L2)
 
 ```
 # fixture tree
@@ -9,7 +9,7 @@ author SETUP (explicit imports only)
   -> WriteFormattedGo (no stdlibByPkgName; unused prune OK)
   -> go test suite
 
-# library surface
+# library surface (in-process, no product binary)
 runner.RunTest(dir, Options{GenDir})
   -> Response.RunErr + generated .go under GenDir
 core.WriteFormattedGo
@@ -21,8 +21,7 @@ core.WriteFormattedGo
 - Package `github.com/xhd2015/doctest/libdoc/runner` exposes `RunTest`.
 - Package `github.com/xhd2015/doctest/libdoc/core` exposes `WriteFormattedGo`.
 - Each leaf uses an isolated fixture tree and gen root under `t.TempDir()`.
-- Classic TDD: **RED** expected for A1 / A3 / A5 until implementer removes
-  `format.Source` requirement and `stdlibByPkgName` auto-add.
+- **Layer**: L2 in-process only (unlabeled). No `testbin` / product binary.
 - Out of scope: gen-manifest, tree-stamps, frontier skip.
 
 ## Steps

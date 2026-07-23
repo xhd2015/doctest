@@ -30,6 +30,7 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
+	req.UseCLI = true // true e2e nested doctest test
     dir := filepath.Join(t.TempDir(), "test-tree")
     createDoctestTree(t, dir, true) // stub = true
     req.Env = append(req.Env, "TEST_TREE_DIR="+dir)

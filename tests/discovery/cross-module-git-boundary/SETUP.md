@@ -62,6 +62,7 @@ const (
 )
 var bt = "`" + "`" + "`"
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	req.UseCLI = true // true e2e product binary
 	req.Timeout = 120 * time.Second
 
 	req.Bin = testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, "..", "..", ".."))

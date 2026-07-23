@@ -1,24 +1,25 @@
 # Scenario
 
-**Feature**: vet fails only on changed leaf with anti-pattern
+**Feature**: vet selection returns only the changed leaf SETUP (not sibling)
 
 ```
-# leaf_b SETUP.md changed to anti-pattern; leaf_a SETUP.md clean and unchanged
-doctest vet --changed -> fail on leaf_b only
+# leaf_b SETUP anti-pattern content + listed as changed
+ChangedDoctestMarkdownFiles -> [leaf_b/SETUP.md] only
 ```
 
 ## Steps
 
-1. Create two-leaf tree with clean SETUP files and commit.
-2. Replace `leaf_b/SETUP.md` with embedded-Go anti-pattern (unstaged).
-3. Run `doctest vet --changed`.
+1. Create two-leaf tree; write anti-pattern content into `leaf_b/SETUP.md`.
+2. Set `ChangedFiles` to that SETUP only.
+3. Assert markdown path list excludes `leaf_a`.
 
 ```go
 import (
-"github.com/xhd2015/doctest/session"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/xhd2015/doctest/session"
 )
 
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
@@ -27,8 +28,9 @@ func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	if err := os.WriteFile(setupPath, readAntiPatternSetup(t, d), 0644); err != nil {
 		t.Fatal(err)
 	}
-	req.WorkDir = fx.RepoDir
-	req.Args = []string{"vet", fx.TreeDir, "--changed"}
+	applyPolicyBase(req, fx)
+	req.Policy = PolicyVetMD
+	req.ChangedFiles = []string{treeRel(fx, "leaf_b", "SETUP.md")}
 	return nil
 }
 ```

@@ -1,17 +1,17 @@
 # Scenario
 
-**Feature**: changing a file under leaf `testdata/` runs that leaf
+**Feature**: changing a file under leaf `testdata/` selects that leaf
 
 ```
-# testdata file modified
-changed leaf_a/testdata/input.txt -> doctest test --changed -> 1 Run
+# leaf_a/testdata/input.txt in changed list
+FilterByChangedFiles -> [leaf_a]
 ```
 
 ## Steps
 
-1. Create flat two-leaf tree with `leaf_a/testdata/input.txt` and commit.
-2. Modify `testdata/input.txt`.
-3. Run `doctest test --changed`.
+1. Create flat two-leaf tree with `leaf_a/testdata/input.txt` present.
+2. Set changed path to that testdata file.
+3. Run filter policy.
 
 ```go
 import (
@@ -29,12 +29,8 @@ func Setup(t *testing.T, req *Request) error {
 	if err := os.WriteFile(filepath.Join(testdataDir, "input.txt"), []byte("baseline\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	gitAddCommitAll(t, fx.RepoDir, "add testdata")
-	if err := os.WriteFile(filepath.Join(testdataDir, "input.txt"), []byte("modified\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	req.WorkDir = fx.RepoDir
-	req.Args = []string{"test", fx.TreeDir, "--changed"}
+	applyPolicyBase(req, fx)
+	req.ChangedFiles = []string{treeRel(fx, "leaf_a", "testdata", "input.txt")}
 	return nil
 }
 ```

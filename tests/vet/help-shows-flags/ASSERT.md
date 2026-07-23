@@ -1,8 +1,17 @@
+---
+explanation: L2 in-process CLI for vet --help argv/usage wiring
+---
+
 ## Expected
-- The command succeeds with exit code 0.
+
+- Exit code 0.
 - stdout contains `-v`, `--verbose`.
 - stdout contains `<dir...>` (multiple positional args).
 - stdout contains `./...` examples.
+
+## Exit Code
+
+- 0
 
 ```go
 import (

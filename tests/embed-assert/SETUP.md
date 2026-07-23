@@ -17,15 +17,15 @@ internal -> temp -modfile (parent go.mod + assert/session replaces) -> go test -
 ## Preconditions
 
 - The doctest module root is two levels above this tree (`DOCTEST_ROOT/../..`).
-- Each leaf builds a fresh doctest binary and runs it in a temp Go module.
-- `GOWORK=off` is set for subprocess invocations.
+- **Default L2**: in-process CLI (`cli.RunWithWriter`) with absolute fixture paths.
+- **L3 e2e** (`cache/`): product binary + child Env for isolated `DOCTEST_CACHE_HOME`.
 - Assert cache lives at `$CACHE/doctest/assert-mod/<content-md5>/`.
 
 ## Steps
 
-1. Build the doctest binary from the module root.
-2. Create a temp module and doctest tree per leaf scenario.
-3. Execute the doctest binary with leaf-specific args and inspect outputs/cache.
+1. Default: no binary; leaves set absolute `Args` and call in-process CLI.
+2. Cache leaves set `UseCLI` + `Bin` + child Env (see `cache/SETUP.md`).
+3. Create a temp module and doctest tree per leaf scenario; assert outputs/cache.
 
 ## Context
 
@@ -76,8 +76,8 @@ func lockCacheTests(t *testing.T) {
 }
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Timeout = 120 * time.Second
-
-	req.Bin = testbin.Ensure(t, filepath.Join(d.DOCTEST_ROOT, "..", ".."))
+	// Default L2 in-process CLI. Cache leaves set UseCLI and get Bin in cache/SETUP.
+	_ = d
 	return nil
 }
 func doctestGoBlock(code string) string {
@@ -194,8 +194,9 @@ func createInternalAssertProject(t *testing.T, d *session.Doctest, req *Request)
 }
 func setupModuleEnv(t *testing.T, req *Request) {
 	t.Helper()
-	req.WorkDir = req.ModuleRoot
-	req.Env = append(req.Env, "GOWORK=off")
+	// Parallel-safe: no WorkDir/Env (would force UseCLI or race Setenv).
+	// Leaves pass absolute TestDir in Args; temp modules have no go.work.
+	req.WorkDir = ""
 }
 func assertFileExists(t *testing.T, path string) {
 	t.Helper()

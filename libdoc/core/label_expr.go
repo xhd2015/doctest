@@ -7,7 +7,9 @@ import (
 )
 
 // EvalLabelExpr parses expr and returns whether labels satisfy the boolean expression.
-// Unlabeled leaves (len(labels)==0) never match a non-empty expression.
+// Evaluation is pure set membership: an empty label set (unlabeled leaf) makes every
+// positive atom false, so expressions like "!e2e" match unlabeled leaves.
+// Grammar: atoms, !, &&, ||, and parentheses. Precedence: ! > && > ||.
 func EvalLabelExpr(expr string, labels []string) (bool, error) {
 	ast, err := parseLabelExpr(expr)
 	if err != nil {
@@ -61,17 +63,27 @@ func (a labelAtom) eval(set map[string]bool) bool {
 	return set[a.name]
 }
 
-type labelUnary struct {
+// labelBinary is && or || (name historical; was labelUnary).
+type labelBinary struct {
 	op    rune // '&' or '|' for && and ||
 	left  labelExpr
 	right labelExpr
 }
 
-func (u labelUnary) eval(set map[string]bool) bool {
+func (u labelBinary) eval(set map[string]bool) bool {
 	if u.op == '&' {
 		return u.left.eval(set) && u.right.eval(set)
 	}
 	return u.left.eval(set) || u.right.eval(set)
+}
+
+// labelNot is unary bang negation: !expr
+type labelNot struct {
+	inner labelExpr
+}
+
+func (n labelNot) eval(set map[string]bool) bool {
+	return !n.inner.eval(set)
 }
 
 type labelParser struct {
@@ -109,12 +121,12 @@ func (p *labelParser) parseOr() (labelExpr, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = labelUnary{op: '|', left: left, right: right}
+		left = labelBinary{op: '|', left: left, right: right}
 	}
 }
 
 func (p *labelParser) parseAnd() (labelExpr, error) {
-	left, err := p.parsePrimary()
+	left, err := p.parseNot()
 	if err != nil {
 		return nil, err
 	}
@@ -123,12 +135,26 @@ func (p *labelParser) parseAnd() (labelExpr, error) {
 		if !p.consume("&&") {
 			return left, nil
 		}
-		right, err := p.parsePrimary()
+		right, err := p.parseNot()
 		if err != nil {
 			return nil, err
 		}
-		left = labelUnary{op: '&', left: left, right: right}
+		left = labelBinary{op: '&', left: left, right: right}
 	}
+}
+
+// parseNot handles unary ! (right-associative: !!e2e).
+func (p *labelParser) parseNot() (labelExpr, error) {
+	p.skipSpace()
+	if p.pos < len(p.input) && p.peek() == '!' {
+		p.pos++
+		inner, err := p.parseNot()
+		if err != nil {
+			return nil, err
+		}
+		return labelNot{inner: inner}, nil
+	}
+	return p.parsePrimary()
 }
 
 func (p *labelParser) parsePrimary() (labelExpr, error) {
@@ -151,7 +177,7 @@ func (p *labelParser) parsePrimary() (labelExpr, error) {
 	start := p.pos
 	for p.pos < len(p.input) {
 		r := rune(p.input[p.pos])
-		if r == '(' || r == ')' {
+		if r == '(' || r == ')' || r == '!' {
 			break
 		}
 		if p.matchAt("&&") || p.matchAt("||") {

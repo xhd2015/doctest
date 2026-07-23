@@ -1,24 +1,25 @@
 # Scenario
 
-**Feature**: `-cpuprofile` without a value fails at CLI parse time
+**Feature**: `-cpuprofile` without a value fails at parse time (L2)
 
 ```
-doctest test -cpuprofile
-  -> parse error -> non-zero exit -> stderr mentions cpuprofile
+runner.ParseTestOptions([-cpuprofile])
+  -> parse error mentioning cpuprofile / argument
 ```
 
 ## Preconditions
-- No profile path argument follows `-cpuprofile`.
+
+- Nested L2 root: parse only; no directory required for parse failure.
 
 ## Steps
-1. Run `doctest test -cpuprofile` (no value, no dir required for parse failure).
+
+1. Pass incomplete profile flag.
 
 ```go
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-	// Missing value for -cpuprofile; parse should fail before dir handling.
-	req.Args = []string{"test", "-cpuprofile"}
+	req.Args = []string{"-cpuprofile"}
 	return nil
 }
 ```

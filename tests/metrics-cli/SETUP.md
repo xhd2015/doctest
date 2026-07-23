@@ -1,6 +1,6 @@
 # Scenario
 
-**Feature**: analyze recorded metrics via `libdoc/metrics` APIs (default) or sparse CLI e2e
+**Feature**: analyze recorded metrics via `libdoc/metrics` APIs or short-path `cli.RunWithWriter`
 
 ```
 # L2 default: in-process analyze against fixture JSONL
@@ -9,18 +9,16 @@ MetricsRoot=<temp> + ProjectID
   -> metrics.ListRunFiles / RankLeaves / SelectRun / AggregateRuns / …
   -> Response{Stdout, ExitCode, RunFiles}
 
-# L3 e2e (e2e/ only, label: heavy)
-go build ./cmd/doctest -> req.Bin
-DOCTEST_METRICS_ROOT=<temp>
-  -> doctest metrics <subcmd>
+# L2 help/unknown (e2e/ path, unlabeled)
+cli.RunWithWriter -> doctest metrics --help | unknown subcommand
 ```
 
 ## Preconditions
 
-- Module root is `DOCTEST_ROOT/../..` (e2e binary build only).
+- Nested root: does not inherit workspace binary Run.
 - P1 layout and P2 event shapes are fixed; this tree only reads fixtures.
 - L2 injects MetricsRoot / ProjectID on `Request` — no env or binary required.
-- L3 e2e uses env `DOCTEST_METRICS_ROOT` with the product binary.
+- Help/unknown leaves use `cli.RunWithWriter` (no product binary).
 - Prune retention under test: keep newest **30** run files per project.
 - Leaves never invoke long `doctest test` suites to populate metrics; they
   write JSONL fixtures under a temp MetricsRoot.
@@ -30,14 +28,14 @@ DOCTEST_METRICS_ROOT=<temp>
 1. Root Setup is a no-op (no binary by default).
 2. Descendants create MetricsRoot, seed `runs/*.jsonl`, set `Args`.
 3. Default `Run` dispatches in-process to `libdoc/metrics`.
-4. `e2e/` Setup sets `UseCLI`, builds binary once via `testbin.Ensure`.
+4. `e2e/` Setup sets `UseCLI` for `cli.RunWithWriter` (no `testbin`).
 
 ## Context
 
 - Shared helpers live in this root `SETUP.md` Go block (fixture writers).
 - `Request` / `Response` / `Run` are defined only in `DOCTEST.md`.
 - Parallel-safe: each leaf uses `t.TempDir()` for MetricsRoot and WorkDir.
-- **Layer**: L2 in-process is the mass; L3 e2e is sparse and labeled `heavy`.
+- **Layer**: L2 in-process for all leaves (analyze APIs + CLI writer).
 
 ```go
 import (
@@ -54,13 +52,13 @@ import (
 )
 
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-	// Default: in-process. e2e/ subtree Setup sets UseCLI + Bin.
+	// Default: in-process. e2e/ subtree Setup sets UseCLI for RunWithWriter.
 	_ = d
 	return nil
 }
 
 // ensureFixtureProject creates a temp MetricsRoot + ProjectID (and optional git
-// cwd for e2e/ProjectIDForDir). Sets req.WorkDir, req.ProjectID, req.MetricsRoot.
+// cwd for ProjectIDForDir). Sets req.WorkDir, req.ProjectID, req.MetricsRoot.
 func ensureFixtureProject(t *testing.T, req *Request) {
 	t.Helper()
 	if req.MetricsRoot == "" {

@@ -1,38 +1,25 @@
 # Scenario
 
-**Feature**: changing a parent `SETUP.md` runs all descendant leaves
+**Feature**: changing a parent `SETUP.md` selects all descendant leaves
 
 ```
-# shared/SETUP.md modified
-changed group SETUP.md -> doctest test --changed -> 2 Run
+# shared/SETUP.md in changed list
+FilterByChangedFiles -> [shared/leaf_a, shared/leaf_b]
 ```
 
 ## Steps
 
-1. Create shared-parent two-leaf tree and commit.
-2. Modify `shared/SETUP.md`.
-3. Run `doctest test --changed`.
+1. Create shared-parent two-leaf tree.
+2. Set changed path to `shared/SETUP.md`.
+3. Run filter policy.
 
 ```go
-import (
-	"os"
-	"path/filepath"
-	"testing"
-)
+import "testing"
 
 func Setup(t *testing.T, req *Request) error {
 	fx := createSharedParentTwoLeafTree(t)
-	setupPath := filepath.Join(fx.TreeDir, "shared", "SETUP.md")
-	content, err := os.ReadFile(setupPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	content = append(content, []byte("\n<!-- changed -->\n")...)
-	if err := os.WriteFile(setupPath, content, 0644); err != nil {
-		t.Fatal(err)
-	}
-	req.WorkDir = fx.RepoDir
-	req.Args = []string{"test", fx.TreeDir, "--changed"}
+	applyPolicyBase(req, fx)
+	req.ChangedFiles = []string{treeRel(fx, "shared", "SETUP.md")}
 	return nil
 }
 ```

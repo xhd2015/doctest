@@ -1,23 +1,25 @@
 # Scenario
 
-**Feature**: invalid `-timeout` values are rejected at parse time
+**Feature**: invalid `-timeout` values are rejected at parse time (L2)
 
 ```
-# build and run test binary, report results
-doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
+runner.ParseTestOptions([-timeout, bogus, .]) -> error mentioning timeout
 ```
 
 ## Preconditions
-- An invalid duration string is passed to `-timeout`.
+
+- Nested L2 root: parse only; directory unused after parse fails.
 
 ## Steps
-1. Run `doctest test -timeout bogus .` (directory unused — parse fails first).
+
+1. Set args with invalid duration.
+2. Assert non-zero exit mapping and timeout in error text.
 
 ```go
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-    req.Args = []string{"test", "-timeout", "bogus", "."}
-    return nil
+	req.Args = []string{"-timeout", "bogus", "."}
+	return nil
 }
 ```

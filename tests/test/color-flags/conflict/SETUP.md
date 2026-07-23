@@ -1,23 +1,25 @@
 # Scenario
 
-**Feature**: `--color` and `--no-color` together are rejected
+**Feature**: `--color` and `--no-color` together are rejected (L2)
 
 ```
-# build and run test binary, report results
-doctest test <dir> -> build -> run binary -> pass/fail per leaf -> exit code
+runner.ParseTestOptions([--color, --no-color, .])
+  -> error: mutually exclusive
 ```
 
 ## Preconditions
-- Both `--color` and `--no-color` are passed to `doctest test`.
+
+- Both `--color` and `--no-color` are passed (directory unused — parse fails first).
 
 ## Steps
-1. Run `doctest test --color --no-color .` (directory unused — parse fails first).
+
+1. Set conflicting color flags.
 
 ```go
 import "testing"
 
 func Setup(t *testing.T, req *Request) error {
-	req.Args = []string{"test", "--color", "--no-color", "."}
+	req.Args = []string{"--color", "--no-color", "."}
 	return nil
 }
 ```

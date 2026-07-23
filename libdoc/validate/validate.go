@@ -28,6 +28,24 @@ func RunWithOptions(dir string, opts core.Options) error {
 	return runFull(dir, opts)
 }
 
+// verboseFprint writes -v progress to opts.Stdout when set (in-process capture),
+// otherwise os.Stdout. Parallel-safe: never reassigns process stdout.
+func verboseFprint(opts core.Options, format string, args ...any) {
+	w := opts.Stdout
+	if w == nil {
+		w = os.Stdout
+	}
+	fmt.Fprintf(w, format, args...)
+}
+
+func verboseFprintln(opts core.Options, a ...any) {
+	w := opts.Stdout
+	if w == nil {
+		w = os.Stdout
+	}
+	fmt.Fprintln(w, a...)
+}
+
 func runChangedOnly(dir string, opts core.Options) error {
 	w := opts.Stderr
 	if w == nil {
@@ -45,7 +63,7 @@ func runChangedOnly(dir string, opts core.Options) error {
 	}
 
 	if opts.Verbose {
-		fmt.Printf("[vet] validating %d changed file(s)\n", len(changedPaths))
+		verboseFprint(opts, "[vet] validating %d changed file(s)\n", len(changedPaths))
 	}
 
 	var antiViolations []error
@@ -67,7 +85,7 @@ func validateChangedFile(dir, path string, opts core.Options, antiViolations *[]
 
 	if opts.Verbose {
 		rel, _ := filepath.Rel(dir, path)
-		fmt.Printf("[vet]   %s\n", rel)
+		verboseFprint(opts, "[vet]   %s\n", rel)
 	}
 
 	switch name {
@@ -148,7 +166,7 @@ func runFull(dir string, opts core.Options) error {
 	antiViolations := checkFileAntiPatterns(doctestPath, string(doctestContent))
 
 	if opts.Verbose {
-		fmt.Printf("[vet] validating %s\n", dir)
+		verboseFprint(opts, "[vet] validating %s\n", dir)
 	}
 
 	err = filepath.WalkDir(dir, func(path string, d os.DirEntry, walkErr error) error {
@@ -163,7 +181,7 @@ func runFull(dir string, opts core.Options) error {
 		if d.IsDir() && path != dir {
 			if _, err := os.Stat(filepath.Join(path, "DOCTEST.md")); err == nil {
 				if opts.Verbose {
-					fmt.Println("[vet] skipping nested DOCTEST.md boundary")
+					verboseFprintln(opts, "[vet] skipping nested DOCTEST.md boundary")
 				}
 				return filepath.SkipDir
 			}
@@ -196,7 +214,7 @@ func runFull(dir string, opts core.Options) error {
 		}
 
 		if opts.Verbose {
-			fmt.Printf("[vet]   %s\n", name)
+			verboseFprint(opts, "[vet]   %s\n", name)
 		}
 
 		content, err := os.ReadFile(path)
