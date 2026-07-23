@@ -2,6 +2,7 @@ package build
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -800,39 +801,48 @@ func TestDotProgressIncremental(t *testing.T) {
 		t.Skip("slow dot progress timing test")
 	}
 
+	// One short sleep is enough if we measure the gap *between* dots (batch dump
+	// at process end has ~0 inter-dot gap). Keep this small so `go test` wall
+	// cost stays low; -short skips the whole test.
+	const slowSleep = 800 * time.Millisecond
+	const minIncrementalGap = 400 * time.Millisecond
+
 	subRoot := t.TempDir()
 	testtree.WriteMinimalRunnableTree(t, subRoot, []testtree.LeafSpec{
 		{Name: "a_fast", Steps: "No setup needed.", Expected: "Always passes."},
-		{Name: "z_slow", Steps: "Sleep 2 seconds to simulate a long-running test.", Expected: "Always passes.",
-			SetupGo: "import (\"testing\"; \"time\")\n\nfunc Setup(t *testing.T, req *Request) error { time.Sleep(2 * time.Second); return nil }"},
+		{Name: "z_slow", Steps: "Brief sleep so the fast leaf can finish first.", Expected: "Always passes.",
+			SetupGo: fmt.Sprintf(
+				"import (\"testing\"; \"time\")\n\nfunc Setup(t *testing.T, req *Request) error { time.Sleep(%d * time.Millisecond); return nil }",
+				int(slowSleep/time.Millisecond),
+			)},
 	})
 
 	// Parallel-safe streaming capture via opts.Stdout (never swap os.Stdout).
 	pr, pw := io.Pipe()
 
 	type dotInfo struct {
-		firstDot time.Duration
+		dotTimes []time.Duration // time of each '.' since start
 		output   string
 	}
 	ch := make(chan dotInfo, 1)
 	start := time.Now()
 	go func() {
 		var buf bytes.Buffer
-		firstDot := time.Duration(-1)
+		var dotTimes []time.Duration
 		tmp := make([]byte, 1)
 		for {
 			n, readErr := pr.Read(tmp)
 			if n > 0 {
 				buf.WriteByte(tmp[0])
-				if tmp[0] == '.' && firstDot < 0 {
-					firstDot = time.Since(start)
+				if tmp[0] == '.' {
+					dotTimes = append(dotTimes, time.Since(start))
 				}
 			}
 			if readErr != nil {
 				break
 			}
 		}
-		ch <- dotInfo{firstDot, buf.String()}
+		ch <- dotInfo{dotTimes, buf.String()}
 	}()
 
 	err := Test(subRoot, core.Options{
@@ -848,17 +858,25 @@ func TestDotProgressIncremental(t *testing.T) {
 	}
 
 	totalElapsed := time.Since(start)
-	incremental := info.firstDot >= 0 && (totalElapsed-info.firstDot) > 800*time.Millisecond
-	if !incremental {
-		t.Fatal("dots are NOT printed incrementally — the first dot appeared after the slow package finished")
-	}
-
 	inlineIdx := strings.Index(info.output, "  (")
 	if inlineIdx < 0 {
 		t.Fatalf("expected summary line in output:\n%s", info.output)
 	}
 	if dots := strings.Count(info.output[:inlineIdx], "."); dots != 2 {
 		t.Fatalf("expected 2 dots before summary, got %d. output:\n%s", dots, info.output)
+	}
+	if len(info.dotTimes) < 2 {
+		t.Fatalf("expected 2 timed dots, got %d times=%v total=%s\n%s",
+			len(info.dotTimes), info.dotTimes, totalElapsed, info.output)
+	}
+
+	// Incremental: first and second dots are well apart (fast finishes while slow runs),
+	// or at least the first appears well before the run ends.
+	interDot := info.dotTimes[1] - info.dotTimes[0]
+	firstToEnd := totalElapsed - info.dotTimes[0]
+	if interDot < minIncrementalGap && firstToEnd < minIncrementalGap {
+		t.Fatalf("dots are NOT printed incrementally: inter-dot=%s first→end=%s total=%s times=%v\n%s",
+			interDot, firstToEnd, totalElapsed, info.dotTimes, info.output)
 	}
 }
 
