@@ -130,8 +130,11 @@ func runWorkspaceSingleGen(preps []TreePrep, genRoot string, stats TestRunStats,
 		return filepath.ToSlash(treeRels[i]) < filepath.ToSlash(treeRels[j])
 	})
 
+	unlock := core.LockGenRootWrites(genRoot)
+	defer unlock()
 	if opts.GenBatch != nil {
 		opts.GenBatch.Attach(genRoot)
+		defer opts.GenBatch.Detach(genRoot)
 	}
 	if err := core.WriteWorkspaceExtras(genRoot, treeRels); err != nil {
 		return stats, err
@@ -139,8 +142,15 @@ func runWorkspaceSingleGen(preps []TreePrep, genRoot string, stats TestRunStats,
 	if err := core.CondTidyGoMod(genRoot, opts.GoCache); err != nil {
 		return stats, err
 	}
+	// Orphan prune only under __workspace (trees already pruned per-tree, or
+	// GenerateOnly deferred tree prune — prune each tree now if still needed).
 	if opts.GenBatch != nil {
-		if err := opts.GenBatch.PruneAttached(genRoot); err != nil {
+		for _, tr := range treeRels {
+			if err := opts.GenBatch.PruneTree(genRoot, tr); err != nil {
+				return stats, err
+			}
+		}
+		if err := opts.GenBatch.PruneWorkspace(genRoot); err != nil {
 			return stats, err
 		}
 	}
@@ -183,22 +193,44 @@ func runWorkspaceMultiModHub(preps []TreePrep, byGen map[string][]TreePrep, genO
 			return filepath.ToSlash(treeRels[i]) < filepath.ToSlash(treeRels[j])
 		})
 		multiTree := len(treeRels) > 1
+		unlock := core.LockGenRootWrites(genRoot)
 		if opts.GenBatch != nil {
 			opts.GenBatch.Attach(genRoot)
 		}
 		if multiTree {
 			if err := core.WriteWorkspaceExtras(genRoot, treeRels); err != nil {
+				if opts.GenBatch != nil {
+					opts.GenBatch.Detach(genRoot)
+				}
+				unlock()
 				return stats, err
 			}
 		}
 		if err := core.CondTidyGoMod(genRoot, opts.GoCache); err != nil {
+			if opts.GenBatch != nil {
+				opts.GenBatch.Detach(genRoot)
+			}
+			unlock()
 			return stats, err
 		}
 		if opts.GenBatch != nil {
-			if err := opts.GenBatch.PruneAttached(genRoot); err != nil {
-				return stats, err
+			for _, tr := range treeRels {
+				if err := opts.GenBatch.PruneTree(genRoot, tr); err != nil {
+					opts.GenBatch.Detach(genRoot)
+					unlock()
+					return stats, err
+				}
 			}
+			if multiTree {
+				if err := opts.GenBatch.PruneWorkspace(genRoot); err != nil {
+					opts.GenBatch.Detach(genRoot)
+					unlock()
+					return stats, err
+				}
+			}
+			opts.GenBatch.Detach(genRoot)
 		}
+		unlock()
 		unique := uniqueWorkModulePath(genRoot)
 		if err := ensureWorkModulePath(genRoot, unique); err != nil {
 			return stats, fmt.Errorf("workspace multi-mod: module path for %s: %w", genRoot, err)

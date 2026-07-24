@@ -30,37 +30,49 @@ func TestGenBatchWipeOnce(t *testing.T) {
 	}
 }
 
-func TestPruneGenRootToDesired(t *testing.T) {
+func TestPruneTreeScopeDoesNotTouchSiblingTree(t *testing.T) {
 	gen := t.TempDir()
-	keep := filepath.Join(gen, "keep", "a.go")
-	if err := os.MkdirAll(filepath.Dir(keep), 0755); err != nil {
+	// tree-a keep + orphan, tree-b must survive prune of tree-a
+	keepA := filepath.Join(gen, "tree-a", "keep.go")
+	orphanA := filepath.Join(gen, "tree-a", "orphan.go")
+	keepB := filepath.Join(gen, "tree-b", "keep.go")
+	for _, p := range []string{keepA, orphanA, keepB} {
+		if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("package x\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(gen, "go.mod"), []byte("module testcase\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(keep, []byte("package keep\n"), 0644); err != nil {
+	desired := map[string]struct{}{
+		"tree-a/keep.go": {},
+		"go.mod":         {},
+	}
+	if err := PruneTreeScopeToDesired(gen, "tree-a", desired); err != nil {
 		t.Fatal(err)
 	}
-	orphan := filepath.Join(gen, "stale", "b.go")
-	if err := os.MkdirAll(filepath.Dir(orphan), 0755); err != nil {
-		t.Fatal(err)
+	if _, err := os.Stat(keepA); err != nil {
+		t.Fatalf("keepA: %v", err)
 	}
-	if err := os.WriteFile(orphan, []byte("package stale\n"), 0644); err != nil {
-		t.Fatal(err)
+	if _, err := os.Stat(orphanA); !os.IsNotExist(err) {
+		t.Fatal("orphanA must be deleted")
 	}
-	desired := map[string]struct{}{"keep/a.go": {}}
-	if err := PruneGenRootToDesired(gen, desired); err != nil {
-		t.Fatal(err)
+	if _, err := os.Stat(keepB); err != nil {
+		t.Fatalf("sibling tree-b must not be touched: %v", err)
 	}
-	if _, err := os.Stat(keep); err != nil {
-		t.Fatalf("keep must remain: %v", err)
-	}
-	if _, err := os.Stat(orphan); !os.IsNotExist(err) {
-		t.Fatal("orphan must be deleted")
+	if _, err := os.Stat(filepath.Join(gen, "go.mod")); err != nil {
+		t.Fatalf("go.mod must remain: %v", err)
 	}
 }
 
 func TestNoteDesiredViaAttach(t *testing.T) {
 	gen := t.TempDir()
 	b := NewGenBatch()
+	unlock := LockGenRootWrites(gen)
+	defer unlock()
 	b.Attach(gen)
 	defer b.Detach(gen)
 	NoteDesired(gen, "pkg/x.go")
@@ -72,11 +84,14 @@ func TestNoteDesiredViaAttach(t *testing.T) {
 
 func TestPruneEmptyDesiredNoOp(t *testing.T) {
 	gen := t.TempDir()
-	f := filepath.Join(gen, "x.txt")
+	f := filepath.Join(gen, "tree-a", "x.txt")
+	if err := os.MkdirAll(filepath.Dir(f), 0755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(f, []byte("x"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := PruneGenRootToDesired(gen, nil); err != nil {
+	if err := PruneTreeScopeToDesired(gen, "tree-a", nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(f); err != nil {

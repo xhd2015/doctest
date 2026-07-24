@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -38,8 +39,24 @@ func absGenRoot(genRoot string) string {
 	return genRoot
 }
 
+// genRootWriteMu serializes generate+prune for a shared mapping-gen root so
+// concurrent nested suite leaves do not corrupt each other's emit notes or
+// prune each other's packages.
+var genRootWriteMu sync.Map // abs gen root → *sync.Mutex
+
+// LockGenRootWrites locks exclusive generate/prune for genRoot. Caller must
+// unlock (typically via defer).
+func LockGenRootWrites(genRoot string) (unlock func()) {
+	key := absGenRoot(genRoot)
+	v, _ := genRootWriteMu.LoadOrStore(key, &sync.Mutex{})
+	mu := v.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
+}
+
 // Attach registers this batch as the active desired-path recorder for genRoot
 // so WriteIfChanged / WriteGoMod can Note without threading Options.
+// Caller should hold LockGenRootWrites for the generate duration.
 func (b *GenBatch) Attach(genRoot string) {
 	if b == nil || genRoot == "" {
 		return
@@ -59,6 +76,7 @@ func (b *GenBatch) Detach(genRoot string) {
 }
 
 // activeBatches maps abs gen root → *GenBatch for NoteDesired during writes.
+// Only safe under LockGenRootWrites for that gen root.
 var activeBatches sync.Map
 
 // NoteDesired records a path that this generate batch intends to keep under genRoot.
@@ -146,7 +164,6 @@ func (b *GenBatch) WipeOnce(genRoot string) error {
 	if err := WipeGenRoot(genRoot); err != nil {
 		return err
 	}
-	// Re-attach after wipe (same batch).
 	b.Attach(genRoot)
 	return nil
 }
@@ -168,13 +185,24 @@ func WipeGenRoot(genRoot string) error {
 	return nil
 }
 
-// PruneGenRootToDesired deletes files under genRoot that are not in desired
-// (orphan reconcile). Always retains doctest.gen-manifest as a bookkeeping file
-// when present after rewrite. desired rels use slash form.
+// rootBookkeeping reports shared gen-root files that must never be deleted by
+// tree-scoped orphan prune (multi-tree / nested suite leaves share go.mod).
+func rootBookkeeping(rel string) bool {
+	switch rel {
+	case "go.mod", "go.sum", genManifestFile, "doctest.tidy-done":
+		return true
+	default:
+		return strings.HasPrefix(rel, "doctest.")
+	}
+}
+
+// PruneTreeScopeToDesired deletes orphan files under one tree's ownership scope
+// inside genRoot. treeRel is filepath.Rel(modRoot, doctestRoot) ("" or "." =
+// packages at gen root). Shared mapping-gen holds many trees: we never delete
+// outside this tree's prefix, and never delete root bookkeeping (go.mod, …).
 //
-// If desired is empty, prune is a no-op (avoids accidental full delete when
-// no generate notes were recorded).
-func PruneGenRootToDesired(genRoot string, desired map[string]struct{}) error {
+// desired rels are slash form relative to genRoot. Empty desired → no-op.
+func PruneTreeScopeToDesired(genRoot, treeRel string, desired map[string]struct{}) error {
 	if genRoot == "" {
 		return nil
 	}
@@ -182,12 +210,64 @@ func PruneGenRootToDesired(genRoot string, desired map[string]struct{}) error {
 	if len(desired) == 0 {
 		return nil
 	}
-	// Bookkeeping always kept if we prune.
-	keep := make(map[string]struct{}, len(desired)+2)
+
+	keep := make(map[string]struct{}, len(desired)+4)
 	for k := range desired {
 		keep[filepath.ToSlash(k)] = struct{}{}
 	}
-	keep[genManifestFile] = struct{}{}
+	// Always retain bookkeeping even if a batch forgot to note them.
+	for _, name := range []string{"go.mod", "go.sum", genManifestFile, "doctest.tidy-done"} {
+		keep[name] = struct{}{}
+	}
+
+	treeRel = filepath.ToSlash(filepath.Clean(treeRel))
+	if treeRel == "" {
+		treeRel = "."
+	}
+
+	// Scope: only consider deleting under this tree's directory.
+	// treeRel "." → packages may sit at gen root; restrict to top-level dirs
+	// that appear in desired (never wipe sibling treeRel packages).
+	var scopePrefix string // non-empty ⇒ must have this prefix (or exact dir)
+	var ownedTops map[string]struct{}
+	if treeRel != "." {
+		scopePrefix = treeRel + "/"
+	} else {
+		ownedTops = map[string]struct{}{}
+		for rel := range keep {
+			if rootBookkeeping(rel) {
+				continue
+			}
+			top := rel
+			if i := strings.IndexByte(rel, '/'); i >= 0 {
+				top = rel[:i]
+			}
+			// Skip __workspace ownership from tree-level "." prune.
+			if top == WorkspaceDirName {
+				continue
+			}
+			ownedTops[top] = struct{}{}
+		}
+	}
+
+	inScope := func(rel string) bool {
+		if rootBookkeeping(rel) {
+			return false // never prune bookkeeping via this path
+		}
+		if scopePrefix != "" {
+			return rel == treeRel || strings.HasPrefix(rel, scopePrefix)
+		}
+		// treeRel "."
+		if strings.HasPrefix(rel, WorkspaceDirName+"/") || rel == WorkspaceDirName {
+			return false
+		}
+		top := rel
+		if i := strings.IndexByte(rel, '/'); i >= 0 {
+			top = rel[:i]
+		}
+		_, ok := ownedTops[top]
+		return ok
+	}
 
 	var toDelete []string
 	err := filepath.Walk(genRoot, func(path string, info os.FileInfo, err error) error {
@@ -206,7 +286,26 @@ func PruneGenRootToDesired(genRoot string, desired map[string]struct{}) error {
 		}
 		rel = filepath.ToSlash(rel)
 		if info.IsDir() {
-			return nil // delete files first; prune empty dirs after
+			// Skip walking other trees entirely when scoped.
+			if scopePrefix != "" {
+				if rel != treeRel && !strings.HasPrefix(rel, scopePrefix) && !strings.HasPrefix(scopePrefix, rel+"/") {
+					return filepath.SkipDir
+				}
+			} else if treeRel == "." {
+				// Skip sibling tops not owned by this tree.
+				if !strings.Contains(rel, "/") {
+					if _, ok := ownedTops[rel]; !ok && rel != WorkspaceDirName {
+						// might still be empty dirs; only skip if not owned
+						if _, keepTop := ownedTops[rel]; !keepTop {
+							return filepath.SkipDir
+						}
+					}
+				}
+			}
+			return nil
+		}
+		if !inScope(rel) {
+			return nil
 		}
 		if _, ok := keep[rel]; ok {
 			return nil
@@ -215,19 +314,33 @@ func PruneGenRootToDesired(genRoot string, desired map[string]struct{}) error {
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("PruneGenRootToDesired: walk %s: %w", genRoot, err)
+		return fmt.Errorf("PruneTreeScopeToDesired: walk %s: %w", genRoot, err)
 	}
 	for _, p := range toDelete {
 		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("PruneGenRootToDesired: remove %s: %w", p, err)
+			return fmt.Errorf("PruneTreeScopeToDesired: remove %s: %w", p, err)
 		}
 	}
-	// Remove empty directories (bottom-up via Walk is messy; second walk).
+	// Remove empty dirs under scope only.
 	for {
 		removed := 0
 		_ = filepath.Walk(genRoot, func(path string, info os.FileInfo, err error) error {
 			if err != nil || path == genRoot || info == nil || !info.IsDir() {
 				return nil
+			}
+			rel, rerr := filepath.Rel(genRoot, path)
+			if rerr != nil {
+				return nil
+			}
+			rel = filepath.ToSlash(rel)
+			if !inScope(rel) && rel != treeRel {
+				// For scoped trees, also allow removing empty treeRel itself? no
+				if scopePrefix != "" && rel != treeRel && !strings.HasPrefix(rel, scopePrefix) {
+					return nil
+				}
+				if scopePrefix == "" && treeRel == "." {
+					return nil
+				}
 			}
 			entries, rerr := os.ReadDir(path)
 			if rerr != nil || len(entries) > 0 {
@@ -243,7 +356,7 @@ func PruneGenRootToDesired(genRoot string, desired map[string]struct{}) error {
 		}
 	}
 
-	// Drop stale manifest hashes for deleted rels.
+	// Drop stale manifest hashes only for deleted in-scope paths.
 	genModMu.Lock()
 	defer genModMu.Unlock()
 	man, err := cachedGenManifest(genRoot)
@@ -251,6 +364,9 @@ func PruneGenRootToDesired(genRoot string, desired map[string]struct{}) error {
 		return err
 	}
 	for rel := range man.hashes {
+		if !inScope(rel) {
+			continue
+		}
 		if _, ok := keep[rel]; !ok {
 			man.deleteHash(rel)
 		}
@@ -263,10 +379,41 @@ func PruneGenRootToDesired(genRoot string, desired map[string]struct{}) error {
 	return nil
 }
 
-// PruneAttached prunes genRoot using this batch's desired set (copy under lock).
-func (b *GenBatch) PruneAttached(genRoot string) error {
+// PruneWorkspaceScope deletes orphans under __workspace/ only (multi-tree hub).
+func PruneWorkspaceScope(genRoot string, desired map[string]struct{}) error {
+	if genRoot == "" {
+		return nil
+	}
+	// Reuse tree-scope with synthetic treeRel = __workspace by filtering desired
+	// and walking only that prefix.
+	wsDesired := make(map[string]struct{})
+	prefix := WorkspaceDirName + "/"
+	for rel := range desired {
+		rel = filepath.ToSlash(rel)
+		if rel == WorkspaceDirName || strings.HasPrefix(rel, prefix) {
+			wsDesired[rel] = struct{}{}
+		}
+	}
+	// Also keep any desired notes under __workspace from the batch.
+	if len(wsDesired) == 0 {
+		// Still allow prune of entire __workspace if nothing desired? no-op safer
+		return nil
+	}
+	return PruneTreeScopeToDesired(genRoot, WorkspaceDirName, wsDesired)
+}
+
+// PruneTree prunes one tree's package scope using this batch's desired set.
+func (b *GenBatch) PruneTree(genRoot, treeRel string) error {
 	if b == nil {
 		return nil
 	}
-	return PruneGenRootToDesired(genRoot, b.Desired(genRoot))
+	return PruneTreeScopeToDesired(genRoot, treeRel, b.Desired(genRoot))
+}
+
+// PruneWorkspace prunes __workspace using this batch's desired set.
+func (b *GenBatch) PruneWorkspace(genRoot string) error {
+	if b == nil {
+		return nil
+	}
+	return PruneWorkspaceScope(genRoot, b.Desired(genRoot))
 }

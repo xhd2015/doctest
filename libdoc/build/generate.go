@@ -39,6 +39,8 @@ type generateContext struct {
 	generateOnly bool
 	// forceA: wipe gen root once via genBatch before generate.
 	forceA bool
+	// unlockGenRoot releases LockGenRootWrites for shared mapping-gen safety.
+	unlockGenRoot func()
 	// unifiedMode: hierarchical ref packages + one suite package per DOCTEST tree.
 	// Always true for normal generation; false only for internal-compile trees
 	// (module-internal import path layout still uses classic AssembleTestSource).
@@ -138,17 +140,24 @@ func newGenerateContext(dir string, opts core.Options, cases []core.TreeCase, w 
 	if err := os.MkdirAll(genRoot, 0755); err != nil {
 		return nil, err
 	}
+	// Serialize generate+prune per gen root so parallel nested suite leaves
+	// sharing mapping-gen cannot clobber each other's packages / emit notes.
+	ctx.unlockGenRoot = core.LockGenRootWrites(genRoot)
 	// GenBatch: optional -a wipe-once; attach for emit-set orphan recording.
 	if ctx.genBatch != nil {
 		ctx.genBatch.Attach(genRoot)
 		if ctx.forceA {
 			if err := ctx.genBatch.WipeOnce(genRoot); err != nil {
+				ctx.unlockGenRoot()
+				ctx.unlockGenRoot = nil
 				return nil, err
 			}
 		}
 	} else if opts.ForceWithFlagA {
 		// Library -a without shared GenBatch: still wipe this gen root.
 		if err := core.WipeGenRoot(genRoot); err != nil {
+			ctx.unlockGenRoot()
+			ctx.unlockGenRoot = nil
 			return nil, err
 		}
 	}
@@ -174,6 +183,8 @@ func (ctx *generateContext) Close() {
 		ctx.lifecycleMu.Lock()
 		defer ctx.lifecycleMu.Unlock()
 		ctx.closed = true
+		// Safety if writeCases returned early before finishGenOrphans.
+		ctx.releaseGenWrite()
 		ctx.removeTempsLocked()
 	})
 }
@@ -314,13 +325,27 @@ func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) 
 	})
 }
 
-// finishGenOrphans reconciles throwaway gen: delete paths not in this batch's
-// emit set. Deferred when GenerateOnly (multi-tree workspace prunes later).
+// finishGenOrphans reconciles throwaway gen for this tree only (treeRel scope).
+// Deferred when GenerateOnly (multi-tree workspace prunes later).
+// Never full-gen-prunes: shared mapping-gen holds many trees / nested suite leaves.
+// Releases gen-root write lock after prune so go test does not hold it.
 func (ctx *generateContext) finishGenOrphans() error {
+	defer ctx.releaseGenWrite()
 	if ctx.internalCompile || ctx.generateOnly || ctx.genBatch == nil {
 		return nil
 	}
-	return ctx.genBatch.PruneAttached(ctx.genRoot)
+	return ctx.genBatch.PruneTree(ctx.genRoot, ctx.treeRel())
+}
+
+// releaseGenWrite detaches the batch and unlocks gen-root serialize lock.
+func (ctx *generateContext) releaseGenWrite() {
+	if ctx.genBatch != nil && ctx.genRoot != "" {
+		ctx.genBatch.Detach(ctx.genRoot)
+	}
+	if ctx.unlockGenRoot != nil {
+		ctx.unlockGenRoot()
+		ctx.unlockGenRoot = nil
+	}
 }
 
 // treeRel is the doctest root path relative to the module root (or ".").
