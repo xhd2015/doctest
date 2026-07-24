@@ -10,7 +10,7 @@ run2: doctest test tree-a tree-b (default) -> Cached across both trees
 ## Preconditions
 
 - Parent prepared all-pass multi-tree fixture and multi-arg Args/Args2.
-- No `-count` / `-a` / `--no-leaf-cache` on either run.
+- No `-count` / `-a` on either run.
 - Fresh GOCACHE per invocation (parent `runtime_multi`).
 
 ## Steps

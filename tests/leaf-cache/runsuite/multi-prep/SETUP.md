@@ -24,7 +24,7 @@ RecordPasses(keys, failed={idA}, allPassed=false)
 - Twin trees + isolated StoreRoot.
 - Leaves seed store via PutPass of ComputeLeafKey before prepare when testing warm paths.
 - `req.PrepWarm` controls which trees are pre-warmed: `both` | `a` | `none`.
-- `req.SkipEnabled` defaults true; false models `-count` / `-a` / `--no-leaf-cache`.
+- `req.SkipEnabled` defaults true; false models `-count` / `-a`.
 
 ## Steps
 
@@ -56,7 +56,7 @@ func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	if req.GoVersion == "" {
 		req.GoVersion = "go1.25.0"
 	}
-	// Default: skip enabled (product default when no -count/-a/--no-leaf-cache).
+	// Default: skip enabled (product default when no -count/-a/).
 	if !req.SkipEnabledSet {
 		req.SkipEnabled = true
 		req.SkipEnabledSet = true

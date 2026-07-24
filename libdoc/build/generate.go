@@ -126,7 +126,9 @@ func newGenerateContext(dir string, opts core.Options, cases []core.TreeCase, w 
 			}
 		}
 	}
-	if err := os.MkdirAll(genRoot, 0755); err != nil {
+	// Gen root is a throwaway cache: wipe once per CLI session (or on -a) so
+	// prior orphans cannot linger; multi-tree prepare shares the session marker.
+	if err := core.EnsureCleanGenRoot(genRoot, opts.SessionID, opts.ForceWithFlagA); err != nil {
 		return nil, err
 	}
 	ctx.genRoot = genRoot

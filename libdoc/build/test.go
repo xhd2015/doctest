@@ -19,12 +19,22 @@ import (
 	"github.com/xhd2015/dot-pkgs/go-pkgs/pathfmt"
 )
 
+func applyForceAOpts(opts *core.Options) {
+	if opts == nil || !opts.ForceWithFlagA {
+		return
+	}
+	if opts.Count == 0 {
+		opts.Count = 1
+	}
+}
+
 func Test(dir string, opts core.Options) error {
 	_, err := TestWithStats(dir, opts)
 	return err
 }
 
 func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
+	applyForceAOpts(&opts)
 	w := opts.Stderr
 	if w == nil {
 		w = os.Stderr
@@ -1306,7 +1316,7 @@ func isWarmSkipLeaf(warmSkip map[string]struct{}, leafRel string) bool {
 }
 
 // leafCachedSummary computes summary Cached for the leaf-cache product.
-// When skip is disabled (-count / -a / --no-leaf-cache), always 0.
+// When skip is disabled (-count / -a), always 0.
 // Otherwise Cached is the leaf-skip count; full go package (cached) expands to
 // all N leaves only when every leaf is also a warm GetPass hit.
 func leafCachedSummary(nCases int, skipPaths []string, anyPkgCached, skipEnabled bool) int {
@@ -1346,7 +1356,7 @@ func applyGoTestLeafStats(stats *TestRunStats, result *goTestJSONResult, nCases 
 		stats.Passed = passedCases(stats.Total, result.failCount)
 	}
 	result.cachedCount = leafCachedSummary(nCases, skipPaths, result.anyPackageCached(),
-		leafcache.SkipEnabled(opts.Count, opts.ForceWithFlagA, opts.NoLeafCache))
+		leafcache.SkipEnabled(opts.Count, opts.ForceWithFlagA))
 }
 
 // prepareLeafCache computes leaf keys and warm skip paths for this tree run.
@@ -1368,7 +1378,7 @@ func prepareLeafCache(treeRoot string, cases []core.TreeCase, opts core.Options)
 		return keys, nil
 	}
 	goVer := runtime.Version()
-	enabled := leafcache.SkipEnabled(opts.Count, opts.ForceWithFlagA, opts.NoLeafCache)
+	enabled := leafcache.SkipEnabled(opts.Count, opts.ForceWithFlagA)
 	leaves := make([]leafcache.LeafRef, 0, len(cases))
 	idToPath := make(map[string]string, len(cases))
 	for _, tc := range cases {

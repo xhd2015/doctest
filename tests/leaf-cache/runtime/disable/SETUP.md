@@ -1,6 +1,6 @@
 # Scenario
 
-**Feature**: leaf-cache skip is disabled by count / force / no-leaf-cache flags
+**Feature**: leaf-cache skip is disabled by count / force (`-a`) flags
 
 ```
 # populate store
@@ -25,7 +25,7 @@ run3: doctest test fixture <disable-flag> -> 0 Cached
 
 ## Context
 
-- Sibling leaves are MECE disable knobs: `-count`, `-a`, `--no-leaf-cache`.
+- Sibling leaves are MECE disable knobs: `-count`, `-a`.
 
 ```go
 import "testing"

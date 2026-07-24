@@ -418,7 +418,7 @@ func prepareWorkspaceLeafCache(preps []TreePrep, opts core.Options) (keys map[st
 		return keys, nil
 	}
 	goVer := runtime.Version()
-	enabled := leafcache.SkipEnabled(opts.Count, opts.ForceWithFlagA, opts.NoLeafCache)
+	enabled := leafcache.SkipEnabled(opts.Count, opts.ForceWithFlagA)
 	plan, err := leafcache.PreparePassPlan(store, leaves, goVer, enabled)
 	if err != nil {
 		return keys, nil

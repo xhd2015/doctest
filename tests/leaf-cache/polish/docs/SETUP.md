@@ -4,7 +4,7 @@
 
 ```
 doctest test --help
-  -> usage includes -a and --no-leaf-cache
+  -> usage includes -a and 
 ```
 
 ## Preconditions

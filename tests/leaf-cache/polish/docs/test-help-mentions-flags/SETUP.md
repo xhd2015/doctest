@@ -1,9 +1,9 @@
 # Scenario
 
-**Feature**: `doctest test --help` lists `-a` and `--no-leaf-cache`
+**Feature**: `doctest test --help` lists `-a` hard force (no `--no-leaf-cache`)
 
 ```
-doctest test --help -> usage text includes force and no-leaf-cache options
+doctest test --help -> usage includes -a wipe/force; omits --no-leaf-cache
 ```
 
 ## Preconditions
@@ -13,7 +13,7 @@ doctest test --help -> usage text includes force and no-leaf-cache options
 ## Steps
 
 1. Run help once.
-2. Assert combined output mentions the flags.
+2. Assert combined output mentions `-a` and omits `--no-leaf-cache`.
 
 ## Context
 

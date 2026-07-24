@@ -153,7 +153,7 @@ Examples:
   doctest edit ./tests/feature/ui-leaf/ASSERT.md --add-label manual
 `
 
-const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [-a] [--no-leaf-cache] [-timeout DURATION] [--color] [--no-color] [--changed] [--label EXPR]... [--label-all] [--metrics-on] [--cold-cache] [-cpuprofile FILE] [-memprofile FILE] [-memprofilerate N] [-blockprofile FILE] [-blockprofilerate N] [-mutexprofile FILE] [-mutexprofilefraction N] [-trace FILE] [-outputdir DIR] [-coverprofile FILE] [-cover] [-race] <dir>
+const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [-a] [-timeout DURATION] [--color] [--no-color] [--changed] [--label EXPR]... [--label-all] [--metrics-on] [--cold-cache] [-cpuprofile FILE] [-memprofile FILE] [-memprofilerate N] [-blockprofile FILE] [-blockprofilerate N] [-mutexprofile FILE] [-mutexprofilefraction N] [-trace FILE] [-outputdir DIR] [-coverprofile FILE] [-cover] [-race] <dir>
 
 Run executable Go snippets from a doc-style test directory, allow ./... patterns like go test.
 
@@ -162,10 +162,12 @@ Options:
   --rm              Remove the temporary generated test directory
   --gen-dir DIR     Write generated Go test files to DIR
   -count=N          Forward Go test count option to generated test binary;
-                    also disables programmatic leaf-cache skip for this run
-  -a                Forward -a to go test (force rebuild packages); also
-                    disable programmatic leaf-cache skip for this run
-  --no-leaf-cache   Disable programmatic leaf-cache skip for this run
+                    any N>0 also disables programmatic leaf-cache skip
+  -a                Hard force on the active gen root (superset of -count=1 when
+                    count is unset): wipe throwaway gen cache for this session
+                    before regenerate, forward -a to go test (rebuild packages),
+                    disable leaf-cache skip. Does not switch gen root or isolate
+                    GOCACHE (see --cold-cache).
   -timeout DURATION
                     Forward -timeout to go test (e.g. 30s, 5m, 1h; 0 disables).
                     Omitted uses go test default (10m). Alias: --timeout
@@ -181,10 +183,10 @@ Options:
   --label-all       Discovery mode: run all leaves including labeled ones (full
                     suite). Mutually exclusive with --label.
   --metrics-on      Opt in to suite metrics JSONL recording (off by default)
-  --cold-cache      Reproducible cold run: wipe mapping-gen root on startup
-                    (auto: $CacheHome/doctest/mapping-gen-cold; refuses --gen-dir
-                    equal/under warm mapping-gen), force -count=1 when unset,
-                    isolate empty GOCACHE for go test; leftover gen kept after finish
+  --cold-cache      Separate cold gen root (not warm mapping-gen), wipe it, force
+                    -count=1 when unset, isolate empty GOCACHE. Additive to -a
+                    (combine for cold gen + go package rebuild). Leftover gen
+                    kept after finish. Refuses --gen-dir equal/under warm mapping-gen.
   -cpuprofile FILE  Forward CPU profile path to go test (relative paths abs-resolved)
   -memprofile FILE  Forward memory profile path to go test (relative paths abs-resolved)
   -memprofilerate N Forward memprofilerate to go test (including 0)

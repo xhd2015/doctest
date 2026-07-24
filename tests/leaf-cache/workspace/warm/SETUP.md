@@ -10,7 +10,7 @@ run2: doctest test <mod>/... (default) -> Cached > 0 (leaf-cache skips)
 ## Preconditions
 
 - Two-tree all-pass fixture (`prepareWorkspaceAllPass`).
-- No `-count` / `-a` / `--no-leaf-cache` on either run.
+- No `-count` / `-a` on either run.
 - Fresh GOCACHE per invocation (parent `runtime_multi`).
 
 ## Steps

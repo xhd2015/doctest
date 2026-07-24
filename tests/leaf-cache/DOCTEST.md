@@ -26,7 +26,7 @@ fast library mass). Nested product paths are **`label: heavy`** and opt-in via
 | **Help docs** | `doctest test --help` | `polish/docs/**` |
 
 Leaf-cache is **not** single-tree only. Warm skip, PutPass, disable flags
-(`-count` / `-a` / `--no-leaf-cache`), and summary **Cached** apply on every
+(`-count` / `-a`), and summary **Cached** apply on every
 product shape above. **Cached** is the **programmatic leaf-cache skip count**
 (GetPass hits), not go testcache alone — L3 leaves isolate `GOCACHE`.
 
@@ -78,11 +78,11 @@ Target share: **in-process (L2) ≥ ~60%** of leaf count; remaining e2e labeled
 - **Grey warm progress dots (quiet + color)** — when color is on, progress `.`
   for identities in this-run leaf-cache skip set is **grey** (`\x1b[90m.\x1b[0m`).
   Executed pass stays **plain** `.`. Fail stays **red** (`\x1b[31m.\x1b[0m`).
-  `-count` / `-a` / `--no-leaf-cache` disable skip → no grey leaf-cache dots.
+  `-count` / `-a` disable skip → no grey leaf-cache dots.
 - **Disable leaf-cache skip** when any of:
   - `-count` is set to any N (including `1`)
   - `-a` is set (also forwarded to `go test -a`)
-  - `--no-leaf-cache` is set
+  -  is set
 - **Fail not stored** — failed leaves never `PutPass`; a second run still
   executes and fails (Cached stays 0 for that leaf).
 - **Store I/O errors** — should not fail the suite (best-effort; optional leaf
@@ -97,7 +97,7 @@ Target share: **in-process (L2) ≥ ~60%** of leaf count; remaining e2e labeled
 - **Tree isolation** — keys must not collide across different doctest trees that
   share the same *relative* leaf path but different absolute `TreeRoot`
   (tree identity mixed into the key or equivalent).
-- **Help** — `doctest test --help` documents `-a` and `--no-leaf-cache`.
+- **Help** — `doctest test --help` documents `-a` and .
 
 ### Behaviors (RunSuite multi-prep extract)
 
@@ -155,7 +155,7 @@ Target share: **in-process (L2) ≥ ~60%** of leaf count; remaining e2e labeled
 | *(default)* | leaf-cache **enabled** when `-count` unset and `-a` absent |
 | `-count=N` | any N → **disable** programmatic leaf-cache skip for the invocation |
 | `-a` | forward **`-a`** to `go test` (rebuild packages); **disable** leaf-cache skip |
-| `--no-leaf-cache` | **disable** leaf-cache skip for this invocation |
+|  | **disable** leaf-cache skip for this invocation |
 | `DOCTEST_CACHE_HOME` | base cache home; default store at `$CacheHome/doctest/leaf-cache/v1` |
 | `DOCTEST_LEAF_CACHE` | when set, **store root** for leaf pass markers (overrides default path under CacheHome) |
 
@@ -220,7 +220,7 @@ tests/leaf-cache/
 │   ├── isolation/                            [L2]
 │   │   └── same-relpath-two-trees/           twin TreeRoots → distinct keys
 │   └── docs/                                 [L3 heavy]
-│       └── test-help-mentions-flags/         test --help lists -a / no-leaf-cache
+│       └── test-help-mentions-flags/         test --help lists -a hard force
 ├── runsuite/                                 [L2 nested DOCTEST.md — multi-prep extract]
 │   ├── identity/
 │   │   ├── same-relpath-two-trees/           FormatLeafIdentity distinct across trees
@@ -232,7 +232,7 @@ tests/leaf-cache/
 │       └── record-partial-fail/              failed id not PutPass; other is
 ├── runtime/                                  [L3 heavy — nested doctest test]
 │   ├── warm/second-run-cached/
-│   ├── disable/{count,force-a,no-leaf-cache}-bypasses/
+│   ├── disable/{count,force-a}-bypasses/
 │   ├── fail-path/fail-not-stored/
 │   ├── stream-pass/interrupt-partial-cached/ SIGINT after pass dots → next Cached>=1
 │   └── progress-dots/
@@ -280,7 +280,7 @@ tests/leaf-cache/
 | `runtime/warm/second-run-cached` | Two default runs of a 1-pass fixture; run2 summary has Cached > 0 | **GREEN** |
 | `runtime/disable/count-bypasses` | Run1 store; run2 warm Cached>0; run3 `-count=1` → `0 Cached` | **GREEN** |
 | `runtime/disable/force-a-bypasses` | Run1 store; run2 warm Cached>0; run3 `-a` → `0 Cached` | **GREEN** |
-| `runtime/disable/no-leaf-cache-bypasses` | Run1 store; run2 warm Cached>0; run3 `--no-leaf-cache` → `0 Cached` | **GREEN** |
+
 | `runtime/fail-path/fail-not-stored` | Failing fixture twice; both exit ≠0 and `0 Cached` | **GREEN** |
 | `runtime/stream-pass/interrupt-partial-cached` | Multi-leaf + hang; SIGINT after pass dots; unhang; run2 Cached >= 1 | **GREEN** |
 | `runtime/progress-dots/warm-grey-dots` | 2-leaf warm second run with `--color` → grey progress dots >= 2 | **GREEN** |
@@ -297,7 +297,7 @@ tests/leaf-cache/
 | `polish/selective/sibling-stays-cached` | L2 | edit leaf_a ASSERT → sibling key stable | **GREEN** |
 | `polish/selective/local-dep-invalidates` | L2 | edit imported pkg → leaf key changes | **GREEN** |
 | `polish/isolation/same-relpath-two-trees` | L2 | twin TreeRoots → distinct keys | **GREEN** |
-| `polish/docs/test-help-mentions-flags` | **L3 heavy** | `doctest test --help` mentions `-a` and `--no-leaf-cache` | **GREEN** |
+| `polish/docs/test-help-mentions-flags` | **L3 heavy** | `doctest test --help` mentions `-a` and  | **GREEN** |
 
 ### RunSuite P1 (multi-prep extract — sealed GREEN)
 
@@ -381,7 +381,7 @@ Package: `github.com/xhd2015/doctest/libdoc/leafcache`
 - `func NewStore(root string) (*Store, error)`
 - `func (s *Store) GetPass(key string) (bool, error)` — false when missing
 - `func (s *Store) PutPass(key string) error` — explicit pass only
-- `func SkipEnabled(count int, force, noLeafCache bool) bool`
+- `func SkipEnabled(count int, force bool) bool`
 - `func KeyForLeaf(treeRoot, leafRel, goVersion string) (KeyInput, error)`
 
 ## Expected public API (RunSuite multi-prep extract — sealed)
@@ -410,7 +410,7 @@ In-memory models (no new on-disk format):
   and increment **Cached** in the suite summary line.
 - Quiet + color: progress `.` for this-run skip-set identities is **grey**;
   executed pass plain `.`; fail **red**.
-- Skip disabled when `-count` present, or `-a`, or `--no-leaf-cache`.
+- Skip disabled when `-count` present, or `-a`, or .
 - Never `PutPass` on fail; partial fail stores only non-failed leaves.
 
 ## Expected suite wiring (workspace multi-tree + multi-arg — sealed product)

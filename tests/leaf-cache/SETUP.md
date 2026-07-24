@@ -16,7 +16,7 @@ FormatLeafIdentity / PreparePassPlan / RecordPasses
 
 # L3 e2e (label: heavy) — nested product binary
 doctest test fixture / <mod>/... / tree-a tree-b
-  -> PutPass / warm Cached / -count|-a|--no-leaf-cache bypass
+  -> PutPass / warm Cached / -count|-a bypass
   -> stream PutPass + grey progress dots (runtime/**)
 ```
 
@@ -107,7 +107,7 @@ and a non-local fake tree `remote-src/example.com/remote@v1.0.0/*.go` that is
 - `preparePassFixture` / `prepareFailFixture` — mini trees via `testtree`.
 - `isolateRuntimeEnv` — isolated `DOCTEST_CACHE_HOME` / `DOCTEST_LEAF_CACHE`.
   `Run` adds a **fresh GOCACHE per invocation** so go testcache cannot inflate Cached.
-- CLI flags under test: `-count`, `-a`, `--no-leaf-cache`.
+- CLI flags under test: `-count`, `-a`.
 
 ### Polish helpers (see `polish/` + `key/tree-identity/`)
 

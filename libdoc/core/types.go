@@ -30,7 +30,7 @@ type GoBlock struct {
 }
 
 type FuncSnippet struct {
-	Name    string
+	Name string
 	// Recv is the receiver field list string (e.g. "f *fakeRunner"). Empty for
 	// plain functions. When set, the snippet is a method and must be emitted at
 	// package level (not as a func literal).
@@ -87,17 +87,17 @@ const (
 )
 
 type Options struct {
-	GenDir                string
-	Verbose               bool
-	Stderr                io.Writer
-	Stdout                io.Writer
-	RemoveTemp            bool
-	Count int
+	GenDir     string
+	Verbose    bool
+	Stderr     io.Writer
+	Stdout     io.Writer
+	RemoveTemp bool
+	Count      int
 	// Timeout is the go test -timeout when set. nil means omit the flag (go
 	// default 10m). non-nil zero means -timeout=0 (disable). Use **T parse via
 	// less-flags Duration so unset and zero stay distinct (go-best-practice).
-	Timeout *time.Duration
-	SubDir  string
+	Timeout               *time.Duration
+	SubDir                string
 	Color                 ColorMode
 	SuppressResultSummary bool
 	ChangedOnly           bool
@@ -144,12 +144,11 @@ type Options struct {
 	// child go test via cmd.Env key-replace; never written with os.Setenv.
 	SessionID string
 
-	// ForceWithFlagA is CLI -a: disable programmatic leaf-cache skip and forward -a
-	// to go test (force rebuild of packages that are already up-to-date).
+	// ForceWithFlagA is CLI -a: hard force for this run — superset of -count=1
+	// when Count is unset (applyForceA), wipe gen root for this session (via
+	// EnsureCleanGenRoot), disable leaf-cache skip, and forward -a to go test.
+	// Does not switch gen root or isolate GOCACHE (see ColdCache).
 	ForceWithFlagA bool
-	// NoLeafCache disables programmatic leaf-cache skip (CLI: --no-leaf-cache).
-	// Pass recording (PutPass on success) still occurs.
-	NoLeafCache bool
 
 	// Go test profiling / cover flags (forwarded to go test).
 	// Path fields are abs-resolved at CLI parse time when relative.

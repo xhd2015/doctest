@@ -38,7 +38,6 @@ func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	opts := core.Options{
 		GenDir:                genDir,
 		Count:                 1, // disable leaf-cache skip so Cached=0 is unambiguous
-		NoLeafCache:           true,
 		SuppressResultSummary: false,
 		Stdout:                &stdout,
 		Stderr:                &stderr,

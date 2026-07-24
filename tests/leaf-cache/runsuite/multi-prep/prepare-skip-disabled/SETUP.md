@@ -11,7 +11,7 @@ PreparePassPlan(..., skipEnabled=false)
 
 ## Preconditions
 
-- PrepWarm=`both`; SkipEnabled=false (models `-count` / `-a` / `--no-leaf-cache`).
+- PrepWarm=`both`; SkipEnabled=false (models `-count` / `-a`).
 
 ## Steps
 

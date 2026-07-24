@@ -11,7 +11,7 @@ run2: test --color same fixture -> Cached >= 2; progress has grey dots
 
 - Two-leaf always-pass fixture (`preparePassFixture(t, 2)`).
 - Run2 forces color with `--color` (pipe-safe).
-- Leaf-cache enabled (no `-count` / `-a` / `--no-leaf-cache` on run2).
+- Leaf-cache enabled (no `-count` / `-a` on run2).
 
 ## Steps
 

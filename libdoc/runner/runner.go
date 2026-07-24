@@ -14,13 +14,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/xhd2015/less-flags"
 	runnerbuild "github.com/xhd2015/doctest/libdoc/build"
 	"github.com/xhd2015/doctest/libdoc/core"
 	"github.com/xhd2015/doctest/libdoc/debug"
 	"github.com/xhd2015/doctest/libdoc/metrics"
 	"github.com/xhd2015/doctest/libdoc/path_resolve"
 	"github.com/xhd2015/doctest/libdoc/validate"
+	"github.com/xhd2015/less-flags"
 )
 
 var ErrNoTestsFound = path_resolve.ErrNoTestsFound
@@ -124,6 +124,10 @@ func runTest(opts core.Options, remainArgs []string) error {
 		}
 		coldCacheNs = time.Since(tCold).Nanoseconds()
 	}
+
+	// -a: hard force — superset of -count=1 when count unset; gen wipe happens
+	// later via EnsureCleanGenRoot (session marker / forceA).
+	applyForceA(&opts)
 
 	// One session id for the whole CLI invocation so parallel trees share
 	// session.Once / testbin materialization when nested self-tests run.
@@ -858,7 +862,6 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 		String("--gen-dir", &opts.GenDir).
 		Int("-count", &opts.Count).
 		Bool("-a", &opts.ForceWithFlagA).
-		Bool("--no-leaf-cache", &opts.NoLeafCache).
 		Duration("-timeout,--timeout", &timeout).
 		Bool("--color", &colorFlag).
 		Bool("--no-color", &noColorFlag).
@@ -967,6 +970,18 @@ func absProfilePath(p string) (string, error) {
 // Exported for package-level tests (metrics flags, labels, etc.).
 func ParseTestOptions(args []string) (core.Options, []string, error) {
 	return parseTestOptions(args)
+}
+
+// applyForceA resolves -a once per CLI invocation: when count is unset, force
+// -count=1 (superset of count-based leaf-cache / go testcache busting). Gen wipe
+// and go test -a are applied at generate / go test time via ForceWithFlagA.
+func applyForceA(opts *core.Options) {
+	if opts == nil || !opts.ForceWithFlagA {
+		return
+	}
+	if opts.Count == 0 {
+		opts.Count = 1
+	}
 }
 
 // applyColdCache resolves --cold-cache semantics once per CLI invocation:

@@ -22,7 +22,7 @@ run3: test <mod>/... -count=1   -> 0 Cached (bodies re-run)
 ## Context
 
 - Aligns workspace path with single-tree `runtime/disable/count-bypasses`.
-- Only `-count` is required for P2; `-a` / `--no-leaf-cache` already sealed
+- Only `-count` is required for P2; `-a` already sealed
   on single-tree (same SkipEnabled helper).
 
 ```go

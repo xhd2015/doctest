@@ -1,7 +1,8 @@
 ## Expected
 
 - Exit 0.
-- Help text (stdout or stderr) contains `-a` and `--no-leaf-cache`.
+- Help text (stdout or stderr) contains `-a` and wipe/hard-force wording.
+- Help must not mention removed `--no-leaf-cache`.
 
 ```go
 import (
@@ -17,10 +18,14 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 		t.Fatalf("help exit %d\nstdout:\n%s\nstderr:\n%s", resp.ExitCode, resp.Stdout, resp.Stderr)
 	}
 	out := resp.Stdout + "\n" + resp.Stderr
-	hasA := strings.Contains(out, "-a")
-	hasNoLeaf := strings.Contains(out, "--no-leaf-cache")
-	if !hasA || !hasNoLeaf {
-		t.Fatalf("help missing leaf-cache flags (-a=%v no-leaf-cache=%v)\n%s", hasA, hasNoLeaf, out)
+	if !strings.Contains(out, "-a") {
+		t.Fatalf("help missing -a:\n%s", out)
+	}
+	if strings.Contains(out, "--no-leaf-cache") {
+		t.Fatalf("help must not document removed --no-leaf-cache:\n%s", out)
+	}
+	if !strings.Contains(out, "wipe") && !strings.Contains(out, "Hard force") {
+		t.Fatalf("help -a should describe hard force / wipe:\n%s", out)
 	}
 }
 ```
