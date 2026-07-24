@@ -76,6 +76,15 @@ func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	if strings.Contains(out, "FAIL (0/1)") {
 		t.Fatalf("must not use package-fail denom FAIL (0/1):\n%s", out)
 	}
+	// Quiet UX must surface compiler diagnostics (go test -json Action
+	// "build-output"), not only the package "[build failed]" summary line.
+	// brokenRun uses definitelyNotDefined → undefined symbol.
+	combined := out + stderr.String()
+	if !strings.Contains(combined, "definitelyNotDefined") &&
+		!strings.Contains(combined, "undefined:") &&
+		!strings.Contains(combined, "undefined ") {
+		t.Fatalf("want compiler diagnostic in quiet output (build-output), got:\nstdout:\n%s\nstderr:\n%s", out, stderr.String())
+	}
 }
 
 // TestBuildFailedUX_workspaceWithWarmCachePlan ensures Cached stays 0 even when

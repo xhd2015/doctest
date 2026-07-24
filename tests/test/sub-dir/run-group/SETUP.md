@@ -32,14 +32,13 @@ import (
 
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     treeRoot := t.TempDir()
-    bt := string(rune(96))
-    d := bt + bt + bt
+    bt := "\x60\x60\x60"
 
     testtree.WriteFile(t, treeRoot, "DOCTEST.md", testtree.MinimalDOCTEST(testtree.MinimalRunGo()))
 
-    groupSetup := d+"go\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }\n"+d+"\n"
-    leafSetup := d+"go\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }\n"+d+"\n"
-    leafAssert := d+"go\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}\n"+d+"\n"
+    groupSetup := bt+"go\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }\n"+bt+"\n"
+    leafSetup := bt+"go\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }\n"+bt+"\n"
+    leafAssert := bt+"go\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}\n"+bt+"\n"
 
     ga := filepath.Join(treeRoot, "group-a")
     os.MkdirAll(ga, 0755)

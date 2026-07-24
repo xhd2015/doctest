@@ -307,13 +307,22 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		fmt.Fprintln(stdout, formatSummary(style, result.passCount+result.failCount, result.passCount, result.failCount, result.cachedCount, goTestElapsed))
 	}
 
-	// Print order: progress → fail dumps → Error/hint → PASS/FAIL.
-	// Quiet path buffers fail details for post-run print. Verbose streamed live.
+	// Print order: progress → build diagnostics → package FAIL lines → fail
+	// dumps → Error/hint → PASS/FAIL. Quiet buffers for post-run; verbose streams live.
+	// build-output (compiler lines) before failLines matches plain go test order.
 	if !opts.Verbose {
+		for _, line := range result.buildOutputLines {
+			fmt.Fprintln(stdout, line)
+		}
 		for _, line := range result.failLines {
 			fmt.Fprintln(stdout, line)
 		}
 		for _, line := range result.detailLines {
+			fmt.Fprintln(stdout, line)
+		}
+	} else if len(result.buildOutputLines) > 0 {
+		// Verbose streams build-output live; residual buffer only in edge paths.
+		for _, line := range result.buildOutputLines {
 			fmt.Fprintln(stdout, line)
 		}
 	}
@@ -493,7 +502,12 @@ type goTestJSONResult struct {
 	cachedCount int
 	failLines   []string
 	detailLines []string
-	stderrData  []byte
+	// buildOutputLines holds compiler/link diagnostics from go test -json
+	// Action "build-output" (Go 1.24+). These are not Action "output" and
+	// usually do not appear on the child stderr pipe — quiet mode must dump
+	// them after the progress line or users only see "[build failed]".
+	buildOutputLines []string
+	stderrData       []byte
 	// timeoutError is a clear user-facing line when go test panics with
 	// "test timed out after <d>" (JSON Output events are otherwise buffered
 	// under the test name and dropped because timeout emits no per-test fail).
@@ -535,6 +549,7 @@ func mergeGoTestJSONResult(dst *goTestJSONResult, src goTestJSONResult) {
 	}
 	dst.failLines = append(dst.failLines, src.failLines...)
 	dst.detailLines = append(dst.detailLines, src.detailLines...)
+	dst.buildOutputLines = append(dst.buildOutputLines, src.buildOutputLines...)
 	dst.stderrData = append(dst.stderrData, src.stderrData...)
 	if dst.timeoutError == "" && src.timeoutError != "" {
 		dst.timeoutError = src.timeoutError
@@ -818,11 +833,14 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 	go func() {
 		defer stdoutWg.Done()
 		type goTestEvent struct {
-			Action  string  `json:"Action"`
-			Package string  `json:"Package"`
-			Test    string  `json:"Test"`
-			Output  string  `json:"Output"`
-			Elapsed float64 `json:"Elapsed"`
+			Action  string `json:"Action"`
+			Package string `json:"Package"`
+			// ImportPath is set on build-output / build-fail events (Go 1.24+);
+			// Package is empty for those.
+			ImportPath string  `json:"ImportPath"`
+			Test       string  `json:"Test"`
+			Output     string  `json:"Output"`
+			Elapsed    float64 `json:"Elapsed"`
 		}
 		packageCached := make(map[string]bool)
 		failedTests := make(map[string]bool)
@@ -954,6 +972,24 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 				break
 			}
 			switch ev.Action {
+			case "build-output":
+				// Compiler/linker diagnostics (Go 1.24+ go test -json). Not the same
+				// as Action "output"; must not be dropped or quiet UX is only
+				// "FAIL … [build failed]" with no line:col messages.
+				if ev.Output == "" {
+					continue
+				}
+				if verbose {
+					stdout.Write([]byte(ev.Output))
+					continue
+				}
+				line := strings.TrimRight(ev.Output, "\n")
+				if line != "" {
+					res.buildOutputLines = append(res.buildOutputLines, line)
+				}
+			case "build-fail":
+				// Package failed to compile/link; suite leaves never ran.
+				res.buildFailed = true
 			case "output":
 				// Timeout panics are Output events under a Test name; go test then
 				// only emits package-level fail (no per-test fail), so buffered

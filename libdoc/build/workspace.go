@@ -353,14 +353,21 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	recordLeafCachePasses(leafKeys, failed, runErr == nil && result.failCount == 0 && !result.buildFailed)
 
 	// Quiet path: compact progress summary. Verbose already streamed Output events.
-	// Print order: progress → fail dumps → Error/hint (PASS/FAIL is printed by
-	// the runner after return when SuppressResultSummary).
+	// Print order: progress → build diagnostics → package FAIL → fail dumps →
+	// Error/hint (PASS/FAIL is printed by the runner after return when SuppressResultSummary).
 	if !opts.Verbose {
 		fmt.Fprintln(stdout, formatSummary(style, result.passCount+result.failCount, result.passCount, result.failCount, result.cachedCount, goTestElapsed))
+		for _, line := range result.buildOutputLines {
+			fmt.Fprintln(stdout, line)
+		}
 		for _, line := range result.failLines {
 			fmt.Fprintln(stdout, line)
 		}
 		for _, line := range result.detailLines {
+			fmt.Fprintln(stdout, line)
+		}
+	} else if len(result.buildOutputLines) > 0 {
+		for _, line := range result.buildOutputLines {
 			fmt.Fprintln(stdout, line)
 		}
 	}
