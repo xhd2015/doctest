@@ -130,29 +130,10 @@ func runWorkspaceSingleGen(preps []TreePrep, genRoot string, stats TestRunStats,
 		return filepath.ToSlash(treeRels[i]) < filepath.ToSlash(treeRels[j])
 	})
 
-	unlock := core.LockGenRootWrites(genRoot)
-	defer unlock()
-	if opts.GenBatch != nil {
-		opts.GenBatch.Attach(genRoot)
-		defer opts.GenBatch.Detach(genRoot)
-	}
-	if err := core.WriteWorkspaceExtras(genRoot, treeRels); err != nil {
+	// Hold gen-root write lock only for extras/tidy/prune — not during go test
+	// (nested suite leaves must not block on the outer suite's go test).
+	if err := prepareWorkspaceGen(genRoot, treeRels, opts); err != nil {
 		return stats, err
-	}
-	if err := core.CondTidyGoMod(genRoot, opts.GoCache); err != nil {
-		return stats, err
-	}
-	// Orphan prune only under __workspace (trees already pruned per-tree, or
-	// GenerateOnly deferred tree prune — prune each tree now if still needed).
-	if opts.GenBatch != nil {
-		for _, tr := range treeRels {
-			if err := opts.GenBatch.PruneTree(genRoot, tr); err != nil {
-				return stats, err
-			}
-		}
-		if err := opts.GenBatch.PruneWorkspace(genRoot); err != nil {
-			return stats, err
-		}
 	}
 
 	suiteDir := core.WorkspaceSuiteDir(genRoot)
@@ -166,6 +147,32 @@ func runWorkspaceSingleGen(preps []TreePrep, genRoot string, stats TestRunStats,
 	}
 
 	return finishWorkspaceGoTest(preps, genRoot, genRoot, packageArgs, len(treeRels), stats, opts)
+}
+
+// prepareWorkspaceGen writes hub packages, tidies, and prunes under genRoot.
+// Caller must not hold gen-root lock across go test.
+func prepareWorkspaceGen(genRoot string, treeRels []string, opts core.Options) error {
+	unlock := core.LockGenRootWrites(genRoot)
+	defer unlock()
+	if opts.GenBatch != nil {
+		opts.GenBatch.Attach(genRoot)
+		defer opts.GenBatch.Detach(genRoot)
+	}
+	if err := core.WriteWorkspaceExtras(genRoot, treeRels); err != nil {
+		return err
+	}
+	if err := core.CondTidyGoMod(genRoot, opts.GoCache); err != nil {
+		return err
+	}
+	if opts.GenBatch == nil {
+		return nil
+	}
+	for _, tr := range treeRels {
+		if err := opts.GenBatch.PruneTree(genRoot, tr); err != nil {
+			return err
+		}
+	}
+	return opts.GenBatch.PruneWorkspace(genRoot)
 }
 
 func runWorkspaceMultiModHub(preps []TreePrep, byGen map[string][]TreePrep, genOrder []string, stats TestRunStats, opts core.Options) (TestRunStats, error) {
@@ -193,44 +200,28 @@ func runWorkspaceMultiModHub(preps []TreePrep, byGen map[string][]TreePrep, genO
 			return filepath.ToSlash(treeRels[i]) < filepath.ToSlash(treeRels[j])
 		})
 		multiTree := len(treeRels) > 1
-		unlock := core.LockGenRootWrites(genRoot)
-		if opts.GenBatch != nil {
-			opts.GenBatch.Attach(genRoot)
-		}
 		if multiTree {
-			if err := core.WriteWorkspaceExtras(genRoot, treeRels); err != nil {
-				if opts.GenBatch != nil {
-					opts.GenBatch.Detach(genRoot)
-				}
-				unlock()
+			if err := prepareWorkspaceGen(genRoot, treeRels, opts); err != nil {
 				return stats, err
 			}
-		}
-		if err := core.CondTidyGoMod(genRoot, opts.GoCache); err != nil {
+		} else {
+			// Single tree under this gen root: tidy only (tree packages already written).
+			unlock := core.LockGenRootWrites(genRoot)
 			if opts.GenBatch != nil {
+				opts.GenBatch.Attach(genRoot)
+			}
+			err := core.CondTidyGoMod(genRoot, opts.GoCache)
+			if opts.GenBatch != nil {
+				if err == nil {
+					err = opts.GenBatch.PruneTree(genRoot, treeRels[0])
+				}
 				opts.GenBatch.Detach(genRoot)
 			}
 			unlock()
-			return stats, err
-		}
-		if opts.GenBatch != nil {
-			for _, tr := range treeRels {
-				if err := opts.GenBatch.PruneTree(genRoot, tr); err != nil {
-					opts.GenBatch.Detach(genRoot)
-					unlock()
-					return stats, err
-				}
+			if err != nil {
+				return stats, err
 			}
-			if multiTree {
-				if err := opts.GenBatch.PruneWorkspace(genRoot); err != nil {
-					opts.GenBatch.Detach(genRoot)
-					unlock()
-					return stats, err
-				}
-			}
-			opts.GenBatch.Detach(genRoot)
 		}
-		unlock()
 		unique := uniqueWorkModulePath(genRoot)
 		if err := ensureWorkModulePath(genRoot, unique); err != nil {
 			return stats, fmt.Errorf("workspace multi-mod: module path for %s: %w", genRoot, err)

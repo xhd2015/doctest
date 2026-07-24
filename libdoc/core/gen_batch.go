@@ -201,6 +201,10 @@ func rootBookkeeping(rel string) bool {
 // packages at gen root). Shared mapping-gen holds many trees: we never delete
 // outside this tree's prefix, and never delete root bookkeeping (go.mod, …).
 //
+// Safety: only delete files that appear in doctest.gen-manifest for this gen
+// root and are not in desired. That way an incomplete emit set cannot remove
+// live package sources that were never recorded (false orphans).
+//
 // desired rels are slash form relative to genRoot. Empty desired → no-op.
 func PruneTreeScopeToDesired(genRoot, treeRel string, desired map[string]struct{}) error {
 	if genRoot == "" {
@@ -215,7 +219,6 @@ func PruneTreeScopeToDesired(genRoot, treeRel string, desired map[string]struct{
 	for k := range desired {
 		keep[filepath.ToSlash(k)] = struct{}{}
 	}
-	// Always retain bookkeeping even if a batch forgot to note them.
 	for _, name := range []string{"go.mod", "go.sum", genManifestFile, "doctest.tidy-done"} {
 		keep[name] = struct{}{}
 	}
@@ -225,10 +228,7 @@ func PruneTreeScopeToDesired(genRoot, treeRel string, desired map[string]struct{
 		treeRel = "."
 	}
 
-	// Scope: only consider deleting under this tree's directory.
-	// treeRel "." → packages may sit at gen root; restrict to top-level dirs
-	// that appear in desired (never wipe sibling treeRel packages).
-	var scopePrefix string // non-empty ⇒ must have this prefix (or exact dir)
+	var scopePrefix string
 	var ownedTops map[string]struct{}
 	if treeRel != "." {
 		scopePrefix = treeRel + "/"
@@ -242,7 +242,6 @@ func PruneTreeScopeToDesired(genRoot, treeRel string, desired map[string]struct{
 			if i := strings.IndexByte(rel, '/'); i >= 0 {
 				top = rel[:i]
 			}
-			// Skip __workspace ownership from tree-level "." prune.
 			if top == WorkspaceDirName {
 				continue
 			}
@@ -252,12 +251,11 @@ func PruneTreeScopeToDesired(genRoot, treeRel string, desired map[string]struct{
 
 	inScope := func(rel string) bool {
 		if rootBookkeeping(rel) {
-			return false // never prune bookkeeping via this path
+			return false
 		}
 		if scopePrefix != "" {
 			return rel == treeRel || strings.HasPrefix(rel, scopePrefix)
 		}
-		// treeRel "."
 		if strings.HasPrefix(rel, WorkspaceDirName+"/") || rel == WorkspaceDirName {
 			return false
 		}
@@ -269,59 +267,41 @@ func PruneTreeScopeToDesired(genRoot, treeRel string, desired map[string]struct{
 		return ok
 	}
 
-	var toDelete []string
-	err := filepath.Walk(genRoot, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			if os.IsNotExist(err) {
-				return nil
-			}
-			return err
-		}
-		if path == genRoot {
-			return nil
-		}
-		rel, rerr := filepath.Rel(genRoot, path)
-		if rerr != nil {
-			return rerr
-		}
-		rel = filepath.ToSlash(rel)
-		if info.IsDir() {
-			// Skip walking other trees entirely when scoped.
-			if scopePrefix != "" {
-				if rel != treeRel && !strings.HasPrefix(rel, scopePrefix) && !strings.HasPrefix(scopePrefix, rel+"/") {
-					return filepath.SkipDir
-				}
-			} else if treeRel == "." {
-				// Skip sibling tops not owned by this tree.
-				if !strings.Contains(rel, "/") {
-					if _, ok := ownedTops[rel]; !ok && rel != WorkspaceDirName {
-						// might still be empty dirs; only skip if not owned
-						if _, keepTop := ownedTops[rel]; !keepTop {
-							return filepath.SkipDir
-						}
-					}
-				}
-			}
-			return nil
-		}
+	genModMu.Lock()
+	man, err := cachedGenManifest(genRoot)
+	if err != nil {
+		genModMu.Unlock()
+		return err
+	}
+	// Snapshot candidate rels from manifest only (safe orphan set).
+	var candidates []string
+	for rel := range man.hashes {
 		if !inScope(rel) {
-			return nil
+			continue
 		}
 		if _, ok := keep[rel]; ok {
-			return nil
+			continue
 		}
-		toDelete = append(toDelete, path)
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("PruneTreeScopeToDesired: walk %s: %w", genRoot, err)
+		candidates = append(candidates, rel)
 	}
-	for _, p := range toDelete {
+	for _, rel := range candidates {
+		man.deleteHash(rel)
+	}
+	if man.dirty {
+		if err := man.flush(genRoot); err != nil {
+			genModMu.Unlock()
+			return err
+		}
+	}
+	genModMu.Unlock()
+
+	for _, rel := range candidates {
+		p := filepath.Join(genRoot, filepath.FromSlash(rel))
 		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("PruneTreeScopeToDesired: remove %s: %w", p, err)
 		}
 	}
-	// Remove empty dirs under scope only.
+	// Drop empty dirs under scope.
 	for {
 		removed := 0
 		_ = filepath.Walk(genRoot, func(path string, info os.FileInfo, err error) error {
@@ -333,14 +313,12 @@ func PruneTreeScopeToDesired(genRoot, treeRel string, desired map[string]struct{
 				return nil
 			}
 			rel = filepath.ToSlash(rel)
-			if !inScope(rel) && rel != treeRel {
-				// For scoped trees, also allow removing empty treeRel itself? no
-				if scopePrefix != "" && rel != treeRel && !strings.HasPrefix(rel, scopePrefix) {
+			if scopePrefix != "" {
+				if rel != treeRel && !strings.HasPrefix(rel, scopePrefix) {
 					return nil
 				}
-				if scopePrefix == "" && treeRel == "." {
-					return nil
-				}
+			} else if !inScope(rel) && rel != treeRel {
+				return nil
 			}
 			entries, rerr := os.ReadDir(path)
 			if rerr != nil || len(entries) > 0 {
@@ -353,27 +331,6 @@ func PruneTreeScopeToDesired(genRoot, treeRel string, desired map[string]struct{
 		})
 		if removed == 0 {
 			break
-		}
-	}
-
-	// Drop stale manifest hashes only for deleted in-scope paths.
-	genModMu.Lock()
-	defer genModMu.Unlock()
-	man, err := cachedGenManifest(genRoot)
-	if err != nil {
-		return err
-	}
-	for rel := range man.hashes {
-		if !inScope(rel) {
-			continue
-		}
-		if _, ok := keep[rel]; !ok {
-			man.deleteHash(rel)
-		}
-	}
-	if man.dirty {
-		if err := man.flush(genRoot); err != nil {
-			return err
 		}
 	}
 	return nil

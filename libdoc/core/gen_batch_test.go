@@ -47,6 +47,16 @@ func TestPruneTreeScopeDoesNotTouchSiblingTree(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(gen, "go.mod"), []byte("module testcase\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
+	// Orphans must be in gen-manifest to be pruned (safe mode).
+	if _, err := WriteIfChanged(gen, "tree-a/keep.go", []byte("package x\n")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := WriteIfChanged(gen, "tree-a/orphan.go", []byte("package x\n")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := WriteIfChanged(gen, "tree-b/keep.go", []byte("package x\n")); err != nil {
+		t.Fatal(err)
+	}
 	desired := map[string]struct{}{
 		"tree-a/keep.go": {},
 		"go.mod":         {},

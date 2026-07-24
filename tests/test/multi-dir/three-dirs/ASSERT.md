@@ -20,7 +20,7 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
         t.Fatalf("run failed: %v", err)
     }
     if resp.ExitCode != 0 {
-        t.Fatalf("exit code = %d, stderr:\n%s", resp.ExitCode, resp.Stderr)
+        t.Fatalf("exit code = %d\nstdout:\n%s\nstderr:\n%s", resp.ExitCode, resp.Stdout, resp.Stderr)
     }
     if !strings.Contains(resp.Stderr, "test_a") {
         t.Fatalf("stderr missing test_a:\n%s", resp.Stderr)
