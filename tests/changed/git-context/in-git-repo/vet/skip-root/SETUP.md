@@ -17,7 +17,7 @@ ChangedDoctestMarkdownFiles -> [leaf_a/ASSERT.md] (no DOCTEST.md)
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	fx := createVetSkipRootTree(t)
 	applyPolicyBase(req, fx)
 	req.Policy = PolicyVetMD

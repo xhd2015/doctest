@@ -13,7 +13,7 @@ FilterBySubDir(slow) + LabelExprs → run or skip that leaf only
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	_ = t
 	_ = req
 	return nil

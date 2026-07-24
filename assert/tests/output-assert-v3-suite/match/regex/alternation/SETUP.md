@@ -11,7 +11,7 @@ Matcher <- actual ok
 1. Set alternation regex line and matching branch `ok`.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = v3Template("", "(ok|fail)")
 	req.Actual = "ok"
 	return nil

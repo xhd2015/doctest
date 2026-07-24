@@ -13,7 +13,7 @@ Matcher -> pass or line-numbered diff
 1. Set template/actual fields for AC6 — wrong SGR sequence fails.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "<ansi-color #38;5;208>warn</ansi-color>"
 	req.Actual = grayWrap("warn")
 	return nil

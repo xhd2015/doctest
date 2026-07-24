@@ -12,7 +12,7 @@ Facade -> parse error (not silent v1 fallback)
 1. Set YAML header `version: 9` with a simple body line.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "---\nversion: 9\n---\nhello"
 	return nil
 }

@@ -25,7 +25,7 @@ author without d
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	// Grouping node: leaves set Op to parse-with-d or parse-without-d.
 	_ = req
 	return nil

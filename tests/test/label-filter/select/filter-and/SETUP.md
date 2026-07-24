@@ -12,7 +12,7 @@
 2. LabelExprs = ["slow && ui-automation"].
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.TreeRoot = writeLabelFilterMod(t)
 	req.LabelExprs = []string{"slow && ui-automation"}
 	return nil

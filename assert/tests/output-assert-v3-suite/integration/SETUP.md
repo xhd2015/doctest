@@ -12,7 +12,7 @@ Matcher <- simulated CLI output
 1. Set `req.Operation = "match"` unless leaf overrides for parse-only v1 check.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Operation = "match"
 	return nil
 }

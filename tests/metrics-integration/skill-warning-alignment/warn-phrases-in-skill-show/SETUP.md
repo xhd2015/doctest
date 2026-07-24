@@ -21,7 +21,7 @@ assert each of: WARNING, skill:doctest-review-perf, review-perf --show, 3 minute
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	// Leaf reinforces op + skill argv (parent may have set them; re-assert here
 	// so this SETUP is not an empty stub for vet).
 	req.Op = "align_skill_warn"

@@ -22,7 +22,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	createPublicModuleProject(t, req, "", aliasedAssertAssertGo())
 	req.OutsideGenDir = filepath.Join(t.TempDir(), "generated")
 	setupModuleEnv(t, req)

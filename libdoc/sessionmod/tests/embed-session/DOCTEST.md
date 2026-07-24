@@ -71,7 +71,7 @@ type Response struct {
 	Err             error
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	switch req.RunKind {
 	case "sessionmod-md5":
 		// Prefer generated session.go (or equivalent) next to embed.go.

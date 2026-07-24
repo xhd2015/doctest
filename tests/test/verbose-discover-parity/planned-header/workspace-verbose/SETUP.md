@@ -23,7 +23,7 @@ doctest test -v --no-color ./...
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	mod := createWorkspaceTwoTrees(t)
 	req.WorkDir = mod
 	req.Args = []string{"test", "-v", "--no-color", "./..."}

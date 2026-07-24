@@ -16,7 +16,7 @@ FilterByChangedFiles -> [shared/leaf_a, shared/leaf_b]
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	fx := createSharedParentTwoLeafTree(t)
 	applyPolicyBase(req, fx)
 	req.ChangedFiles = []string{treeRel(fx, "shared", "SETUP.md")}

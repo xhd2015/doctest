@@ -16,7 +16,7 @@ changed leaf_a/ASSERT.md -> FilterByChangedFiles -> [leaf_a]
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	fx := createFlatTwoLeafTree(t)
 	applyPolicyBase(req, fx)
 	req.ChangedFiles = []string{treeRel(fx, "leaf_a", "ASSERT.md")}

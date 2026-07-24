@@ -65,7 +65,7 @@ const (
 
 // Snapshots live on req (Snap* fields) so Parallel leaves do not share package state.
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	// Defaults; leaves override Mode / paths / flags.
 	// Do not wipe Snap* here — each leaf's req starts zeroed; ancestors set what they need.
 	if req.ModPath == "" {

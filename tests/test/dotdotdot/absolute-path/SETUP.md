@@ -19,7 +19,7 @@ Tests for absolute `<prefix>/...` pattern support (same semantics as `./<prefix>
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     t.Logf("absolute-path group")
     return nil
 }

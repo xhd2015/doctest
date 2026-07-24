@@ -14,7 +14,7 @@ EvalLabelExpr("!e2e", {e2e, heavy}) -> false
 1. Assert bang-negation semantics on empty and non-empty label sets.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	_ = t
 	_ = req
 	return nil

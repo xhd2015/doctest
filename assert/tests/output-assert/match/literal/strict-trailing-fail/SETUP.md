@@ -13,7 +13,7 @@ Matcher -> pass or line-numbered diff
 1. Set template/actual fields for M2 — strict trailing newline mismatch.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "OK"
 	req.Actual = "OK\n"
 	return nil

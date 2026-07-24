@@ -65,7 +65,7 @@ func createMultiGroupTree(t *testing.T, dir string) {
 		if err := os.MkdirAll(gDir, 0755); err != nil {
 			t.Fatalf("mkdir %s: %v", g.name, err)
 		}
-		groupSetupCode := "import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }\n"
+		groupSetupCode := "import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }\n"
 		if err := os.WriteFile(filepath.Join(gDir, "SETUP.md"), []byte(doctestGoBlock(groupSetupCode)), 0644); err != nil {
 			t.Fatalf("write %s SETUP.md: %v", g.name, err)
 		}
@@ -75,11 +75,11 @@ func createMultiGroupTree(t *testing.T, dir string) {
 			if err := os.MkdirAll(lDir, 0755); err != nil {
 				t.Fatalf("mkdir %s/%s: %v", g.name, leaf, err)
 			}
-			leafSetupCode := "import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }\n"
+			leafSetupCode := "import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }\n"
 			if err := os.WriteFile(filepath.Join(lDir, "SETUP.md"), []byte(doctestGoBlock(leafSetupCode)), 0644); err != nil {
 				t.Fatalf("write %s/%s SETUP.md: %v", g.name, leaf, err)
 			}
-			leafAssertCode := "import \"testing\"\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}\n"
+			leafAssertCode := "import \"testing\"\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}\n"
 			if err := os.WriteFile(filepath.Join(lDir, "ASSERT.md"), []byte(doctestGoBlock(leafAssertCode)), 0644); err != nil {
 				t.Fatalf("write %s/%s ASSERT.md: %v", g.name, leaf, err)
 			}
@@ -142,7 +142,7 @@ func doMultiRun(t *testing.T, req *Request, scenario string) {
     req.MRSecond = doRun(t, req.Bin, secondArgs, runTimeout)
 }
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     _ = fmt.Sprintf
     req.MRFirst = nil
     req.MRSecond = nil

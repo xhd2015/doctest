@@ -28,7 +28,7 @@ run3: test tree-a tree-b -count=1   -> 0 Cached (bodies re-run)
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	req.Op = "runtime_multi"
 	// Args/Args2 already multi-arg from multi-arg/SETUP.md

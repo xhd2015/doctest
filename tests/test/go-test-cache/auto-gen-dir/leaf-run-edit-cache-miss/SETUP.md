@@ -21,7 +21,7 @@ import (
     "github.com/xhd2015/doctest/libdoc/testtree"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     testDir := createTempTestProjectOpts(t, "mytest", treeOpts{
         RunCode: runCodeWithLog("run-v1"),
     })

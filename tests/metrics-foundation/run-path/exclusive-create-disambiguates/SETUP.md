@@ -28,7 +28,7 @@ import (
 	"time"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Op = "create_run_files"
 	req.CacheDir = t.TempDir()
 	req.ProjectID = "github.com_xhd2015_doctest"

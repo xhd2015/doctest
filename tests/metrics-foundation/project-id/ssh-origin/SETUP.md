@@ -23,7 +23,7 @@ git@github.com:xhd2015/doctest.git -> github.com_xhd2015_doctest
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Op = "project_id_from_origin"
 	req.Origin = "git@github.com:xhd2015/doctest.git"
 	return nil

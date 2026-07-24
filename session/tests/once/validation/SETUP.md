@@ -25,7 +25,7 @@ session.Once -> empty key => error (fn not run)
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Mode = "json-object"
 	req.CallTwice = false
 	return nil

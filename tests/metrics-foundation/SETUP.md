@@ -46,7 +46,7 @@ import (
 	"time"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	// Defaults shared by all leaves; leaves override Op and fields.
 	if req.At.IsZero() {
 		// Fixed UTC instant for deterministic path tests when leaves do not set At.

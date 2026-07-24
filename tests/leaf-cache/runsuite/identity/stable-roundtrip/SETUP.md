@@ -25,7 +25,7 @@ FormatLeafIdentity(tree, "leaf") != FormatLeafIdentity(tree, "other")
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	req.Op = "format_identity_stable"
 	// TreeRoot already set by parent prepareTwinTrees.

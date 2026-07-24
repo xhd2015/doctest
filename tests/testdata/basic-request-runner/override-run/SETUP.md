@@ -16,7 +16,7 @@ leaf: ASSERT.md with func Assert
 1. Mutate the inherited request to use the root Run.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Action = "greet"
 	req.Name = "leaf"
 	return nil

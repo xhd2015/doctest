@@ -24,7 +24,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	dir := filepath.Join(t.TempDir(), "test-tree")
 	createDoctestTree(t, dir, false)
 	// Parent-side path for Assert — not process Env (UseCLI=false).

@@ -11,7 +11,7 @@ Matcher <- exact (1 Cached)
 1. Set escaped pattern line `\(1 Cached\)` and identical actual.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = v3Template("", "\\(1 Cached\\)")
 	req.Actual = "(1 Cached)"
 	return nil

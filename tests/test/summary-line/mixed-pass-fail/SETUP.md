@@ -19,7 +19,7 @@ go test -> FAIL\t lines -> runner -> FAIL(passed/total)
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	testDir := createPassFailTree(t, 2, 1)
 	req.Args = []string{"test", testDir}
 	return nil

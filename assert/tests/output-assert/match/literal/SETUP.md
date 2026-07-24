@@ -13,7 +13,7 @@ Matcher -> pass or line-numbered diff
 1. Templates are plain literal lines.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	_ = t
 	return nil
 }

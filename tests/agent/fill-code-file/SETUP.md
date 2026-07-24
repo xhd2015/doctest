@@ -23,7 +23,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	path := filepath.Join(t.TempDir(), "target.txt")
 	if err := os.WriteFile(path, []byte("not a dir"), 0644); err != nil {
 		t.Fatal(err)

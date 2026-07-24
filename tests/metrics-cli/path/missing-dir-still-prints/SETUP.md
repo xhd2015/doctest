@@ -19,7 +19,7 @@ doctest metrics path -> exit 0, print canonical path
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	ensureFixtureProject(t, req)
 	// intentionally do not MkdirAll project metrics dir
 	req.Args = []string{"metrics", "path"}

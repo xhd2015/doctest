@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	combined := resp.Stdout + resp.Stderr + resp.ParseErr
 	lower := strings.ToLower(combined)
 

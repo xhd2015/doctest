@@ -26,7 +26,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	validDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(validDir, "DOCTEST.md"), []byte(testtree.VetDOCTEST()), 0644); err != nil {
 		t.Fatal(err)

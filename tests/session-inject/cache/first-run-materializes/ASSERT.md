@@ -19,7 +19,7 @@ import (
 	"testing"
 )
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	// Materialize should occur even if leaf later fails; require cache layout.
 	cacheDir := expectedSessionCacheDir(t)
 	if _, statErr := os.Stat(cacheDir); statErr != nil {

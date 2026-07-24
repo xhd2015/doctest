@@ -26,7 +26,7 @@ RunTest(...) -> JSONL includes leaf_start and leaf_end (result pass)
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.MetricsOn = true
 	return nil
 }

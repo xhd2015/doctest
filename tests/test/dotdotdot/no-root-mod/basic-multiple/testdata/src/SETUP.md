@@ -16,7 +16,7 @@ progress dots -> . F | verbose -> go test -v | count -> N tests
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Name = "src"
 	return nil
 }

@@ -27,16 +27,16 @@ import (
     "github.com/xhd2015/doctest/libdoc/testtree"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     treeRoot := t.TempDir()
     bt := string(rune(96))
     d := bt + bt + bt
 
     testtree.WriteFile(t, treeRoot, "DOCTEST.md", testtree.MinimalDOCTEST(testtree.MinimalRunGo()))
 
-    groupSetup := d+"go\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }\n"+d+"\n"
-    leafSetup := d+"go\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }\n"+d+"\n"
-    leafAssert := d+"go\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}\n"+d+"\n"
+    groupSetup := d+"go\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }\n"+d+"\n"
+    leafSetup := d+"go\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }\n"+d+"\n"
+    leafAssert := d+"go\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}\n"+d+"\n"
 
     ga := filepath.Join(treeRoot, "group-a")
     os.MkdirAll(ga, 0755)

@@ -83,7 +83,7 @@ type Response struct {
 	GenDir	string
 	TestErr	error
 }
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	subRoot := t.TempDir()
 	genDir := filepath.Join(t.TempDir(), "gendir")
 

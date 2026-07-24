@@ -28,7 +28,7 @@ abs root -> sha256 -> nogit_<12 hex>
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	// Group default: project-id leaves exercise origin/fallback helpers only.
 	t.Helper()
 	if req.ProjectID != "" {

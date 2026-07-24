@@ -19,7 +19,7 @@ DOCTEST.md (no ## Version) -> doctest vet -> error mentioning version
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	treeDir := writeTree(t, treeOpts{withVersion: false})
 	setVetArgs(t, req, treeDir)
 	return nil

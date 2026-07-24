@@ -26,7 +26,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	lockCacheTests(t)
 	// Request-local gen dir placeholder (leaf may overwrite); Parallel-safe.
 	if req.GenDir == "" {

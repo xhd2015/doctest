@@ -56,13 +56,13 @@ func doctestBody(runCode string) string {
 	return "import \"testing\"\n\ntype Request struct{ Name string }\ntype Response struct{ Message string }\n\n" + runCode
 }
 func rootSetupContent() string {
-	return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }")
+	return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }")
 }
 func leafSetupContent() string {
-	return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }")
+	return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }")
 }
 func leafAssertContent() string {
-	return doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}")
+	return doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}")
 }
 func createDoctestRoot(dir string, runCode string) error {
 	if err := os.WriteFile(filepath.Join(dir, "DOCTEST.md"), []byte(testtree.MinimalDOCTEST(doctestBody(runCode))), 0644); err != nil {
@@ -95,7 +95,7 @@ func createTempProject(t *testing.T, dirName string) string {
 	if err := os.MkdirAll(testDir, 0755); err != nil {
 		t.Fatalf("mkdir test dir: %v", err)
 	}
-	runCode := "func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }"
+	runCode := "func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }"
 	if err := createDoctestRoot(testDir, runCode); err != nil {
 		t.Fatalf("create doctest root: %v", err)
 	}

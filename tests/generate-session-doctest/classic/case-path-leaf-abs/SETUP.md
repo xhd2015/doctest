@@ -28,14 +28,14 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	abs, err := filepath.Abs(t.TempDir())
 	if err != nil {
 		t.Fatalf("abs: %v", err)
 	}
 	req.DocTestRoot = abs
 	req.CasePath = "nested/leaf"
-	req.AuthorDMode = "omit"
+	req.AuthorDMode = "named-d"
 	return nil
 }
 ```

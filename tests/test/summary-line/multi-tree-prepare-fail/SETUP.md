@@ -25,7 +25,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	mod := createPrepareFailMultiTree(t)
 	genDir := filepath.Join(t.TempDir(), "gen")
 	// WorkDir + ./... needs subprocess isolation (L2 ignores WorkDir).

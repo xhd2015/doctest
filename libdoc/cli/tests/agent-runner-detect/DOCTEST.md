@@ -104,7 +104,7 @@ func mergeChildEnv(overrides []string) []string {
 	return out
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	// Subprocess isolation: product code may read env; parent process env stays untouched.
 	bin := req.Bin
 	if bin == "" {

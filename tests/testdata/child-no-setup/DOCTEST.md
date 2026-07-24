@@ -23,7 +23,7 @@ type Response struct {
 	Result int
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	if req.Value < 0 {
 		return nil, fmt.Errorf("Value must be non-negative")
 	}

@@ -53,62 +53,62 @@ func doctestBody(extraRunCode string) string {
 }
 
 func defaultRunCode() string {
-    return "func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }"
+    return "func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }"
 }
 
 func rootSetupContent() string {
-    return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }")
+    return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }")
 }
 
 func rootSetupWorkDir(tag string) string {
-    return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { req.WorkDir = \"" + tag + "\"; return nil }")
+    return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { req.WorkDir = \"" + tag + "\"; return nil }")
 }
 
 // intermediateSetupWorkDir sets WorkDir so edits change a real field write.
 func intermediateSetupWorkDir(tag string) string {
-    return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { req.WorkDir = \"" + tag + "\"; return nil }")
+    return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { req.WorkDir = \"" + tag + "\"; return nil }")
 }
 
 // intermediateSetupDiscardString: only discards a string — typically DCE'd.
 func intermediateSetupDiscardString(tag string) string {
-    return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error {\n\t_ = req\n\t_ = \"" + tag + "\"\n\treturn nil\n}")
+    return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error {\n\t_ = req\n\t_ = \"" + tag + "\"\n\treturn nil\n}")
 }
 
 // intermediateSetupTLog: t.Log keeps the tag live in the test binary.
 func intermediateSetupTLog(tag string) string {
-    return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error {\n\t_ = req\n\tt.Log(\"" + tag + "\")\n\treturn nil\n}")
+    return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error {\n\t_ = req\n\tt.Log(\"" + tag + "\")\n\treturn nil\n}")
 }
 
 func leafSetupContent() string {
-    return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }")
+    return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }")
 }
 
 func leafSetupWorkDir(tag string) string {
-    return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { req.WorkDir = \"" + tag + "\"; return nil }")
+    return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { req.WorkDir = \"" + tag + "\"; return nil }")
 }
 
 func leafAssertContent() string {
-    return doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}")
+    return doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}")
 }
 
 // leafAssertObserveWorkDir reads WorkDir so Setup writes stay live in the test binary
 // (prevents DCE). Accepts any non-empty value so V1→V2 edits still pass.
 func leafAssertObserveWorkDir() string {
-    return doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {\n\tif req.WorkDir == \"\" {\n\t\tt.Fatal(\"expected non-empty WorkDir from Setup\")\n\t}\n}")
+    return doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n\tif req.WorkDir == \"\" {\n\t\tt.Fatal(\"expected non-empty WorkDir from Setup\")\n\t}\n}")
 }
 
 // leafAssertTLogWorkDir always logs WorkDir (stronger live use than non-empty check alone).
 func leafAssertTLogWorkDir() string {
-    return doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {\n\tt.Log(req.WorkDir)\n\tif req.WorkDir == \"\" {\n\t\tt.Fatal(\"expected non-empty WorkDir from Setup\")\n\t}\n}")
+    return doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n\tt.Log(req.WorkDir)\n\tif req.WorkDir == \"\" {\n\t\tt.Fatal(\"expected non-empty WorkDir from Setup\")\n\t}\n}")
 }
 
 // leafAssertStdoutNonEmpty only checks non-empty — Run string swaps can still DCE.
 func leafAssertStdoutNonEmpty() string {
-    return doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {\n\tif resp == nil || resp.Stdout == \"\" {\n\t\tt.Fatal(\"expected non-empty Stdout\")\n\t}\n}")
+    return doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n\tif resp == nil || resp.Stdout == \"\" {\n\t\tt.Fatal(\"expected non-empty Stdout\")\n\t}\n}")
 }
 
 func runCodeWithStdout(tag string) string {
-    return "func Run(t *testing.T, req *Request) (*Response, error) { return &Response{Stdout: \"" + tag + "\"}, nil }"
+    return "func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{Stdout: \"" + tag + "\"}, nil }"
 }
 
 func modifiedDiscardStringSetup(tag string) string {
@@ -401,17 +401,17 @@ func stdoutHasPositiveCached(stdout string) bool {
 }
 
 func modifiedSetupContent(tag string) string {
-    return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { req.WorkDir = \"" + tag + "\"; return nil }")
+    return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { req.WorkDir = \"" + tag + "\"; return nil }")
 }
 
 func modifiedAssertContent() string {
-    return doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {\n    if resp.Stdout != \"modified\" {\n        t.Log(\"stdout was not modified\")\n    }\n}")
+    return doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n    if resp.Stdout != \"modified\" {\n        t.Log(\"stdout was not modified\")\n    }\n}")
 }
 
 // runCodeWithLog uses t.Log so the tag string stays live in the test binary
 // (plain Stdout constants can be DCE'd when only tested for non-empty).
 func runCodeWithLog(tag string) string {
-    return "func Run(t *testing.T, req *Request) (*Response, error) {\n\tt.Log(\"" + tag + "\")\n\treturn &Response{}, nil\n}"
+    return "func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {\n\tt.Log(\"" + tag + "\")\n\treturn &Response{}, nil\n}"
 }
 
 func modifiedRunCode() string {

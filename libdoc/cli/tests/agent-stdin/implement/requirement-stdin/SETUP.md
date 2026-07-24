@@ -12,7 +12,7 @@ import (
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     tf := filepath.Join(t.TempDir(), "requirement.md")
     if err := os.WriteFile(tf, []byte("Feature spec from requirement file"), 0644); err != nil {
         return err

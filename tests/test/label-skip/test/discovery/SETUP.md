@@ -13,7 +13,7 @@ doctest test <discovery-target> -> omit labeled ASSERT.md leaves
 2. Run `doctest test` against a discovery target (not a concrete leaf).
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	if req.WorkDir == "" {
 		req.WorkDir = "."
 	}

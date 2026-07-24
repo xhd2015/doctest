@@ -13,7 +13,7 @@ Matcher -> pass or line-numbered diff
 1. Set template/actual fields for C2 — missing fragment fails.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "<contains>\na\nb\n</contains>"
 	req.Actual = "z\na"
 	return nil

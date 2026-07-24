@@ -12,7 +12,7 @@ Parser -> Pattern with Placeholder, RegexLine, OmitLine, etc.
 1. Expect parse success (no `ExpectParseError`).
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.ExpectParseError = false
 	return nil
 }

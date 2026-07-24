@@ -13,7 +13,7 @@ import (
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     binDir := t.TempDir()
     if err := os.Symlink("/bin/cp", filepath.Join(binDir, "cp")); err != nil {
         return err

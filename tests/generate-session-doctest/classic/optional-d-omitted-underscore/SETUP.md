@@ -1,11 +1,10 @@
 # Scenario
 
-**Feature**: when author omits the inject param, classic inserts `_ *session.Doctest`
+**Feature**: when author omits `d *session.Doctest`, assemble fails clearly (no auto-inject)
 
 ```
 # author: Setup(t, req) without d
-AssembleTestSource -> generated closures include `_ *session.Doctest` as second param
-# call sites still pass the real d value
+AssembleTestSource -> error: missing d *session.Doctest (no auto-inject)
 ```
 
 ## Preconditions
@@ -15,16 +14,16 @@ AssembleTestSource -> generated closures include `_ *session.Doctest` as second 
 ## Steps
 
 1. Assemble classic with omitted author d.
-2. Assert `_ *session.Doctest` appears in generated source and call sites pass `d`.
+2. Assert assemble returns a clear missing-d error (not silent `_` inject).
 
 ## Context
 
-- Distinct from injects-d: focuses on the underscore placeholder in signatures.
+- Broken author signatures must be fixed in the test tree, not papered over by gen.
 
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.AuthorDMode = "omit"
 	return nil
 }

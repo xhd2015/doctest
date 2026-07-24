@@ -19,7 +19,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Mode = "write-file-second"
 	req.SecondFileContent = sampleGoB
 	if err := writeGenRelFile(t, req.GenDir, req.RelPath, req.FileContent); err != nil {

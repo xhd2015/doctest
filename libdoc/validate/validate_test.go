@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	minimalDOCTEST  = "# Tests\n\n## Version\n0.0.2\n\n## DSN (Domain Specific Notion)\n\n### Participants\n- **system** — under test.\n\n### Behaviors\n- **run** — executes the scenario.\n\n```go\nimport \"testing\"\n\ntype Request struct{}\ntype Response struct{}\n\nfunc Run(t *testing.T, req *Request) (*Response, error) {\n\treturn &Response{}, nil\n}\n```\n"
+	minimalDOCTEST  = "# Tests\n\n## Version\n0.0.2\n\n## DSN (Domain Specific Notion)\n\n### Participants\n- **system** — under test.\n\n### Behaviors\n- **run** — executes the scenario.\n\n```go\nimport \"testing\"\n\ntype Request struct{}\ntype Response struct{}\n\nfunc Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {\n\treturn &Response{}, nil\n}\n```\n"
 	minimalScenario = "# Scenario\n\n**Feature**: minimal test setup\n\n```\n# minimal pipeline\nsystem -> run\n```\n\n"
 )
 
@@ -38,7 +38,7 @@ func TestRunValidationCases(t *testing.T) {
 				writeFile(t, dir, "DOCTEST.md", minimalDOCTEST)
 				writeFile(t, dir, "SETUP.md", minimalSETUP("## Setup\nsetup\n"))
 				writeFile(t, dir, "leaf/SETUP.md", minimalSETUP("## Setup\nleaf\n"))
-				writeFile(t, dir, "leaf/ASSERT.md", "# Assert\n\n```go\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}\n```\n")
+				writeFile(t, dir, "leaf/ASSERT.md", "# Assert\n\n```go\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}\n```\n")
 				return dir
 			},
 		},
@@ -46,7 +46,7 @@ func TestRunValidationCases(t *testing.T) {
 			name: "missing DSN section",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
-				writeFile(t, dir, "DOCTEST.md", "# tests\n\n## Version\n0.0.2\n\n```go\nimport \"testing\"\n\ntype Request struct{}\ntype Response struct{}\nfunc Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }\n```\n")
+				writeFile(t, dir, "DOCTEST.md", "# tests\n\n## Version\n0.0.2\n\n```go\nimport \"testing\"\n\ntype Request struct{}\ntype Response struct{}\nfunc Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }\n```\n")
 				writeFile(t, dir, "SETUP.md", minimalSETUP("## Setup\nsetup\n"))
 				return dir
 			},
@@ -56,7 +56,7 @@ func TestRunValidationCases(t *testing.T) {
 			name: "missing version section",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
-				writeFile(t, dir, "DOCTEST.md", "# Tests\n\n## DSN (Domain Specific Notion)\n\n### Participants\n- **system** — under test.\n\n### Behaviors\n- **run** — executes.\n\n```go\nimport \"testing\"\n\ntype Request struct{}\ntype Response struct{}\nfunc Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }\n```\n")
+				writeFile(t, dir, "DOCTEST.md", "# Tests\n\n## DSN (Domain Specific Notion)\n\n### Participants\n- **system** — under test.\n\n### Behaviors\n- **run** — executes.\n\n```go\nimport \"testing\"\n\ntype Request struct{}\ntype Response struct{}\nfunc Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }\n```\n")
 				writeFile(t, dir, "SETUP.md", minimalSETUP("## Setup\nsetup\n"))
 				return dir
 			},
@@ -130,7 +130,7 @@ func TestRunValidationCases(t *testing.T) {
 				writeFile(t, dir, "SETUP.md", minimalSETUP("## Setup\nsetup\n"))
 				writeFile(t, dir, "notes.txt", "notes\n")
 				writeFile(t, dir, "leaf/SETUP.md", minimalSETUP("## Setup\nleaf\n"))
-				writeFile(t, dir, "leaf/ASSERT.md", "# Assert\n\n```go\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}\n```\n")
+				writeFile(t, dir, "leaf/ASSERT.md", "# Assert\n\n```go\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}\n```\n")
 				writeFile(t, dir, "leaf/notes.txt", "notes\n")
 				return dir
 			},
@@ -140,7 +140,7 @@ func TestRunValidationCases(t *testing.T) {
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
 				writeFile(t, dir, "DOCTEST.md", minimalDOCTEST)
-				writeFile(t, dir, "SETUP.md", minimalSETUP("# Setup\n\n```go\nfunc Setup(t *testing.T, req *Request) error {\n\treq.MainGo = `package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}`\n\treturn nil\n}\n```\n"))
+				writeFile(t, dir, "SETUP.md", minimalSETUP("# Setup\n\n```go\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error {\n\treq.MainGo = `package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}`\n\treturn nil\n}\n```\n"))
 				return dir
 			},
 			wantErr: "anti-pattern: raw Go code embedded in string literal",
@@ -150,7 +150,7 @@ func TestRunValidationCases(t *testing.T) {
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
 				writeFile(t, dir, "DOCTEST.md", minimalDOCTEST)
-				writeFile(t, dir, "SETUP.md", minimalSETUP("# Setup\n\n```go\nfunc Setup(t *testing.T, req *Request) error {\n\treq.MainGo = \"package main\\n\\nfunc main() {}\\n\"\n\treturn nil\n}\n```\n"))
+				writeFile(t, dir, "SETUP.md", minimalSETUP("# Setup\n\n```go\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error {\n\treq.MainGo = \"package main\\n\\nfunc main() {}\\n\"\n\treturn nil\n}\n```\n"))
 				return dir
 			},
 			wantErr: "anti-pattern: raw Go code embedded in string literal",
@@ -159,7 +159,7 @@ func TestRunValidationCases(t *testing.T) {
 			name: "go test shell-out",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
-				writeFile(t, dir, "DOCTEST.md", "# Tests\n\n## Version\n0.0.2\n\n## DSN (Domain Specific Notion)\n\n### Participants\n- **system** — under test.\n\n### Behaviors\n- **run** — executes.\n\n```go\nimport (\n\t\"os/exec\"\n\t\"testing\"\n)\n\ntype Request struct{}\ntype Response struct{ Stdout string}\n\nfunc Run(t *testing.T, req *Request) (*Response, error) {\n\tcmd := exec.Command(\"go\", \"test\", \"./pkg/foo\", \"-run\", \"TestFoo\")\n\tout, _ := cmd.CombinedOutput()\n\treturn &Response{Stdout: string(out)}, nil\n}\n```\n")
+				writeFile(t, dir, "DOCTEST.md", "# Tests\n\n## Version\n0.0.2\n\n## DSN (Domain Specific Notion)\n\n### Participants\n- **system** — under test.\n\n### Behaviors\n- **run** — executes.\n\n```go\nimport (\n\t\"os/exec\"\n\t\"testing\"\n)\n\ntype Request struct{}\ntype Response struct{ Stdout string}\n\nfunc Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {\n\tcmd := exec.Command(\"go\", \"test\", \"./pkg/foo\", \"-run\", \"TestFoo\")\n\tout, _ := cmd.CombinedOutput()\n\treturn &Response{Stdout: string(out)}, nil\n}\n```\n")
 				writeFile(t, dir, "SETUP.md", minimalSETUP("## Setup\nsetup\n"))
 				return dir
 			},
@@ -170,7 +170,7 @@ func TestRunValidationCases(t *testing.T) {
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
 				writeFile(t, dir, "DOCTEST.md", minimalDOCTEST)
-				writeFile(t, dir, "SETUP.md", minimalSETUP("# Setup\n\n```go\nfunc Setup(t *testing.T, req *Request) error {\n\treq.Msg = \"package main is the entry point\"\n\treturn nil\n}\n```\n"))
+				writeFile(t, dir, "SETUP.md", minimalSETUP("# Setup\n\n```go\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error {\n\treq.Msg = \"package main is the entry point\"\n\treturn nil\n}\n```\n"))
 				return dir
 			},
 		},
@@ -178,7 +178,7 @@ func TestRunValidationCases(t *testing.T) {
 			name: "valid exec.Command not go test",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
-				writeFile(t, dir, "DOCTEST.md", "# Tests\n\n## Version\n0.0.2\n\n## DSN (Domain Specific Notion)\n\n### Participants\n- **system** — under test.\n\n### Behaviors\n- **run** — executes.\n\n```go\nimport (\n\t\"os/exec\"\n\t\"testing\"\n)\n\ntype Request struct{ InputDir string }\ntype Response struct{ Stdout string }\n\nfunc Run(t *testing.T, req *Request) (*Response, error) {\n\tcmd := exec.Command(\"doctest\", \"build\", req.InputDir)\n\tout, _ := cmd.CombinedOutput()\n\treturn &Response{Stdout: string(out)}, nil\n}\n```\n")
+				writeFile(t, dir, "DOCTEST.md", "# Tests\n\n## Version\n0.0.2\n\n## DSN (Domain Specific Notion)\n\n### Participants\n- **system** — under test.\n\n### Behaviors\n- **run** — executes.\n\n```go\nimport (\n\t\"os/exec\"\n\t\"testing\"\n)\n\ntype Request struct{ InputDir string }\ntype Response struct{ Stdout string }\n\nfunc Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {\n\tcmd := exec.Command(\"doctest\", \"build\", req.InputDir)\n\tout, _ := cmd.CombinedOutput()\n\treturn &Response{Stdout: string(out)}, nil\n}\n```\n")
 				writeFile(t, dir, "SETUP.md", minimalSETUP("## Setup\nsetup\n"))
 				return dir
 			},
@@ -188,19 +188,20 @@ func TestRunValidationCases(t *testing.T) {
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
 				writeFile(t, dir, "DOCTEST.md", minimalDOCTEST)
-				writeFile(t, dir, "SETUP.md", minimalSETUP("# Setup\n\n```go\nimport \"os\"\n\nfunc Setup(t *testing.T, req *Request) error {\n\t_ = os.Getenv(\"DOCTEST_SESSION_ID\")\n\treturn nil\n}\n```\n"))
+				writeFile(t, dir, "SETUP.md", minimalSETUP("# Setup\n\n```go\nimport \"os\"\n\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error {\n\t_ = os.Getenv(\"DOCTEST_SESSION_ID\")\n\treturn nil\n}\n```\n"))
 				return dir
 			},
 			wantErr: "anti-pattern: read DOCTEST_SESSION_ID via os.Getenv",
 		},
 		{
-			name: "doctest session id direct use accepted",
+			name: "doctest session id bare free var rejected",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
 				writeFile(t, dir, "DOCTEST.md", minimalDOCTEST)
-				writeFile(t, dir, "SETUP.md", minimalSETUP("# Setup\n\n```go\nimport (\n\t\"os\"\n\t\"path/filepath\"\n)\n\nfunc sessionCacheDir() string {\n\treturn filepath.Join(os.TempDir(), \"harness-\"+DOCTEST_SESSION_ID)\n}\n\nfunc Setup(t *testing.T, req *Request) error {\n\t_ = sessionCacheDir()\n\treturn nil\n}\n```\n"))
+				writeFile(t, dir, "SETUP.md", minimalSETUP("# Setup\n\n```go\nimport (\n\t\"os\"\n\t\"path/filepath\"\n)\n\nfunc sessionCacheDir() string {\n\treturn filepath.Join(os.TempDir(), \"harness-\"+DOCTEST_SESSION_ID)\n}\n\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error {\n\t_ = sessionCacheDir()\n\treturn nil\n}\n```\n"))
 				return dir
 			},
+			wantErr: "without d. prefix",
 		},
 		{
 			name: "double contains output assert rejected",
@@ -208,8 +209,8 @@ func TestRunValidationCases(t *testing.T) {
 				dir := t.TempDir()
 				writeFile(t, dir, "DOCTEST.md", minimalDOCTEST)
 				writeFile(t, dir, "SETUP.md", minimalSETUP("## Setup\nsetup\n"))
-				writeFile(t, dir, "leaf/SETUP.md", minimalSETUP("# Setup\n\n```go\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }\n```\n"))
-				writeFile(t, dir, "leaf/ASSERT.md", "# Assert\n\n```go\nimport (\n\t\"testing\"\n\n\tdtassert \"github.com/xhd2015/doctest/assert\"\n)\n\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {\n\tp := dtassert.MustParse(`<contains>\nok\n</contains>`)\n\tif matchErr := dtassert.Match(p, \"ok\", dtassert.Contains()); matchErr != nil {\n\t\tt.Fatal(matchErr)\n\t}\n}\n```\n")
+				writeFile(t, dir, "leaf/SETUP.md", minimalSETUP("# Setup\n\n```go\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }\n```\n"))
+				writeFile(t, dir, "leaf/ASSERT.md", "# Assert\n\n```go\nimport (\n\t\"testing\"\n\n\tdtassert \"github.com/xhd2015/doctest/assert\"\n)\n\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n\tp := dtassert.MustParse(`<contains>\nok\n</contains>`)\n\tif matchErr := dtassert.Match(p, \"ok\", dtassert.Contains()); matchErr != nil {\n\t\tt.Fatal(matchErr)\n\t}\n}\n```\n")
 				return dir
 			},
 			wantErr: "prefer assert.Output",
@@ -220,8 +221,8 @@ func TestRunValidationCases(t *testing.T) {
 				dir := t.TempDir()
 				writeFile(t, dir, "DOCTEST.md", minimalDOCTEST)
 				writeFile(t, dir, "SETUP.md", minimalSETUP("## Setup\nsetup\n"))
-				writeFile(t, dir, "leaf/SETUP.md", minimalSETUP("# Setup\n\n```go\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }\n```\n"))
-				writeFile(t, dir, "leaf/ASSERT.md", "# Assert\n\n```go\nimport (\n\t\"testing\"\n\n\tdtassert \"github.com/xhd2015/doctest/assert\"\n)\n\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {\n\tdtassert.Output(t, \"ok\", `` + `<contains>\nok\n</contains>`)\n}\n```\n")
+				writeFile(t, dir, "leaf/SETUP.md", minimalSETUP("# Setup\n\n```go\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }\n```\n"))
+				writeFile(t, dir, "leaf/ASSERT.md", "# Assert\n\n```go\nimport (\n\t\"testing\"\n\n\tdtassert \"github.com/xhd2015/doctest/assert\"\n)\n\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n\tdtassert.Output(t, \"ok\", `` + `<contains>\nok\n</contains>`)\n}\n```\n")
 				return dir
 			},
 		},
@@ -231,7 +232,7 @@ func TestRunValidationCases(t *testing.T) {
 				dir := t.TempDir()
 				writeFile(t, dir, "DOCTEST.md", minimalDOCTEST)
 				writeFile(t, dir, "SETUP.md", minimalSETUP("## Setup\n"))
-				writeFile(t, dir, "testdata/bad/SETUP.md", "# Setup\n\n```go\nfunc Setup(t *testing.T, req *Request) error {\n\treq.MainGo = `package main\nfunc main() {}`\n\treturn nil\n}\n```\n")
+				writeFile(t, dir, "testdata/bad/SETUP.md", "# Setup\n\n```go\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error {\n\treq.MainGo = `package main\nfunc main() {}`\n\treturn nil\n}\n```\n")
 				return dir
 			},
 		},
@@ -239,10 +240,10 @@ func TestRunValidationCases(t *testing.T) {
 			name: "multiple anti-patterns in one tree",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
-				writeFile(t, dir, "DOCTEST.md", "# Tests\n\n## Version\n0.0.2\n\n## DSN (Domain Specific Notion)\n\n### Participants\n- **system** — under test.\n\n### Behaviors\n- **run** — executes.\n\n```go\nimport (\n\t\"os/exec\"\n\t\"testing\"\n)\n\ntype Request struct{}\ntype Response struct{ Stdout string }\n\nfunc Run(t *testing.T, req *Request) (*Response, error) {\n\tcmd := exec.Command(\"go\", \"test\", \"./pkg/foo\")\n\tout, _ := cmd.CombinedOutput()\n\treturn &Response{Stdout: string(out)}, nil\n}\n```\n")
+				writeFile(t, dir, "DOCTEST.md", "# Tests\n\n## Version\n0.0.2\n\n## DSN (Domain Specific Notion)\n\n### Participants\n- **system** — under test.\n\n### Behaviors\n- **run** — executes.\n\n```go\nimport (\n\t\"os/exec\"\n\t\"testing\"\n)\n\ntype Request struct{}\ntype Response struct{ Stdout string }\n\nfunc Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {\n\tcmd := exec.Command(\"go\", \"test\", \"./pkg/foo\")\n\tout, _ := cmd.CombinedOutput()\n\treturn &Response{Stdout: string(out)}, nil\n}\n```\n")
 				writeFile(t, dir, "SETUP.md", minimalSETUP("## Setup\nsetup\n"))
-				writeFile(t, dir, "leaf/SETUP.md", minimalSETUP("# Setup\n\n```go\nfunc Setup(t *testing.T, req *Request) error {\n\treq.MainGo = `package main\nfunc main() {}`\n\treturn nil\n}\n```\n"))
-				writeFile(t, dir, "leaf/ASSERT.md", "# Assert\n\n```go\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}\n```\n")
+				writeFile(t, dir, "leaf/SETUP.md", minimalSETUP("# Setup\n\n```go\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error {\n\treq.MainGo = `package main\nfunc main() {}`\n\treturn nil\n}\n```\n"))
+				writeFile(t, dir, "leaf/ASSERT.md", "# Assert\n\n```go\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}\n```\n")
 				return dir
 			},
 			wantErr: "anti-pattern: shelling out to 'go test'",

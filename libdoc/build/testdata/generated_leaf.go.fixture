@@ -37,14 +37,14 @@ func RunTestLeaf(t *testing.T) {
 	}
 	Run := droot.Run
 	req := &droot.Request{}
-	setup0 := func(t *testing.T, _ *session.Doctest, req *droot.Request) error {
+	setup0 := func(t *testing.T, d *session.Doctest, req *droot.Request) error {
 		_ = req
 		return nil
 	}
 	if err := setup0(t, d, req); err != nil {
 		t.Fatalf("leaf/SETUP.md failed: %v", err)
 	}
-	assert := func(t *testing.T, _ *session.Doctest, req *droot.Request, resp *droot.Response, err error) {
+	assert := func(t *testing.T, d *session.Doctest, req *droot.Request, resp *droot.Response, err error) {
 	}
 	_ = Run
 	// compileOnly

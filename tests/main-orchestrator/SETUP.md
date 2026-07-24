@@ -112,15 +112,15 @@ func createDoctestTree(t *testing.T, dir string, stub bool) {
         "type Response struct {\n" +
         "    Greeting string\n" +
         "}\n\n" +
-        "func Run(t *testing.T, req *Request) (*Response, error) {\n" +
+        "func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {\n" +
         "    " + runBody + "\n" +
         "}"
 
     testtree.WriteFile(t, dir, "DOCTEST.md", testtree.MinimalDOCTEST(goBody))
     bt := "\x60\x60\x60"
-    testtree.WriteFile(t, dir, "SETUP.md", "## Preconditions\n- This is a test tree for the greet feature.\n\n## Steps\n1. Set the default name value.\n\n"+bt+"go\nimport \"testing\"\n\nfunc Setup(t *testing.T, req *Request) error {\n    req.Name = \"world\"\n    return nil\n}\n"+bt+"\n")
-    testtree.WriteFile(t, dir, "basic/SETUP.md", "## Preconditions\n- The request name is \"world\".\n\n## Steps\n1. Set req.Name to \"world\".\n\n"+bt+"go\nfunc Setup(t *testing.T, req *Request) error {\n    req.Name = \"world\"\n    return nil\n}\n"+bt+"\n")
-    testtree.WriteFile(t, dir, "basic/ASSERT.md", "## Expected\n- The greeting is \"Hello, world!\".\n\n"+bt+"go\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {\n    if err != nil {\n        t.Fatal(err)\n    }\n    want := \"Hello, world!\"\n    if resp.Greeting != want {\n        t.Fatalf(\"expected %q, got %q\", want, resp.Greeting)\n    }\n}\n"+bt+"\n")
+    testtree.WriteFile(t, dir, "SETUP.md", "## Preconditions\n- This is a test tree for the greet feature.\n\n## Steps\n1. Set the default name value.\n\n"+bt+"go\nimport \"testing\"\n\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error {\n    req.Name = \"world\"\n    return nil\n}\n"+bt+"\n")
+    testtree.WriteFile(t, dir, "basic/SETUP.md", "## Preconditions\n- The request name is \"world\".\n\n## Steps\n1. Set req.Name to \"world\".\n\n"+bt+"go\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error {\n    req.Name = \"world\"\n    return nil\n}\n"+bt+"\n")
+    testtree.WriteFile(t, dir, "basic/ASSERT.md", "## Expected\n- The greeting is \"Hello, world!\".\n\n"+bt+"go\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n    if err != nil {\n        t.Fatal(err)\n    }\n    want := \"Hello, world!\"\n    if resp.Greeting != want {\n        t.Fatalf(\"expected %q, got %q\", want, resp.Greeting)\n    }\n}\n"+bt+"\n")
 }
 
 func writeFile(t *testing.T, path string, content string) {

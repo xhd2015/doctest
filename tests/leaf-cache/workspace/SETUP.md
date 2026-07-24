@@ -132,7 +132,7 @@ func prepareWorkspacePartialFail(t *testing.T, req *Request) {
 			Expected: "fails",
 			AssertGo: `import "testing"
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	t.Fatal("forced workspace fail leaf")
 }`,
 		}},
@@ -148,7 +148,7 @@ func prepareWorkspaceSameRelpathPassFail(t *testing.T, req *Request) {
 			Name: "leaf",
 			AssertGo: `import "testing"
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	// twin_ws_a
 	_ = req
 	_ = resp
@@ -159,7 +159,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 			Name: "leaf",
 			AssertGo: `import "testing"
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	t.Fatal("tree-b must execute body; false warm skip would hide this fail")
 }`,
 		}},

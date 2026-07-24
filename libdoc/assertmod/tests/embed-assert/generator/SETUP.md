@@ -18,7 +18,7 @@ assert/*.go (sorted, no *_test.go) -> single assert.go bytes
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     req.RunKind = "embed-script"
 	req.OutputPath = ""
 	return nil

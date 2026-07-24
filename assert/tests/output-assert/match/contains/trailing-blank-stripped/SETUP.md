@@ -17,7 +17,7 @@ Matcher -> pass
 2. Set actual to `"bar\nfoo\n"` (the fragment present, ending with `\n`).
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "<contains>\nfoo\n</contains>"
 	req.Actual = "bar\nfoo\n"
 	return nil

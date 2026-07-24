@@ -18,7 +18,7 @@ metrics summary --last 1 --json -> parseable JSON on stdout
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	ensureFixtureProject(t, req)
 	name := "2026-07-16-09-00-00-00-sumjson1.jsonl"
 	writeRunFile(t, req, name, fixtureRunDefault(runStem(name)))

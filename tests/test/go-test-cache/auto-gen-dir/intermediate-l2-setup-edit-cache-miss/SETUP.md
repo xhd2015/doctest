@@ -19,7 +19,7 @@ import (
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     cfg := multiRunCfg{
         TestDir:       createL2Project(t, "mytest"),
         ModifyFile:    "mid-a/mid-b/SETUP.md",

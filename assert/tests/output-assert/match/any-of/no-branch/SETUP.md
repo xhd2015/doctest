@@ -13,7 +13,7 @@ Matcher -> pass or line-numbered diff
 1. Set template/actual fields for A3 — no branch matches, all reported.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "<any-of><expect>a</expect><expect>b</expect></any-of>"
 	req.Actual = "c"
 	return nil

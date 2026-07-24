@@ -18,7 +18,7 @@ import (
 	"testing"
 )
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	_ = req
 	requireExit0(t, resp, err, "quiet-ok")
 	out := combinedOutput(resp)

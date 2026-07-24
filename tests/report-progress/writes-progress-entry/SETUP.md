@@ -26,7 +26,7 @@ import (
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     tf := filepath.Join(t.TempDir(), "progress.jsonl")
     req.Env = append(req.Env, "PROGRESS_FILE="+tf)
     req.ProgressFile = tf

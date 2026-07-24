@@ -29,7 +29,7 @@ import (
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     qFile := filepath.Join(t.TempDir(), "questions.jsonl")
     req.Env = append(req.Env, "QUESTION_FIFO="+qFile)
     req.TestQFile = qFile

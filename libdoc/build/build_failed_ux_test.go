@@ -22,15 +22,15 @@ func TestBuildFailedUX_noPhantomRunOrCached(t *testing.T) {
 type Request struct{}
 type Response struct{}
 
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	_ = definitelyNotDefined
 	return &Response{}, nil
 }`
 	testtree.WriteFile(t, root, "DOCTEST.md", testtree.MinimalDOCTEST(brokenRun))
 	// Two leaves so Planned=2 (not 1 — guards against package-fail denom).
 	for _, name := range []string{"leaf_a", "leaf_b"} {
-		testtree.WriteFile(t, root, name+"/SETUP.md", "## Steps\n1. x\n\n```go\nimport \"testing\"\n\nfunc Setup(t *testing.T, req *Request) error { return nil }\n```\n")
-		testtree.WriteFile(t, root, name+"/ASSERT.md", "## Expected\n- ok\n\n```go\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}\n```\n")
+		testtree.WriteFile(t, root, name+"/SETUP.md", "## Steps\n1. x\n\n```go\nimport \"testing\"\n\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { return nil }\n```\n")
+		testtree.WriteFile(t, root, name+"/ASSERT.md", "## Expected\n- ok\n\n```go\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}\n```\n")
 	}
 
 	genDir := filepath.Join(t.TempDir(), "gen")

@@ -22,7 +22,7 @@ Caller <- error (fn not invoked)
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.SessionID = ""
 	req.Key = "k"
 	req.Mode = "json-object"

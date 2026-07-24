@@ -41,12 +41,17 @@ func MinimalDOCTEST(goBody string) string {
 }
 
 func MinimalRunGo() string {
-	return `import "testing"
+	return `import (
+	"testing"
+
+	"github.com/xhd2015/doctest/session"
+)
 
 type Request struct{}
 type Response struct{}
 
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
+	_ = d
 	return &Response{}, nil
 }`
 }
@@ -65,9 +70,13 @@ func WriteMinimalRunnableTree(t *testing.T, root string, leaves []LeafSpec) {
 	for _, leaf := range leaves {
 		setup := leaf.SetupGo
 		if setup == "" {
-			setup = `import "testing"
+			setup = `import (
+	"testing"
 
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }`
+	"github.com/xhd2015/doctest/session"
+)
+
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = d; _ = req; return nil }`
 		}
 		steps := leaf.Steps
 		if steps == "" {
@@ -80,7 +89,11 @@ func Setup(t *testing.T, req *Request) error { _ = req; return nil }`
 		WriteFile(t, root, leaf.Name+"/SETUP.md", fmt.Sprintf("## Steps\n1. %s\n\n```go\n%s\n```\n", steps, setup))
 		assert := leaf.AssertGo
 		if assert == "" {
-			assert = `func Assert(t *testing.T, req *Request, resp *Response, err error) {}`
+			assert = `import "github.com/xhd2015/doctest/session"
+
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
+	_ = d
+}`
 		}
 		WriteFile(t, root, leaf.Name+"/ASSERT.md", fmt.Sprintf("## Expected\n- %s\n\n```go\n%s\n```\n", expected, assert))
 	}
@@ -110,9 +123,16 @@ func WritePassFailTree(t *testing.T, root string, passCount, failCount int) {
 		name := "z_fail_" + itoa(i)
 		leaves = append(leaves, LeafSpec{
 			Name: name,
-			AssertGo: `import "testing"
+			AssertGo: `import (
+	"testing"
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) { t.Fatal("forced failure") }`,
+	"github.com/xhd2015/doctest/session"
+)
+
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
+	_ = d
+	t.Fatal("forced failure")
+}`,
 		})
 	}
 	if len(leaves) == 0 {

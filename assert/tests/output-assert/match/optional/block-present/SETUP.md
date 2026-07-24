@@ -13,7 +13,7 @@ Matcher -> pass or line-numbered diff
 1. Set template/actual fields for O2 — block optional present.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "head\n<optional>\nnoise\n</optional>\ntail"
 	req.Actual = "head\nnoise\ntail"
 	return nil

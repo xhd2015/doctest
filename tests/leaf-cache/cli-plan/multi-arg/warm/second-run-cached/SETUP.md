@@ -25,7 +25,7 @@ run2: multi-arg two trees -> exit 0, sum(Cached) >= 2
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	req.Op = "runtime_multi"
 	return nil

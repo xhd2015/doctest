@@ -16,7 +16,7 @@ leaf: ASSERT.md with func Assert
 1. Select an action that the root `Run` intentionally reports as a run error.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Action = "fail"
 	req.Name = "case"
 	return nil

@@ -19,7 +19,7 @@ temp tree (new layout + leaf) -> doctest test -> leaf passes, exit 0
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	treeDir := writeTree(t, treeOpts{withVersion: true, withLeaf: true})
 	req.Args = []string{"test", treeDir}
 	return nil

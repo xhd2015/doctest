@@ -13,7 +13,7 @@ Matcher -> pass or line-numbered diff
 1. Set template/actual fields for R2 — regex requires full line.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "<regex>\n^\\.+$\n</regex>"
 	req.Actual = "..  (2 Run)"
 	return nil

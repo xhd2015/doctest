@@ -13,7 +13,7 @@ Matcher -> pass or line-numbered / binding error
 1. Set `req.Operation = "match"`.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Operation = "match"
 	return nil
 }

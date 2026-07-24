@@ -7,7 +7,7 @@
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     req.Args = append(req.Args, "sh", "-c", "echo $@", "--", "arg1", "arg2")
     return nil
 }

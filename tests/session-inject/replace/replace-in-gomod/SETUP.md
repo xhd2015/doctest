@@ -23,7 +23,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	createPublicModuleProject(t, req, "", defaultSessionAssertGo(), true)
 	setupModuleEnv(t, req)
 	// Request-local gen dir: Parallel-safe (no package-level var genDir).

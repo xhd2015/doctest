@@ -22,7 +22,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Log("using auto gen dir (mapping-gen cache, no --gen-dir)")
 	return nil
 }

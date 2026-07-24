@@ -30,7 +30,7 @@ import (
     "github.com/xhd2015/doctest/libdoc/testtree"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     treeRoot := t.TempDir()
     bt := string(rune(96))
     d := bt + bt + bt
@@ -40,7 +40,7 @@ func Setup(t *testing.T, req *Request) error {
     noLeafDir := filepath.Join(treeRoot, "no-leaf-dir")
     os.MkdirAll(noLeafDir, 0755)
     os.WriteFile(filepath.Join(noLeafDir, "SETUP.md"), []byte(
-        d+"go\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }\n"+d+"\n"), 0644)
+        d+"go\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }\n"+d+"\n"), 0644)
 
     req.Args = []string{"test", noLeafDir}
     return nil

@@ -25,7 +25,7 @@ import (
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     testDir := createTempCustomProjectOpts(t, "mytest", treeOpts{ObserveWorkDir: true},
         []string{"mid-a", "other"},
         []string{"mid-a/leaf-x", "other/leaf-z"},

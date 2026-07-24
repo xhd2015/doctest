@@ -26,7 +26,7 @@ run2: doctest test <mod>/... (default) -> Cached > 0 (leaf-cache skips)
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	req.Op = "runtime_multi"
 	prepareWorkspaceAllPass(t, req)

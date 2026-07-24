@@ -13,7 +13,7 @@ doctest build <tree> -> compiles generated Go, exit 0
 2. Run `doctest build <tree>`.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	root := writeLabeledTree(t, false, "ui-automation", "compile check")
 	req.Args = []string{"build", root}
 	return nil

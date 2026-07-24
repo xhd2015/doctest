@@ -11,7 +11,7 @@ Matcher <- actual line must fully match regex
 1. Body lines use deliberate RE (e.g. `.*`, alternation) — not escaped as literals.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Operation = "match"
 	return nil
 }

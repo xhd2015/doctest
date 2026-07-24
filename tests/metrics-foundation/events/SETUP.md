@@ -32,7 +32,7 @@ run_start may include branch/commit; must not include dirty flag
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Op = "write_sequence"
 	req.CacheDir = t.TempDir()
 	req.ProjectID = "github.com_xhd2015_doctest"

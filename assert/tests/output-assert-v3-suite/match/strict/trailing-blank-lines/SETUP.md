@@ -11,7 +11,7 @@ Matcher preserves interior/trailing blank lines in template body
 1. Template body ends with a blank line; actual matches including that blank line.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = `---
 version: 3
 ---

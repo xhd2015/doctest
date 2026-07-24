@@ -35,13 +35,13 @@ author Setup/Run/Assert with optional d after t -> parse/rules accept
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	// Defaults: nested leaf path, author omits d, temp abs root filled by Run.
 	if req.CasePath == "" {
 		req.CasePath = "nested/leaf"
 	}
 	if req.AuthorDMode == "" {
-		req.AuthorDMode = "omit"
+		req.AuthorDMode = "named-d"
 	}
 	return nil
 }

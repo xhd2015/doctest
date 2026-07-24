@@ -31,7 +31,7 @@ import (
     "github.com/xhd2015/doctest/libdoc/testtree"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     tmp := t.TempDir()
     bt := string(rune(96))
     d := bt + bt + bt
@@ -40,12 +40,12 @@ func Setup(t *testing.T, req *Request) error {
     modATests := filepath.Join(modA, "tests")
     os.MkdirAll(modATests, 0755)
     os.WriteFile(filepath.Join(modA, "go.mod"), []byte("module mod-a\n\ngo 1.21\n"), 0644)
-    modADoctest := testtree.MinimalDOCTEST("import \"testing\"\n\ntype RequestA struct{}\ntype ResponseA struct{}\n\nfunc Run(t *testing.T, req *RequestA) (*ResponseA, error) { return &ResponseA{}, nil }")
+    modADoctest := testtree.MinimalDOCTEST("import \"testing\"\n\ntype RequestA struct{}\ntype ResponseA struct{}\n\nfunc Run(t *testing.T, d *session.Doctest, req *RequestA) (*ResponseA, error) { return &ResponseA{}, nil }")
     os.WriteFile(filepath.Join(modATests, "DOCTEST.md"), []byte(modADoctest), 0644)
     leafA := filepath.Join(modATests, "leaf-a")
     os.MkdirAll(leafA, 0755)
-    os.WriteFile(filepath.Join(leafA, "SETUP.md"), []byte(d+"go\nfunc Setup(t *testing.T, req *RequestA) error { _ = req; return nil }\n"+d+"\n"), 0644)
-    os.WriteFile(filepath.Join(leafA, "ASSERT.md"), []byte(d+"go\nfunc Assert(t *testing.T, req *RequestA, resp *ResponseA, err error) {}\n"+d+"\n"), 0644)
+    os.WriteFile(filepath.Join(leafA, "SETUP.md"), []byte(d+"go\nfunc Setup(t *testing.T, d *session.Doctest, req *RequestA) error { _ = req; return nil }\n"+d+"\n"), 0644)
+    os.WriteFile(filepath.Join(leafA, "ASSERT.md"), []byte(d+"go\nfunc Assert(t *testing.T, d *session.Doctest, req *RequestA, resp *ResponseA, err error) {}\n"+d+"\n"), 0644)
 
     modB := filepath.Join(tmp, "mod-b")
     os.MkdirAll(modB, 0755)
@@ -54,13 +54,13 @@ func Setup(t *testing.T, req *Request) error {
 
     subDir := filepath.Join(modB, "sub")
     os.MkdirAll(subDir, 0755)
-    leafSetup := d+"go\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }\n"+d+"\n"
+    leafSetup := d+"go\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }\n"+d+"\n"
     os.WriteFile(filepath.Join(subDir, "SETUP.md"), []byte(leafSetup), 0644)
 
     leafB := filepath.Join(subDir, "leaf-b")
     os.MkdirAll(leafB, 0755)
     os.WriteFile(filepath.Join(leafB, "SETUP.md"), []byte(leafSetup), 0644)
-    os.WriteFile(filepath.Join(leafB, "ASSERT.md"), []byte(d+"go\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}\n"+d+"\n"), 0644)
+    os.WriteFile(filepath.Join(leafB, "ASSERT.md"), []byte(d+"go\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}\n"+d+"\n"), 0644)
 
     req.Args = []string{"test", leafB}
     return nil

@@ -21,7 +21,7 @@ func myHelper(s string) string {
     return "child: " + s
 }
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     req.Name = myHelper("name")
     return nil
 }

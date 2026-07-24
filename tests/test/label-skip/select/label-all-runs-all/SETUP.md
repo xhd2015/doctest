@@ -11,7 +11,7 @@ Options{LabelAll: true} → run both leaves
 1. Mixed tree; LabelAll = true.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.TreeRoot = writeLabeledTree(t, true, "ui-automation", "heavy ui test")
 	req.LabelAll = true
 	return nil

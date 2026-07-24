@@ -11,7 +11,7 @@ Matcher <- actual (+ Contains option or CRLF normalization)
 1. Compare CRLF actual against LF template.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	_ = t
 	return nil
 }

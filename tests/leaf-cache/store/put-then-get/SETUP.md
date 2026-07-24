@@ -26,7 +26,7 @@ st.GetPass(key) -> true
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	req.Op = "store_put_get"
 	req.Key = "aabbccddeeff00112233445566778899"

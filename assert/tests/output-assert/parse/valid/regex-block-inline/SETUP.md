@@ -12,7 +12,7 @@ Parser -> Pattern with LiteralLine, BlockOptional, Hint, etc.
 1. Set template/actual fields for P16 — block and inline regex.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "<regex>\n^\\.+$\n</regex>\nid=<regex>[0-9]+</regex>"
 	return nil
 }

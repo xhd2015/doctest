@@ -147,10 +147,10 @@ func createDoctestLeaf(dir string, setupGo string, assertGo string) error {
 		return err
 	}
 	if setupGo == "" {
-		setupGo = "import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }"
+		setupGo = "import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }"
 	}
 	if assertGo == "" {
-		assertGo = "import \"testing\"\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {\n" +
+		assertGo = "import \"testing\"\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n" +
 			"\tif err != nil { t.Fatal(err) }\n" +
 			"\tif resp.Message != \"ok\" { t.Fatalf(\"expected ok, got %q\", resp.Message) }\n" +
 			"}"
@@ -179,13 +179,13 @@ func createPublicModuleProject(t *testing.T, req *Request, leafSetupGo string, l
 	}
 
 	extraImports := ""
-	runCode := "func Run(t *testing.T, req *Request) (*Response, error) {\n" +
+	runCode := "func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {\n" +
 		"\treturn &Response{Message: \"ok\"}, nil\n" +
 		"}"
 	if withSessionImport {
 		extraImports = "\t\"encoding/json\"\n\t\"" + sessionModPath + "\"\n"
 		// Run imports session so assemble detects the import even if leaf also imports it.
-		runCode = "func Run(t *testing.T, req *Request) (*Response, error) {\n" +
+		runCode = "func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {\n" +
 			"\t_ = json.RawMessage(nil)\n" +
 			"\t_ = session.DoctestSessionIDEnv\n" +
 			"\treturn &Response{Message: \"ok\"}, nil\n" +
@@ -211,7 +211,7 @@ func defaultSessionAssertGo() string {
 		"\t\"testing\"\n" +
 		"\t\"" + sessionModPath + "\"\n" +
 		")\n" +
-		"func Assert(t *testing.T, req *Request, resp *Response, err error) {\n" +
+		"func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n" +
 		"\tif err != nil { t.Fatal(err) }\n" +
 		"\traw, e := session.Once(t, \"probe\", func(t testing.TB, cacheDir string) (json.RawMessage, error) {\n" +
 		"\t\treturn json.RawMessage(`{\"path\":\"x\"}`), nil\n" +

@@ -47,21 +47,21 @@ func createMixedTestProject(t *testing.T) string {
         "import \"testing\"",
         "type Request struct{}",
         "type Response struct{}",
-        "func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }",
+        "func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }",
     }, "\n"))
     os.WriteFile(filepath.Join(ancestorDir, "DOCTEST.md"), []byte(ancestorDoctest), 0644)
     os.WriteFile(filepath.Join(ancestorDir, "SETUP.md"), []byte(mkGoBlock(
-        "import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { t.Logf(\"ancestor setup\"); return nil }",
+        "import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { t.Logf(\"ancestor setup\"); return nil }",
     )), 0644)
 
     // leaf directory with ASSERT.md (test case within ancestor tree)
     leafDir := filepath.Join(ancestorDir, "leaf")
     os.MkdirAll(leafDir, 0755)
     os.WriteFile(filepath.Join(leafDir, "SETUP.md"), []byte(mkGoBlock(
-        "import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { t.Logf(\"leaf setup\"); return nil }",
+        "import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { t.Logf(\"leaf setup\"); return nil }",
     )), 0644)
     os.WriteFile(filepath.Join(leafDir, "ASSERT.md"), []byte(mkGoBlock(
-        "import \"testing\"\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}",
+        "import \"testing\"\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}",
     )), 0644)
 
     // nested DOCTEST root: leaf/nested-sub2 (non-stub)
@@ -71,27 +71,27 @@ func createMixedTestProject(t *testing.T) string {
         "import \"testing\"",
         "type Request struct{}",
         "type Response struct{}",
-        "func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }",
+        "func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }",
     }, "\n"))
     os.WriteFile(filepath.Join(sub2Dir, "DOCTEST.md"), []byte(sub2Doctest), 0644)
     os.WriteFile(filepath.Join(sub2Dir, "SETUP.md"), []byte(mkGoBlock(
-        "import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { t.Logf(\"sub2 setup\"); return nil }",
+        "import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { t.Logf(\"sub2 setup\"); return nil }",
     )), 0644)
 
     // nested-sub2's test leaf
     simpleDir := filepath.Join(sub2Dir, "simple")
     os.MkdirAll(simpleDir, 0755)
     os.WriteFile(filepath.Join(simpleDir, "SETUP.md"), []byte(mkGoBlock(
-        "import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { t.Logf(\"sub2 simple setup\"); return nil }",
+        "import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { t.Logf(\"sub2 simple setup\"); return nil }",
     )), 0644)
     os.WriteFile(filepath.Join(simpleDir, "ASSERT.md"), []byte(mkGoBlock(
-        "import \"testing\"\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}",
+        "import \"testing\"\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}",
     )), 0644)
 
     return projDir
 }
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     req.Timeout = 120 * time.Second
     return nil
 }

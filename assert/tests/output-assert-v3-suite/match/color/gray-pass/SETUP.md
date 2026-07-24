@@ -11,7 +11,7 @@ Matcher <- gray-wrapped 1 Cached
 1. Set color span template and gray-wrapped actual.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = v3Template("", "<ansi-color gray>1 Cached</ansi-color>")
 	req.Actual = grayWrap("1 Cached")
 	return nil

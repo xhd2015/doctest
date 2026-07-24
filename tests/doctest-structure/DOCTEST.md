@@ -125,7 +125,7 @@ type Response struct {
 	Err      error
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	t.Helper()
 	if !req.UseCLI {
 		var stdout, stderr bytes.Buffer
@@ -195,7 +195,7 @@ func validTypesGoBlock() string {
 		"import \"testing\"\n\n" +
 			"type Request struct{}\n" +
 			"type Response struct{}\n\n" +
-			"func Run(t *testing.T, req *Request) (*Response, error) {\n" +
+			"func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {\n" +
 			"\treturn &Response{}, nil\n" +
 			"}",
 	)
@@ -213,7 +213,7 @@ func typesWithoutRequestGoBlock() string {
 	return goBlock(
 		"import \"testing\"\n\n" +
 			"type Response struct{}\n\n" +
-			"func Run(t *testing.T, req *Request) (*Response, error) {\n" +
+			"func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {\n" +
 			"\treturn &Response{}, nil\n" +
 			"}",
 	)
@@ -255,7 +255,7 @@ func writeRootSetupOnly(dir string) error {
 	content := "# Scenario\n\n**Feature**: root setup without types\n\n" +
 		bt + "\n# root setup only\nroot -> Setup\n" + bt + "\n\n" +
 		"## Steps\n1. noop\n\n" +
-		goBlock("import \"testing\"\n\nfunc Setup(t *testing.T, req *Request) error { return nil }") +
+		goBlock("import \"testing\"\n\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { return nil }") +
 		"\n"
 	return os.WriteFile(filepath.Join(dir, "SETUP.md"), []byte(content), 0644)
 }
@@ -268,7 +268,7 @@ func writeRootSetupWithTypes(dir string) error {
 			"import \"testing\"\n\n" +
 				"type Request struct{}\n" +
 				"type Response struct{}\n\n" +
-				"func Run(t *testing.T, req *Request) (*Response, error) {\n" +
+				"func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {\n" +
 				"\treturn &Response{}, nil\n" +
 				"}",
 		) + "\n"
@@ -283,12 +283,12 @@ func writeMinimalLeaf(dir string) error {
 	leafSetup := "# Scenario\n\n**Feature**: minimal runnable leaf\n\n" +
 		bt + "\n# leaf runs\nleaf -> Run -> pass\n" + bt + "\n\n" +
 		"## Steps\n1. noop\n\n" +
-		goBlock("import \"testing\"\n\nfunc Setup(t *testing.T, req *Request) error { return nil }") +
+		goBlock("import \"testing\"\n\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { return nil }") +
 		"\n"
 	leafAssert := "## Expected\n- Run succeeds without error.\n\n" +
 		goBlock(
 			"import \"testing\"\n\n" +
-				"func Assert(t *testing.T, req *Request, resp *Response, err error) {\n" +
+				"func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n" +
 				"\tif err != nil {\n" +
 				"\t\tt.Fatal(err)\n" +
 				"\t}\n" +

@@ -152,10 +152,10 @@ func createDoctestLeaf(dir string) error {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
-	leafSetup := doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }")
+	leafSetup := doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }")
 	leafAssert := doctestGoBlock(
 		"import \"testing\"\n" +
-			"func Assert(t *testing.T, req *Request, resp *Response, err error) {\n" +
+			"func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n" +
 			"\tif err != nil { t.Fatal(err) }\n" +
 			"\tif resp.Message != \"hi\" { t.Fatalf(\"expected hi, got %q\", resp.Message) }\n" +
 			"}",
@@ -249,7 +249,7 @@ func createPublicModuleProject(t *testing.T, req *Request) {
 		t.Fatalf("mkdir tests: %v", err)
 	}
 	extraImports := "\t\"" + modPath + "/pkg/greet\"\n"
-	runCode := "func Run(t *testing.T, req *Request) (*Response, error) {\n" +
+	runCode := "func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {\n" +
 		"\treturn &Response{Message: greet.Hello()}, nil\n" +
 		"}"
 	if err := createDoctestRoot(req.TestDir, extraImports, runCode); err != nil {

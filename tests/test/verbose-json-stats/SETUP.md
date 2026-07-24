@@ -102,7 +102,7 @@ func createNestedFailOuterPassTree(t *testing.T, bin string) string {
 	"testing"
 )
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	cmd := exec.Command(%s, "test", "--no-color", %s)
 	cmd.Env = append(os.Environ(),
 		"GOCACHE="+t.TempDir(),

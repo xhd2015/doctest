@@ -16,7 +16,7 @@ progress dots -> summary -> FAIL lines -> detailed failure text (only from fail 
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	testDir := createSecondOfThreeFailsTree(t)
 	req.Args = []string{"test", testDir}
 	return nil

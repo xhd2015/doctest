@@ -12,7 +12,7 @@ Parser -> Pattern with LiteralLine, BlockOptional, Hint, etc.
 1. Set template/actual fields for P17 — inline any-of pattern line.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "status: <any-of><expect>ok</expect><expect>no</expect></any-of>"
 	return nil
 }

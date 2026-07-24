@@ -21,7 +21,7 @@ func writeTreeFile(t *testing.T, root string, rel string, content string) {
 func setupDoc(code string) string {
 	code = strings.TrimSpace(code)
 	if !strings.Contains(code, "func Setup") {
-		setupLine := "func Setup(t *testing.T, req *Request) error { _ = req; return nil }"
+		setupLine := "func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }"
 		idx := strings.Index(code, "\")\n")
 		if idx >= 0 && strings.Contains(code[:idx], "import") {
 			code = code[:idx+3] + "\n" + setupLine + "\n" + code[idx+3:]

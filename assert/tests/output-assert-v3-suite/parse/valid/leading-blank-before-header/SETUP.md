@@ -11,7 +11,7 @@
 1. Set template with blank lines before the opening `---`.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = `
 ---
 version: 3

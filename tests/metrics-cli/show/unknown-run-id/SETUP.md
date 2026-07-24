@@ -18,7 +18,7 @@ metrics show definitely-missing-run-id-xyz -> non-zero
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	ensureFixtureProject(t, req)
 	name := "2026-07-16-09-00-00-00-showmiss.jsonl"
 	writeRunFile(t, req, name, fixtureRunDefault(runStem(name)))

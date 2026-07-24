@@ -16,7 +16,7 @@ fail dot -> red | pass dot -> plain | summary Pass -> green | summary Fail -> re
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.PassCount = 1
 	req.FailCount = 1
 	return nil

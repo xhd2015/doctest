@@ -29,8 +29,8 @@ root package: no package free var DOCTEST_ROOT / DOCTEST_SESSION_ID
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
-	req.AuthorDMode = "omit"
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	req.AuthorDMode = "named-d"
 	return nil
 }
 ```

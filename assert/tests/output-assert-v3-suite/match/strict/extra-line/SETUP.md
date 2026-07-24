@@ -11,7 +11,7 @@ Matcher rejects trailing extra line
 1. Set single literal line template and two-line actual.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = v3Template("", "only one line")
 	req.Actual = "only one line\nextra line"
 	return nil

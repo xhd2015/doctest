@@ -18,7 +18,7 @@ MaterializeAssertModule -> $CACHE/doctest/assert-mod/<md5>/{assert.go,go.mod}
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     req.RunKind = "materialize"
 	req.ModPath = "example.com/app"
 	return nil

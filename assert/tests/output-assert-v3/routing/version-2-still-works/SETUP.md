@@ -14,7 +14,7 @@ Matcher -> pass
 1. Set version: 2 string-placeholder template and matching actual.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Operation = "match"
 	req.Template = v2Template("__USER__: type=string\n", "Hello __USER__")
 	req.Actual = "Hello alice"

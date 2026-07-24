@@ -6,7 +6,7 @@
 - No run error is returned.
 
 ```go
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	if err != nil {
 		t.Fatalf("unexpected run error: %v", err)
 	}

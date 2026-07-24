@@ -19,7 +19,7 @@ doctest test --no-color <dir> -> plain inline DURATION -> plain PASS(p/t) in DUR
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	testDir := createPassFailTree(t, 1, 0)
 	req.Args = []string{"test", "--no-color", testDir}
 	return nil

@@ -25,7 +25,7 @@ import (
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     proj := t.TempDir()
     if err := os.WriteFile(filepath.Join(proj, "go.mod"), []byte("module testproj\ngo 1.21\n"), 0644); err != nil {
         t.Fatalf("write go.mod: %v", err)
@@ -36,11 +36,11 @@ func Setup(t *testing.T, req *Request) error {
         t.Fatalf("mkdir test dir: %v", err)
     }
 
-    runCode := "func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }"
+    runCode := "func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }"
     if err := createDoctestRoot(testDir, runCode); err != nil {
         t.Fatalf("create doctest root: %v", err)
     }
-    setupWithUnusedImport := doctestGoBlock("import (\n    \"testing\"\n    \"fmt\"\n)\n\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }")
+    setupWithUnusedImport := doctestGoBlock("import (\n    \"testing\"\n    \"fmt\"\n)\n\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }")
     if err := os.WriteFile(filepath.Join(testDir, "SETUP.md"), []byte(setupWithUnusedImport), 0644); err != nil {
         t.Fatalf("write SETUP.md with unused import: %v", err)
     }

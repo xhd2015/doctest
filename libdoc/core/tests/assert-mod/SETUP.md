@@ -39,7 +39,7 @@ import (
 
 const assertImportPath = "github.com/xhd2015/doctest/assert"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.ModPath = "example.com/app"
 	return nil
 }

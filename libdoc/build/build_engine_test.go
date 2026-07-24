@@ -21,13 +21,13 @@ func TestMultiCaseRunIgnoresStaleNestedDoctestPackages(t *testing.T) {
 	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 `, "")
 	writeTreeFile(t, root, "parent/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "parent/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 `))
 
 	nested := filepath.Join(root, "nested")
@@ -35,13 +35,13 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 	writeRootHarness(t, nested, `
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 `, "")
 	writeTreeFile(t, nested, "bad/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, nested, "bad/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	t.Fatal("nested doctest should not run when testing parent tree")
 }
 `))
@@ -61,13 +61,13 @@ func TestChildCannotRedefineRun(t *testing.T) {
 	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{ Source string }
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{Source: "root"}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{Source: "root"}, nil }
 `, "")
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{Source: "leaf"}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{Source: "leaf"}, nil }
 `))
 	writeTreeFile(t, root, "leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 `))
 
 	err := Test(root, core.Options{RemoveTemp: true})
@@ -85,19 +85,19 @@ func TestExecutionOrderSetupRunAssert(t *testing.T) {
 	writeRootHarness(t, root, `
 type Request struct{ Order []string }
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { req.Order = append(req.Order, "run"); return &Response{}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { req.Order = append(req.Order, "run"); return &Response{}, nil }
 `, `
-func Setup(t *testing.T, req *Request) error { req.Order = append(req.Order, "root setup"); return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { req.Order = append(req.Order, "root setup"); return nil }
 `)
 	writeTreeFile(t, root, "parent/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { req.Order = append(req.Order, "parent setup"); return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { req.Order = append(req.Order, "parent setup"); return nil }
 `))
 	writeTreeFile(t, root, "parent/leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { req.Order = append(req.Order, "leaf setup"); return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { req.Order = append(req.Order, "leaf setup"); return nil }
 `))
 	writeTreeFile(t, root, "parent/leaf/ASSERT.md", assertDoc(`
 import "reflect"
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	req.Order = append(req.Order, "assert")
 	want := []string{"root setup", "parent setup", "leaf setup", "run", "assert"}
 	if !reflect.DeepEqual(req.Order, want) { t.Fatalf("order = %#v, want %#v", req.Order, want) }
@@ -116,15 +116,15 @@ func TestSetupErrorFailsBeforeRunAndAssert(t *testing.T) {
 import "fmt"
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { t.Fatal("run should not execute"); return nil, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { t.Fatal("run should not execute"); return nil, nil }
 `, `
-func Setup(t *testing.T, req *Request) error { return fmt.Errorf("setup failed") }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { return fmt.Errorf("setup failed") }
 `)
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	t.Fatal("assert should not execute")
 }
 `))
@@ -145,13 +145,13 @@ func TestRunErrorPassedToAssert(t *testing.T) {
 import "fmt"
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return nil, fmt.Errorf("run failed") }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return nil, fmt.Errorf("run failed") }
 `, "")
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	if err == nil || err.Error() != "run failed" { t.Fatalf("expected run failed error, got %v", err) }
 }
 `))
@@ -167,18 +167,18 @@ func TestRequestMutatedThroughSetupChain(t *testing.T) {
 	writeRootHarness(t, root, `
 type Request struct{ Value int }
 type Response struct{ Value int }
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{Value: req.Value}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{Value: req.Value}, nil }
 `, `
-func Setup(t *testing.T, req *Request) error { req.Value += 1; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { req.Value += 1; return nil }
 `)
 	writeTreeFile(t, root, "parent/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { req.Value += 2; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { req.Value += 2; return nil }
 `))
 	writeTreeFile(t, root, "parent/leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { req.Value += 3; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { req.Value += 3; return nil }
 `))
 	writeTreeFile(t, root, "parent/leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	if err != nil { t.Fatal(err) }
 	if req.Value != 6 || resp.Value != 6 { t.Fatalf("req=%d resp=%d, want 6", req.Value, resp.Value) }
 }
@@ -195,13 +195,13 @@ func TestResponsePassedFromRunToAssert(t *testing.T) {
 	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{ Message string }
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{Message: "ok"}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{Message: "ok"}, nil }
 `, "")
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	if err != nil { t.Fatal(err) }
 	if resp == nil || resp.Message != "ok" { t.Fatalf("unexpected response: %#v", resp) }
 }
@@ -218,18 +218,18 @@ func TestDuplicateSetupHooksAcrossLevelsAllowed(t *testing.T) {
 	writeRootHarness(t, root, `
 type Request struct{ Count int }
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 `, `
-func Setup(t *testing.T, req *Request) error { req.Count++; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { req.Count++; return nil }
 `)
 	writeTreeFile(t, root, "parent/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { req.Count++; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { req.Count++; return nil }
 `))
 	writeTreeFile(t, root, "parent/leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { req.Count++; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { req.Count++; return nil }
 `))
 	writeTreeFile(t, root, "parent/leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	if err != nil { t.Fatal(err) }
 	if req.Count != 3 { t.Fatalf("count = %d, want 3", req.Count) }
 }
@@ -246,22 +246,22 @@ func TestDuplicateNamesAcrossDifferentLeavesAllowed(t *testing.T) {
 	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{ Name string }
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{Name: "root"}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{Name: "root"}, nil }
 `, "")
 	writeTreeFile(t, root, "a/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "a/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	var duplicate = "a"
 	if duplicate != "a" { t.Fatal(duplicate) }
 }
 `))
 	writeTreeFile(t, root, "b/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "b/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	var duplicate = "b"
 	if duplicate != "b" { t.Fatal(duplicate) }
 }
@@ -278,14 +278,14 @@ func TestChildCannotRedefineRequestOrResponse(t *testing.T) {
 	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 `, "")
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
 type Request struct{ Bad bool }
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 `))
 
 	err := Test(root, core.Options{RemoveTemp: true})
@@ -303,13 +303,13 @@ func TestGeneratedCodeHasDoctestRootConst(t *testing.T) {
 	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 `, "")
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 `))
 
 	genDir := filepath.Join(t.TempDir(), "generated")
@@ -342,10 +342,10 @@ func TestGeneratedRootCaseChdirsToDoctestRoot(t *testing.T) {
 	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 `, "")
 	writeTreeFile(t, root, "ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 `))
 
 	genDir := filepath.Join(t.TempDir(), "generated")
@@ -413,13 +413,13 @@ func TestCompileGoModGeneratedWithModule(t *testing.T) {
 	writeRootHarness(t, filepath.Join(srcRoot, "tests"), `
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 `, "")
 	writeTreeFile(t, srcRoot, "tests/leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, srcRoot, "tests/leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 `))
 
 	genDir := filepath.Join(t.TempDir(), "generated")
@@ -449,13 +449,13 @@ func TestCompileNoGoModWhenNoSourceModule(t *testing.T) {
 	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 `, "")
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 `))
 
 	genDir := filepath.Join(t.TempDir(), "generated")
@@ -504,15 +504,15 @@ import "example.com/mylib/pkg"
 
 type Request struct{}
 type Response struct{ Val string }
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	return &Response{Val: pkg.Name()}, nil
 }
 `))
 	writeTreeFile(t, testsDir, "leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, testsDir, "leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	if err != nil { t.Fatal(err) }
 	if resp.Val != "hello" { t.Fatalf("expected hello, got %q", resp.Val) }
 }
@@ -552,20 +552,20 @@ func TestSourceFilesCopiedWithPackageRename(t *testing.T) {
 
 type Request struct{}
 type Response struct{ Msg string }
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	return &Response{Msg: Exported() + " " + private()}, nil
 }`))
 	writeTreeFile(t, testsDir, "SETUP.md", `# Setup
 - Go module: example.com/mylib
 - Package under test: pkg
 
-`+setupDoc(`func Setup(t *testing.T, req *Request) error { _ = req; return nil }`))
+`+setupDoc(`func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }`))
 
 	writeTreeFile(t, testsDir, "leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, testsDir, "leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	if err != nil { t.Fatal(err) }
 	if resp.Msg != "exported private" { t.Fatalf("got %q", resp.Msg) }
 }
@@ -621,19 +621,19 @@ func TestNoTestGoFilesCopied(t *testing.T) {
 	writeTreeFile(t, testsDir, "DOCTEST.md", doctestDoc(`
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 `))
 	writeTreeFile(t, testsDir, "SETUP.md", `# Setup
 - Go module: example.com/mylib
 - Package under test: pkg
 
-`+setupDoc(`func Setup(t *testing.T, req *Request) error { _ = req; return nil }`))
+`+setupDoc(`func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }`))
 
 	writeTreeFile(t, testsDir, "leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, testsDir, "leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 `))
 
 	genDir := filepath.Join(t.TempDir(), "generated")
@@ -655,13 +655,13 @@ func TestBackwardCompatNoPackageUnderTest(t *testing.T) {
 	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 `, "")
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 `))
 
 	genDir := filepath.Join(t.TempDir(), "generated")
@@ -684,13 +684,13 @@ func TestCompileDefaultKeepsTempDir(t *testing.T) {
 	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 `, "")
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 `))
 
 	var stderr bytes.Buffer
@@ -718,13 +718,13 @@ func TestCompileRmRemovesTempDir(t *testing.T) {
 	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 `, "")
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 `))
 
 	var stderr bytes.Buffer
@@ -751,13 +751,13 @@ func TestCompileRmDoesNotRemoveGenDir(t *testing.T) {
 	writeRootHarness(t, root, `
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 `, "")
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 `))
 
 	genDir := filepath.Join(t.TempDir(), "generated")
@@ -778,13 +778,13 @@ type Request struct{}
 type Response struct{}
 `))
 	writeTreeFile(t, root, "SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 `))
 
 	err := Test(root, core.Options{RemoveTemp: true})
@@ -812,7 +812,7 @@ func TestDotProgressIncremental(t *testing.T) {
 		{Name: "a_fast", Steps: "No setup needed.", Expected: "Always passes."},
 		{Name: "z_slow", Steps: "Brief sleep so the fast leaf can finish first.", Expected: "Always passes.",
 			SetupGo: fmt.Sprintf(
-				"import (\"testing\"; \"time\")\n\nfunc Setup(t *testing.T, req *Request) error { time.Sleep(%d * time.Millisecond); return nil }",
+				"import (\"testing\"; \"time\")\n\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { time.Sleep(%d * time.Millisecond); return nil }",
 				int(slowSleep/time.Millisecond),
 			)},
 	})

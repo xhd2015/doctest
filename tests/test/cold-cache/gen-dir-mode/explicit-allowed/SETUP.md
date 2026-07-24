@@ -27,7 +27,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	withCacheSandbox(t, req)
 	req.CCTestDir = createTempTestProject(t)
 	// Explicit dir lives outside the warm home (sibling under sandbox, not under mapping-gen).

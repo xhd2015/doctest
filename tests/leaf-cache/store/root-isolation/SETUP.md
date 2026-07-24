@@ -31,7 +31,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	req.Op = "store_isolate"
 	req.Key = "11223344556677889900aabbccddeeff"

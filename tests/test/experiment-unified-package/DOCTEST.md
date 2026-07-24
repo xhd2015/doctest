@@ -125,7 +125,7 @@ type Response struct {
 	GoTestDisplayLine  string   // full "go test …" line from stdout/stderr
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	t.Helper()
 	resp := &Response{}
 
@@ -180,7 +180,7 @@ func ExperimentUnifiedRootMarker() string {
 	return "ROOT_RUN_MARKER_UNIFIED_PACKAGE"
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	_ = ExperimentUnifiedRootMarker()
 	return &Response{}, nil
 }`
@@ -192,13 +192,13 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 	for _, name := range []string{"a", "b"} {
 		setup := `import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	_ = req
 	return nil
 }`
 		assert := `import "testing"
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	if err != nil {
 		t.Fatal(err)
 	}

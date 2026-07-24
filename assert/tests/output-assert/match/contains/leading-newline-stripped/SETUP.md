@@ -17,7 +17,7 @@ Matcher -> pass
 2. Set actual to a line that contains the fragment mid-line, ending with `\n`.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "<contains>\nnot a git repository\n</contains>"
 	req.Actual = "wrk: /p is not a git repository\n"
 	return nil

@@ -96,7 +96,7 @@ doctest <- Fake Codex (session id, events, progress)
 - ...
 
 ```go
-func Setup(t *testing.T, req *Request) error { ... }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { ... }
 ```
 </example-of-SETUP.md>
 
@@ -209,7 +209,7 @@ explanation: AX tree poll; compile and link ~25s
 Every `ASSERT.md` must have a `func Assert`. Signature must match exactly:
 
 ```
-func Assert(t *testing.T, req *Request, resp *Response, err error)
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error)
 ```
 
 Fail via `t.Fatal`/`t.Fatalf`.
@@ -250,7 +250,7 @@ import (
     "github.com/xhd2015/doctest/assert"
 )
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
     if err != nil {
         t.Fatal(err)
     }

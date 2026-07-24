@@ -11,7 +11,7 @@ import (
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     _ = req
     req.RunType = "is_dot_dot_dot_pattern"
     return nil

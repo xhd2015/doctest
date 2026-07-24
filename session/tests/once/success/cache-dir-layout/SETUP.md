@@ -14,7 +14,7 @@ Caller <- JSON containing path; disk has probe-write
 1. Mode `cache-probe` writes a marker file inside cacheDir.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Mode = "cache-probe"
 	req.Key = "layout-key"
 	req.SessionID = "once-doctest-layout-" + t.Name()

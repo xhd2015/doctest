@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	// Gen-dir policy leaves all invoke --cold-cache against a tiny fixture that
 	// must generate + go test; keep a generous timeout even if an ancestor lowered it.
 	if req.Timeout < 120*time.Second {

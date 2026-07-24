@@ -24,7 +24,7 @@ run2: doctest test fixture -> exit 0, Cached >= 1
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	// Parent already set fixture and args; reaffirm Op.
 	req.Op = "runtime_multi"

@@ -294,7 +294,7 @@ func writeFixture(t *testing.T, kind string) string {
 		writeLeaf(t, root, "leaf", fence,
 			`import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	_ = 20 * time.Second
 	_ = req
 	return nil
@@ -309,7 +309,7 @@ func Setup(t *testing.T, req *Request) error {
 	"time"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	_ = 20 * time.Second
 	_ = req
 	return nil
@@ -322,7 +322,7 @@ func Setup(t *testing.T, req *Request) error {
 		writeLeaf(t, root, "leaf", fence,
 			`import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	_ = t
 	_ = req
 	return nil
@@ -338,7 +338,7 @@ func Setup(t *testing.T, req *Request) error {
 // FeatureHelper is exported from the feature intermediate package.
 func FeatureHelper() int { return 42 }
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	_ = t
 	_ = req
 	return nil
@@ -346,7 +346,7 @@ func Setup(t *testing.T, req *Request) error {
 		writeGroupingSetup(t, root, "feature/mid", fence,
 			`import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	// Intentionally does NOT call FeatureHelper — parent import should be pruned.
 	_ = t
 	_ = req
@@ -355,7 +355,7 @@ func Setup(t *testing.T, req *Request) error {
 		writeLeaf(t, root, "feature/mid/leaf", fence,
 			`import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	_ = t
 	_ = req
 	return nil
@@ -374,7 +374,7 @@ func rootRunGo() string {
 type Request struct{}
 type Response struct{}
 
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	_ = t
 	_ = req
 	return &Response{}, nil
@@ -389,7 +389,7 @@ type Response struct{}
 
 func RootMarker() string { return "root" }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	_ = RootMarker()
 	_ = t
 	_ = req
@@ -400,7 +400,7 @@ func Run(t *testing.T, req *Request) (*Response, error) {
 func leafAssertPass() string {
 	return `import "testing"
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -417,7 +417,7 @@ func writeMinimalRoot(t *testing.T, root, fence, runGo string) {
 		fence + "\nfixture root\n" + fence + "\n\n## Steps\n1. root setup\n\n" +
 		fence + "go\n" + `import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	_ = t
 	_ = req
 	return nil

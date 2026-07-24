@@ -18,7 +18,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	if req.Mode != "write-gomod" {
 		t.Fatalf("creates-manifest expects Mode write-gomod, got %q", req.Mode)
 	}

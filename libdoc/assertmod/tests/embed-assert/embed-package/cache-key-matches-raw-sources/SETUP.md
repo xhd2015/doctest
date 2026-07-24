@@ -18,7 +18,7 @@ RawSourceCacheKeyMD5() == md5(sorted assert/*.go raw bytes)
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     req.RunKind = "embed-cache-key"
 	req.SecondRun = false
 	return nil

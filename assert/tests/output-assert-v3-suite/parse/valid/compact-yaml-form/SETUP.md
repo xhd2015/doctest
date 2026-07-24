@@ -12,7 +12,7 @@ Parser -> metadata captured (example=8901)
 1. Set compact placeholder `__PORT__: type=number, example=8901, a port`.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = v3Template("__PORT__: type=number, example=8901, a port\n", "Server listen on: __PORT__")
 	return nil
 }

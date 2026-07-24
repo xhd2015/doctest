@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	// Parse failures should be fast; keep a short bound.
 	if req.Timeout <= 0 || req.Timeout > 30*time.Second {
 		req.Timeout = 30 * time.Second

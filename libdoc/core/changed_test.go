@@ -171,8 +171,8 @@ func changedFixtureRepo(t *testing.T) (repoDir, treeDir string) {
 		if err := os.MkdirAll(leaf, 0755); err != nil {
 			t.Fatal(err)
 		}
-		setup := "# Scenario\n\n```go\nimport \"testing\"\nfunc Setup(t *testing.T, req *Request) error { return nil }\n```\n"
-		assert := "```go\nimport \"testing\"\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}\n```\n"
+		setup := "# Scenario\n\n```go\nimport \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { return nil }\n```\n"
+		assert := "```go\nimport \"testing\"\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}\n```\n"
 		if err := os.WriteFile(filepath.Join(leaf, "SETUP.md"), []byte(setup), 0644); err != nil {
 			t.Fatal(err)
 		}

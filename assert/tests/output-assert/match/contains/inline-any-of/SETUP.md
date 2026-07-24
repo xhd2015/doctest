@@ -13,7 +13,7 @@ Matcher -> pass or line-numbered diff
 1. Set template/actual fields for C7 — contains fragment with inline any-of.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "<contains>\ndefault\n<any-of><expect>not configured</expect><expect>profiles</expect><expect>no profiles</expect></any-of>\n</contains>"
 	req.Actual = "default\nnot configured\nno profiles"
 	return nil

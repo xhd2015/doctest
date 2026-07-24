@@ -22,7 +22,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Mode = "write-gomod-second"
 	req.WithAssertReplace = false
 	req.AssertCacheDir = ""

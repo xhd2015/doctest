@@ -11,7 +11,7 @@ Matcher <- actual with PORT=abc
 1. Same template as M1 with non-numeric actual.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = v3Template("__PORT__: type=number\n", "Server listen on: __PORT__")
 	req.Actual = "Server listen on: abc"
 	return nil

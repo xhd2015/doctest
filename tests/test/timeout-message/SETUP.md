@@ -105,7 +105,7 @@ func createSleepTree(t *testing.T, leafCount, sleepSec int) string {
 type Request struct{}
 type Response struct{}
 
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	time.Sleep(%d * time.Second)
 	return &Response{}, nil
 }`, sleepSec)

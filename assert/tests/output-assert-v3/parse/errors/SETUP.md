@@ -12,7 +12,7 @@ Facade -> parse error
 1. Expect parse failure.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.ExpectParseError = true
 	return nil
 }

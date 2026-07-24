@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	if resp.Err == nil {
 		t.Fatal("expected error (child exit 42), got nil")
 	}

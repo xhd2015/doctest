@@ -13,7 +13,7 @@ ContentMD5() -> hex matches file hash of sessionmod embedded blob
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     req.RunKind = "sessionmod-md5"
 	return nil
 }

@@ -72,7 +72,7 @@ type Response struct {
 	Stdout	string
 	Stderr	string
 }
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	// Inject stdin via TestExported_RunWithStdin — never reassign os.Stdin/Stdout/Stderr.
 	// Error-path leaves fail before agent implement/design produce output, so
 	// stdout/stderr capture is unnecessary.

@@ -20,7 +20,7 @@ default run + labeled-suite run
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	ensureFixtureProject(t, req)
 	defName := "2026-07-10-08-00-00-00-sumdef01.jsonl"
 	labName := "2026-07-16-12-00-00-00-sumlab01.jsonl"

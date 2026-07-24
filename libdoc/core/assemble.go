@@ -61,16 +61,22 @@ func AssembleTestSource(tc TreeCase, compileOnly bool, pkgName string, docTestRo
 		run = &runCopy
 	}
 	if run == nil {
-		return "", fmt.Errorf("missing Run(t *testing.T, req *Request) (*Response, error) in setup chain")
+		return "", fmt.Errorf("missing Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) in setup chain")
 	}
-	run.Params = ensureDoctestParam(run.Params)
+	if err := requireDoctestParam("Run", run.Params, ""); err != nil {
+		return "", err
+	}
 	writeFuncClosure(&buf, "run", *run)
 	buf.WriteString("\tRun := run\n")
 
 	buf.WriteString("\treq := &Request{}\n")
-	writeSetupCalls(&buf, tc.SetupFiles)
+	if err := writeSetupCalls(&buf, tc.SetupFiles); err != nil {
+		return "", err
+	}
 	assertFn := *tc.AssertFile.GoBlock.Assert
-	assertFn.Params = ensureDoctestParam(assertFn.Params)
+	if err := requireDoctestParam("Assert", assertFn.Params, tc.AssertFile.Path); err != nil {
+		return "", err
+	}
 	writeFuncClosure(&buf, "assert", assertFn)
 
 	helperNames := collectHelperNames(tc.SetupFiles, tc.AssertFile.GoBlock)
@@ -144,27 +150,26 @@ func escapeRawString(s string) string {
 	return strings.ReplaceAll(s, "`", "`+\"`\"+`")
 }
 
-// ensureDoctestParam inserts `_ *session.Doctest` after t when the author omitted it.
-// If a param of type *session.Doctest is already present (any name), params are unchanged.
-func ensureDoctestParam(params string) string {
+// requireDoctestParam verifies author signatures include *session.Doctest.
+// Doctest never rewrites params: missing d is an author error, reported clearly.
+func requireDoctestParam(kind, params, path string) error {
 	if strings.Contains(params, "*session.Doctest") {
-		return params
+		return nil
 	}
-	trimmed := strings.TrimSpace(params)
-	const tParam = "t *testing.T"
-	if strings.HasPrefix(trimmed, tParam) {
-		rest := strings.TrimSpace(trimmed[len(tParam):])
-		rest = strings.TrimPrefix(rest, ",")
-		rest = strings.TrimSpace(rest)
-		if rest == "" {
-			return tParam + ", _ *session.Doctest"
-		}
-		return tParam + ", _ *session.Doctest, " + rest
+	loc := kind
+	if path != "" {
+		loc = path + ": " + kind
 	}
-	if trimmed == "" {
-		return tParam + ", _ *session.Doctest"
+	switch kind {
+	case "Setup":
+		return fmt.Errorf("%s: missing d *session.Doctest parameter — write func Setup(t *testing.T, d *session.Doctest, req *Request) error (no auto-inject)", loc)
+	case "Run":
+		return fmt.Errorf("%s: missing d *session.Doctest parameter — write func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) (no auto-inject)", loc)
+	case "Assert":
+		return fmt.Errorf("%s: missing d *session.Doctest parameter — write func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) (no auto-inject)", loc)
+	default:
+		return fmt.Errorf("%s: missing d *session.Doctest parameter (no auto-inject); have (%s)", loc, strings.TrimSpace(params))
 	}
-	return tParam + ", _ *session.Doctest, " + trimmed
 }
 
 func importKey(spec ImportSpec) string {
@@ -567,19 +572,22 @@ func sortTypeDecls(decls []string, types map[string]bool) []string {
 	return decls
 }
 
-func writeSetupCalls(buf *strings.Builder, setupFiles []SetupDocument) {
+func writeSetupCalls(buf *strings.Builder, setupFiles []SetupDocument) error {
 	for i, doc := range setupFiles {
 		if doc.GoBlock == nil || doc.GoBlock.Setup == nil {
 			continue
 		}
 		name := fmt.Sprintf("setup%d", i)
 		fn := *doc.GoBlock.Setup
-		fn.Params = ensureDoctestParam(fn.Params)
+		if err := requireDoctestParam("Setup", fn.Params, doc.Path); err != nil {
+			return err
+		}
 		writeFuncClosure(buf, name, fn)
 		buf.WriteString(fmt.Sprintf("\tif err := %s(t, d, req); err != nil {\n", name))
 		buf.WriteString(fmt.Sprintf("\t\tt.Fatalf(\"%s failed: %%v\", err)\n", escapeString(doc.Path)))
 		buf.WriteString("\t}\n")
 	}
+	return nil
 }
 
 func writeFuncClosure(buf *strings.Builder, name string, fn FuncSnippet) {

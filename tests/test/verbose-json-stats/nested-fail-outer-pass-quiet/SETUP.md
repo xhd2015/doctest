@@ -23,7 +23,7 @@ doctest test --no-color <outer>
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	outer := createNestedFailOuterPassTree(t, req.Bin)
 	req.Args = []string{"test", "--no-color", outer}
 	req.Env = append(req.Env, isolateRunEnv(t)...)

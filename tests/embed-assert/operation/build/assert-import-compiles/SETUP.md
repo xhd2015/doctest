@@ -19,7 +19,7 @@ doctest build <tests> -> generated code compiles with assert replace
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	createPublicModuleProject(t, req, "", defaultAssertAssertGo())
 	setupModuleEnv(t, req)
 	req.Args = []string{"build", req.TestDir}

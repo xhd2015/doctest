@@ -25,7 +25,7 @@ run3: test fixture -count=1   -> 0 Cached
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	req.Args3 = []string{"test", req.FixtureDir, "-count=1"}
 	return nil

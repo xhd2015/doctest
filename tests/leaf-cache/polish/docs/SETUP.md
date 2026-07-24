@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	req.Timeout = 30 * time.Second
 	// L2: Bin stays empty → Run uses in-process CLI for runtime_once.

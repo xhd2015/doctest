@@ -34,7 +34,7 @@ Caller <- d.DOCTEST_SESSION_ID
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Mode = "construct"
 	req.WantRoot = "/tmp/doctest-context-root"
 	req.WantCase = "/tmp/doctest-context-root/construct-and-read"

@@ -24,7 +24,7 @@ func writeTreeFile(t *testing.T, root, rel, content string) {
 func setupDoc(code string) string {
 	code = trimDocCode(code)
 	if !containsDocFunc(code, "func Setup") {
-		setupLine := "func Setup(t *testing.T, req *Request) error { _ = req; return nil }"
+		setupLine := "func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }"
 		code = injectSetupFunc(code, setupLine)
 	}
 	return "# Setup\n\nAny section names are allowed.\n\n```go\n" + code + "\n```\n"
@@ -82,13 +82,13 @@ func createValidTestTree(t *testing.T, root string) {
 	writeTreeFile(t, root, "DOCTEST.md", doctestDoc(`
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 `))
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 `))
 }
 
@@ -321,14 +321,14 @@ func TestDotDotDotPrepareFailNoPASS(t *testing.T) {
 	writeTreeFile(t, bad, "DOCTEST.md", doctestDoc(`
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil
 // missing closing brace — syntax error
 `))
 	writeTreeFile(t, bad, "leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, bad, "leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 `))
 
 	genDir := filepath.Join(t.TempDir(), "gen")

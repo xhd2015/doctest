@@ -17,7 +17,7 @@ leaf: ASSERT.md with func Assert
 2. Override the request name for this leaf.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Action = "greet"
 	req.Name = "runner"
 	return nil

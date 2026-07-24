@@ -20,7 +20,7 @@ metrics top --unlabeled-only
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	ensureFixtureProject(t, req)
 	name := "2026-07-16-09-00-00-00-topunlab.jsonl"
 	writeRunFile(t, req, name, fixtureRunDefault(runStem(name)))

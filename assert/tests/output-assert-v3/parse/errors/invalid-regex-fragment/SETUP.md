@@ -12,7 +12,7 @@ Parser -> parse error
 1. Set `__ID__: regex=[` in header (invalid Go RE fragment).
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = v3Template("__ID__: regex=[\n", "id=__ID__")
 	return nil
 }

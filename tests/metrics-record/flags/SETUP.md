@@ -24,7 +24,7 @@ parseTestOptions([...]) -> Options.MetricsOn
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Op = "parse_flags"
 	return nil
 }

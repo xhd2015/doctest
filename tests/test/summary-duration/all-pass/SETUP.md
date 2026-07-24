@@ -19,7 +19,7 @@ doctest test <dir> -> discover 3 leaves -> inline (3 Run, ...) in DURATION -> PA
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	testDir := createPassFailTree(t, 3, 0)
 	req.Args = []string{"test", testDir}
 	return nil

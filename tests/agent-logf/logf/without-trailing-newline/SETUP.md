@@ -20,7 +20,7 @@ doctest agent show-status <session-id> -> session state -> stdout
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     req.Env = append(req.Env, "LOGF_FORMAT=hello")
     return nil
 }

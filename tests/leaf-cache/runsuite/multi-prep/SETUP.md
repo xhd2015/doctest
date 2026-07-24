@@ -47,7 +47,7 @@ import (
 	"github.com/xhd2015/doctest/libdoc/leafcache"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	prepareTwinTrees(t, req)
 	if req.StoreRoot == "" {

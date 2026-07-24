@@ -17,13 +17,13 @@ func TestRootSetupRequiresRequestAndResponseTypes(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "README.md", "# tree")
 	writeTreeFile(t, root, "DOCTEST.md", doctestDoc(`
-func Run(t *testing.T, req *Request) (*Response, error) { return nil, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return nil, nil }
 `))
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 `))
 
 	_, err := DiscoverTreeCases(root)
@@ -37,10 +37,10 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {}
 
 func TestValidationReportsAllErrorsAtOnce(t *testing.T) {
 	root := t.TempDir()
-	writeTreeFile(t, root, "DOCTEST.md", doctestDoc(`func Run(t *testing.T, req *Request) (*Response, error) { return nil, nil }`))
-	writeTreeFile(t, root, "SETUP.md", "# Setup\n\n```go\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }\n```\n")
+	writeTreeFile(t, root, "DOCTEST.md", doctestDoc(`func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return nil, nil }`))
+	writeTreeFile(t, root, "SETUP.md", "# Setup\n\n```go\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }\n```\n")
 	writeTreeFile(t, root, "leaf/SETUP.md", "# Setup\n\nProse only, no Go block.\n")
-	writeTreeFile(t, root, "leaf/ASSERT.md", "# Assert\n\n```go\nfunc Check(t *testing.T, req *Request, resp *Response, err error) {}\n```\n")
+	writeTreeFile(t, root, "leaf/ASSERT.md", "# Assert\n\n```go\nfunc Check(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}\n```\n")
 
 	_, err := DiscoverTreeCases(root)
 	if err == nil {
@@ -70,13 +70,13 @@ func TestValidationNoErrorForValidTree(t *testing.T) {
 	writeTreeFile(t, root, "DOCTEST.md", doctestDoc(`
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 `))
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 `))
 
 	if _, err := DiscoverTreeCases(root); err != nil {
@@ -89,23 +89,23 @@ func TestValidationTestdataDirSkipped(t *testing.T) {
 	writeTreeFile(t, root, "DOCTEST.md", doctestDoc(`
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 `))
 	writeTreeFile(t, root, "leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 `))
 	writeTreeFile(t, root, "testdata/SETUP.md", setupDoc(`
 type Request struct{}
 type Response struct{}
 `))
 	writeTreeFile(t, root, "testdata/leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "testdata/leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 `))
 
 	cases, err := DiscoverTreeCases(root)
@@ -123,18 +123,18 @@ func TestDiscoverTreeCasesSharedSetupMemoized(t *testing.T) {
 	writeTreeFile(t, root, "DOCTEST.md", doctestDoc(`
 type Request struct{ X int }
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 `))
 	writeTreeFile(t, root, "SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { req.X = 1; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { req.X = 1; return nil }
 `))
 	for i := 0; i < 12; i++ {
 		name := fmt.Sprintf("leaf%d", i)
 		writeTreeFile(t, root, filepath.Join(name, "SETUP.md"), setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 		writeTreeFile(t, root, filepath.Join(name, "ASSERT.md"), assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 `))
 	}
 	cases, err := DiscoverTreeCases(root)
@@ -157,13 +157,13 @@ func TestDiscoverTreeCasesVerbose(t *testing.T) {
 	writeTreeFile(t, root, "DOCTEST.md", doctestDoc(`
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 `))
 	writeTreeFile(t, root, "setup_leaf/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "setup_leaf/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 `))
 
 	var buf bytes.Buffer
@@ -218,7 +218,7 @@ func TestAssembleTestSourceIncludesDoctestSessionID(t *testing.T) {
 			GoBlock: &GoBlock{
 				Run: &FuncSnippet{
 					Name:    "Run",
-					Params:  "t *testing.T, req *Request",
+					Params:  "t *testing.T, d *session.Doctest, req *Request",
 					Results: "(*Response, error)",
 					Body:    "{ return &Response{}, nil }",
 				},
@@ -233,7 +233,7 @@ func TestAssembleTestSourceIncludesDoctestSessionID(t *testing.T) {
 			GoBlock: GoBlock{
 				Assert: &FuncSnippet{
 					Name:   "Assert",
-					Params: "t *testing.T, req *Request, resp *Response, err error",
+					Params: "t *testing.T, d *session.Doctest, req *Request, resp *Response, err error",
 					Body:   "{}",
 				},
 			},
@@ -437,7 +437,7 @@ func TestAssembleFuncClosureSharedTypeNamedResultsParses(t *testing.T) {
 			GoBlock: &GoBlock{
 				Run: &FuncSnippet{
 					Name:        "Run",
-					Params:      "t *testing.T, req *Request",
+					Params:      "t *testing.T, d *session.Doctest, req *Request",
 					Results:     "(*Response, error)",
 					ResultTypes: "(*Response, error)",
 					Body:        "{ return &Response{}, nil }",
@@ -461,7 +461,7 @@ func TestAssembleFuncClosureSharedTypeNamedResultsParses(t *testing.T) {
 			GoBlock: GoBlock{
 				Assert: &FuncSnippet{
 					Name:   "Assert",
-					Params: "t *testing.T, req *Request, resp *Response, err error",
+					Params: "t *testing.T, d *session.Doctest, req *Request, resp *Response, err error",
 					Body:   "{}",
 				},
 			},
@@ -501,7 +501,7 @@ func TestAssembleFuncClosurePreservesNamedResults(t *testing.T) {
 	block := parseHelpersBlock(t, `
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 func splitNames(req *Request) (mainRepo, wtDir, branch string) {
 	mainRepo = "a"
 	wtDir = "b"
@@ -516,7 +516,7 @@ func splitNames(req *Request) (mainRepo, wtDir, branch string) {
 		AssertFile: AssertDocument{GoBlock: GoBlock{
 			Assert: &FuncSnippet{
 				Name:   "Assert",
-				Params: "t *testing.T, req *Request, resp *Response, err error",
+				Params: "t *testing.T, d *session.Doctest, req *Request, resp *Response, err error",
 				Body:   "{}",
 			},
 		}},
@@ -547,7 +547,7 @@ func TestAssembleHelpersTopoSortedForwardRef(t *testing.T) {
 	block := parseHelpersBlock(t, `
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 func caller(x int) string { return callee(x) }
 func callee(x int) string { return "x" }
 `)
@@ -558,7 +558,7 @@ func callee(x int) string { return "x" }
 		AssertFile: AssertDocument{GoBlock: GoBlock{
 			Assert: &FuncSnippet{
 				Name:   "Assert",
-				Params: "t *testing.T, req *Request, resp *Response, err error",
+				Params: "t *testing.T, d *session.Doctest, req *Request, resp *Response, err error",
 				Body:   "{}",
 			},
 		}},

@@ -16,7 +16,7 @@ FilterByChangedFiles -> [] (path not under doctest root)
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	fx := createFlatTwoLeafTree(t)
 	applyPolicyBase(req, fx)
 	req.ChangedFiles = []string{"README.md"}

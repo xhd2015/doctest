@@ -13,7 +13,7 @@ doctest test ./mod/... <explicit-leaf> -> PASS(2/2) + skip other labeled
 2. Run `doctest test ./mod/... <explicit_labeled>` from work dir parent.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	workDir, explicitLeaf := writeMultiArgModTree(t)
 	req.WorkDir = workDir
 	req.Args = []string{"test", "./mod/...", explicitLeaf}

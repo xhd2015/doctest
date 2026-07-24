@@ -36,7 +36,7 @@ RunTest(2-leaf marker fixture, GenDir=tmp)
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	// Leaves set Op and scenario fields; default keeps Run from erroring if forgotten.
 	if req.Op == "" {
 		req.Op = "mini_run"

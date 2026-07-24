@@ -30,7 +30,7 @@ type Response struct {
 	Status	string
 	Message	string
 }
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	if req.ID <= 0 {
 		return nil, fmt.Errorf("ID must be positive")
 	}

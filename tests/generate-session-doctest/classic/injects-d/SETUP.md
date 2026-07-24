@@ -3,7 +3,7 @@
 **Feature**: classic assemble constructs `d *session.Doctest`, passes it, and drops Chdir/free vars
 
 ```
-# author omits d (default)
+# author declares d (named-d)
 AssembleTestSource
   -> d := &session.Doctest{ROOT, CASE, SESSION_ID}
   -> setup(t, d, req); run(t, d, req); assert(t, d, req, resp, err)
@@ -12,7 +12,7 @@ AssembleTestSource
 
 ## Preconditions
 
-- Author signatures use the legacy without-d shape (`AuthorDMode=omit`).
+- Author signatures use the required with-d shape (`AuthorDMode=named-d`).
 - Leaf path is the default `nested/leaf`.
 
 ## Steps
@@ -27,8 +27,8 @@ AssembleTestSource
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
-	req.AuthorDMode = "omit"
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	req.AuthorDMode = "named-d"
 	return nil
 }
 ```

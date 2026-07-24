@@ -22,7 +22,7 @@ import (
 	"testing"
 )
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr1:\n%s\nstderr2:\n%s", err, resp.Stderr, resp.Stderr2)
 	}

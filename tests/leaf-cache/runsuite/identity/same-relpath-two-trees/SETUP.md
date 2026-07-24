@@ -23,7 +23,7 @@ FormatLeafIdentity(A,"leaf") != FormatLeafIdentity(B,"leaf")
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	req.Op = "format_identity"
 	// Twin trees already prepared by parent.

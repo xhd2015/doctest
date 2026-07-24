@@ -30,7 +30,7 @@ Caller <- d.DOCTEST_SESSION_ID == ""
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Mode = "zero"
 	// Want* intentionally left empty; zero path ignores them.
 	return nil

@@ -18,7 +18,7 @@ doctest skills update --global -> Skill is up to date for global target
 3. Run `skills update --global`.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	home := t.TempDir()
 	// Child-only HOME — never t.Setenv (Parallel-incompatible).
 	req.Home = home

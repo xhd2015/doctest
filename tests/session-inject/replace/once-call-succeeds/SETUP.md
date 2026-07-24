@@ -22,7 +22,7 @@ doctest test leaf importing session
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	createPublicModuleProject(t, req, "", defaultSessionAssertGo(), true)
 	setupModuleEnv(t, req)
 	req.Args = []string{"test", req.TestDir, "-v"}

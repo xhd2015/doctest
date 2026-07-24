@@ -20,7 +20,7 @@ DiscoverTreeCases -> FilterByChangedFiles -> subset of leaves
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	if req.Policy == "" {
 		req.Policy = PolicyFilter
 	}

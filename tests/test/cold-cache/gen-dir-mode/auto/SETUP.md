@@ -26,7 +26,7 @@ doctest test --cold-cache <tiny-tree>
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	withCacheSandbox(t, req)
 	req.CCTestDir = createTempTestProject(t)
 	seedMarker(t, req, req.CCColdHome, "marker-before")

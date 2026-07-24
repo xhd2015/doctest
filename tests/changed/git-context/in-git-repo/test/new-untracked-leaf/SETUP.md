@@ -16,7 +16,7 @@ FilterByChangedFiles -> [leaf_c]
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	fx := createFlatTwoLeafTree(t)
 	writeLeaf(t, fx.TreeDir, "leaf_c")
 	applyPolicyBase(req, fx)

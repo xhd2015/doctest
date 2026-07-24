@@ -28,7 +28,7 @@ Caller -> session.Doctest{ DOCTEST_SESSION_ID: onlySID }  # ROOT, CASE stay ""
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Mode = "independence"
 	req.WantRoot = "/tmp/doctest-indep-root"
 	req.WantCase = "/tmp/doctest-indep-case"

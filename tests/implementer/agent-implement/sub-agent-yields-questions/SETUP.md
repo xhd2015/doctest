@@ -27,7 +27,7 @@ import (
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     req.Env = append(req.Env, "CODEX_THREAD_ID=impl_test_yields")
     yieldPQ := ""
     for _, env := range req.Env {

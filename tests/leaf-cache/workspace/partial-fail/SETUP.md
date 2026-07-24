@@ -27,7 +27,7 @@ run2: a_pass Cached/skip; b_fail re-executes -> exit != 0, Cached >= 1
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	req.Op = "runtime_multi"
 	prepareWorkspacePartialFail(t, req)

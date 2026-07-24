@@ -50,7 +50,7 @@ type Response struct {
 	Stderr		string
 	Err		error
 }
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	tmp := t.TempDir()
 	rpBin := filepath.Join(tmp, "report-progress")
 	if out, err := exec.Command("cp", req.Bin, rpBin).CombinedOutput(); err != nil {

@@ -26,7 +26,7 @@ GoVersion=go1.24.0 -> keyB
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	req.Op = "compute_go_versions"
 	req.GoVersion = "go1.25.0"

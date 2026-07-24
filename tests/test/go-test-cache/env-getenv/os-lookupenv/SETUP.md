@@ -15,14 +15,14 @@ import (
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     cfg := envCacheCfg{
         LeafSetupGo: `import (
     "os"
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     _, _ = os.LookupEnv("DOCTEST_CACHE_ENV_PROBE")
     return nil
 }`,

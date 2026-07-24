@@ -33,7 +33,7 @@ doctest test --color -count=1 fixture -> 0 Cached; no grey leaf-cache skip dots
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	req.Op = "runtime_multi"
 	return nil

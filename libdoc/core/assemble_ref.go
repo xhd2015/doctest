@@ -328,12 +328,38 @@ func RefIntermediatePkgName(dirRel string) string {
 }
 
 // RefIntermediateAlias is a unique import alias for an intermediate dir (path-based).
+// When the sanitized name would collide with a common default import name (e.g. dir
+// "http" → http vs net/http), prefix with "i_" so leaf imports stay unambiguous.
 func RefIntermediateAlias(dirRel string) string {
 	dirRel = cleanRelDir(dirRel)
 	if dirRel == "" {
 		return "pkg"
 	}
-	return SanitizePackageName(strings.ReplaceAll(dirRel, "/", "_"))
+	alias := SanitizePackageName(strings.ReplaceAll(dirRel, "/", "_"))
+	if isStdlibDefaultImportName(alias) {
+		return "i_" + alias
+	}
+	return alias
+}
+
+// isStdlibDefaultImportName reports names that match common stdlib package
+// defaults and would collide if used as an intermediate import alias.
+func isStdlibDefaultImportName(name string) bool {
+	switch name {
+	case "http", "url", "json", "os", "io", "fmt", "time", "sync", "path",
+		"filepath", "strings", "bytes", "bufio", "context", "errors", "flag",
+		"log", "math", "net", "reflect", "regexp", "runtime", "sort", "strconv",
+		"syscall", "testing", "unicode", "utf8", "embed", "maps", "slices",
+		"cmp", "iter", "atomic", "rand", "sha256", "hex", "base64", "gzip",
+		"tar", "zip", "template", "html", "csv", "exec", "signal", "plugin",
+		"tls", "tcp", "udp", "user", "binary", "big", "cmplx", "bits", "image",
+		"color", "draw", "jpeg", "png", "gif", "mime", "multipart", "cookiejar",
+		"httptest", "smtp", "mail", "textproto", "pprof", "trace", "debug",
+		"buildinfo", "metric", "slog", "fs", "glob":
+		return true
+	default:
+		return false
+	}
 }
 
 // intermediateSetupName returns the exported Setup symbol for the i-th setup in a group.
@@ -951,13 +977,17 @@ func AssembleRefRootSource(rootDocs []SetupDocument, pkgName string) (string, er
 		if fn.Name == "" || fn.Name == "Setup" {
 			fn.Name = fmt.Sprintf("RootSetup%d", i)
 		}
-		fn.Params = ensureDoctestParam(fn.Params)
+		if err := requireDoctestParam("Setup", fn.Params, doc.Path); err != nil {
+			return "", err
+		}
 		writePackageFunc(&body, fn)
 		body.WriteString("\n")
 	}
 
 	run.Name = "Run"
-	run.Params = ensureDoctestParam(run.Params)
+	if err := requireDoctestParam("Run", run.Params, ""); err != nil {
+		return "", err
+	}
 	writePackageFunc(&body, *run)
 	body.WriteString("\n")
 
@@ -1034,7 +1064,9 @@ func AssembleRefIntermediateSource(
 		fn := *doc.GoBlock.Setup
 		fn.Name = intermediateSetupName(setupIdx, setupTotal)
 		setupIdx++
-		fn.Params = ensureDoctestParam(fn.Params)
+		if err := requireDoctestParam("Setup", fn.Params, doc.Path); err != nil {
+			return "", err
+		}
 		writePackageFunc(&body, fn)
 		body.WriteString("\n")
 	}
@@ -1170,7 +1202,9 @@ func AssembleRefLeafTestSource(tc TreeCase, compileOnly bool, pkgName, docTestRo
 		fn.ResultTypes = qualifyAncestorSymbols(fn.ResultTypes, part, rootAlias, rootDocs)
 		fn.ClosureResults = qualifyAncestorSymbols(fn.ClosureResults, part, rootAlias, rootDocs)
 		fn.Body = qualifyAncestorSymbols(fn.Body, part, rootAlias, rootDocs)
-		fn.Params = ensureDoctestParam(fn.Params)
+		if err := requireDoctestParam("Setup", fn.Params, doc.Path); err != nil {
+			return "", err
+		}
 		writeFuncClosure(&buf, name, fn)
 		buf.WriteString(fmt.Sprintf("\tif err := %s(t, d, req); err != nil {\n", name))
 		buf.WriteString(fmt.Sprintf("\t\tt.Fatalf(\"%s failed: %%v\", err)\n", escapeString(doc.Path)))
@@ -1183,7 +1217,9 @@ func AssembleRefLeafTestSource(tc TreeCase, compileOnly bool, pkgName, docTestRo
 	assertFn.ResultTypes = qualifyAncestorSymbols(assertFn.ResultTypes, part, rootAlias, rootDocs)
 	assertFn.ClosureResults = qualifyAncestorSymbols(assertFn.ClosureResults, part, rootAlias, rootDocs)
 	assertFn.Body = qualifyAncestorSymbols(assertFn.Body, part, rootAlias, rootDocs)
-	assertFn.Params = ensureDoctestParam(assertFn.Params)
+	if err := requireDoctestParam("Assert", assertFn.Params, tc.AssertFile.Path); err != nil {
+		return "", err
+	}
 	writeFuncClosure(&buf, "assert", assertFn)
 
 	buf.WriteString("\t_ = Run\n")

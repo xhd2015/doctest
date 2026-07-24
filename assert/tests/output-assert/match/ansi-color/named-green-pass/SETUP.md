@@ -13,7 +13,7 @@ Matcher -> pass or line-numbered diff
 1. Set template/actual fields for AC3 — named green passes.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "<ansi-color green>2 Pass</ansi-color>"
 	req.Actual = greenWrap("2 Pass")
 	return nil

@@ -17,7 +17,7 @@ import (
 	"path/filepath"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	root := writeUnlabeledTree(t)
 	leaf := filepath.Join(root, "plain_leaf")
 	req.Args = []string{"edit", leaf, "--add-label", "ui-automation", "--add-explanation", "AX test"}

@@ -15,7 +15,7 @@ doctest skills --help -> stdout contains "update"
 1. Run with `["skills", "--help"]`.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Args = []string{"skills", "--help"}
 	return nil
 }

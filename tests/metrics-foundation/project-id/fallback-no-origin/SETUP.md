@@ -24,7 +24,7 @@ abs root path -> sha256 -> nogit_<12 hex chars>
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Op = "project_id_fallback"
 	req.AbsRoot = "/tmp/metrics-foundation-fixture-root"
 	return nil

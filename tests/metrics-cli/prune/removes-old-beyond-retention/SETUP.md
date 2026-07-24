@@ -22,7 +22,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	ensureFixtureProject(t, req)
 	req.SnapshotRunFilesAfter = true
 	// 35 files: 2026-06-01 .. padded so lexicographic order matches creation index

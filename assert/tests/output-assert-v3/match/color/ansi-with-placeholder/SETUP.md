@@ -14,7 +14,7 @@ Matcher -> pass
 1. Set color span with literal dots in inner text and PORT placeholder; actual uses gray ANSI wrap.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = v3Template(
 		"__PORT__: type=number\n",
 		"status: <ansi-color gray>v1.0 ready</ansi-color> on __PORT__",

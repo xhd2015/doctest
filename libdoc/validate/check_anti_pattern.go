@@ -18,13 +18,19 @@ func checkFileAntiPatterns(path string, content string) []error {
 		return nil
 	}
 
+	var violations []error
+
+	// Check for bare DOCTEST_ROOT / DOCTEST_CASE identifiers (not d.DOCTEST_*)
+	if msg := checkBareDoctestRoots(path, goCode); msg != "" {
+		violations = append(violations, fmt.Errorf("%s", msg))
+	}
+
 	fset := token.NewFileSet()
 	file, parseErr := parser.ParseFile(fset, path+".go", "package testcase\n"+goCode, parser.ParseComments)
 	if parseErr != nil {
-		return nil
+		return violations
 	}
 
-	var violations []error
 	containsTemplateVars := collectContainsTemplateVars(file)
 	ast.Inspect(file, func(n ast.Node) bool {
 		switch node := n.(type) {
@@ -241,6 +247,44 @@ func doctestSessionIDEnvReadMessage(call *ast.CallExpr) string {
 	default:
 		return "anti-pattern: read DOCTEST_SESSION_ID via syscall.Getenv — use the doctest-injected variable DOCTEST_SESSION_ID directly"
 	}
+}
+
+// checkBareDoctestRoots scans source code for bare DOCTEST_ROOT, DOCTEST_CASE,
+// or DOCTEST_SESSION_ID identifiers that aren't prefixed with d. (i.e. the old
+// classic free-var style). In unified/ref gen mode, these are struct fields on
+// d *session.Doctest and must be accessed as d.DOCTEST_ROOT, not bare.
+func checkBareDoctestRoots(path, src string) string {
+	// Check for bare identifiers by looking for the tokens NOT preceded by "d.".
+	// Use a simple token-based scan on the raw source before AST parsing.
+	for _, tok := range []string{"DOCTEST_ROOT", "DOCTEST_CASE", "DOCTEST_SESSION_ID"} {
+		idx := 0
+		for {
+			pos := strings.Index(src[idx:], tok)
+			if pos < 0 {
+				break
+			}
+			absPos := idx + pos
+			// Check if preceded by "d." — skip those (they're already correct).
+			if absPos >= 2 && src[absPos-2:absPos] == "d." {
+				idx = absPos + len(tok)
+				continue
+			}
+			// Also skip if it's part of a string literal or comment.
+			// Simple heuristic: if there's a // on this line before the token, it's a comment.
+			lineStart := strings.LastIndexByte(src[:absPos], '\n')
+			if lineStart < 0 {
+				lineStart = 0
+			}
+			line := src[lineStart:absPos]
+			if strings.Contains(line, "//") || strings.Contains(line, "`") {
+				idx = absPos + len(tok)
+				continue
+			}
+			return fmt.Sprintf("%s: %s used without d. prefix — add d *session.Doctest param and use d.%s instead of bare %s",
+				path, tok, tok, tok)
+		}
+	}
+	return ""
 }
 
 func isGoTestShellOut(call *ast.CallExpr) bool {

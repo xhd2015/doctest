@@ -11,7 +11,7 @@ Matcher <- exact cost: $5.00
 1. Set escaped pattern line `cost: \$5\.00` and identical actual.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = v3Template("", "cost: \\$5\\.00")
 	req.Actual = "cost: $5.00"
 	return nil

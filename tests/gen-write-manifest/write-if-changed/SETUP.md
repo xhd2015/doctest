@@ -35,7 +35,7 @@ import (
 const sampleGoA = "package leaf\n\nfunc Answer() int { return 42 }\n"
 const sampleGoB = "package leaf\n\nfunc Answer() int { return 99 }\n"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.ModPath = "example.com/app"
 	req.HasMod = true
 	prepareFreshGen(t, req, "module example.com/app\n\ngo 1.21\n")

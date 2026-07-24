@@ -19,7 +19,7 @@ doctest test --color <dir> -> red FAIL(passed/total)
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	testDir := createPassFailTree(t, 0, 1)
 	req.Args = []string{"test", "--color", testDir}
 	return nil

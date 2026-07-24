@@ -36,7 +36,7 @@ type Response struct {
 	DotCount	int
 	Output		string
 }
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	fixtureBase := filepath.Join(os.TempDir(), "doctest-libdoc-build-dot-progress-fast")
 	subRoot := filepath.Join(fixtureBase, "tree")
 	genDir := filepath.Join(fixtureBase, "gendir")

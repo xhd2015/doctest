@@ -82,7 +82,7 @@ type Response struct {
 	ExitCode int
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	// Subprocess isolation: feed stdin via cmd.Stdin; never mutate os.Stdin/Stdout/Stderr.
 	bin := req.Bin
 	if bin == "" {

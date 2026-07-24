@@ -17,7 +17,7 @@ Matcher -> fail (trailing blank line missing)
 2. Set actual to `"foo\n"` (no trailing blank line after the `foo` line).
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "foo\n\n"
 	req.Actual = "foo\n"
 	return nil

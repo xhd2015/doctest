@@ -23,7 +23,7 @@ progress dots -> . F | verbose -> go test -v | count -> N tests
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     projDir := createMultiDirProject(t, req)
     req.WorkDir = projDir
     req.Args = []string{"test", "-v", "test_a", "test_b/..."}

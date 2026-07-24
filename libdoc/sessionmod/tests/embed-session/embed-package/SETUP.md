@@ -14,7 +14,7 @@ Content() / ContentMD5() / RawSourceCacheKeyMD5()
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	// Grouping node: ensure ModuleRoot already resolved by root Setup.
 	if req.ModuleRoot == "" {
 		t.Fatal("ModuleRoot must be set by root Setup")

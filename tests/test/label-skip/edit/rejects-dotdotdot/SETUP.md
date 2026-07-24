@@ -12,7 +12,7 @@ doctest edit ./mod/... -> error exit
 1. Run `doctest edit ./any/... --add-label ui`.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Args = []string{"edit", "./any/...", "--add-label", "ui-automation"}
 	return nil
 }

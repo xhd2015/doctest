@@ -27,8 +27,8 @@ func RunTestLeaf(t *testing.T) {
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
-	req.AuthorDMode = "omit"
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	req.AuthorDMode = "named-d"
 	return nil
 }
 ```

@@ -24,7 +24,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	testDir := createTempProject(t, "tests")
 	if err := createDoctestLeaf(filepath.Join(testDir, "simple")); err != nil {
 		t.Fatalf("create leaf: %v", err)

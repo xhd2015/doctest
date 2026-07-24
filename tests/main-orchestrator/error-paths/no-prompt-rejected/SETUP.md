@@ -22,7 +22,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	// L2 short path: no Env isolation, no product binary.
 	req.UseCLI = false
 	req.Bin = ""

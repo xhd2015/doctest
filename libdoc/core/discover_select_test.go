@@ -11,23 +11,23 @@ func TestDiscoverLightSkipsDeepParseOfHeavy(t *testing.T) {
 	writeTreeFile(t, root, "DOCTEST.md", doctestDoc(`
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 `))
 	writeTreeFile(t, root, "SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	// Unlabeled good leaf
 	writeTreeFile(t, root, "fast/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "fast/ASSERT.md", assertDoc(`
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 `))
 	// Heavy leaf with BROKEN setup body — would fail full discover hydrate of that leaf
 	writeTreeFile(t, root, "slow/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
-	writeTreeFile(t, root, "slow/ASSERT.md", "---\nlabel: heavy\n---\n\n## Expected\n\n```go\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {\n\tnot valid go (((\n}\n```\n")
+	writeTreeFile(t, root, "slow/ASSERT.md", "---\nlabel: heavy\n---\n\n## Expected\n\n```go\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n\tnot valid go (((\n}\n```\n")
 
 	light, err := DiscoverTreeCasesLight(root)
 	if err != nil {
@@ -65,15 +65,15 @@ func TestHydrateBrokenSelectedFails(t *testing.T) {
 	writeTreeFile(t, root, "DOCTEST.md", doctestDoc(`
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 `))
 	writeTreeFile(t, root, "SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
 	writeTreeFile(t, root, "bad/SETUP.md", setupDoc(`
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
-	writeTreeFile(t, root, "bad/ASSERT.md", "## Expected\n\n```go\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {\n\tnot valid (((\n}\n```\n")
+	writeTreeFile(t, root, "bad/ASSERT.md", "## Expected\n\n```go\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n\tnot valid (((\n}\n```\n")
 
 	light, err := DiscoverTreeCasesLight(root)
 	if err != nil {

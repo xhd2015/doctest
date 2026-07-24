@@ -12,7 +12,7 @@ Parser -> Pattern with Placeholder{ID, regex subpattern}
 1. Set template with __ID__: regex=[a-z]+ and body id=__ID__.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = v3Template("__ID__: regex=[a-z]+\n", "id=__ID__")
 	return nil
 }

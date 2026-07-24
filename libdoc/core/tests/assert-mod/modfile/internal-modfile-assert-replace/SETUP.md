@@ -19,7 +19,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     req.RunKind = "internal-modfile"
 	req.ModRoot = t.TempDir()
 	parentGoMod := "module example.com/app\n\ngo 1.21\n\nreplace example.com/dep => ../dep\n"

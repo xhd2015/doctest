@@ -32,7 +32,7 @@ doctest -> FAIL (0/3, N cancelled) in …   # planned=3, N>0
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	testDir := createSleepTree(t, 3, 5)
 	req.Args = []string{"test", "--timeout=2s", "--no-color", testDir}
 	return nil

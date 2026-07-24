@@ -20,7 +20,7 @@ older run (old/only-leaf) + newer default run
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	ensureFixtureProject(t, req)
 	older := "2026-07-01-10-00-00-00-pickold1.jsonl"
 	newer := "2026-07-16-09-00-00-00-picknew1.jsonl"

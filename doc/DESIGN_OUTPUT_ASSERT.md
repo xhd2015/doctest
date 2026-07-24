@@ -13,7 +13,7 @@
 > ```go
 > import "github.com/xhd2015/doctest/assert"
 >
-> func Assert(t *testing.T, req *Request, resp *Response, err error) {
+> func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 >     // ...
 >     assert.Output(t, resp.Stdout, `---
 > version: 3
@@ -1041,7 +1041,7 @@ type matchState struct {
 ```
 
 ```go
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
     assert.Output(t, resp.Output, `` +
 `..
   (2 Run, 2 Pass, 1 Cached, 0 Fail)

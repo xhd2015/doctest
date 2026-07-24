@@ -13,7 +13,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *droot.Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *droot.Request) error {
 	_ = 20 * time.Second
 	_ = req
 	return nil

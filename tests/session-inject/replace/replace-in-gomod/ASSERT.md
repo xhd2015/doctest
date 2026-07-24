@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	cacheDir := expectedSessionCacheDir(t)
 	if req.GenDir == "" {
 		t.Fatal("req.GenDir is empty; Setup must set request-local gen dir")

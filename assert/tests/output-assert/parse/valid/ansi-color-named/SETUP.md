@@ -12,7 +12,7 @@ Parser -> Pattern with LiteralLine, BlockOptional, Hint, etc.
 1. Set template/actual fields for P11 — named gray ansi-color.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "<ansi-color gray>1 Cached</ansi-color>"
 	return nil
 }

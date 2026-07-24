@@ -23,7 +23,7 @@ import (
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.UseCLI = true // true e2e agent generate
 	requireFakeCodex(t, req)
 	outDir := filepath.Join(t.TempDir(), "generated-doc-tests")

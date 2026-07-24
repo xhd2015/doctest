@@ -60,7 +60,7 @@ import (
 	"github.com/xhd2015/doctest/libdoc/testtree"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	if req.GoVersion == "" {
 		req.GoVersion = "go1.25.0"
@@ -82,7 +82,7 @@ func prepareTwinTrees(t *testing.T, req *Request) {
 				Name: "leaf",
 				AssertGo: `import "testing"
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	// twin_marker
 	_ = req
 	_ = resp

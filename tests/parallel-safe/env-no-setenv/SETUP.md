@@ -93,13 +93,13 @@ func scenarioFence(line string) string {
 func tinyRootSetupMD() string {
 	return "# Scenario\n\n**Feature**: tiny fixture root\n\n" + scenarioFence("root setup") +
 		"\n\n## Steps\n1. no-op\n\n" +
-		doctestGoBlock("import \"testing\"\n\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }\n")
+		doctestGoBlock("import \"testing\"\n\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }\n")
 }
 
 func tinyLeafSetupMD() string {
 	return "# Scenario\n\n**Feature**: tiny leaf\n\n" + scenarioFence("leaf setup") +
 		"\n\n## Steps\n1. no-op\n\n" +
-		doctestGoBlock("import \"testing\"\n\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }\n")
+		doctestGoBlock("import \"testing\"\n\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }\n")
 }
 
 // tinyLeafAssertSessionMD requires non-empty d.DOCTEST_SESSION_ID (nested suite inject).
@@ -118,7 +118,7 @@ func tinyLeafAssertSessionMD() string {
 func tinyLeafAssertOKMD() string {
 	return "# Scenario\n\n**Feature**: leaf passes\n\n" + scenarioFence("leaf pass") +
 		"\n\n## Expected\n- pass\n\n" +
-		doctestGoBlock("import \"testing\"\n\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}\n")
+		doctestGoBlock("import \"testing\"\n\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}\n")
 }
 
 func tinyRunGo() string {
@@ -127,7 +127,7 @@ func tinyRunGo() string {
 type Request struct{}
 type Response struct{}
 
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	_ = req
 	return &Response{}, nil
 }

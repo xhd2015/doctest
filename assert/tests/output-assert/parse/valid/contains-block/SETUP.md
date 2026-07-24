@@ -12,7 +12,7 @@ Parser -> Pattern with LiteralLine, BlockOptional, Hint, etc.
 1. Set template/actual fields for P9 — contains block with three fragments.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "<contains>\nline1\nline2\nline3\n</contains>"
 	return nil
 }

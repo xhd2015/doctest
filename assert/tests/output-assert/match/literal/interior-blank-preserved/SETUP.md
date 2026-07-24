@@ -16,7 +16,7 @@ Matcher -> pass
 2. Set actual to `"a\n\nb"` (same bytes, no trailing `\n` on either side).
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "a\n\nb"
 	req.Actual = "a\n\nb"
 	return nil

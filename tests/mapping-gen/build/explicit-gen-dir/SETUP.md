@@ -23,7 +23,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	// Request-local gen dir: Parallel-safe (no package-level var genDir).
 	req.GenDir = filepath.Join(t.TempDir(), "generated")
 	if err := os.MkdirAll(req.GenDir, 0755); err != nil {

@@ -12,7 +12,7 @@ Parser -> OmitLine{3}
 1. Set body line ...3 lines omitted....
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = v3Template("", "...3 lines omitted...")
 	return nil
 }

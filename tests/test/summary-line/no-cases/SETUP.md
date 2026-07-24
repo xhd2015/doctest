@@ -19,7 +19,7 @@ doctest test <empty-dir> -> Total=0 -> stderr "no tests"
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	emptyDir := createEmptyDir(t)
 	req.Args = []string{"test", emptyDir}
 	return nil

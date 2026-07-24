@@ -24,7 +24,7 @@ doctest -> no "cancelled" on PASS/FAIL or progress
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	testDir := createFastPassTree(t)
 	req.Args = []string{"test", "--no-color", testDir}
 	return nil

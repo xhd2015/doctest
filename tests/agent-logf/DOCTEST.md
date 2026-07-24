@@ -90,7 +90,7 @@ type Response struct {
 	Stderr		string
 	Err		error
 }
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	t.Helper()
 	// Env (e.g. DOCTEST_DEBUG_SESSION_HOME) needs a child process — never Setenv.
 	// WorkDir alone can stay L2 but these leaves almost always set Env.

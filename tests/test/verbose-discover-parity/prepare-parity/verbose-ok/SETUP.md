@@ -24,7 +24,7 @@ doctest test -v parent/
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	_, parentDir := createMegaParentNestedFixture(t)
 	req.Args = []string{"test", "-v", "--no-color", parentDir}
 	return nil

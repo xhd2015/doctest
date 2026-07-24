@@ -20,7 +20,7 @@ RunTest(2-leaf, GenDir=tmp)
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Op = "ref_gen"
 	return nil
 }

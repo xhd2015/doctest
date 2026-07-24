@@ -13,7 +13,7 @@ Parser -> Pattern with USER string placeholder
 1. Set template with explicit version: 3 and __USER__ string placeholder.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = v3Template("__USER__: type=string\n", "Hello __USER__")
 	return nil
 }

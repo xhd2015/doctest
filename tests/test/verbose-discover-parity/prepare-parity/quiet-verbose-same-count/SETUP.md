@@ -22,7 +22,7 @@ assert:  Pq == Pv == 1
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	_, parentDir := createMegaParentNestedFixture(t)
 	req.Op = "dual_cli"
 	req.QuietArgs = []string{"test", "--no-color", parentDir}

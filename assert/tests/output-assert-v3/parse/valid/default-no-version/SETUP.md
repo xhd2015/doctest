@@ -13,7 +13,7 @@ Parser -> Pattern with USER string placeholder
 1. Set template with __USER__ but no version key in YAML header.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = v3TemplateNoVersion("__USER__: type=string\n", "Hello __USER__")
 	return nil
 }

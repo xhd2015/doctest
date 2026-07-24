@@ -12,7 +12,7 @@ Parser -> parse error
 1. Set body line `...abc lines omitted...` (omit-intent shape, non-numeric count — do not escape the dots; omit is special, not content RE).
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = v3Template("", "...abc lines omitted...")
 	return nil
 }

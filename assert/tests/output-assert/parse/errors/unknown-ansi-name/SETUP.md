@@ -12,7 +12,7 @@ Parser -> parse error (position + message)
 1. Set template/actual fields for P15 — unknown ansi color name.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "<ansi-color orange>x</ansi-color>"
 	return nil
 }

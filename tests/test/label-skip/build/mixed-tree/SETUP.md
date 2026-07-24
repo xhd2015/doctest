@@ -13,7 +13,7 @@ doctest build <tree> -> exit 0, compiles all leaves
 2. Run `doctest build <tree>`.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	root := writeLabeledTree(t, true, "ui-automation", "mixed build")
 	req.Args = []string{"build", root}
 	return nil

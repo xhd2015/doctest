@@ -31,7 +31,7 @@ run2: doctest test <mod>/...  -> tree-a may Cached; tree-b MUST execute (fail)
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	req.Op = "runtime_multi"
 	prepareWorkspaceSameRelpathPassFail(t, req)

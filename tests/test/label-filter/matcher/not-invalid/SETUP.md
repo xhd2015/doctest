@@ -12,7 +12,7 @@ EvalLabelExpr("e2e !", labels) -> error
 1. Expect non-nil parse errors.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	_ = t
 	_ = req
 	return nil

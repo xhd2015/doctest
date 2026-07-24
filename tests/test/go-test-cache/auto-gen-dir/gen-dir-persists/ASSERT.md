@@ -16,7 +16,7 @@ import (
     "testing"
 )
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
     if req.MRGenDir == "" {
         t.Fatal("gen dir path was not captured from output")
     }

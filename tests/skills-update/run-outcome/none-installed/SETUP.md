@@ -15,7 +15,7 @@ fresh WorkDir -> doctest skills update -> exit 0, not-installed line per skill
 1. Run `skills update` only.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.PreInstalls = nil
 	req.Args = []string{"skills", "update"}
 	return nil

@@ -25,7 +25,7 @@ import (
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     projDir := createCrossModuleProject(t, "sub", "testproj2/sub", "hidden_test")
     req.WorkDir = projDir
     req.Args = []string{"test", "-v", "./..."}

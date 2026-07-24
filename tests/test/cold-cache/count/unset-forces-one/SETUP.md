@@ -20,7 +20,7 @@ doctest test --cold-cache <tree>   # no -count flag
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Args = []string{"test", "--cold-cache", req.CCTestDir}
 	return nil
 }

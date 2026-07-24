@@ -23,7 +23,7 @@ doctest test --cold-cache --gen-dir warmHome|warmHome/foo
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	withCacheSandbox(t, req)
 	req.CCTestDir = createTempTestProject(t)
 	return nil

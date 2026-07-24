@@ -13,7 +13,7 @@ doctest test <tree-root> -> PASS(1/1) + SKIPPED summary
 2. Run `doctest test <tree-root>`.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	root := writeLabeledTree(t, true, "ui-automation", "heavy ui test")
 	req.Args = []string{"test", root}
 	return nil

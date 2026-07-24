@@ -362,7 +362,9 @@ func AssembleUnifiedLeafSource(tc TreeCase, compileOnly bool, pkgName, docTestRo
 		fn.ResultTypes = qualifyAncestorSymbols(fn.ResultTypes, part, rootAlias, rootDocs)
 		fn.ClosureResults = qualifyAncestorSymbols(fn.ClosureResults, part, rootAlias, rootDocs)
 		fn.Body = qualifyAncestorSymbols(fn.Body, part, rootAlias, rootDocs)
-		fn.Params = ensureDoctestParam(fn.Params)
+		if err := requireDoctestParam("Setup", fn.Params, doc.Path); err != nil {
+			return "", err
+		}
 		writeFuncClosure(&buf, name, fn)
 		buf.WriteString(fmt.Sprintf("\tif err := %s(t, d, req); err != nil {\n", name))
 		buf.WriteString(fmt.Sprintf("\t\tt.Fatalf(\"%s failed: %%v\", err)\n", escapeString(doc.Path)))
@@ -375,7 +377,9 @@ func AssembleUnifiedLeafSource(tc TreeCase, compileOnly bool, pkgName, docTestRo
 	assertFn.ResultTypes = qualifyAncestorSymbols(assertFn.ResultTypes, part, rootAlias, rootDocs)
 	assertFn.ClosureResults = qualifyAncestorSymbols(assertFn.ClosureResults, part, rootAlias, rootDocs)
 	assertFn.Body = qualifyAncestorSymbols(assertFn.Body, part, rootAlias, rootDocs)
-	assertFn.Params = ensureDoctestParam(assertFn.Params)
+	if err := requireDoctestParam("Assert", assertFn.Params, tc.AssertFile.Path); err != nil {
+		return "", err
+	}
 	writeFuncClosure(&buf, "assert", assertFn)
 
 	buf.WriteString("\t_ = Run\n")

@@ -20,7 +20,7 @@ create session -> run sub-agent -> events recorded -> yield questions -> resume
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     req.Env = append(req.Env, "TEST_GROUP=agent-implement")
     return nil
 }

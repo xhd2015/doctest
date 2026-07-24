@@ -79,7 +79,7 @@ func isolateRunEnv(t *testing.T) []string {
 // skipAssertGo is Assert body that always t.Skip (runtime suite-leaf skip).
 const skipAssertGo = `import "testing"
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	t.Skip("intentional runtime t.Skip for summary-tskip fixture")
 }
 `
@@ -116,7 +116,7 @@ func createOneFailOneTSkipTree(t *testing.T) string {
 			Expected: "fails",
 			AssertGo: `import "testing"
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	t.Fatal("forced failure")
 }
 `,

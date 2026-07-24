@@ -13,7 +13,7 @@ Facade -> legacy_v1 literal parse
 2. Clear `ExpectParseError` — v1 fallback should parse OK.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.ExpectParseError = false
 	req.ExpectV1Fallback = true
 	req.Template = "---\nfoo: 1\n---"

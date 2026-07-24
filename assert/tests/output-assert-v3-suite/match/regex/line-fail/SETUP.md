@@ -11,7 +11,7 @@ Matcher <- actual with no match
 1. Same regex template as M4 with non-matching actual.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = v3Template("", ".*Some middle content.*suffix content")
 	req.Actual = "no match here"
 	return nil

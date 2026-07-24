@@ -13,7 +13,7 @@ doctest test <tree-root> -> 0 run, SKIPPED summary, no PASS/FAIL line
 2. Run `doctest test <tree-root>`.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	root := writeLabeledTree(t, false, "human-guided-ui-test", "manual only")
 	req.Args = []string{"test", root}
 	return nil

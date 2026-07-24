@@ -39,7 +39,7 @@ type Response struct {
 }
 
 // Run parses flags in-process; map parse failure to ExitCode/Stderr for assert parity.
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	t.Helper()
 	_, _, err := runner.ParseTestOptions(req.Args)
 	resp := &Response{}

@@ -144,7 +144,7 @@ type Response struct {
 	Cases       []core.TreeCase
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	t.Helper()
 	if req.Timeout <= 0 {
 		req.Timeout = 2 * time.Minute

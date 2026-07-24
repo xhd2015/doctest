@@ -13,9 +13,9 @@
   - **unified** — `AssembleUnifiedLeafSource` (leaf `RunTestLeaf` package registering with suite)
 - **Session Doctest** — public type `session.Doctest` (`github.com/xhd2015/doctest/session`) with fields
   `DOCTEST_ROOT`, `DOCTEST_CASE`, `DOCTEST_SESSION_ID` (struct fields, not free package vars).
-- **Author harness** — SETUP / Run / Assert funcs written by test authors. May omit the inject
-  param or declare an optional second param after `t` of type `*session.Doctest` (any name).
-- **Signature rules** — `libdoc/rules` (+ parse) accept both old (no `d`) and new (with `d`) shapes.
+- **Author harness** — SETUP / Run / Assert funcs written by test authors. Must declare
+  a second param after `t` of type `*session.Doctest` (any name; conventionally `d`).
+- **Signature rules** — `libdoc/rules` (+ parse) require `d`; omitting it is a validation error (no auto-inject).
 - **Generated test** — the `*_test.go` / leaf package body that constructs `d`, wires Setup→Run→Assert.
 
 **Behaviors**
@@ -23,8 +23,8 @@
 - At the start of each generated test entry, assembler constructs:
   `d := &session.Doctest{ DOCTEST_ROOT, DOCTEST_CASE, DOCTEST_SESSION_ID }`.
 - Call sites always pass that `d` into Setup / Run / Assert.
-- If the author omitted the second param, assembler inserts `_ *session.Doctest` in the
-  generated signature; if the author named it, the name is preserved.
+- If the author omitted the second param, assemble/validate fails with a clear error
+  (no silent rewrite). If the author named it, the name is preserved as written.
 - No leaf `os.Chdir` / Getwd-restore boilerplate is emitted.
 - No package-level free vars `DOCTEST_ROOT` / `DOCTEST_SESSION_ID` (or free-var assignment).
 - Import path `github.com/xhd2015/doctest/session` is present when `session.Doctest` is used.
@@ -45,16 +45,16 @@ TreeCase + author funcs
 generate-session-doctest/
 ├── classic/                              assemble path: AssembleTestSource
 │   ├── injects-d/                        d construct + pass; no Chdir; no free vars
-│   ├── optional-d-omitted-underscore/    author omits d → `_ *session.Doctest`
+│   ├── optional-d-omitted-underscore/    author omits d → clear error (no auto-inject)
 │   ├── optional-d-present-keep-name/     author writes `d *session.Doctest` → keep name
 │   └── case-path-leaf-abs/               DOCTEST_CASE is abs(root+leaf rel)
 ├── ref/                                  assemble path: AssembleRefLeafTestSource (+ root)
 │   └── injects-d/                        same inject contract on ref leaf (and root free vars gone)
 ├── unified/                              assemble path: AssembleUnifiedLeafSource
 │   └── injects-d/                        same inject contract on unified leaf
-└── signature-rules/                      parse/rules accept optional d
+└── signature-rules/                      parse/rules require d
     ├── with-d-accepted/                  Setup/Run/Assert with d parse OK
-    └── without-d-still-accepted/         classic without-d shapes still parse OK
+    └── without-d-still-accepted/         without-d shapes rejected
 ```
 
 ## Test Index
@@ -62,13 +62,13 @@ generate-session-doctest/
 | Leaf | Description |
 |------|-------------|
 | `classic/injects-d` | Classic source constructs `session.Doctest`, passes `d`, no Chdir, no free DOCTEST_* vars |
-| `classic/optional-d-omitted-underscore` | Author omits second param → generated params include `_ *session.Doctest` |
+| `classic/optional-d-omitted-underscore` | Author omits second param → assemble error (no auto-inject) |
 | `classic/optional-d-present-keep-name` | Author uses `d *session.Doctest` → generated keeps that name |
 | `classic/case-path-leaf-abs` | `d.DOCTEST_CASE` assignment uses abs path joining root + leaf rel |
 | `ref/injects-d` | Ref leaf (and root package) follow inject contract; no Chdir / free vars |
 | `unified/injects-d` | Unified leaf follows inject contract; no Chdir / free vars |
 | `signature-rules/with-d-accepted` | Parse accepts Setup/Run/Assert signatures that include `d *session.Doctest` |
-| `signature-rules/without-d-still-accepted` | Old without-d signatures still accepted |
+| `signature-rules/without-d-still-accepted` | Old without-d signatures rejected |
 
 ## How to Run
 
@@ -114,7 +114,7 @@ type Response struct {
 	ParseErr string // non-empty when parse/rules failed
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	switch req.Op {
 	case "classic":
 		root := resolveDocRoot(t, req)

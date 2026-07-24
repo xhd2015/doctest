@@ -22,7 +22,7 @@ doctest -> .doctest_run_* -> -modfile (parent go.mod + assert replace)
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	// No process Env (Parallel-safe). Temp fixtures have no go.work.
 	_ = req
 	return nil

@@ -20,7 +20,7 @@ DOCTEST.md only -> Request/Response/Run -> vet pass
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	treeDir := writeTree(t, treeOpts{withVersion: true})
 	setVetArgs(t, req, treeDir)
 	return nil

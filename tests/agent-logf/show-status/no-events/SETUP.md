@@ -27,7 +27,7 @@ import (
     "time"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     sessionHome := t.TempDir()
     today := time.Now().Format("2006/01/02")
     sessionDir := filepath.Join(sessionHome, today, "sess_test_status_no_ev")

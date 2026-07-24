@@ -21,7 +21,7 @@ non-root missing Setup -> build error
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     t.Log("validation-run-restrictions: testing Run placement rules")
     return nil
 }

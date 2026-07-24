@@ -26,7 +26,7 @@ import (
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     projDir := createTempProject(t, req)
 
     // create deep doctest tree: group/subgroup/deep_tests

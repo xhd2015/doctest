@@ -18,7 +18,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	repoDir, modDir := createLabelFilterGitMod(t)
 	assertPath := filepath.Join(modDir, "slow", "ASSERT.md")
 	data, err := os.ReadFile(assertPath)

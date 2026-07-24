@@ -30,7 +30,7 @@ run3: doctest test fixture <disable-flag> -> 0 Cached
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	req.FixtureDir = preparePassFixture(t, 1)
 	req.Args = []string{"test", req.FixtureDir}

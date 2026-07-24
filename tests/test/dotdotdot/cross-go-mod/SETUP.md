@@ -54,7 +54,7 @@ func createCrossModuleProject(t *testing.T, nestedSubDir, nestedModulePath, chil
     return tmp
 }
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     req.Timeout = 120 * time.Second
     return nil
 }

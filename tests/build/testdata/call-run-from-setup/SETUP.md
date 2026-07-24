@@ -26,12 +26,12 @@ type Response struct {
     Message string
 }
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     req.Name = "root"
     return nil
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
     return &Response{Message: "hello " + req.Name}, nil
 }
 ```

@@ -45,7 +45,7 @@ func endFence() string {
 	return bt(3) + "\n"
 }
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	_ = t
 	_ = req
 	return nil
@@ -57,12 +57,12 @@ func writeMinimalLeafSetupAssert(t *testing.T, root, leafRel string) {
 	setup.WriteString("# Scenario\n\n**Feature**: label-filter select fixture leaf\n\n")
 	setup.WriteString(bt(3) + "\nfixture leaf\n" + bt(3) + "\n\n## Steps\n1. leaf setup\n\n")
 	setup.WriteString(goFence())
-	setup.WriteString("import \"testing\"\n\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }\n")
+	setup.WriteString("import \"testing\"\n\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }\n")
 	setup.WriteString(endFence())
 	var assert strings.Builder
 	assert.WriteString("## Expected\n- passes\n\n")
 	assert.WriteString(goFence())
-	assert.WriteString("func Assert(t *testing.T, req *Request, resp *Response, err error) {}\n")
+	assert.WriteString("func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}\n")
 	assert.WriteString(endFence())
 	testtree.WriteFile(t, root, leafRel+"/SETUP.md", setup.String())
 	testtree.WriteFile(t, root, leafRel+"/ASSERT.md", assert.String())
@@ -84,7 +84,7 @@ func writeLabeledAssert(t *testing.T, root, leafRel, label, explanation string) 
 	}
 	b.WriteString("---\n\n## Expected\n- passes\n\n")
 	b.WriteString(goFence())
-	b.WriteString("func Assert(t *testing.T, req *Request, resp *Response, err error) {}\n")
+	b.WriteString("func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}\n")
 	b.WriteString(endFence())
 	testtree.WriteFile(t, root, leafRel+"/ASSERT.md", b.String())
 }

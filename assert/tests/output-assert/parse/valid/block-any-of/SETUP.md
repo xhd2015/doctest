@@ -12,7 +12,7 @@ Parser -> Pattern with LiteralLine, BlockOptional, Hint, etc.
 1. Set template/actual fields for P8 — block any-of with two branches.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "<any-of>\n<expect>\na\n</expect>\n<expect>\nb\n</expect>\n</any-of>"
 	return nil
 }

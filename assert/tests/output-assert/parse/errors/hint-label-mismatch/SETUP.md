@@ -12,7 +12,7 @@ Parser -> parse error (position + message)
 1. Set template/actual fields for P10 — hint label mismatch.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "<hint:id>abc</hint:wrong>"
 	return nil
 }

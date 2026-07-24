@@ -29,7 +29,7 @@ run2: test --color same fixture -> Cached >= 2; progress has grey dots
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	req.Op = "runtime_multi"
 	req.FixtureDir = preparePassFixture(t, 2)

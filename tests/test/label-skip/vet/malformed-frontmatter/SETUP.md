@@ -13,7 +13,7 @@ doctest vet <tree> -> non-zero exit
 2. Run `doctest vet <tree>`.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	root := writeMalformedAssertTree(t)
 	req.Args = []string{"vet", root}
 	return nil

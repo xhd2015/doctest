@@ -93,7 +93,7 @@ func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(leafDir, "ASSERT.md"), []byte(doctestGoBlock(`import "testing"
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}`)), 0644); err != nil {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}`)), 0644); err != nil {
 		t.Fatal(err)
 	}
 

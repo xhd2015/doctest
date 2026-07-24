@@ -19,7 +19,7 @@ doctest test <dir> -> leaf Setup sleeps ~1s -> inline + final DURATION >= 1s
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	testDir := createSlowLeafTree(t)
 	req.Args = []string{"test", testDir}
 	return nil

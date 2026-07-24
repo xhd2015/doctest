@@ -26,7 +26,7 @@ explicit gen-dir -> absolute path under sandbox project (Short may be abs)
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	// Default to auto mapping-gen; explicit-gen-dir leaf overrides to "_gen".
 	req.GenDir = ""
 	return nil

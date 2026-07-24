@@ -11,7 +11,7 @@ Matcher <- plain 1 Cached without SGR codes
 1. Same color template as M15 with plain actual.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = v3Template("", "<ansi-color gray>1 Cached</ansi-color>")
 	req.Actual = "1 Cached"
 	return nil

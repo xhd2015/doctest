@@ -53,7 +53,7 @@ to leaf before `Run`. Must implement the preconditions and steps described in
 the markdown sections above the code block.
 
 ```go
-func Setup(t *testing.T, req *Request) error
+func Setup(t *testing.T, d *session.Doctest, req *Request) error
 ```
 
 - Returns `error` — if non-nil, the test fails immediately (before `Run` and `Assert`)
@@ -77,7 +77,7 @@ Defined **exclusively** in the root `DOCTEST.md` Go block. Executes the core
 behavior under test. Must not be redefined by any descendant (Rule 9).
 
 ```go
-func Run(t *testing.T, req *Request) (*Response, error)
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error)
 ```
 
 - Returns `(*Response, error)` — the `error` is passed to `Assert`, not treated
@@ -126,7 +126,7 @@ Declared in every `ASSERT.md`. Validates the outcomes described in
 `## Expected`, `## Side Effects`, `## Errors`, and `## Exit Code`.
 
 ```go
-func Assert(t *testing.T, req *Request, resp *Response, err error)
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error)
 ```
 
 - `resp` is the value returned by `Run`; `err` is the error returned by `Run`
@@ -202,7 +202,7 @@ prose, no text, no other blocks after the closing `` ``` ``.
 ```go
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { ... }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { ... }
 ```
 
 This sentence comes after the block and makes it non-final.
@@ -225,7 +225,7 @@ type Response struct {
     Output string
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) { ... }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { ... }
 ```
 **Error**: `DOCTEST.md: must define type Request and type Response`
 
@@ -245,7 +245,7 @@ type Response struct {
 ```go
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { ... }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { ... }
 ```
 **Error**: `SETUP.md: Request and Response must be defined in DOCTEST.md, not SETUP.md`
 
@@ -276,7 +276,7 @@ type Response struct{ Result int }
 ### 5. `func Setup` must have the correct signature
 
 ```go
-func Setup(t *testing.T, req *Request) error
+func Setup(t *testing.T, d *session.Doctest, req *Request) error
 ```
 
 **Violation** — wrong parameter type:
@@ -285,23 +285,23 @@ func Setup(t *testing.T, req string) error {
     return nil
 }
 ```
-**Error**: `SETUP.md: Setup must be func Setup(t *testing.T, req *Request) error`
+**Error**: `SETUP.md: Setup must be func Setup(t *testing.T, d *session.Doctest, req *Request) error`
 
 ---
 
 ### 6. `func Run` must have the correct signature
 
 ```go
-func Run(t *testing.T, req *Request) (*Response, error)
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error)
 ```
 
 **Violation** — missing `*Response` in return:
 ```go
-func Run(t *testing.T, req *Request) error {
+func Run(t *testing.T, d *session.Doctest, req *Request) error {
     return nil
 }
 ```
-**Error**: `SETUP.md: Run must be func Run(t *testing.T, req *Request) (*Response, error)`
+**Error**: `SETUP.md: Run must be func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error)`
 
 ---
 
@@ -317,14 +317,14 @@ func Check(t *testing.T, req *Request, resp *Response, err error) {
     t.Log("not an Assert function")
 }
 ```
-**Error**: `leaf/ASSERT.md: missing func Assert(t *testing.T, req *Request, resp *Response, err error)`
+**Error**: `leaf/ASSERT.md: missing func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error)`
 
 ---
 
 ### 8. `func Assert` must have the correct signature
 
 ```go
-func Assert(t *testing.T, req *Request, resp *Response, err error)
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error)
 ```
 
 **Violation** — missing parameters:
@@ -332,7 +332,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error)
 func Assert(t *testing.T) {
 }
 ```
-**Error**: `leaf/ASSERT.md: Assert must be func Assert(t *testing.T, req *Request, resp *Response, err error)`
+**Error**: `leaf/ASSERT.md: Assert must be func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error)`
 
 ---
 
@@ -348,15 +348,15 @@ type Request struct {
     Bad bool
 }
 
-func Setup(t *testing.T, req *Request) error { ... }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { ... }
 ```
 **Error**: `leaf/SETUP.md: child SETUP.md cannot redefine Request`
 
 **Violation** — leaf redefines Run:
 ```go
-func Run(t *testing.T, req *Request) (*Response, error) { ... }
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { ... }
 
-func Setup(t *testing.T, req *Request) error { ... }
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { ... }
 ```
 **Error**: `leaf/SETUP.md: child SETUP.md cannot redefine Run`
 
@@ -382,7 +382,7 @@ in the markdown sections above it.
 
 **Violation** — bare stub:
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     return nil
 }
 ```
@@ -514,8 +514,8 @@ func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 ```
 
 Each leaf overrides only `req.InputDir` in its `Setup`; the root `Run` handles
-the actual invocation. The second parameter `d *session.Doctest` is optional in
-author source (assembler inserts `_ *session.Doctest` if omitted) but is always
+the actual invocation. The second parameter `d *session.Doctest` is **required** in
+author source (doctest does **not** auto-inject; missing `d` is a validation error) and is always
 passed at call sites.
 
 ## Working directory and inject context
@@ -565,7 +565,7 @@ Field names match the former free variables (immutable inject contract). They ar
 **struct fields**, not environment variables.
 
 Author signatures may omit `d`; the assembler still generates a second parameter
-(`_ *session.Doctest`). Prefer declaring `d` when the body needs paths or session id:
+(always declare `d *session.Doctest`; use `_ = d` if unused):
 
 ```go
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {

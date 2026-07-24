@@ -40,12 +40,12 @@ func helperC(s string) string {
     return "C: " + s
 }
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     req.Name = "default"
     return nil
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
     msg := helperA(req.Name)
     _ = fmt.Sprintf("%v", msg)
     return &Response{Message: msg}, nil

@@ -18,7 +18,7 @@ three runs on disk; --last 2 focuses on the two newest basenames
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	ensureFixtureProject(t, req)
 	a := "2026-07-01-10-00-00-00-sumold01.jsonl"
 	b := "2026-07-10-08-00-00-00-summid01.jsonl"

@@ -7,7 +7,7 @@
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     req.StdinSource = "pipe"
     req.Stdin = "this stdin content should be ignored"
     req.Args = []string{"use positional instead"}

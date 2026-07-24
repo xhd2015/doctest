@@ -47,7 +47,7 @@ func copyDir(dst, src string) error {
     })
 }
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     t.Logf("no-root-mod group: WorkDir=%s", req.WorkDir)
     return nil
 }

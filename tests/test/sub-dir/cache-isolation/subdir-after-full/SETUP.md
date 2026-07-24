@@ -27,7 +27,7 @@ import (
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     doMultiRun(t, req, "subdir_after_full")
     return nil
 }

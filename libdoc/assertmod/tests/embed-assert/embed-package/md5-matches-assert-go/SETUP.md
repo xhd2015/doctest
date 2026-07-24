@@ -14,7 +14,7 @@ ContentMD5() -> hex matches file hash
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.SecondRun = false
 	return nil
 }

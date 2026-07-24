@@ -18,7 +18,7 @@ cli.RunWithWriter -> doctest metrics --help -> usage + path last top summary sho
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Args = []string{"metrics", "--help"}
 	return nil
 }

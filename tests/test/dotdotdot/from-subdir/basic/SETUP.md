@@ -27,7 +27,7 @@ import (
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     projDir := createTempProject(t, req)
     req.WorkDir = filepath.Join(projDir, "alpha_test")
     req.Args = []string{"test", "-v", "./..."}

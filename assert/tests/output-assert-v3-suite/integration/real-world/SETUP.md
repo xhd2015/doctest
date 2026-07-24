@@ -12,7 +12,7 @@ Matcher <- familiar CLI stdout/stderr shapes
 1. Category and leaf Setup functions build Template and Actual fields.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Operation = "match"
 	return nil
 }

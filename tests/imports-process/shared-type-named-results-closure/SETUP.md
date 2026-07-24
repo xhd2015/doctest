@@ -30,7 +30,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	proj := t.TempDir()
 	if err := os.WriteFile(filepath.Join(proj, "go.mod"), []byte("module testproj\ngo 1.21\n"), 0644); err != nil {
 		t.Fatalf("write go.mod: %v", err)
@@ -41,7 +41,7 @@ func Setup(t *testing.T, req *Request) error {
 		t.Fatalf("mkdir test dir: %v", err)
 	}
 
-	runCode := `func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }
+	runCode := `func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
 
 func pickTwoPorts(base int) (port, alt int) {
 	return base, base + 1
@@ -53,7 +53,7 @@ func pickTwoPorts(base int) (port, alt int) {
 	leafDir := filepath.Join(testDir, "leaf")
 	leafSetup := doctestGoBlock(`import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	port, alt := pickTwoPorts(7681)
 	if port != 7681 || alt != 7682 {
 		t.Fatalf("pickTwoPorts: got %d,%d", port, alt)

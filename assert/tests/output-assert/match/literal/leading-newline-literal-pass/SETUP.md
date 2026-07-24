@@ -17,7 +17,7 @@ Matcher -> pass
 2. Set actual to `"\nfoo"`.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "\nfoo"
 	req.Actual = "\nfoo"
 	return nil

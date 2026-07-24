@@ -26,7 +26,7 @@ keys1 = ...
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	req.Op = "two_sibling_keys"
 	req.FixtureDir = prepareTwoSiblingPassLeaves(t)

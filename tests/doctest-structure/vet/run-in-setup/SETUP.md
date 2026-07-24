@@ -19,7 +19,7 @@ root SETUP.md -> Request/Response/Run -> vet error (must be in DOCTEST.md)
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Env = append(req.Env, "DOCTEST_STRUCTURE_VET_RUN_IN_SETUP=1")
 	return nil
 }

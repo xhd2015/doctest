@@ -19,7 +19,7 @@ doctest test <dir-a> <dir-b> -> one prepare/workspace hub go test -> one (3 Run,
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	dirA := createPassFailTree(t, 2, 0)
 	dirB := createPassFailTree(t, 1, 0)
 	req.Args = []string{"test", dirA, dirB}

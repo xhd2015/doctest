@@ -45,19 +45,19 @@ func doctestBody() string {
         "type Request struct{ Args []string; Env []string; WorkDir string }",
         "type Response struct{ ExitCode int; Stdout string; Stderr string }",
         "",
-        "func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }",
+        "func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }",
     }, "\n")
 }
 func rootSetupContent() string {
-    return "# Scenario\n\n**Feature**: multi-dir test tree root\n\n## Steps\n1. Root setup.\n\n" + doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error {\n    t.Logf(\"setup\")\n    return nil\n}")
+    return "# Scenario\n\n**Feature**: multi-dir test tree root\n\n## Steps\n1. Root setup.\n\n" + doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error {\n    t.Logf(\"setup\")\n    return nil\n}")
 }
 
 func leafSetupContent() string {
-    return "# Scenario\n\n**Feature**: multi-dir leaf\n\n## Steps\n1. Leaf setup.\n\n" + doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error {\n    t.Logf(\"setup\")\n    return nil\n}")
+    return "# Scenario\n\n**Feature**: multi-dir leaf\n\n## Steps\n1. Leaf setup.\n\n" + doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error {\n    t.Logf(\"setup\")\n    return nil\n}")
 }
 
 func leafAssertContent() string {
-    return "## Expected\n- pass\n\n" + doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}")
+    return "## Expected\n- pass\n\n" + doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}")
 }
 
 func createTestTree(parent string, name string) error {
@@ -105,7 +105,7 @@ func createMultiDirProject(t *testing.T, req *Request) string {
     return tmp
 }
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     req.Timeout = 120 * time.Second
     return nil
 }

@@ -96,14 +96,14 @@ func createPrepareFailMultiTree(t *testing.T) string {
 	testtree.WriteFile(t, bad, "DOCTEST.md", testtree.MinimalDOCTEST(`
 type Request struct{}
 type Response struct{}
-func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil
 // missing closing brace — syntax error
 `))
 	fence := bt(3)
 	setupBody := `import "testing"
 
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }`
-	assertBody := `func Assert(t *testing.T, req *Request, resp *Response, err error) {}`
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }`
+	assertBody := `func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}`
 	testtree.WriteFile(t, bad, "leaf/SETUP.md",
 		"## Steps\n1. bad leaf\n\n"+fence+"go\n"+setupBody+"\n"+fence+"\n")
 	testtree.WriteFile(t, bad, "leaf/ASSERT.md",

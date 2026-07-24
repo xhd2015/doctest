@@ -14,7 +14,7 @@ run 1 MD5 == run 2 MD5
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.SecondRun = true
 	return nil
 }

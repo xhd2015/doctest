@@ -13,7 +13,7 @@ Matcher -> pass or line-numbered diff
 1. Set template/actual fields for H3 — literal prefix with hint.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "id=<hint:id>abc</hint:id>"
 	req.Actual = "id=abc"
 	return nil

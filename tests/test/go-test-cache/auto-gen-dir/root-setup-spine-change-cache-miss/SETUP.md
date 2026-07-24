@@ -21,7 +21,7 @@ import (
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     cfg := multiRunCfg{
         TestDir:       createTempTestProjectRootWorkDirDead(t, "mytest", "root-dead-v1"),
         ModifyFile:    "SETUP.md",

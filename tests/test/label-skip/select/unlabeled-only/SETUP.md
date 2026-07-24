@@ -11,7 +11,7 @@ FilterCasesByLabel → run {plain_leaf}; skip {}
 1. Create unlabeled tree.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.TreeRoot = writeUnlabeledTree(t)
 	return nil
 }

@@ -22,7 +22,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	ensureFixtureProject(t, req)
 	if err := os.MkdirAll(projectMetricsDir(req), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)

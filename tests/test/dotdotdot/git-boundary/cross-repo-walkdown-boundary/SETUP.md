@@ -31,7 +31,7 @@ import (
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     parent := t.TempDir()
     if err := initGitRepo(parent); err != nil {
         t.Fatalf("init parent repo: %v", err)

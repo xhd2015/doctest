@@ -25,7 +25,7 @@ import (
 	"github.com/xhd2015/doctest/libdoc/core"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	cacheDir, err := core.MaterializeAssertModule()
 	if err != nil {
 		t.Fatalf("materialize for modfile tests: %v", err)

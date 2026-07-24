@@ -14,7 +14,7 @@ script/embed-assert -> assert.go containing package assert only
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.SecondRun = false
 	return nil
 }

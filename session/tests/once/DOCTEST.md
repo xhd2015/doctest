@@ -114,7 +114,7 @@ type Response struct {
 	ErrorFile   string
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	t.Helper()
 	// Parallel-safe: OnceSession with explicit sid — never Setenv/Unsetenv.
 

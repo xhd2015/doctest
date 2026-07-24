@@ -13,7 +13,7 @@ Matcher -> pass (non-greedy string + trailing !)
 1. Set string placeholder mid-line with trailing `!` and matching actual.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = v3Template("__NAME__: type=string\n", "Hello __NAME__!")
 	req.Actual = "Hello world!"
 	return nil

@@ -48,7 +48,7 @@ type envCacheCfg struct {
     EnvValueB    string
 }
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     // Clear multi-run fields so a leaked pointer cannot satisfy Assert.
     req.MRFirst = nil
     req.MRSecond = nil
@@ -56,7 +56,7 @@ func Setup(t *testing.T, req *Request) error {
 }
 
 func createTestTreeWithLeafSetup(dir string, leafSetupGo string) error {
-    runCode := "func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }"
+    runCode := "func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }"
     if err := os.WriteFile(filepath.Join(dir, "DOCTEST.md"), []byte(testtree.MinimalDOCTEST(doctestBody(runCode))), 0644); err != nil {
         return err
     }

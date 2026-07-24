@@ -20,7 +20,7 @@ runner.ParseTestOptions([dir, --definitely-not-real])
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	// Dir is unused: parse rejects the unknown flag first.
 	req.Args = []string{".", "--definitely-not-real"}
 	return nil

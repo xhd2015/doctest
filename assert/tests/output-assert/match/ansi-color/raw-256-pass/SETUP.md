@@ -13,7 +13,7 @@ Matcher -> pass or line-numbered diff
 1. Set template/actual fields for AC5 — raw 256-color SGR.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "<ansi-color #38;5;208>warn</ansi-color>"
 	req.Actual = raw256Wrap("warn")
 	return nil

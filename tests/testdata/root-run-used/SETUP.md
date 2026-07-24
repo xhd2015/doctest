@@ -23,7 +23,7 @@ leaf: ASSERT.md with func Assert
 ```go
 import "fmt"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	if req.Name == "" {
 		req.Name = "world"
 	}

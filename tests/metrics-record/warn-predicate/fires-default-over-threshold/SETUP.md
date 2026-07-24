@@ -28,7 +28,7 @@ import (
 	"github.com/xhd2015/doctest/libdoc/metrics"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.DefaultSuite = true
 	req.Total = 1
 	req.Elapsed = metrics.DefaultSuiteWarnThreshold + time.Nanosecond

@@ -22,7 +22,7 @@ import (
 
 var beforeDigest [16]byte
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	dir1, err := core.MaterializeAssertModule()
 	if err != nil {
 		t.Fatalf("first materialize: %v", err)

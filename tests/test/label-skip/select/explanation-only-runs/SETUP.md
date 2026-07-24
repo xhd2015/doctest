@@ -11,7 +11,7 @@ explanation without label → leaf runs under discovery
 1. Create explanation-only tree.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.TreeRoot = writeExplanationOnlyTree(t, "documentation note only")
 	return nil
 }

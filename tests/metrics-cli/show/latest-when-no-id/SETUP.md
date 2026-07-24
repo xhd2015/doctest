@@ -18,7 +18,7 @@ older + newer fixtures -> metrics show -> newer content (group/slow-leaf)
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	ensureFixtureProject(t, req)
 	older := "2026-07-01-10-00-00-00-showold1.jsonl"
 	newer := "2026-07-16-09-00-00-00-shownew1.jsonl"

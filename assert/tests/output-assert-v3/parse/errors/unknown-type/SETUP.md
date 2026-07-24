@@ -12,7 +12,7 @@ Parser -> parse error
 1. Set `__X__: type=boolean` in header (no regex=).
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = v3Template("__X__: type=boolean\n", "value: __X__")
 	return nil
 }

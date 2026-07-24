@@ -11,7 +11,7 @@ Matcher <- XXXSome middle contentYYYsuffix content
 1. Set regex-intent body line and matching actual.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = v3Template("", ".*Some middle content.*suffix content")
 	req.Actual = "XXXSome middle contentYYYsuffix content"
 	return nil

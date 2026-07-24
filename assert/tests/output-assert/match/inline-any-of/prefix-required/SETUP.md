@@ -13,7 +13,7 @@ Matcher -> pass or line-numbered diff
 1. Set template/actual fields for X3 — literal prefix required.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "status: <any-of><expect>ok</expect><expect>err</expect></any-of>"
 	req.Actual = "ok"
 	return nil

@@ -24,7 +24,7 @@ doctest test --no-color <z_fail + skip_me>
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	tree := createOneFailOneTSkipTree(t)
 	req.Args = []string{"test", "--no-color", tree}
 	req.Env = append(req.Env, isolateRunEnv(t)...)

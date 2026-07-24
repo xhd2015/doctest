@@ -98,10 +98,10 @@ func createDoctestLeaf(dir string, setupGo string, assertGo string) error {
 		return err
 	}
 	if setupGo == "" {
-		setupGo = "import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }"
+		setupGo = "import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }"
 	}
 	if assertGo == "" {
-		assertGo = "import \"testing\"\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {\n" +
+		assertGo = "import \"testing\"\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n" +
 			"\tif err != nil { t.Fatal(err) }\n" +
 			"\tif resp.Message != \"hi\" { t.Fatalf(\"expected hi, got %q\", resp.Message) }\n" +
 			"}"
@@ -166,7 +166,7 @@ func createPublicModuleProject(t *testing.T, req *Request, leafSetupGo string, l
 		t.Fatalf("mkdir tests: %v", err)
 	}
 	extraImports := "\t\"" + modPath + "/pkg/greet\"\n"
-	runCode := "func Run(t *testing.T, req *Request) (*Response, error) {\n" +
+	runCode := "func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {\n" +
 		"\treturn &Response{Message: greet.Hello()}, nil\n" +
 		"}"
 	if err := createDoctestRoot(req.TestDir, extraImports, runCode); err != nil {
@@ -413,7 +413,7 @@ func defaultAssertAssertGo() string {
 		"\t\"testing\"\n" +
 		"\t\"github.com/xhd2015/doctest/assert\"\n" +
 		")\n\n" +
-		"func Assert(t *testing.T, req *Request, resp *Response, err error) {\n" +
+		"func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n" +
 		"\tif err != nil { t.Fatal(err) }\n" +
 		"\tassert.Output(t, \"hello\\n\", \"hello\\n\")\n" +
 		"}"
@@ -423,13 +423,13 @@ func aliasedAssertAssertGo() string {
 		"\t\"testing\"\n" +
 		"\toutputassert \"github.com/xhd2015/doctest/assert\"\n" +
 		")\n\n" +
-		"func Assert(t *testing.T, req *Request, resp *Response, err error) {\n" +
+		"func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n" +
 		"\tif err != nil { t.Fatal(err) }\n" +
 		"\toutputassert.Output(t, \"hello\\n\", \"hello\\n\")\n" +
 		"}"
 }
 func defaultPublicAssertGo() string {
-	return "import \"testing\"\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {\n" +
+	return "import \"testing\"\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n" +
 		"\tif err != nil { t.Fatal(err) }\n" +
 		"\tif resp.Message != \"hi\" { t.Fatalf(\"expected hi, got %q\", resp.Message) }\n" +
 		"}"

@@ -23,7 +23,7 @@ DOCTEST.md -> ## Version heading -> vet pass or fail
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Env = append(req.Env, "DOCTEST_STRUCTURE_VET_VERSION=1")
 	return nil
 }

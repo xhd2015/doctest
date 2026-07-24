@@ -25,7 +25,7 @@ run_start + leaf_start + leaf_end(pass)  # no run_end
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Events = []map[string]any{
 		{
 			"type":       "run_start",

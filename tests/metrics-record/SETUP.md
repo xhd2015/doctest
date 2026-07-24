@@ -46,7 +46,7 @@ runner.ParseTestOptions(args) -> MetricsOn / remain
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	// Leaves set Op and scenario fields; root only documents shared contract.
 	return nil
 }

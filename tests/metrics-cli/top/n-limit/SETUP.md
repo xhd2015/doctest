@@ -18,7 +18,7 @@ metrics top --n 2 -> at most two leaf paths from the ranking
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	ensureFixtureProject(t, req)
 	name := "2026-07-16-09-00-00-00-topn0002.jsonl"
 	writeRunFile(t, req, name, fixtureRunDefault(runStem(name)))

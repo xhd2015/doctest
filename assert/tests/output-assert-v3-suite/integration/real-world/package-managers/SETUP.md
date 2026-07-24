@@ -11,7 +11,7 @@ Matcher <- simulated tool output
 1. Leaf Setup supplies Template and Actual for one tool transcript.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Operation = "match"
 	return nil
 }

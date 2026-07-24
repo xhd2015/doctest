@@ -1,20 +1,21 @@
 ## Expected
 
-- Generated source includes `_ *session.Doctest` as the second parameter on
-  Setup/Run/Assert closures (author omitted the name).
-- Call sites still pass the constructed `d`.
-- Inject contract (no Chdir / free vars) still holds.
+- Assemble fails when author omits `d *session.Doctest`.
+- Error message mentions missing `d` and/or no auto-inject (not a successful gen with `_`).
 
 ```go
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
-	if err != nil {
-		t.Fatalf("classic assemble failed: %v", err)
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
+	if err == nil {
+		t.Fatal("expected assemble error when author omits d *session.Doctest; got success (no auto-inject)")
 	}
-	assertInjectContract(t, "classic-omit-d", resp.Source)
-	if !hasUnderscoreDoctestParam(resp.Source) {
-		t.Fatalf("expected `_ *session.Doctest` when author omits d param\n%s", resp.Source)
+	msg := err.Error()
+	if !strings.Contains(msg, "*session.Doctest") && !strings.Contains(msg, "no auto-inject") && !strings.Contains(msg, "missing d") {
+		t.Fatalf("expected clear missing-d error, got: %v", err)
 	}
 }
 ```

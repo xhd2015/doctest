@@ -23,7 +23,7 @@ doctest test --no-color <1-fail>
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	testDir := createRealFailTree(t)
 	req.Args = []string{"test", "--no-color", testDir}
 	req.Env = append(req.Env, isolateRunEnv(t)...)

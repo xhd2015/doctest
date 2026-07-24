@@ -13,7 +13,7 @@ Matcher -> pass
 1. Set two `__ID__` references and actual with the same captured value.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = v3Template("__ID__: type=string\n", "id=__ID__\nagain=__ID__")
 	req.Actual = "id=abc\nagain=abc"
 	return nil

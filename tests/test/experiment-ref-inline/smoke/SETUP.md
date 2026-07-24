@@ -18,7 +18,7 @@ RunTest(1-pass tree) -> pass
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Op = "mini_run"
 	return nil
 }

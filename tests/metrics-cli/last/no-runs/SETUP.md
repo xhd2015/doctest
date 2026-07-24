@@ -23,7 +23,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	ensureFixtureProject(t, req)
 	// Empty runs dir documents "project known, no files"
 	if err := os.MkdirAll(projectRunsDir(req), 0o755); err != nil {

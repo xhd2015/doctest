@@ -12,7 +12,7 @@ Parser -> ContainsBlock AST
 1. Override operation to parse-only; use v1 contains template.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Operation = "parse"
 	req.Template = "<contains>\nUsage: mytool\n  build\n</contains>"
 	return nil

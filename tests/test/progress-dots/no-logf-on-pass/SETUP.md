@@ -20,7 +20,7 @@ generated Setup calls t.Logf -> must not appear on stdout or stderr
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     testDir := createLogfPassTree(t)
     req.Args = []string{"test", testDir}
     return nil

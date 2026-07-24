@@ -28,7 +28,7 @@ same second -> different NN or suffix -> two distinct files
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	// Group default project id segment used when a leaf does not override.
 	if req.ProjectID == "" {

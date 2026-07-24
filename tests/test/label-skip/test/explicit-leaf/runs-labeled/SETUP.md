@@ -17,7 +17,7 @@ import (
 	"path/filepath"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	root := writeLabeledTree(t, false, "ui-automation", "heavy ui test")
 	req.Args = []string{"test", filepath.Join(root, "labeled_leaf")}
 	return nil

@@ -21,7 +21,7 @@ doctest agent show-status <session-id> -> session state -> stdout
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     sessionHome := t.TempDir()
     req.Env = append(req.Env, "DOCTEST_DEBUG_SESSION_HOME="+sessionHome)
     req.Args = []string{"agent", "implement", "--status", "--session-id", "test-status-missing"}

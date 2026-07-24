@@ -13,7 +13,7 @@ Matcher -> pass or line-numbered diff
 1. Set template/actual fields for C3 — <contains> matches a mid-line substring.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "<contains>\nfoo\n</contains>"
 	req.Actual = "x\nxfoo\n"
 	return nil

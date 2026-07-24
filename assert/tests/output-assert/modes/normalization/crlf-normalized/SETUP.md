@@ -11,7 +11,7 @@ Matcher <- actual (+ Contains option or CRLF normalization)
 1. Set template/actual fields for N2 — CRLF normalized to LF.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "line1\nline2"
 	req.Actual = "line1\r\nline2"
 	return nil

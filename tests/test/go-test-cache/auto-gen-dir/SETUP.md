@@ -54,7 +54,7 @@ type multiRunCfg struct {
     RewriteIdentical  bool // rewrite ModifyFile with its current bytes
 }
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     // Clear multi-run fields so a leaked pointer from a prior leaf cannot
     // satisfy Assert under sequential reuse of a Request value (defensive;
     // doctest allocates per leaf — package globals were the real race).

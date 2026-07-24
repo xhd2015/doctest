@@ -31,7 +31,7 @@ skill review-perf --show
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Op = "align_skill_warn"
 	req.Args = []string{"skill", "review-perf", "--show"}
 	return nil

@@ -22,7 +22,7 @@ doctest test -v --no-color <tree>
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	testDir := createFastPassTree(t)
 	req.Args = []string{"test", "-v", "--no-color", testDir}
 	return nil

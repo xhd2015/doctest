@@ -13,7 +13,7 @@ RawSourceCacheKeyMD5() -> non-empty hex used as session-mod/<md5>/
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     req.RunKind = "sessionmod-cache-key"
 	return nil
 }

@@ -12,7 +12,7 @@ Parser -> parse error
 1. Set body using `__MISSING__` without header definition.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = v3Template("", "Hello __MISSING__")
 	return nil
 }

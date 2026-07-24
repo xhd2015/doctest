@@ -19,7 +19,7 @@ doctest test <dir> -> discover 1 leaf -> PASS(1/1)
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	testDir := createPassFailTree(t, 1, 0)
 	req.Args = []string{"test", testDir}
 	return nil

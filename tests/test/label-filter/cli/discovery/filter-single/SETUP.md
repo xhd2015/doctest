@@ -11,7 +11,7 @@
 1. Run `doctest test <mod> --label slow`.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	mod := writeLabelFilterMod(t)
 	req.Args = []string{"test", mod, "--label", "slow"}
 	return nil

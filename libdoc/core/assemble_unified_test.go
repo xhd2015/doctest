@@ -17,13 +17,13 @@ func TestAssembleUnifiedLeafHierarchicalNoInline(t *testing.T) {
 		},
 		Run: &FuncSnippet{
 			Name:    "Run",
-			Params:  "t *testing.T, req *Request",
+			Params:  "t *testing.T, d *session.Doctest, req *Request",
 			Results: "(*Response, error)",
 			Body:    "{ return &Response{OK: true}, nil }",
 		},
 		Setup: &FuncSnippet{
 			Name:    "Setup",
-			Params:  "t *testing.T, req *Request",
+			Params:  "t *testing.T, d *session.Doctest, req *Request",
 			Results: "error",
 			Body:    "{ req.N = 1; return nil }",
 		},
@@ -37,7 +37,7 @@ func TestAssembleUnifiedLeafHierarchicalNoInline(t *testing.T) {
 		}},
 		Setup: &FuncSnippet{
 			Name:    "Setup",
-			Params:  "t *testing.T, req *Request",
+			Params:  "t *testing.T, d *session.Doctest, req *Request",
 			Results: "error",
 			Body:    "{ _ = featureMarkerHelper(); req.N += 10; return nil }",
 		},
@@ -51,7 +51,7 @@ func TestAssembleUnifiedLeafHierarchicalNoInline(t *testing.T) {
 		}},
 		Setup: &FuncSnippet{
 			Name:    "Setup",
-			Params:  "t *testing.T, req *Request",
+			Params:  "t *testing.T, d *session.Doctest, req *Request",
 			Results: "error",
 			Body:    "{ _ = midMarkerHelper(); req.N += 100; return nil }",
 		},
@@ -59,7 +59,7 @@ func TestAssembleUnifiedLeafHierarchicalNoInline(t *testing.T) {
 	leafBlock := &GoBlock{
 		Setup: &FuncSnippet{
 			Name:    "Setup",
-			Params:  "t *testing.T, req *Request",
+			Params:  "t *testing.T, d *session.Doctest, req *Request",
 			Results: "error",
 			Body:    "{ req.N += 1000; return nil }",
 		},
@@ -67,7 +67,7 @@ func TestAssembleUnifiedLeafHierarchicalNoInline(t *testing.T) {
 	assertBlock := GoBlock{
 		Assert: &FuncSnippet{
 			Name:   "Assert",
-			Params: "t *testing.T, req *Request, resp *Response, err error",
+			Params: "t *testing.T, d *session.Doctest, req *Request, resp *Response, err error",
 			Body:   "{ if err != nil { t.Fatal(err) }; if req.N != 1111 { t.Fatalf(\"N=%d\", req.N) } }",
 		},
 	}
@@ -143,7 +143,7 @@ func TestWriteUnifiedTreeWritesIntermediatePackages(t *testing.T) {
 		},
 		Run: &FuncSnippet{
 			Name:    "Run",
-			Params:  "t *testing.T, req *Request",
+			Params:  "t *testing.T, d *session.Doctest, req *Request",
 			Results: "(*Response, error)",
 			Body:    "{ return &Response{}, nil }",
 		},
@@ -157,7 +157,7 @@ func TestWriteUnifiedTreeWritesIntermediatePackages(t *testing.T) {
 		}},
 		Setup: &FuncSnippet{
 			Name:    "Setup",
-			Params:  "t *testing.T, req *Request",
+			Params:  "t *testing.T, d *session.Doctest, req *Request",
 			Results: "error",
 			Body:    "{ _ = parentOnlyHelper(); return nil }",
 		},
@@ -165,7 +165,7 @@ func TestWriteUnifiedTreeWritesIntermediatePackages(t *testing.T) {
 	leafABlock := &GoBlock{
 		Setup: &FuncSnippet{
 			Name:    "Setup",
-			Params:  "t *testing.T, req *Request",
+			Params:  "t *testing.T, d *session.Doctest, req *Request",
 			Results: "error",
 			Body:    "{ return nil }",
 		},
@@ -173,7 +173,7 @@ func TestWriteUnifiedTreeWritesIntermediatePackages(t *testing.T) {
 	leafBBlock := &GoBlock{
 		Setup: &FuncSnippet{
 			Name:    "Setup",
-			Params:  "t *testing.T, req *Request",
+			Params:  "t *testing.T, d *session.Doctest, req *Request",
 			Results: "error",
 			Body:    "{ return nil }",
 		},
@@ -181,7 +181,7 @@ func TestWriteUnifiedTreeWritesIntermediatePackages(t *testing.T) {
 	assertBlock := GoBlock{
 		Assert: &FuncSnippet{
 			Name:   "Assert",
-			Params: "t *testing.T, req *Request, resp *Response, err error",
+			Params: "t *testing.T, d *session.Doctest, req *Request, resp *Response, err error",
 			Body:   "{ _ = req; _ = resp; _ = err }",
 		},
 	}

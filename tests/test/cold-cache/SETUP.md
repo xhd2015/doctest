@@ -77,19 +77,19 @@ func doctestBody(extraRunCode string) string {
 }
 
 func rootSetupContent() string {
-	return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }")
+	return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }")
 }
 
 func leafSetupContent() string {
-	return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }")
+	return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }")
 }
 
 func leafAssertContent() string {
-	return doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}")
+	return doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}")
 }
 
 func createTinyTestTree(dir string) error {
-	if err := os.WriteFile(filepath.Join(dir, "DOCTEST.md"), []byte(testtree.MinimalDOCTEST(doctestBody("func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }"))), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "DOCTEST.md"), []byte(testtree.MinimalDOCTEST(doctestBody("func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }"))), 0644); err != nil {
 		return err
 	}
 	if err := os.WriteFile(filepath.Join(dir, "SETUP.md"), []byte(rootSetupContent()), 0644); err != nil {

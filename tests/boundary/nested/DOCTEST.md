@@ -36,7 +36,7 @@ type Request struct {
 type Response struct {
 	Greeting string
 }
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	if req.Name == "" {
 		return nil, fmt.Errorf("Name is required")
 	}

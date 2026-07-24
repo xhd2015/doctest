@@ -179,7 +179,7 @@ func fenceClose() string {
 	return mdFence() + "\n"
 }
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	if req.GoVersion == "" {
 		req.GoVersion = "go1.25.0"
@@ -281,7 +281,7 @@ func writeBaseFixture(t *testing.T, req *Request, withReplace, withRemote bool) 
 		"import \"testing\"\n\n" +
 		"type Request struct{ N int }\n" +
 		"type Response struct{ Ok bool }\n\n" +
-		"func Run(t *testing.T, req *Request) (*Response, error) {\n" +
+		"func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {\n" +
 		"\treturn &Response{Ok: true}, nil\n" +
 		"}\n" +
 		fenceClose()
@@ -294,7 +294,7 @@ func writeBaseFixture(t *testing.T, req *Request, withReplace, withRemote bool) 
 		"## Steps\n1. Root setup.\n\n" +
 		goFenceOpen() +
 		"import \"testing\"\n\n" +
-		"func Setup(t *testing.T, req *Request) error {\n" +
+		"func Setup(t *testing.T, d *session.Doctest, req *Request) error {\n" +
 		"\treq.N = 1\n" +
 		"\treturn nil\n" +
 		"}\n" +
@@ -308,7 +308,7 @@ func writeBaseFixture(t *testing.T, req *Request, withReplace, withRemote bool) 
 		"## Steps\n1. Group setup.\n\n" +
 		goFenceOpen() +
 		"import \"testing\"\n\n" +
-		"func Setup(t *testing.T, req *Request) error {\n" +
+		"func Setup(t *testing.T, d *session.Doctest, req *Request) error {\n" +
 		"\treq.N = 2\n" +
 		"\treturn nil\n" +
 		"}\n" +
@@ -322,7 +322,7 @@ func writeBaseFixture(t *testing.T, req *Request, withReplace, withRemote bool) 
 		"## Steps\n1. Leaf setup.\n\n" +
 		goFenceOpen() +
 		"import \"testing\"\n\n" +
-		"func Setup(t *testing.T, req *Request) error {\n" +
+		"func Setup(t *testing.T, d *session.Doctest, req *Request) error {\n" +
 		"\treq.N = 3\n" +
 		"\treturn nil\n" +
 		"}\n" +
@@ -341,7 +341,7 @@ func writeBaseFixture(t *testing.T, req *Request, withReplace, withRemote bool) 
 	assertMD := "## Expected\n\n- helper answer is 42\n\n" +
 		goFenceOpen() +
 		"import (\n\t\"testing\"\n" + assertImports + ")\n\n" +
-		"func Assert(t *testing.T, req *Request, resp *Response, err error) {\n" +
+		"func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n" +
 		assertBody +
 		"}\n" +
 		fenceClose()
@@ -454,7 +454,7 @@ func prepareStreamInterruptFixture(t *testing.T) string {
 			Name: "leaf_a",
 			AssertGo: `import "testing"
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	// stream_leaf_a
 	_ = req
 	_ = resp
@@ -468,7 +468,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	"time"
 )
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	// stream_hang_marker
 	_ = req
 	_ = resp
@@ -507,7 +507,7 @@ func prepareTwoSiblingPassLeaves(t *testing.T) string {
 			Name: "leaf_a",
 			AssertGo: `import "testing"
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	// marker_leaf_a
 	_ = req
 	_ = resp
@@ -518,7 +518,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 			Name: "leaf_b",
 			AssertGo: `import "testing"
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	// marker_leaf_b
 	_ = req
 	_ = resp
@@ -554,13 +554,13 @@ func prepareLocalDepPassFixture(t *testing.T, req *Request) string {
 	if err := os.WriteFile(filepath.Join(tree, "DOCTEST.md"), []byte(doctestBody), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	setupBody := "## Steps\n1. leaf\n\n" + goFenceOpen() + "import \"testing\"\n\nfunc Setup(t *testing.T, req *Request) error { return nil }\n" + fenceClose()
+	setupBody := "## Steps\n1. leaf\n\n" + goFenceOpen() + "import \"testing\"\n\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { return nil }\n" + fenceClose()
 	if err := os.WriteFile(filepath.Join(leaf, "SETUP.md"), []byte(setupBody), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	assertBody := "## Expected\n- helper\n\n" + goFenceOpen() +
 		"import (\n\t\"testing\"\n\t\"example.com/app/pkg/helper\"\n)\n\n" +
-		"func Assert(t *testing.T, req *Request, resp *Response, err error) {\n" +
+		"func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n" +
 		"\tif helper.Answer() != 42 {\n\t\tt.Fatalf(\"answer\")\n\t}\n" +
 		"\t_ = req\n\t_ = resp\n\t_ = err\n}\n" + fenceClose()
 	if err := os.WriteFile(filepath.Join(leaf, "ASSERT.md"), []byte(assertBody), 0o644); err != nil {
@@ -585,7 +585,7 @@ func prepareTwinTrees(t *testing.T, req *Request) {
 				Name: "leaf",
 				AssertGo: `import "testing"
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	// twin_marker
 	_ = req
 	_ = resp
@@ -653,7 +653,7 @@ func preparePartialPackageDepsFixture(t *testing.T, req *Request) string {
 			t.Fatal(err)
 		}
 		setupBody := "## Steps\n1. leaf\n\n" + goFenceOpen() +
-			"import \"testing\"\n\nfunc Setup(t *testing.T, req *Request) error { return nil }\n" + fenceClose()
+			"import \"testing\"\n\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { return nil }\n" + fenceClose()
 		if err := os.WriteFile(filepath.Join(leaf, "SETUP.md"), []byte(setupBody), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -670,7 +670,7 @@ func preparePartialPackageDepsFixture(t *testing.T, req *Request) string {
 	"example.com/partialcache/shared/c"
 )
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	if a.Version() == "" || b.Version() == "" || c.Version() == "" {
 		t.Fatal("empty shared version")
 	}
@@ -685,7 +685,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	aloned "example.com/partialcache/alone/d"
 )
 
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
 	if aloned.Version() == "" {
 		t.Fatal("empty alone version")
 	}
@@ -727,7 +727,7 @@ func applyPolishMutation(t *testing.T, req *Request) error {
 		p := filepath.Join(req.FixtureDir, "leaf_hang", "ASSERT.md")
 		body := "## Expected\n- unhung pass\n\n" + goFenceOpen() +
 			"import \"testing\"\n\n" +
-			"func Assert(t *testing.T, req *Request, resp *Response, err error) {\n" +
+			"func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n" +
 			"\t// stream_unhang_pass\n" +
 			"\t_ = req\n\t_ = resp\n\t_ = err\n}\n" + fenceClose()
 		return os.WriteFile(p, []byte(body), 0o644)

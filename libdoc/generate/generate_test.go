@@ -34,7 +34,7 @@ func TestScanFindsFilesWithoutGoBlocks(t *testing.T) {
 func TestScanSkipsFilesWithGoBlocks(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "SETUP.md", "# Setup\n\n```go\ntype Request struct{}\n```\n")
-	writeFile(t, root, "leaf/ASSERT.md", "# Assert\n\n```go\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}\n```\n")
+	writeFile(t, root, "leaf/ASSERT.md", "# Assert\n\n```go\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}\n```\n")
 
 	needs, err := Scan(root)
 	if err != nil {

@@ -12,11 +12,11 @@ func TestPartitionRefSetupDocsHierarchical(t *testing.T) {
 	tc := TreeCase{
 		Path: "feature/mid/leaf",
 		SetupFiles: []SetupDocument{
-			{Path: "DOCTEST.md", GoBlock: &GoBlock{Setup: &FuncSnippet{Name: "Setup", Params: "t *testing.T, req *Request", Results: "error", Body: "{ return nil }"}}},
-			{Path: "SETUP.md", GoBlock: &GoBlock{Setup: &FuncSnippet{Name: "Setup", Params: "t *testing.T, req *Request", Results: "error", Body: "{ return nil }"}}},
-			{Path: "feature/SETUP.md", GoBlock: &GoBlock{Setup: &FuncSnippet{Name: "Setup", Params: "t *testing.T, req *Request", Results: "error", Body: "{ return nil }"}}},
-			{Path: "feature/mid/SETUP.md", GoBlock: &GoBlock{Setup: &FuncSnippet{Name: "Setup", Params: "t *testing.T, req *Request", Results: "error", Body: "{ return nil }"}}},
-			{Path: "feature/mid/leaf/SETUP.md", GoBlock: &GoBlock{Setup: &FuncSnippet{Name: "Setup", Params: "t *testing.T, req *Request", Results: "error", Body: "{ return nil }"}}},
+			{Path: "DOCTEST.md", GoBlock: &GoBlock{Setup: &FuncSnippet{Name: "Setup", Params: "t *testing.T, d *session.Doctest, req *Request", Results: "error", Body: "{ return nil }"}}},
+			{Path: "SETUP.md", GoBlock: &GoBlock{Setup: &FuncSnippet{Name: "Setup", Params: "t *testing.T, d *session.Doctest, req *Request", Results: "error", Body: "{ return nil }"}}},
+			{Path: "feature/SETUP.md", GoBlock: &GoBlock{Setup: &FuncSnippet{Name: "Setup", Params: "t *testing.T, d *session.Doctest, req *Request", Results: "error", Body: "{ return nil }"}}},
+			{Path: "feature/mid/SETUP.md", GoBlock: &GoBlock{Setup: &FuncSnippet{Name: "Setup", Params: "t *testing.T, d *session.Doctest, req *Request", Results: "error", Body: "{ return nil }"}}},
+			{Path: "feature/mid/leaf/SETUP.md", GoBlock: &GoBlock{Setup: &FuncSnippet{Name: "Setup", Params: "t *testing.T, d *session.Doctest, req *Request", Results: "error", Body: "{ return nil }"}}},
 		},
 	}
 	part := PartitionRefSetupDocs(tc)
@@ -43,13 +43,13 @@ func TestAssembleRefIntermediateAndLeafNoInline(t *testing.T) {
 		},
 		Run: &FuncSnippet{
 			Name:    "Run",
-			Params:  "t *testing.T, req *Request",
+			Params:  "t *testing.T, d *session.Doctest, req *Request",
 			Results: "(*Response, error)",
 			Body:    "{ return &Response{OK: true}, nil }",
 		},
 		Setup: &FuncSnippet{
 			Name:    "Setup",
-			Params:  "t *testing.T, req *Request",
+			Params:  "t *testing.T, d *session.Doctest, req *Request",
 			Results: "error",
 			Body:    "{ req.N = 1; return nil }",
 		},
@@ -63,7 +63,7 @@ func TestAssembleRefIntermediateAndLeafNoInline(t *testing.T) {
 		}},
 		Setup: &FuncSnippet{
 			Name:    "Setup",
-			Params:  "t *testing.T, req *Request",
+			Params:  "t *testing.T, d *session.Doctest, req *Request",
 			Results: "error",
 			Body:    "{ _ = featureMarkerHelper(); req.N += 10; return nil }",
 		},
@@ -77,7 +77,7 @@ func TestAssembleRefIntermediateAndLeafNoInline(t *testing.T) {
 		}},
 		Setup: &FuncSnippet{
 			Name:    "Setup",
-			Params:  "t *testing.T, req *Request",
+			Params:  "t *testing.T, d *session.Doctest, req *Request",
 			Results: "error",
 			Body:    "{ _ = midMarkerHelper(); req.N += 100; return nil }",
 		},
@@ -85,7 +85,7 @@ func TestAssembleRefIntermediateAndLeafNoInline(t *testing.T) {
 	leafBlock := &GoBlock{
 		Setup: &FuncSnippet{
 			Name:    "Setup",
-			Params:  "t *testing.T, req *Request",
+			Params:  "t *testing.T, d *session.Doctest, req *Request",
 			Results: "error",
 			Body:    "{ req.N += 1000; return nil }",
 		},
@@ -93,7 +93,7 @@ func TestAssembleRefIntermediateAndLeafNoInline(t *testing.T) {
 	assertBlock := GoBlock{
 		Assert: &FuncSnippet{
 			Name:   "Assert",
-			Params: "t *testing.T, req *Request, resp *Response, err error",
+			Params: "t *testing.T, d *session.Doctest, req *Request, resp *Response, err error",
 			Body:   "{ if err != nil { t.Fatal(err) }; if req.N != 1111 { t.Fatalf(\"N=%d\", req.N) } }",
 		},
 	}
@@ -212,7 +212,7 @@ func TestWriteRefTreeWritesIntermediatePackages(t *testing.T) {
 		},
 		Run: &FuncSnippet{
 			Name:    "Run",
-			Params:  "t *testing.T, req *Request",
+			Params:  "t *testing.T, d *session.Doctest, req *Request",
 			Results: "(*Response, error)",
 			Body:    "{ return &Response{}, nil }",
 		},
@@ -226,7 +226,7 @@ func TestWriteRefTreeWritesIntermediatePackages(t *testing.T) {
 		}},
 		Setup: &FuncSnippet{
 			Name:    "Setup",
-			Params:  "t *testing.T, req *Request",
+			Params:  "t *testing.T, d *session.Doctest, req *Request",
 			Results: "error",
 			Body:    "{ _ = parentOnlyHelper(); return nil }",
 		},
@@ -234,7 +234,7 @@ func TestWriteRefTreeWritesIntermediatePackages(t *testing.T) {
 	leafBlock := &GoBlock{
 		Setup: &FuncSnippet{
 			Name:    "Setup",
-			Params:  "t *testing.T, req *Request",
+			Params:  "t *testing.T, d *session.Doctest, req *Request",
 			Results: "error",
 			Body:    "{ return nil }",
 		},
@@ -242,7 +242,7 @@ func TestWriteRefTreeWritesIntermediatePackages(t *testing.T) {
 	assertBlock := GoBlock{
 		Assert: &FuncSnippet{
 			Name:   "Assert",
-			Params: "t *testing.T, req *Request, resp *Response, err error",
+			Params: "t *testing.T, d *session.Doctest, req *Request, resp *Response, err error",
 			Body:   "{ _ = req; _ = resp; _ = err }",
 		},
 	}

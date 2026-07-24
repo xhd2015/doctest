@@ -40,7 +40,7 @@ func writeGoMod(dir, modulePath string) error {
     return os.WriteFile(filepath.Join(dir, "go.mod"), []byte(content), 0644)
 }
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     t.Logf("git-boundary group: WorkDir=%s", req.WorkDir)
     return nil
 }

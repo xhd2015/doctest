@@ -29,7 +29,7 @@ in -> ComputeLeafKey -> key2
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	// Op already compute_twice; fixture already built.
 	req.Op = "compute_twice"

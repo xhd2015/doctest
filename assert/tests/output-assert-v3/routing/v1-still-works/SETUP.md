@@ -13,7 +13,7 @@ Parser -> ContainsBlock AST
 1. Parse-only with a pure v1 `<contains>` template (no version header).
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Operation = "parse"
 	req.Template = "<contains>\nUsage: mytool\n  build\n</contains>"
 	return nil

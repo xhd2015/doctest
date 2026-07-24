@@ -11,7 +11,7 @@ Matcher <- version 1\.0 / cost: \$5\.00 / \(1 Cached\)
 1. Leaf templates use escaped RE metacharacters; actual bytes stay unescaped.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Operation = "match"
 	return nil
 }

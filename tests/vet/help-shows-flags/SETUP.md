@@ -18,7 +18,7 @@ cli.RunWithWriter -> doctest vet --help -> usage includes -v, --verbose, <dir...
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Args = []string{"vet", "--help"}
 	return nil
 }

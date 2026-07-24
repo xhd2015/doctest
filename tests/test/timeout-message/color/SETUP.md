@@ -29,7 +29,7 @@ doctest -> FAIL (0/3, N cancelled): FAIL token red; "N cancelled" orange (38;5;2
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	testDir := createSleepTree(t, 3, 5)
 	req.Args = []string{"test", "--timeout=2s", "--color", testDir}
 	return nil

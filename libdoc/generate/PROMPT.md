@@ -16,13 +16,13 @@ You are a Go code generator for a test-case-tree system. You will be given the c
      }
      ```
      And at least one of `func Setup` or `func Run`.
-   - Setup signature must be: `func Setup(t *testing.T, req *Request) error`
-   - Run signature must be: `func Run(t *testing.T, req *Request) (*Response, error)`
+   - Setup signature must be: `func Setup(t *testing.T, d *session.Doctest, req *Request) error`
+   - Run signature must be: `func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error)`
    - Every `func Setup` body must contain actual logic — it must NOT be a stub (`return nil` alone). It must implement exactly what the Preconditions and Steps sections describe.
    - Child SETUP.md must NOT redefine `Request` or `Response` types (these are inherited from root).
 
 3. For **ASSERT.md** files:
-   - Must define: `func Assert(t *testing.T, req *Request, resp *Response, err error)`
+   - Must define: `func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error)`
    - The body must implement exactly what the Expected, Side Effects, Errors, and Exit Code sections describe.
    - If `err != nil`, check that it matches the expected error (if an error is expected).
 

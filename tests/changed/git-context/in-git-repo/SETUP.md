@@ -43,11 +43,11 @@ import (
 
 const tick = "\u0060"
 
-const leafSetupGo = "import \"testing\"\n\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }"
+const leafSetupGo = "import \"testing\"\n\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }"
 
-const leafAssertGo = "import \"testing\"\n\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}"
+const leafAssertGo = "import \"testing\"\n\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}"
 
-const fixtureSetupGo = "import \"testing\"\n\nfunc Setup(t *testing.T, req *Request) error { _ = req; return nil }"
+const fixtureSetupGo = "import \"testing\"\n\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }"
 
 // policyFixture is a temp layout whose GitRoot is the synthetic repo parent and
 // TreeDir is tests/fixture under it. No real git repository is required.
@@ -143,7 +143,7 @@ func applyPolicyBase(req *Request, fx policyFixture) {
 	req.UseCLI = false
 }
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.UseCLI = false
 	return nil
 }

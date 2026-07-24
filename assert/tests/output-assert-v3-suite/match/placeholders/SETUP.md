@@ -12,7 +12,7 @@ Matcher -> pass when values match type rules
 1. Templates declare placeholders in v3 YAML header.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	_ = t
 	_ = req
 	return nil

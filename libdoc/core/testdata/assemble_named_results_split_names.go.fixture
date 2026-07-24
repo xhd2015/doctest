@@ -35,12 +35,12 @@ func TestGeneratedCaseLeaf(t *testing.T) {
 			NestSink:   nestSink,
 		},
 	}
-	run := func(t *testing.T, _ *session.Doctest, req *Request) (*Response, error) {
+	run := func(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	return &Response{}, nil
 }
 	Run := run
 	req := &Request{}
-	assert := func(t *testing.T, _ *session.Doctest, req *Request, resp *Response, err error) {}
+	assert := func(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 	_ = Run
 	_ = splitNames
 	resp, runErr := run(t, d, req)

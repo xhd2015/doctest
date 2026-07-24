@@ -25,11 +25,11 @@ import (
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     cfg := multiRunCfg{}
     cfg.TestDir = createTempTestProject(t, "mytest")
     cfg.ModifyFile = "simple/ASSERT.md"
-    cfg.ModifyContent = doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {\n    if resp.Stdout != \"modified\" {\n        t.Log(\"stdout was not modified\")\n    }\n}")
+    cfg.ModifyContent = doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n    if resp.Stdout != \"modified\" {\n        t.Log(\"stdout was not modified\")\n    }\n}")
     doMultiRun(t, req, cfg)
     return nil
 }

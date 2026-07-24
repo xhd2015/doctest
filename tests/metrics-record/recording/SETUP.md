@@ -25,7 +25,7 @@ RunTest(..., MetricsOn:false) -> no new *.jsonl under MetricsRoot
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Op = "record_run"
 	return nil
 }

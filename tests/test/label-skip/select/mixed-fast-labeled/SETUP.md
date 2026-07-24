@@ -12,7 +12,7 @@ discovery FilterCasesByLabel → run {fast_leaf}; skip {labeled_leaf}
 2. Default discovery options (no LabelExprs, not ExplicitLeaf).
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.TreeRoot = writeLabeledTree(t, true, "ui-automation", "heavy ui test")
 	return nil
 }

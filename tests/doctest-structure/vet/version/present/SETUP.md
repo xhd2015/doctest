@@ -19,7 +19,7 @@ DOCTEST.md -> ## Version 9.9.9 -> doctest vet -> pass
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	treeDir := writeTree(t, treeOpts{withVersion: true, version: "9.9.9"})
 	setVetArgs(t, req, treeDir)
 	return nil

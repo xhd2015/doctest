@@ -16,7 +16,7 @@ doctest skill tdd --install -> doctest skills update -> output for doctest-tdd o
 2. Run `skills update`.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.PreInstalls = []PreInstallCLI{{
 		Args: []string{"skill", "tdd", "--install"},
 	}}

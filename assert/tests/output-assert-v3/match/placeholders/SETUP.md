@@ -12,7 +12,7 @@ Matcher <- actual with typed values
 1. Narrow to placeholder match scenarios.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	_ = t
 	_ = req
 	return nil

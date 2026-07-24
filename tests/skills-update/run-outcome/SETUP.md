@@ -59,7 +59,7 @@ func assertNoScopeHint(t *testing.T, stdout string) {
 	}
 }
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	if len(req.Args) == 0 {
 		req.Args = []string{"skills", "update"}
 	}

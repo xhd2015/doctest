@@ -78,17 +78,17 @@ func doctestBody() string {
 		"type Request struct{ Args []string; Env []string; WorkDir string }",
 		"type Response struct{ ExitCode int; Stdout string; Stderr string }",
 		"",
-		"func Run(t *testing.T, req *Request) (*Response, error) { return &Response{}, nil }",
+		"func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }",
 	}, "\n")
 }
 func rootSetupContent() string {
-	return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error {\n    t.Logf(\"setup\")\n    return nil\n}")
+	return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error {\n    t.Logf(\"setup\")\n    return nil\n}")
 }
 func leafSetupContent() string {
-	return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, req *Request) error {\n    t.Logf(\"setup\")\n    return nil\n}")
+	return doctestGoBlock("import \"testing\"\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error {\n    t.Logf(\"setup\")\n    return nil\n}")
 }
 func leafAssertContent() string {
-	return doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, req *Request, resp *Response, err error) {}")
+	return doctestGoBlock("import \"testing\"\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}")
 }
 func createTestTree(parent string, name string) error {
 	root := filepath.Join(parent, name)

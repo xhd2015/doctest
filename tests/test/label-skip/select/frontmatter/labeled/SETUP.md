@@ -13,7 +13,7 @@ explanation: heavy ui
 1. Op=parse_frontmatter with label+explanation.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Op = "parse_frontmatter"
 	req.FrontmatterContent = "---\nlabel: ui-automation\nexplanation: heavy ui test\n---\n\n## Expected\n"
 	return nil

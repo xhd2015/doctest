@@ -21,7 +21,7 @@ doctest test parent/ -> exit 0; planned 1 parent leaf
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	_, parentDir := createMegaParentNestedFixture(t)
 	req.Args = []string{"test", "--no-color", parentDir}
 	return nil

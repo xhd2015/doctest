@@ -30,7 +30,7 @@ spine(v2) -> key2
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	req.Op = "compute_mutate"
 	return nil

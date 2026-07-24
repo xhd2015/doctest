@@ -32,7 +32,7 @@ Write(run_start, leaf_*) without run_end -> Close -> lines still readable
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Op = "write_sequence"
 	req.CacheDir = t.TempDir()
 	req.ProjectID = "writer_proj"

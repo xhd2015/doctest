@@ -19,7 +19,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     req.RunKind = "write-gomod"
 	req.GenDir = t.TempDir()
 	req.ModRoot = t.TempDir()

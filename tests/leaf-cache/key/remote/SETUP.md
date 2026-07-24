@@ -27,7 +27,7 @@ remote-src/.../remote.go change -> key stable
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	t.Helper()
 	req.Flavor = "remote"
 	req.Op = "compute_mutate"

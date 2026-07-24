@@ -17,7 +17,7 @@ Matcher -> fail (leading blank line missing)
 2. Set actual to `"foo"` (same text without the leading blank line).
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "\nfoo"
 	req.Actual = "foo"
 	return nil

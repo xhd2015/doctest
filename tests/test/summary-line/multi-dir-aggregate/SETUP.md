@@ -19,7 +19,7 @@ doctest test <dir-a> <dir-b> -> accumulate stats -> single PASS(passed/total)
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	dirA := createPassFailTree(t, 2, 0)
 	dirB := createPassFailTree(t, 1, 0)
 	req.Args = []string{"test", dirA, dirB}

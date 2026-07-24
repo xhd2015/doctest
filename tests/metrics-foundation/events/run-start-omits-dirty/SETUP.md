@@ -23,7 +23,7 @@ run_start{git_branch, git_commit}  # no dirty / git_dirty / dirty_worktree
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Events = []map[string]any{
 		{
 			"type":       "run_start",

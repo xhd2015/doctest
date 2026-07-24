@@ -25,7 +25,7 @@ import (
     "testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     proj := t.TempDir()
     if err := os.WriteFile(filepath.Join(proj, "go.mod"), []byte("module testproj\ngo 1.21\n"), 0644); err != nil {
         t.Fatalf("write go.mod: %v", err)
@@ -36,7 +36,7 @@ func Setup(t *testing.T, req *Request) error {
         t.Fatalf("mkdir test dir: %v", err)
     }
 
-    brokenRun := "func Run(t *testing.T, req *Request) (*Response, error) {\n    _ = \"unclosed\n    return &Response{}, nil\n}\n"
+    brokenRun := "func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {\n    _ = \"unclosed\n    return &Response{}, nil\n}\n"
 
     if err := createDoctestRoot(testDir, brokenRun); err != nil {
         t.Fatalf("create doctest root: %v", err)

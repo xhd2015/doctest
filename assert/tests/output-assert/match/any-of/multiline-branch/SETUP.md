@@ -13,7 +13,7 @@ Matcher -> pass or line-numbered diff
 1. Set template/actual fields for A4 — multiline expect branch.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Template = "<any-of>\n<expect>\nline1\nline2\n</expect>\n<expect>\nalt\n</expect>\n</any-of>"
 	req.Actual = "line1\nline2"
 	return nil

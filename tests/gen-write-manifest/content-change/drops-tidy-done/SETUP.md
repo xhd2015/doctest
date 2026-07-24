@@ -17,7 +17,7 @@ import (
 	"testing"
 )
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	if req.Mode != "write-gomod-second" {
 		t.Fatalf("drops-tidy-done expects Mode write-gomod-second, got %q", req.Mode)
 	}

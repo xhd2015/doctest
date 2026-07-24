@@ -72,9 +72,9 @@ func writePassLeaf(t *testing.T, root, name string) {
     leafDir := filepath.Join(root, name)
     os.MkdirAll(leafDir, 0755)
     os.WriteFile(filepath.Join(leafDir, "SETUP.md"), []byte(doctestGoBlock(`import "testing"
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }`)), 0644)
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }`)), 0644)
     os.WriteFile(filepath.Join(leafDir, "ASSERT.md"), []byte(doctestGoBlock(`import "testing"
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}`)), 0644)
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}`)), 0644)
 }
 
 func writeFailLeafWithMarker(t *testing.T, root, name, marker string) {
@@ -82,9 +82,9 @@ func writeFailLeafWithMarker(t *testing.T, root, name, marker string) {
     leafDir := filepath.Join(root, name)
     os.MkdirAll(leafDir, 0755)
     os.WriteFile(filepath.Join(leafDir, "SETUP.md"), []byte(doctestGoBlock(`import "testing"
-func Setup(t *testing.T, req *Request) error { _ = req; return nil }`)), 0644)
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }`)), 0644)
     assertCode := fmt.Sprintf(`import "testing"
-func Assert(t *testing.T, req *Request, resp *Response, err error) {
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
     t.Fatal(%q)
 }`, marker)
     os.WriteFile(filepath.Join(leafDir, "ASSERT.md"), []byte(doctestGoBlock(assertCode)), 0644)
@@ -96,13 +96,13 @@ func createLogfPassTree(t *testing.T) string {
     leafDir := filepath.Join(tmp, "logf_leaf")
     os.MkdirAll(leafDir, 0755)
     setupCode := fmt.Sprintf(`import "testing"
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     t.Logf(%q)
     return nil
 }`, unwantedNonVerboseLogfMarker)
     os.WriteFile(filepath.Join(leafDir, "SETUP.md"), []byte(doctestGoBlock(setupCode)), 0644)
     os.WriteFile(filepath.Join(leafDir, "ASSERT.md"), []byte(doctestGoBlock(`import "testing"
-func Assert(t *testing.T, req *Request, resp *Response, err error) {}`)), 0644)
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}`)), 0644)
     return tmp
 }
 
@@ -131,7 +131,7 @@ func findInlineSummaryLine(stdout string) string {
     return ""
 }
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     req.Timeout = 120 * time.Second
     return nil
 }

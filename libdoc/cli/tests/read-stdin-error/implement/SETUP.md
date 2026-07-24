@@ -15,7 +15,7 @@ cli.Run -> agent implement -> readStdinIfPresent -> implementer.Run
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.Args = append([]string{"agent", "implement"}, req.Args...)
 	return nil
 }

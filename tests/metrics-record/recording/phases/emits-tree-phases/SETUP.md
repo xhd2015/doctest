@@ -18,7 +18,7 @@
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	// Ensure record_run with metrics; parent already sets MetricsOn.
 	req.Op = "record_run"
 	req.MetricsOn = true

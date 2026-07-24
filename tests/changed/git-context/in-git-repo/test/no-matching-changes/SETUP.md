@@ -19,7 +19,7 @@ FilterByChangedFiles -> [] ; ChangedCount 0 ; Announce false without -v
 ```go
 import "testing"
 
-func Setup(t *testing.T, req *Request) error {
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	if req.Policy == "" {
 		req.Policy = PolicyFilter
 	}
