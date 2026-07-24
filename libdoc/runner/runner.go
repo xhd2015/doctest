@@ -125,13 +125,19 @@ func runTest(opts core.Options, remainArgs []string) error {
 		coldCacheNs = time.Since(tCold).Nanoseconds()
 	}
 
-	// -a: hard force — superset of -count=1 when count unset; gen wipe happens
-	// later via EnsureCleanGenRoot (session marker / forceA).
+	// -a: hard force — superset of -count=1 when count unset; gen wipe is
+	// Options GenBatch.WipeOnce (not SessionID).
 	applyForceA(&opts)
+
+	// Shared gen batch for multi-tree emit-set union + -a wipe-once per gen root.
+	if opts.GenBatch == nil {
+		opts.GenBatch = core.NewGenBatch()
+	}
 
 	// One session id for the whole CLI invocation so parallel trees share
 	// session.Once / testbin materialization when nested self-tests run.
 	// Held on opts only — children receive it via cmd.Env key-replace (no process Setenv).
+	// Unrelated to gen wipe / orphan prune.
 	if opts.SessionID == "" {
 		if v, ok := syscall.Getenv(core.DoctestSessionIDEnv); ok && v != "" {
 			opts.SessionID = v

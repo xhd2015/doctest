@@ -27,5 +27,9 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 	if !strings.Contains(out, "wipe") && !strings.Contains(out, "Hard force") {
 		t.Fatalf("help -a should describe hard force / wipe:\n%s", out)
 	}
+	// Default orphan reconcile should be documented near -a or usage.
+	if !strings.Contains(out, "orphan") {
+		t.Fatalf("help should mention orphan cleanup for default runs:\n%s", out)
+	}
 }
 ```

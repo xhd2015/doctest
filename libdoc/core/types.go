@@ -142,11 +142,18 @@ type Options struct {
 	// SessionID is the DOCTEST_SESSION_ID for this CLI invocation. Set once at
 	// Test entry (inherit from process when nested, else mint). Threaded into
 	// child go test via cmd.Env key-replace; never written with os.Setenv.
+	// Unrelated to gen wipe / orphan prune (see GenBatch).
 	SessionID string
 
+	// GenBatch tracks throwaway-gen wipe-once (-a) and desired emit paths for
+	// orphan prune. Pointer is shared across multi-tree PrepareTree copies.
+	// Set once per CLI Run; library multi-tree tests should share one pointer.
+	// Unrelated to SessionID.
+	GenBatch *GenBatch
+
 	// ForceWithFlagA is CLI -a: hard force for this run — superset of -count=1
-	// when Count is unset (applyForceA), wipe gen root for this session (via
-	// EnsureCleanGenRoot), disable leaf-cache skip, and forward -a to go test.
+	// when Count is unset, wipe gen root once per GenBatch/genRoot, regenerate,
+	// disable leaf-cache skip, and forward -a to go test.
 	// Does not switch gen root or isolate GOCACHE (see ColdCache).
 	ForceWithFlagA bool
 

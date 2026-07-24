@@ -35,6 +35,12 @@ func Test(dir string, opts core.Options) error {
 
 func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	applyForceAOpts(&opts)
+	// Ensure a GenBatch for emit-set orphan prune and -a wipe-once. Multi-tree
+	// callers should pass a shared *GenBatch on Options so prepare unions emit
+	// sets; runner always sets one for the CLI invocation.
+	if opts.GenBatch == nil {
+		opts.GenBatch = core.NewGenBatch()
+	}
 	w := opts.Stderr
 	if w == nil {
 		w = os.Stderr

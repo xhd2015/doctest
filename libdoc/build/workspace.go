@@ -29,6 +29,11 @@ type TreePrep struct {
 // Unified trees write __wreg for later workspace fan-in.
 func PrepareTree(dir string, opts core.Options) (TreePrep, error) {
 	o := opts
+	// Share GenBatch across multi-tree prepare when caller provided one; else
+	// allocate so this prepare still records emit paths for a later prune.
+	if o.GenBatch == nil {
+		o.GenBatch = core.NewGenBatch()
+	}
 	o.GenerateOnly = true
 	o.SuppressResultSummary = true
 	stats, err := TestWithStats(dir, o)
@@ -125,11 +130,19 @@ func runWorkspaceSingleGen(preps []TreePrep, genRoot string, stats TestRunStats,
 		return filepath.ToSlash(treeRels[i]) < filepath.ToSlash(treeRels[j])
 	})
 
+	if opts.GenBatch != nil {
+		opts.GenBatch.Attach(genRoot)
+	}
 	if err := core.WriteWorkspaceExtras(genRoot, treeRels); err != nil {
 		return stats, err
 	}
 	if err := core.CondTidyGoMod(genRoot, opts.GoCache); err != nil {
 		return stats, err
+	}
+	if opts.GenBatch != nil {
+		if err := opts.GenBatch.PruneAttached(genRoot); err != nil {
+			return stats, err
+		}
 	}
 
 	suiteDir := core.WorkspaceSuiteDir(genRoot)
@@ -170,6 +183,9 @@ func runWorkspaceMultiModHub(preps []TreePrep, byGen map[string][]TreePrep, genO
 			return filepath.ToSlash(treeRels[i]) < filepath.ToSlash(treeRels[j])
 		})
 		multiTree := len(treeRels) > 1
+		if opts.GenBatch != nil {
+			opts.GenBatch.Attach(genRoot)
+		}
 		if multiTree {
 			if err := core.WriteWorkspaceExtras(genRoot, treeRels); err != nil {
 				return stats, err
@@ -177,6 +193,11 @@ func runWorkspaceMultiModHub(preps []TreePrep, byGen map[string][]TreePrep, genO
 		}
 		if err := core.CondTidyGoMod(genRoot, opts.GoCache); err != nil {
 			return stats, err
+		}
+		if opts.GenBatch != nil {
+			if err := opts.GenBatch.PruneAttached(genRoot); err != nil {
+				return stats, err
+			}
 		}
 		unique := uniqueWorkModulePath(genRoot)
 		if err := ensureWorkModulePath(genRoot, unique); err != nil {

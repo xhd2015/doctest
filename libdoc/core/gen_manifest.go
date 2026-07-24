@@ -132,6 +132,8 @@ func (m *genManifest) writeRelIfChanged(genRoot, rel string, data []byte) (wrote
 	abs := filepath.Join(genRoot, filepath.FromSlash(rel))
 	if m.hashes[rel] == hash {
 		if _, err := os.Stat(abs); err == nil {
+			// Still desired this batch even when rewrite skipped.
+			NoteDesired(genRoot, rel)
 			return false, nil
 		}
 		// Manifest claims hash but file missing — rewrite.
@@ -144,6 +146,7 @@ func (m *genManifest) writeRelIfChanged(genRoot, rel string, data []byte) (wrote
 		return false, err
 	}
 	m.setHash(rel, hash)
+	NoteDesired(genRoot, rel)
 	return wrote, nil
 }
 

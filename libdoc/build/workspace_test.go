@@ -29,8 +29,10 @@ func TestPrepareAndRunWorkspaceTwoTrees(t *testing.T) {
 	})
 
 	genDir := filepath.Join(t.TempDir(), "gen")
+	batch := core.NewGenBatch()
 	opts := core.Options{
 		GenDir:                genDir,
+		GenBatch:              batch,
 		Count:                 1,
 		SuppressResultSummary: true,
 		Stderr:                ioDiscard{},
@@ -105,8 +107,10 @@ func TestSharedGenRootAlwaysAssertReplace(t *testing.T) {
 		{Name: "b1", Steps: "b1", Expected: "ok"},
 	})
 	genDir := filepath.Join(t.TempDir(), "gen")
+	batch := core.NewGenBatch()
 	opts := core.Options{
 		GenDir:                genDir,
+		GenBatch:              batch,
 		Count:                 1,
 		SuppressResultSummary: true,
 		Stderr:                ioDiscard{},
@@ -154,8 +158,10 @@ func TestPrepareTreeParallelSharedGenRoot(t *testing.T) {
 		})
 	}
 	genDir := filepath.Join(t.TempDir(), "gen")
+	batch := core.NewGenBatch()
 	opts := core.Options{
 		GenDir:                genDir,
+		GenBatch:              batch,
 		Count:                 1,
 		SuppressResultSummary: true,
 		Stderr:                ioDiscard{},

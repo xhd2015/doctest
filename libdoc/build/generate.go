@@ -33,6 +33,12 @@ type generateContext struct {
 	removeLegacyTmp bool
 	// goCache is optional isolated GOCACHE for go mod tidy / go build children.
 	goCache string
+	// genBatch tracks -a wipe-once and desired emit paths (orphan prune).
+	genBatch *core.GenBatch
+	// generateOnly: defer orphan prune to workspace fan-in (multi-tree).
+	generateOnly bool
+	// forceA: wipe gen root once via genBatch before generate.
+	forceA bool
 	// unifiedMode: hierarchical ref packages + one suite package per DOCTEST tree.
 	// Always true for normal generation; false only for internal-compile trees
 	// (module-internal import path layout still uses classic AssembleTestSource).
@@ -80,6 +86,9 @@ func newGenerateContext(dir string, opts core.Options, cases []core.TreeCase, w 
 		assertImport:    assertImport,
 		sessionImport:   sessionImport,
 		goCache:         opts.GoCache,
+		genBatch:        opts.GenBatch,
+		generateOnly:    opts.GenerateOnly,
+		forceA:          opts.ForceWithFlagA,
 		unifiedMode:     unifiedMode,
 	}
 
@@ -126,10 +135,22 @@ func newGenerateContext(dir string, opts core.Options, cases []core.TreeCase, w 
 			}
 		}
 	}
-	// Gen root is a throwaway cache: wipe once per CLI session (or on -a) so
-	// prior orphans cannot linger; multi-tree prepare shares the session marker.
-	if err := core.EnsureCleanGenRoot(genRoot, opts.SessionID, opts.ForceWithFlagA); err != nil {
+	if err := os.MkdirAll(genRoot, 0755); err != nil {
 		return nil, err
+	}
+	// GenBatch: optional -a wipe-once; attach for emit-set orphan recording.
+	if ctx.genBatch != nil {
+		ctx.genBatch.Attach(genRoot)
+		if ctx.forceA {
+			if err := ctx.genBatch.WipeOnce(genRoot); err != nil {
+				return nil, err
+			}
+		}
+	} else if opts.ForceWithFlagA {
+		// Library -a without shared GenBatch: still wipe this gen root.
+		if err := core.WipeGenRoot(genRoot); err != nil {
+			return nil, err
+		}
 	}
 	ctx.genRoot = genRoot
 	return ctx, nil
@@ -239,7 +260,10 @@ func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) 
 			if err := ctx.writeUnifiedCases(cases, compileOnly, pkgName, hasPkgUnderTest, srcDir, origPkg); err != nil {
 				return err
 			}
-			return core.FlushGenManifest(ctx.genRoot)
+			if err := core.FlushGenManifest(ctx.genRoot); err != nil {
+				return err
+			}
+			return ctx.finishGenOrphans()
 		})
 	}
 
@@ -283,8 +307,20 @@ func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) 
 				return err
 			}
 		}
-		return core.FlushGenManifest(ctx.genRoot)
+		if err := core.FlushGenManifest(ctx.genRoot); err != nil {
+			return err
+		}
+		return ctx.finishGenOrphans()
 	})
+}
+
+// finishGenOrphans reconciles throwaway gen: delete paths not in this batch's
+// emit set. Deferred when GenerateOnly (multi-tree workspace prunes later).
+func (ctx *generateContext) finishGenOrphans() error {
+	if ctx.internalCompile || ctx.generateOnly || ctx.genBatch == nil {
+		return nil
+	}
+	return ctx.genBatch.PruneAttached(ctx.genRoot)
 }
 
 // treeRel is the doctest root path relative to the module root (or ".").

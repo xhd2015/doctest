@@ -164,10 +164,11 @@ Options:
   -count=N          Forward Go test count option to generated test binary;
                     any N>0 also disables programmatic leaf-cache skip
   -a                Hard force on the active gen root (superset of -count=1 when
-                    count is unset): wipe throwaway gen cache for this session
-                    before regenerate, forward -a to go test (rebuild packages),
-                    disable leaf-cache skip. Does not switch gen root or isolate
-                    GOCACHE (see --cold-cache).
+                    count is unset): wipe throwaway gen once for this invocation,
+                    regenerate, forward -a to go test (rebuild packages), disable
+                    leaf-cache skip. Does not switch gen root or isolate GOCACHE
+                    (see --cold-cache). Default runs keep warm gen and delete
+                    orphans (paths not emitted this run) after generate.
   -timeout DURATION
                     Forward -timeout to go test (e.g. 30s, 5m, 1h; 0 disables).
                     Omitted uses go test default (10m). Alias: --timeout
