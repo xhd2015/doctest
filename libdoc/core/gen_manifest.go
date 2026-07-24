@@ -163,14 +163,15 @@ func WriteIfChanged(genRoot, rel string, data []byte) (wrote bool, err error) {
 	if genRoot == "" || rel == "" {
 		return false, fmt.Errorf("WriteIfChanged: genRoot and rel required")
 	}
-	genRoot = filepath.Clean(genRoot)
+	// Always abs+clean so manByRoot / GenBatch emit keys stay aligned.
+	genRoot = absGenRoot(genRoot)
 	genModMu.Lock()
 	defer genModMu.Unlock()
 
 	if err := os.MkdirAll(genRoot, 0755); err != nil {
 		return false, err
 	}
-	man, err := cachedGenManifest(genRoot)
+	man, err := cachedGenManifestLocked(genRoot)
 	if err != nil {
 		return false, err
 	}
@@ -196,7 +197,7 @@ func FlushGenManifest(genRoot string) error {
 	if genRoot == "" {
 		return nil
 	}
-	genRoot = filepath.Clean(genRoot)
+	genRoot = absGenRoot(genRoot)
 	genModMu.Lock()
 	defer genModMu.Unlock()
 	man := manByRoot[genRoot]
@@ -215,13 +216,23 @@ func InvalidateGenManifestCache(genRoot string) {
 	if genRoot == "" {
 		return
 	}
-	genRoot = filepath.Clean(genRoot)
+	genRoot = absGenRoot(genRoot)
 	genModMu.Lock()
 	delete(manByRoot, genRoot)
+	// Also drop Clean-only legacy keys if present.
+	delete(manByRoot, filepath.Clean(genRoot))
 	genModMu.Unlock()
 }
 
 func cachedGenManifest(genRoot string) (*genManifest, error) {
+	genRoot = absGenRoot(genRoot)
+	genModMu.Lock()
+	defer genModMu.Unlock()
+	return cachedGenManifestLocked(genRoot)
+}
+
+// cachedGenManifestLocked requires genModMu held; genRoot already abs-cleaned.
+func cachedGenManifestLocked(genRoot string) (*genManifest, error) {
 	if man, ok := manByRoot[genRoot]; ok {
 		return man, nil
 	}
@@ -234,9 +245,12 @@ func cachedGenManifest(genRoot string) (*genManifest, error) {
 }
 
 // findGenRootWithManifest walks up from path's directory looking for
-// doctest.gen-manifest. Returns gen root, slash-relative path, and true if found.
+// doctest.gen-manifest. Returns abs gen root, slash-relative path, and true if found.
 func findGenRootWithManifest(absPath string) (genRoot, rel string, ok bool) {
 	absPath = filepath.Clean(absPath)
+	if abs, err := filepath.Abs(absPath); err == nil {
+		absPath = abs
+	}
 	dir := filepath.Dir(absPath)
 	for {
 		manPath := filepath.Join(dir, genManifestFile)
@@ -245,7 +259,7 @@ func findGenRootWithManifest(absPath string) (genRoot, rel string, ok bool) {
 			if err != nil || strings.HasPrefix(rel, "..") {
 				return "", "", false
 			}
-			return dir, filepath.ToSlash(rel), true
+			return absGenRoot(dir), filepath.ToSlash(rel), true
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {

@@ -61,7 +61,7 @@ func TestPruneTreeScopeDoesNotTouchSiblingTree(t *testing.T) {
 		"tree-a/keep.go": {},
 		"go.mod":         {},
 	}
-	if err := PruneTreeScopeToDesired(gen, "tree-a", desired); err != nil {
+	if err := PruneTreeScopeToDesired(gen, "tree-a", desired, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(keepA); err != nil {
@@ -101,7 +101,7 @@ func TestPruneEmptyDesiredNoOp(t *testing.T) {
 	if err := os.WriteFile(f, []byte("x"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := PruneTreeScopeToDesired(gen, "tree-a", nil); err != nil {
+	if err := PruneTreeScopeToDesired(gen, "tree-a", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(f); err != nil {

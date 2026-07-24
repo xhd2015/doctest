@@ -168,7 +168,7 @@ func prepareWorkspaceGen(genRoot string, treeRels []string, opts core.Options) e
 		return nil
 	}
 	for _, tr := range treeRels {
-		if err := opts.GenBatch.PruneTree(genRoot, tr); err != nil {
+		if err := opts.GenBatch.PruneTree(genRoot, tr, treeRels); err != nil {
 			return err
 		}
 	}
@@ -213,7 +213,7 @@ func runWorkspaceMultiModHub(preps []TreePrep, byGen map[string][]TreePrep, genO
 			err := core.CondTidyGoMod(genRoot, opts.GoCache)
 			if opts.GenBatch != nil {
 				if err == nil {
-					err = opts.GenBatch.PruneTree(genRoot, treeRels[0])
+					err = opts.GenBatch.PruneTree(genRoot, treeRels[0], treeRels)
 				}
 				opts.GenBatch.Detach(genRoot)
 			}

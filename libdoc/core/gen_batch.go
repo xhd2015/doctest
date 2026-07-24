@@ -196,17 +196,42 @@ func rootBookkeeping(rel string) bool {
 	}
 }
 
+// nestedTreeExcludes returns prefixes of other treeRels that live under treeRel
+// so a parent tree prune never deletes a nested tree's packages.
+func nestedTreeExcludes(treeRel string, allTreeRels []string) []string {
+	treeRel = filepath.ToSlash(filepath.Clean(treeRel))
+	if treeRel == "" || treeRel == "." {
+		return nil
+	}
+	prefix := treeRel + "/"
+	var out []string
+	for _, o := range allTreeRels {
+		o = filepath.ToSlash(filepath.Clean(o))
+		if o == "" || o == "." || o == treeRel {
+			continue
+		}
+		if strings.HasPrefix(o+"/", prefix) || strings.HasPrefix(o, prefix) {
+			out = append(out, o+"/")
+		}
+	}
+	return out
+}
+
 // PruneTreeScopeToDesired deletes orphan files under one tree's ownership scope
 // inside genRoot. treeRel is filepath.Rel(modRoot, doctestRoot) ("" or "." =
 // packages at gen root). Shared mapping-gen holds many trees: we never delete
-// outside this tree's prefix, and never delete root bookkeeping (go.mod, …).
+// outside this tree's prefix, never under nested sibling treeRels, and never
+// delete root bookkeeping (go.mod, …).
 //
 // Safety: only delete files that appear in doctest.gen-manifest for this gen
 // root and are not in desired. That way an incomplete emit set cannot remove
 // live package sources that were never recorded (false orphans).
 //
+// excludeNested are other treeRel prefixes (with trailing slash) that must not
+// be touched when pruning a parent tree (e.g. tests/ vs tests/boundary/).
+//
 // desired rels are slash form relative to genRoot. Empty desired → no-op.
-func PruneTreeScopeToDesired(genRoot, treeRel string, desired map[string]struct{}) error {
+func PruneTreeScopeToDesired(genRoot, treeRel string, desired map[string]struct{}, excludeNested []string) error {
 	if genRoot == "" {
 		return nil
 	}
@@ -249,8 +274,24 @@ func PruneTreeScopeToDesired(genRoot, treeRel string, desired map[string]struct{
 		}
 	}
 
+	underNested := func(rel string) bool {
+		for _, ex := range excludeNested {
+			if strings.HasPrefix(rel, ex) || rel+"/" == ex {
+				return true
+			}
+			// exact nested treeRel without trailing slash
+			if strings.TrimSuffix(ex, "/") == rel {
+				return true
+			}
+		}
+		return false
+	}
+
 	inScope := func(rel string) bool {
 		if rootBookkeeping(rel) {
+			return false
+		}
+		if underNested(rel) {
 			return false
 		}
 		if scopePrefix != "" {
@@ -268,7 +309,7 @@ func PruneTreeScopeToDesired(genRoot, treeRel string, desired map[string]struct{
 	}
 
 	genModMu.Lock()
-	man, err := cachedGenManifest(genRoot)
+	man, err := cachedGenManifestLocked(genRoot)
 	if err != nil {
 		genModMu.Unlock()
 		return err
@@ -341,8 +382,6 @@ func PruneWorkspaceScope(genRoot string, desired map[string]struct{}) error {
 	if genRoot == "" {
 		return nil
 	}
-	// Reuse tree-scope with synthetic treeRel = __workspace by filtering desired
-	// and walking only that prefix.
 	wsDesired := make(map[string]struct{})
 	prefix := WorkspaceDirName + "/"
 	for rel := range desired {
@@ -351,20 +390,20 @@ func PruneWorkspaceScope(genRoot string, desired map[string]struct{}) error {
 			wsDesired[rel] = struct{}{}
 		}
 	}
-	// Also keep any desired notes under __workspace from the batch.
 	if len(wsDesired) == 0 {
-		// Still allow prune of entire __workspace if nothing desired? no-op safer
 		return nil
 	}
-	return PruneTreeScopeToDesired(genRoot, WorkspaceDirName, wsDesired)
+	return PruneTreeScopeToDesired(genRoot, WorkspaceDirName, wsDesired, nil)
 }
 
 // PruneTree prunes one tree's package scope using this batch's desired set.
-func (b *GenBatch) PruneTree(genRoot, treeRel string) error {
+// allTreeRels lists every tree in the workspace batch so parent prune excludes
+// nested sibling trees (tests/ must not delete tests/boundary/ packages).
+func (b *GenBatch) PruneTree(genRoot, treeRel string, allTreeRels []string) error {
 	if b == nil {
 		return nil
 	}
-	return PruneTreeScopeToDesired(genRoot, treeRel, b.Desired(genRoot))
+	return PruneTreeScopeToDesired(genRoot, treeRel, b.Desired(genRoot), nestedTreeExcludes(treeRel, allTreeRels))
 }
 
 // PruneWorkspace prunes __workspace using this batch's desired set.

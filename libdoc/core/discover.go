@@ -483,7 +483,7 @@ func WriteGoMod(genDir, modRoot, modPath string, hasMod bool, withAssertReplace 
 	genModMu.Lock()
 	defer genModMu.Unlock()
 
-	genDir = filepath.Clean(genDir)
+	genDir = absGenRoot(genDir)
 	if err := os.MkdirAll(genDir, 0755); err != nil {
 		return err
 	}
@@ -509,7 +509,7 @@ func WriteGoMod(genDir, modRoot, modPath string, hasMod bool, withAssertReplace 
 		content += fmt.Sprintf("replace %s => %s\n", SessionImportPath, sessionCacheDir)
 	}
 
-	man, err := cachedGenManifest(genDir)
+	man, err := cachedGenManifestLocked(genDir)
 	if err != nil {
 		return err
 	}

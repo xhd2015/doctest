@@ -334,7 +334,8 @@ func (ctx *generateContext) finishGenOrphans() error {
 	if ctx.internalCompile || ctx.generateOnly || ctx.genBatch == nil {
 		return nil
 	}
-	return ctx.genBatch.PruneTree(ctx.genRoot, ctx.treeRel())
+	// Single-tree path: no sibling treeRels to exclude.
+	return ctx.genBatch.PruneTree(ctx.genRoot, ctx.treeRel(), nil)
 }
 
 // releaseGenWrite detaches the batch and unlocks gen-root serialize lock.
