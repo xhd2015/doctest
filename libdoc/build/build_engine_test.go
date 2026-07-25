@@ -801,82 +801,110 @@ func TestDotProgressIncremental(t *testing.T) {
 		t.Skip("slow dot progress timing test")
 	}
 
-	// One short sleep is enough if we measure the gap *between* dots (batch dump
-	// at process end has ~0 inter-dot gap). Keep this small so `go test` wall
-	// cost stays low; -short skips the whole test.
-	const slowSleep = 800 * time.Millisecond
-	const minIncrementalGap = 400 * time.Millisecond
+	// Measure gap *between* progress dots (end-of-process dump has ~0 inter-dot
+	// gap). Under CI load, go test -json can occasionally flush late; retry once
+	// with a longer sleep before failing. -short skips this test.
+	runOnce := func(t *testing.T, slowSleep, minIncrementalGap time.Duration) (ok bool, detail string) {
+		t.Helper()
+		subRoot := t.TempDir()
+		testtree.WriteMinimalRunnableTree(t, subRoot, []testtree.LeafSpec{
+			{Name: "a_fast", Steps: "No setup needed.", Expected: "Always passes."},
+			{Name: "z_slow", Steps: "Brief sleep so the fast leaf can finish first.", Expected: "Always passes.",
+				SetupGo: fmt.Sprintf(
+					"import (\"testing\"; \"time\")\n\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { time.Sleep(%d * time.Millisecond); return nil }",
+					int(slowSleep/time.Millisecond),
+				)},
+		})
 
-	subRoot := t.TempDir()
-	testtree.WriteMinimalRunnableTree(t, subRoot, []testtree.LeafSpec{
-		{Name: "a_fast", Steps: "No setup needed.", Expected: "Always passes."},
-		{Name: "z_slow", Steps: "Brief sleep so the fast leaf can finish first.", Expected: "Always passes.",
-			SetupGo: fmt.Sprintf(
-				"import (\"testing\"; \"time\")\n\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { time.Sleep(%d * time.Millisecond); return nil }",
-				int(slowSleep/time.Millisecond),
-			)},
-	})
+		// Parallel-safe streaming capture via opts.Stdout (never swap os.Stdout).
+		pr, pw := io.Pipe()
 
-	// Parallel-safe streaming capture via opts.Stdout (never swap os.Stdout).
-	pr, pw := io.Pipe()
-
-	type dotInfo struct {
-		dotTimes []time.Duration // time of each '.' since start
-		output   string
-	}
-	ch := make(chan dotInfo, 1)
-	start := time.Now()
-	go func() {
-		var buf bytes.Buffer
-		var dotTimes []time.Duration
-		tmp := make([]byte, 1)
-		for {
-			n, readErr := pr.Read(tmp)
-			if n > 0 {
-				buf.WriteByte(tmp[0])
-				if tmp[0] == '.' {
-					dotTimes = append(dotTimes, time.Since(start))
+		type dotInfo struct {
+			dotTimes []time.Duration // time of each progress '.' since start
+			output   string
+		}
+		ch := make(chan dotInfo, 1)
+		start := time.Now()
+		go func() {
+			var buf bytes.Buffer
+			var dotTimes []time.Duration
+			tmp := make([]byte, 1)
+			// Only time dots before the quiet progress summary "  (N Run…".
+			// Digits like "1.01s" also contain '.' and must not count.
+			summarySeen := false
+			var window [3]byte
+			winN := 0
+			for {
+				n, readErr := pr.Read(tmp)
+				if n > 0 {
+					b := tmp[0]
+					buf.WriteByte(b)
+					if !summarySeen {
+						if winN < 3 {
+							window[winN] = b
+							winN++
+						} else {
+							window[0], window[1], window[2] = window[1], window[2], b
+						}
+						if winN == 3 && window[0] == ' ' && window[1] == ' ' && window[2] == '(' {
+							summarySeen = true
+						} else if b == '.' {
+							dotTimes = append(dotTimes, time.Since(start))
+						}
+					}
+				}
+				if readErr != nil {
+					break
 				}
 			}
-			if readErr != nil {
-				break
-			}
+			ch <- dotInfo{dotTimes, buf.String()}
+		}()
+
+		err := Test(subRoot, core.Options{
+			RemoveTemp:            true,
+			Count:                 1,
+			Stdout:                pw,
+			SuppressResultSummary: true, // PASS/FAIL stays off real os.Stdout
+		})
+		_ = pw.Close()
+		info := <-ch
+		if err != nil {
+			return false, fmt.Sprintf("build.Test: %v", err)
 		}
-		ch <- dotInfo{dotTimes, buf.String()}
-	}()
 
-	err := Test(subRoot, core.Options{
-		RemoveTemp:            true,
-		Count:                 1,
-		Stdout:                pw,
-		SuppressResultSummary: true, // PASS/FAIL stays off real os.Stdout
-	})
-	_ = pw.Close()
-	info := <-ch
-	if err != nil {
-		t.Fatalf("build.Test: %v", err)
-	}
+		totalElapsed := time.Since(start)
+		inlineIdx := strings.Index(info.output, "  (")
+		if inlineIdx < 0 {
+			return false, fmt.Sprintf("expected summary line in output:\n%s", info.output)
+		}
+		if dots := strings.Count(info.output[:inlineIdx], "."); dots != 2 {
+			return false, fmt.Sprintf("expected 2 dots before summary, got %d. output:\n%s", dots, info.output)
+		}
+		if len(info.dotTimes) < 2 {
+			return false, fmt.Sprintf("expected 2 timed progress dots, got %d times=%v total=%s\n%s",
+				len(info.dotTimes), info.dotTimes, totalElapsed, info.output)
+		}
 
-	totalElapsed := time.Since(start)
-	inlineIdx := strings.Index(info.output, "  (")
-	if inlineIdx < 0 {
-		t.Fatalf("expected summary line in output:\n%s", info.output)
-	}
-	if dots := strings.Count(info.output[:inlineIdx], "."); dots != 2 {
-		t.Fatalf("expected 2 dots before summary, got %d. output:\n%s", dots, info.output)
-	}
-	if len(info.dotTimes) < 2 {
-		t.Fatalf("expected 2 timed dots, got %d times=%v total=%s\n%s",
-			len(info.dotTimes), info.dotTimes, totalElapsed, info.output)
+		// Incremental: first and second progress dots are well apart, or the first
+		// appears well before the run ends (not a single end-of-process dump).
+		interDot := info.dotTimes[1] - info.dotTimes[0]
+		firstToEnd := totalElapsed - info.dotTimes[0]
+		if interDot < minIncrementalGap && firstToEnd < minIncrementalGap {
+			return false, fmt.Sprintf("dots are NOT printed incrementally: inter-dot=%s first→end=%s total=%s times=%v\n%s",
+				interDot, firstToEnd, totalElapsed, info.dotTimes, info.output)
+		}
+		return true, ""
 	}
 
-	// Incremental: first and second dots are well apart (fast finishes while slow runs),
-	// or at least the first appears well before the run ends.
-	interDot := info.dotTimes[1] - info.dotTimes[0]
-	firstToEnd := totalElapsed - info.dotTimes[0]
-	if interDot < minIncrementalGap && firstToEnd < minIncrementalGap {
-		t.Fatalf("dots are NOT printed incrementally: inter-dot=%s first→end=%s total=%s times=%v\n%s",
-			interDot, firstToEnd, totalElapsed, info.dotTimes, info.output)
+	const slowSleep = 800 * time.Millisecond
+	const minIncrementalGap = 400 * time.Millisecond
+	if ok, detail := runOnce(t, slowSleep, minIncrementalGap); ok {
+		return
+	} else {
+		t.Logf("first attempt inconclusive, retrying with longer sleep: %s", detail)
+		if ok2, detail2 := runOnce(t, 1500*time.Millisecond, 600*time.Millisecond); !ok2 {
+			t.Fatalf("dots not incremental after retry:\nfirst: %s\nretry: %s", detail, detail2)
+		}
 	}
 }
 
@@ -914,4 +942,3 @@ func assertGeneratedMatchesFixture(t *testing.T, got, absRoot, fixtureName strin
 		t.Fatalf("generated source does not match fixture %s\n--- got ---\n%s\n--- want ---\n%s", fixtureName, normalized, want)
 	}
 }
-

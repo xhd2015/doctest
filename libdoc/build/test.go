@@ -1148,8 +1148,18 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 		}
 	}()
 
-	stderrData, _ := io.ReadAll(stderrPipe)
+	// Drain stderr concurrently with stdout JSON. Sequential ReadAll(stderr)
+	// after/before a blocked stdout path can stall go test (full pipe buffers)
+	// and batch progress dots until process exit — flaky under CI load.
+	var stderrData []byte
+	var stderrWg sync.WaitGroup
+	stderrWg.Add(1)
+	go func() {
+		defer stderrWg.Done()
+		stderrData, _ = io.ReadAll(stderrPipe)
+	}()
 	stdoutWg.Wait()
+	stderrWg.Wait()
 	err = goTestCmd.Wait()
 	res.stderrData = stderrData
 	// go test may also print the panic only on stderr in edge cases.
