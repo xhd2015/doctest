@@ -131,6 +131,10 @@ type Options struct {
 	// fan-in still run. Not a public CLI flag.
 	BypassGoTest bool
 
+	// GenPlan prints generate plan/result hierarchy trees on stderr
+	// (DOCTEST_DEBUG=gen-plan=1). Not a public CLI flag.
+	GenPlan bool
+
 	// ColdCache enables doctest test --cold-cache: wipe mapping gen root on
 	// startup, force -count=1 when unset, and isolate GOCACHE for the run.
 	ColdCache bool

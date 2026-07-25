@@ -115,10 +115,15 @@ func (m *genManifest) flush(genRoot string) error {
 	}
 	path := filepath.Join(genRoot, genManifestFile)
 	data := m.encode()
-	if _, err := writeFileIfChanged(path, data, 0644); err != nil {
+	wrote, err := writeFileIfChanged(path, data, 0644)
+	if err != nil {
 		return err
 	}
 	m.dirty = false
+	// Track the manifest file itself for gen-plan / orphan desired set.
+	NoteDesired(genRoot, genManifestFile)
+	// Manifest rewrite: treat as modified when wrote (file almost always exists).
+	NoteWriteEx(genRoot, genManifestFile, wrote, false)
 	return nil
 }
 
@@ -134,10 +139,13 @@ func (m *genManifest) writeRelIfChanged(genRoot, rel string, data []byte) (wrote
 		if _, err := os.Stat(abs); err == nil {
 			// Still desired this batch even when rewrite skipped.
 			NoteDesired(genRoot, rel)
+			NoteWriteEx(genRoot, rel, false, false)
 			return false, nil
 		}
-		// Manifest claims hash but file missing — rewrite.
+		// Manifest claims hash but file missing — rewrite as new file on disk.
 	}
+	_, statErr := os.Stat(abs)
+	existed := statErr == nil
 	if err := os.MkdirAll(filepath.Dir(abs), 0755); err != nil {
 		return false, err
 	}
@@ -147,6 +155,8 @@ func (m *genManifest) writeRelIfChanged(genRoot, rel string, data []byte) (wrote
 	}
 	m.setHash(rel, hash)
 	NoteDesired(genRoot, rel)
+	// wrote=false → unchanged; wrote && !existed → new; wrote && existed → modified.
+	NoteWriteEx(genRoot, rel, wrote, wrote && !existed)
 	return wrote, nil
 }
 

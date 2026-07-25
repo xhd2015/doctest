@@ -627,6 +627,9 @@ func CondTidyGoMod(genDir string, goCache string) error {
 
 	markerFile := filepath.Join(genDir, "doctest.tidy-done")
 	if _, err := os.Stat(markerFile); err == nil {
+		// Marker already present: bookkeeping unchanged this run.
+		NoteDesired(genDir, "doctest.tidy-done")
+		NoteWrite(genDir, "doctest.tidy-done", false)
 		noteGenBookkeeping(genDir)
 		return nil
 	}
@@ -640,16 +643,21 @@ func CondTidyGoMod(genDir string, goCache string) error {
 	if err := f.Close(); err != nil {
 		return err
 	}
+	NoteDesired(genDir, "doctest.tidy-done")
+	NoteWriteEx(genDir, "doctest.tidy-done", true, true) // newly created marker
 	noteGenBookkeeping(genDir)
 	return nil
 }
 
 // noteGenBookkeeping marks go.mod / go.sum / tidy-done / manifest as desired
 // when present (tidy may rewrite go.sum outside writeRelIfChanged).
+// Paths without a prior write outcome default to unchanged (already on disk).
 func noteGenBookkeeping(genDir string) {
 	for _, name := range []string{"go.mod", "go.sum", "doctest.tidy-done", genManifestFile} {
 		if _, err := os.Stat(filepath.Join(genDir, name)); err == nil {
 			NoteDesired(genDir, name)
+			// Only set unchanged when no stronger outcome was recorded.
+			NoteWrite(genDir, name, false)
 		}
 	}
 }
@@ -761,15 +769,20 @@ func CopySourceFiles(genDir, srcDir, origPkgName string) (string, error) {
 		content := strings.Replace(string(data), oldPkgDecl, newPkgDecl, 1)
 		dst := filepath.Join(genDir, name)
 
+		_, stErr := os.Stat(dst)
+		existed := stErr == nil
 		existing, _ := os.ReadFile(dst)
+		wrote := false
 		if string(existing) != content {
 			if err := os.WriteFile(dst, []byte(content), 0644); err != nil {
 				return "", err
 			}
+			wrote = true
 		}
 		// Desired even on content-identical skip.
 		if root, rel, ok := findGenRootWithManifest(dst); ok {
 			NoteDesired(root, rel)
+			NoteWriteEx(root, rel, wrote, wrote && !existed)
 		}
 	}
 	return newPkgName, nil

@@ -4,9 +4,43 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 )
+
+// EmitStatus is the write outcome for one relative path under a gen root
+// (used by DOCTEST_DEBUG gen-plan=1 result coloring / summary).
+type EmitStatus int
+
+const (
+	// EmitUnknown means desired but no write outcome recorded yet.
+	EmitUnknown EmitStatus = iota
+	// EmitNew: path created this run (did not exist before write).
+	EmitNew
+	// EmitModified: existing file content rewritten this run.
+	EmitModified
+	// EmitUnchanged: content-hash / bytes match; rewrite skipped.
+	EmitUnchanged
+	// EmitDeleted: orphan prune removed the path this run.
+	EmitDeleted
+)
+
+// Tag returns the gen-plan result annotation without the leading '#'.
+func (st EmitStatus) Tag() string {
+	switch st {
+	case EmitNew:
+		return "new"
+	case EmitModified:
+		return "modified"
+	case EmitUnchanged:
+		return "unchanged"
+	case EmitDeleted:
+		return "deleted"
+	default:
+		return "unchanged"
+	}
+}
 
 // GenBatch tracks throwaway-gen lifecycle for one doctest test invocation
 // (or library multi-tree prepare that shares the same *GenBatch pointer).
@@ -17,16 +51,18 @@ import (
 //   - -a wipes each gen root at most once
 //   - desired emit paths union across trees before orphan prune
 type GenBatch struct {
-	mu    sync.Mutex
-	wiped map[string]struct{}            // abs gen root → wiped for -a this batch
-	emit  map[string]map[string]struct{} // abs gen root → slash-rel desired paths
+	mu       sync.Mutex
+	wiped    map[string]struct{}            // abs gen root → wiped for -a this batch
+	emit     map[string]map[string]struct{} // abs gen root → slash-rel desired paths
+	outcomes map[string]map[string]EmitStatus
 }
 
 // NewGenBatch returns an empty batch.
 func NewGenBatch() *GenBatch {
 	return &GenBatch{
-		wiped: make(map[string]struct{}),
-		emit:  make(map[string]map[string]struct{}),
+		wiped:    make(map[string]struct{}),
+		emit:     make(map[string]map[string]struct{}),
+		outcomes: make(map[string]map[string]EmitStatus),
 	}
 }
 
@@ -120,6 +156,107 @@ func (b *GenBatch) Note(genRoot, rel string) {
 	m[rel] = struct{}{}
 }
 
+// NoteWrite records a write outcome for rel under genRoot (desired + status).
+// wrote=false → unchanged; wrote=true && isNew → new; wrote=true && !isNew → modified.
+// Priority: deleted < unchanged < modified < new for same-path re-reports this run
+// (later NoteOutcome rules below).
+func NoteWrite(genRoot, rel string, wrote bool) {
+	NoteWriteEx(genRoot, rel, wrote, false)
+}
+
+// NoteWriteEx is like NoteWrite but isNew marks a newly created path.
+func NoteWriteEx(genRoot, rel string, wrote, isNew bool) {
+	if genRoot == "" || rel == "" {
+		return
+	}
+	key := absGenRoot(genRoot)
+	v, ok := activeBatches.Load(key)
+	if !ok {
+		return
+	}
+	b, _ := v.(*GenBatch)
+	if b == nil {
+		return
+	}
+	st := EmitUnchanged
+	if wrote {
+		if isNew {
+			st = EmitNew
+		} else {
+			st = EmitModified
+		}
+	}
+	b.NoteOutcome(key, rel, st)
+}
+
+// NoteDeleted records that prune removed rel under genRoot.
+func NoteDeleted(genRoot, rel string) {
+	if genRoot == "" || rel == "" {
+		return
+	}
+	key := absGenRoot(genRoot)
+	v, ok := activeBatches.Load(key)
+	if !ok {
+		return
+	}
+	b, _ := v.(*GenBatch)
+	if b == nil {
+		return
+	}
+	b.NoteOutcome(key, rel, EmitDeleted)
+}
+
+// NoteOutcome records status for a path. Also marks desired unless deleted-only
+// (deleted paths may no longer be desired).
+func (b *GenBatch) NoteOutcome(genRoot, rel string, st EmitStatus) {
+	if b == nil || genRoot == "" || rel == "" || st == EmitUnknown {
+		return
+	}
+	genRoot = absGenRoot(genRoot)
+	rel = filepath.ToSlash(filepath.Clean(rel))
+	if rel == "." {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if st != EmitDeleted {
+		if b.emit == nil {
+			b.emit = make(map[string]map[string]struct{})
+		}
+		m := b.emit[genRoot]
+		if m == nil {
+			m = make(map[string]struct{})
+			b.emit[genRoot] = m
+		}
+		m[rel] = struct{}{}
+	}
+	if b.outcomes == nil {
+		b.outcomes = make(map[string]map[string]EmitStatus)
+	}
+	om := b.outcomes[genRoot]
+	if om == nil {
+		om = make(map[string]EmitStatus)
+		b.outcomes[genRoot] = om
+	}
+	prev := om[rel]
+	switch {
+	case st == EmitNew:
+		// New wins unless already modified (rewrite after create).
+		if prev != EmitModified {
+			om[rel] = EmitNew
+		}
+	case st == EmitModified:
+		om[rel] = EmitModified
+	case st == EmitDeleted:
+		om[rel] = EmitDeleted
+	case st == EmitUnchanged:
+		// Prefer new/modified if already written this run.
+		if prev == EmitUnknown || prev == EmitUnchanged {
+			om[rel] = EmitUnchanged
+		}
+	}
+}
+
 // Desired returns a copy of desired rel paths for genRoot (may be nil/empty).
 func (b *GenBatch) Desired(genRoot string) map[string]struct{} {
 	if b == nil {
@@ -136,6 +273,47 @@ func (b *GenBatch) Desired(genRoot string) map[string]struct{} {
 	for k := range src {
 		out[k] = struct{}{}
 	}
+	return out
+}
+
+// Outcomes returns a copy of emit statuses for genRoot (may be nil/empty).
+func (b *GenBatch) Outcomes(genRoot string) map[string]EmitStatus {
+	if b == nil {
+		return nil
+	}
+	genRoot = absGenRoot(genRoot)
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	src := b.outcomes[genRoot]
+	if len(src) == 0 {
+		return nil
+	}
+	out := make(map[string]EmitStatus, len(src))
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
+}
+
+// AllGenRoots returns abs gen roots that have desired paths or outcomes.
+func (b *GenBatch) AllGenRoots() []string {
+	if b == nil {
+		return nil
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	seen := map[string]struct{}{}
+	for k := range b.emit {
+		seen[k] = struct{}{}
+	}
+	for k := range b.outcomes {
+		seen[k] = struct{}{}
+	}
+	out := make([]string, 0, len(seen))
+	for k := range seen {
+		out = append(out, k)
+	}
+	sort.Strings(out)
 	return out
 }
 
@@ -159,6 +337,7 @@ func (b *GenBatch) WipeOnce(genRoot string) error {
 	}
 	b.wiped[genRoot] = struct{}{}
 	delete(b.emit, genRoot)
+	delete(b.outcomes, genRoot)
 	b.mu.Unlock()
 
 	if err := WipeGenRoot(genRoot); err != nil {
@@ -341,6 +520,7 @@ func PruneTreeScopeToDesired(genRoot, treeRel string, desired map[string]struct{
 		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("PruneTreeScopeToDesired: remove %s: %w", p, err)
 		}
+		NoteDeleted(genRoot, rel)
 	}
 	// Drop empty dirs under scope.
 	for {

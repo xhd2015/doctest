@@ -12,7 +12,7 @@ func TestParseEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.BypassGoTest || s.CPUProfile != "" || s.MemProfile != "" || s.BlockProfile != "" {
+	if s.BypassGoTest || s.GenPlan || s.CPUProfile != "" || s.MemProfile != "" || s.BlockProfile != "" {
 		t.Fatal("expected zero settings")
 	}
 }
@@ -31,6 +31,31 @@ func TestParseBypassGoTest(t *testing.T) {
 	}
 	if s.BypassGoTest {
 		t.Fatal("expected off")
+	}
+}
+
+func TestParseGenPlan(t *testing.T) {
+	s, err := Parse("gen-plan=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !s.GenPlan {
+		t.Fatal("expected GenPlan")
+	}
+	if s.BypassGoTest {
+		t.Fatal("expected BypassGoTest false")
+	}
+	s, err = Parse("gen-plan=1,bypass-go-test=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !s.GenPlan || !s.BypassGoTest {
+		t.Fatalf("expected both on: %+v", s)
+	}
+	if _, err := Parse("gen-plan=maybe"); err == nil {
+		t.Fatal("expected bool error")
+	} else if !strings.Contains(err.Error(), "gen-plan") {
+		t.Fatalf("err=%v", err)
 	}
 }
 

@@ -1469,10 +1469,12 @@ func WriteFormattedGo(path, src string) error {
 		_, werr := WriteIfChanged(genRoot, rel, res)
 		return werr
 	}
+	_, statErr := os.Stat(path)
+	existed := statErr == nil
 	existing, _ := os.ReadFile(path)
-	if string(existing) == string(res) {
+	if existed && string(existing) == string(res) {
 		// Still desired for orphan reconcile even when bytes unchanged.
-		noteDesiredForPath(path)
+		noteDesiredForPath(path, false, false)
 		return nil
 	}
 	tmpFile, err := os.CreateTemp(filepath.Dir(path), ".doctest-gen-*")
@@ -1500,15 +1502,16 @@ func WriteFormattedGo(path, src string) error {
 		}
 		os.Remove(tmpPath)
 	}
-	noteDesiredForPath(path)
+	noteDesiredForPath(path, true, !existed)
 	return nil
 }
 
 // noteDesiredForPath records path under an attached GenBatch when a gen root
 // with doctest.gen-manifest (or go.mod) can be resolved.
-func noteDesiredForPath(path string) {
+func noteDesiredForPath(path string, wrote, isNew bool) {
 	if genRoot, rel, ok := findGenRootWithManifest(path); ok {
 		NoteDesired(genRoot, rel)
+		NoteWriteEx(genRoot, rel, wrote, isNew)
 		return
 	}
 	// Fallback: gen root that has go.mod (module testcase layout) without
@@ -1519,6 +1522,7 @@ func noteDesiredForPath(path string) {
 		if st, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil && !st.IsDir() {
 			if rel, rerr := filepath.Rel(dir, abs); rerr == nil && !strings.HasPrefix(rel, "..") {
 				NoteDesired(dir, filepath.ToSlash(rel))
+				NoteWriteEx(dir, filepath.ToSlash(rel), wrote, isNew)
 			}
 			return
 		}

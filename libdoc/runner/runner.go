@@ -47,6 +47,34 @@ func mergeRunStats(dst *runnerbuild.TestRunStats, src runnerbuild.TestRunStats) 
 	if src.NoTestsChanged {
 		dst.NoTestsChanged = true
 	}
+	if dst.GenRoot == "" && src.GenRoot != "" {
+		dst.GenRoot = src.GenRoot
+	}
+	if dst.TreeRel == "" && src.TreeRel != "" {
+		dst.TreeRel = src.TreeRel
+	}
+}
+
+// printGenPlanAfterRun emits plan + result trees from GenBatch after generate.
+func printGenPlanAfterRun(w io.Writer, opts core.Options, remainArgs []string, multi bool, stats *runnerbuild.TestRunStats) {
+	if w == nil {
+		w = os.Stderr
+	}
+	genRoot := opts.GenDir
+	if genRoot == "" && stats != nil && stats.GenRoot != "" {
+		genRoot = stats.GenRoot
+	}
+	if genRoot == "" && opts.GenBatch != nil {
+		if roots := opts.GenBatch.AllGenRoots(); len(roots) > 0 {
+			genRoot = roots[0]
+		}
+	}
+	planArgs := runnerbuild.ResolveGenPlanArgs(remainArgs, "")
+	// Prefer TreeRel from stats for single-tree when Resolve fell back.
+	if !multi && stats != nil && stats.TreeRel != "" && len(planArgs) == 1 {
+		planArgs[0].TreeRel = filepath.ToSlash(stats.TreeRel)
+	}
+	runnerbuild.PrintGenPlanAndResult(w, opts, planArgs, genRoot, multi)
 }
 
 func Build(dir string) error {
@@ -105,13 +133,17 @@ func runTest(opts core.Options, remainArgs []string) error {
 	if err != nil {
 		return err
 	}
+	stderrW := opts.Stderr
+	if stderrW == nil {
+		stderrW = os.Stderr
+	}
+	if dbg.GenPlan {
+		opts.GenPlan = true
+		runnerbuild.PrintGenPlanBanner(stderrW)
+	}
 	if dbg.BypassGoTest {
 		opts.BypassGoTest = true
-		w := opts.Stderr
-		if w == nil {
-			w = os.Stderr
-		}
-		fmt.Fprintln(w, "doctest: DOCTEST_DEBUG bypass-go-test=1 (go test will be skipped)")
+		fmt.Fprintln(stderrW, "doctest: DOCTEST_DEBUG bypass-go-test=1 (go test will be skipped)")
 	}
 
 	// Cold-cache: resolve gen root, wipe on startup, force count, isolate GOCACHE.
@@ -132,6 +164,13 @@ func runTest(opts core.Options, remainArgs []string) error {
 	// Shared gen batch for multi-tree emit-set union + -a wipe-once per gen root.
 	if opts.GenBatch == nil {
 		opts.GenBatch = core.NewGenBatch()
+	}
+
+	// gen-plan invocation header (after GenDir may be resolved by cold-cache).
+	multiArg := len(remainArgs) > 1 || (len(remainArgs) == 1 && path_resolve.IsDotDotDotPattern(remainArgs[0]))
+	if opts.GenPlan {
+		genRootLabel := opts.GenDir
+		runnerbuild.PrintGenPlanInvocation(stderrW, remainArgs, opts, genRootLabel, multiArg)
 	}
 
 	// One session id for the whole CLI invocation so parallel trees share
@@ -293,6 +332,13 @@ func runTest(opts core.Options, remainArgs []string) error {
 		default:
 			runErr = runSuitePlan(targets, opts, rec, &stats, &statsMu)
 		}
+	}
+
+	// gen-plan plan + result trees after emit/prune are known.
+	// Printed here (not inside PrepareTree) so multi-arg buffered prepare
+	// stderr is not swallowed when -v is off.
+	if opts.GenPlan {
+		printGenPlanAfterRun(stderrW, opts, remainArgs, multiArg, &stats)
 	}
 
 	if len(stats.Skipped) > 0 {

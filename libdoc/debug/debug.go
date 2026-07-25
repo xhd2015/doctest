@@ -26,6 +26,10 @@ type Settings struct {
 	// write+tidy. Prepare and hub fan-in still run.
 	BypassGoTest bool
 
+	// GenPlan prints generate plan and result hierarchy trees on stderr
+	// (DOCTEST_DEBUG=gen-plan=1). Never pollutes test stdout / JSON.
+	GenPlan bool
+
 	// Host process profiles (paths; empty = off). Written on Stop from StartProfiles.
 	CPUProfile   string
 	MemProfile   string
@@ -61,6 +65,12 @@ func Parse(s string) (Settings, error) {
 				return Settings{}, fmt.Errorf("%s: bypass-go-test: %w", EnvName, err)
 			}
 			out.BypassGoTest = on
+		case "gen-plan":
+			on, err := parseBool(val)
+			if err != nil {
+				return Settings{}, fmt.Errorf("%s: gen-plan: %w", EnvName, err)
+			}
+			out.GenPlan = on
 		case "cpuprofile":
 			if val == "" {
 				return Settings{}, fmt.Errorf("%s: cpuprofile requires a non-empty path", EnvName)

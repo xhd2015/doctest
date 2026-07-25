@@ -216,6 +216,8 @@ Env:
                       Unknown keys error. Keys may be combined. Supported:
                       bypass-go-test=1 — skip go test after generate/workspace
                       write+tidy (honest BYPASS summary; prepare measurement);
+                      gen-plan=1 — print generate plan/result trees on stderr
+                      (arg hierarchies, merged multi-tree view, status colors);
                       cpuprofile=PATH — host CPU profile (all subcommands);
                       memprofile=PATH — host heap profile at process exit;
                       blockprofile=PATH — host block profile at process exit.
@@ -231,6 +233,7 @@ Examples:
   doctest test ./mod --label slow --label heavy
   doctest test ./... --label '!e2e'
   DOCTEST_DEBUG=bypass-go-test=1 doctest test ./... --cold-cache
+  DOCTEST_DEBUG=gen-plan=1,bypass-go-test=1 doctest test ./ --gen-dir /tmp/g
   DOCTEST_DEBUG=bypass-go-test=1,cpuprofile=/tmp/prep.pprof,memprofile=/tmp/prep.mprof,blockprofile=/tmp/prep.block doctest test ./...
 `
 

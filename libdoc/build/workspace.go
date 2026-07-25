@@ -151,6 +151,13 @@ func runWorkspaceSingleGen(preps []TreePrep, genRoot string, stats TestRunStats,
 
 // prepareWorkspaceGen writes hub packages, tidies, and prunes under genRoot.
 // Caller must not hold gen-root lock across go test.
+//
+// Tree package prune is intentionally skipped here. Multi-tree GenerateOnly
+// prepare + warm second runs (hash-hit writes) have left incomplete GenBatch
+// emit notes; pruning then deleted live packages (e.g. tree-b/__wreg) while
+// __alltrees still imported them. Single-tree finishGenOrphans still prunes.
+// Full clean remains available via -a / --cold-cache. Hub-only prune keeps
+// __workspace free of stale hub files.
 func prepareWorkspaceGen(genRoot string, treeRels []string, opts core.Options) error {
 	unlock := core.LockGenRootWrites(genRoot)
 	defer unlock()
@@ -164,15 +171,10 @@ func prepareWorkspaceGen(genRoot string, treeRels []string, opts core.Options) e
 	if err := core.CondTidyGoMod(genRoot, opts.GoCache); err != nil {
 		return err
 	}
-	if opts.GenBatch == nil {
-		return nil
+	if opts.GenBatch != nil {
+		return opts.GenBatch.PruneWorkspace(genRoot)
 	}
-	for _, tr := range treeRels {
-		if err := opts.GenBatch.PruneTree(genRoot, tr, treeRels); err != nil {
-			return err
-		}
-	}
-	return opts.GenBatch.PruneWorkspace(genRoot)
+	return nil
 }
 
 func runWorkspaceMultiModHub(preps []TreePrep, byGen map[string][]TreePrep, genOrder []string, stats TestRunStats, opts core.Options) (TestRunStats, error) {
@@ -205,18 +207,10 @@ func runWorkspaceMultiModHub(preps []TreePrep, byGen map[string][]TreePrep, genO
 				return stats, err
 			}
 		} else {
-			// Single tree under this gen root: tidy only (tree packages already written).
+			// Single tree under this gen root: tidy only (no tree prune here;
+			// GenerateOnly already deferred; avoid warm-run emit gaps).
 			unlock := core.LockGenRootWrites(genRoot)
-			if opts.GenBatch != nil {
-				opts.GenBatch.Attach(genRoot)
-			}
 			err := core.CondTidyGoMod(genRoot, opts.GoCache)
-			if opts.GenBatch != nil {
-				if err == nil {
-					err = opts.GenBatch.PruneTree(genRoot, treeRels[0], treeRels)
-				}
-				opts.GenBatch.Detach(genRoot)
-			}
 			unlock()
 			if err != nil {
 				return stats, err
