@@ -1,75 +1,74 @@
-# VCS Detection in Doctest Builds
+# Go `-buildvcs` and doctest
 
-## Background
+## What is `-buildvcs`?
 
-### What is `-buildvcs`?
+Go’s `go build` / `go test` support `-buildvcs` (`true` | `false` | `auto`).
+Default since Go 1.21 is **`auto`**: stamp commit / dirty state into the binary
+when the main package, main module, and current directory share one local repo.
 
-Go's `go build` and `go test -c` commands support a `-buildvcs` flag that controls whether version control information (commit hash, branch, etc.) is stamped into the resulting binary:
+When Go tries to stamp and `git status` / `git log` fail (exit 128), you see:
 
-- `true` — always stamp; error out if VCS info is unavailable
-- `false` — never stamp
-- `auto` (default since Go 1.21) — stamp only if the main package, main module, and current directory are all in the same repository
-
-### What is Git Safe Directory?
-
-Git's `safe.directory` config controls which repositories Git trusts. When enabled (the default in modern Git), operations like `git status` or `git rev-parse` fail with "detected dubious ownership" unless the directory is added to `safe.directory`.
-
-This is a problem in containerized CI (Docker, GitHub Actions) where the filesystem user differs from the repo owner. Notably, `actions/checkout@v4` sets `safe.directory` in a **temporary HOME override** that is discarded after checkout.
-
-## The Problem
-
-Doctest invokes `go build` / `go test -c` in two contexts, both vulnerable:
-
-1. **Internal temp build dirs**: Created by `os.MkdirTemp` to compile generated test code — never inside a Git working tree.
-
-2. **Project root builds**: Integration tests resolve a shared doctest binary via
-   `libdoc/testbin.Ensure` (`go build -o $CACHE/doctest/selftest-bin/<key>/doctest ./cmd/doctest`).
-   The module root IS a Git repo, but in CI containers Git may reject all operations due to "dubious ownership".
-
-Both cases produce the same error:
-
-```
+```text
 error obtaining VCS status: exit status 128
 Use -buildvcs=false to disable VCS stamping.
 ```
 
-## The Solution
+Common causes (see also `tests/build/buildvcs-auto/`):
 
-### Detection Logic
+| Situation | Result under `auto` |
+|-----------|---------------------|
+| Healthy full clone | OK, stamps `vcs.*` |
+| Healthy shallow (`--depth 1`) | OK, stamps tip (shallow alone is **not** the fail axis) |
+| Broken / untrusted git (`safe.directory`, corrupt HEAD, …) | **Fails** with the message above |
 
-`NeedsBuildVCSFlag(dir string) bool` (in `libdoc/build/vcs.go`) checks two conditions:
+## What doctest does
 
-1. **Is `git` available?** (`exec.LookPath("git")`)
-2. **Does `git rev-parse --is-inside-work-tree` succeed *and* return true?**
+Doctest **does not** inject `-buildvcs=false` into `go build` / `go test`.
 
-If either check fails — git not found, directory not in a work tree, or git commands rejected (dubious ownership) — the function returns `true`.
+Stamping follows the Go toolchain and the user’s environment (`GOFLAGS`, etc.).
+If go reports `error obtaining VCS status`, doctest appends guidance:
 
-### Where It's Used
-
-**Engine code** (adds `-buildvcs=false` when the temp build dir has no git):
-
-- `libdoc/build/build.go` — `go build` in generated temp dir
-- `libdoc/build/test.go` — `go test -c` in generated temp dir
-
-**Test specs** (adds `-buildvcs=false` when the project root cannot be accessed by git):
-
-- `tests/SETUP.md` — builds doctest for integration tests
-- `tests/implementer/SETUP.md` — builds doctest for implementer tests
-- `tests/main-orchestrator/SETUP.md` — builds doctest for orchestrator tests
-- `tests/test/nested-workdir/SETUP.md` — builds doctest for nested workdir tests
-
-Each uses `libdocbuild.NeedsBuildVCSFlag(buildDir)` to conditionally add `-buildvcs=false`.
-
-**CI workflow** (hardcoded in `.github/workflows/test.yml` since this is a shell command, not Go code):
-
-```
-go build -buildvcs=false -o doctest ./cmd/doctest
+```text
+Error: go could not obtain VCS status (git failed while stamping; not caused by shallow clone alone)
+hint: set GOFLAGS=-buildvcs=false and re-run
+hint: CI (GitHub Actions) example:
+hint:   env:
+hint:     GOFLAGS: -buildvcs=false
+hint: or fix git trust: git config --global --add safe.directory '*'
 ```
 
-### Why Not Always Add `-buildvcs=false`?
+## Fix options
 
-When the build directory IS in a healthy Git tree (e.g., a user places `GenDir` inside their repo, or runs on a properly configured local machine), we preserve normal VCS stamping to avoid surprising behavior.
+### Local shell
 
-### Why Not Try-First-Then-Retry?
+```bash
+export GOFLAGS=-buildvcs=false
+doctest test ./...
+```
 
-Try-and-retry is error-prone and slow. It can mask real build errors, pollute caches, and adds latency. A static check based on Git availability is deterministic and fast.
+### GitHub Actions
+
+```yaml
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GOFLAGS: -buildvcs=false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+      - run: go test ./...
+      - run: doctest test ./...
+```
+
+### Fix git trust (containers / mismatched UID)
+
+```bash
+git config --global --add safe.directory '*'
+# or the specific workspace path
+```
+
+## Related tests
+
+- Toolchain matrix (full / shallow / broken HEAD): `tests/build/buildvcs-auto/`
+- Hint unit tests: `libdoc/build/vcs_test.go`

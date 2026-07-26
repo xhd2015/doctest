@@ -102,15 +102,16 @@ func buildDoctest(absRoot string) (string, error) {
 
 	// Always invoke go build so the toolchain rebuilds when sources change.
 	// (A mere Stat on the -o path would pin a stale binary forever.)
-	args := []string{"build", "-o", bin}
-	if build.NeedsBuildVCSFlag(absRoot) {
-		args = append(args, "-buildvcs=false")
-	}
-	args = append(args, "./cmd/doctest")
+	// Do not inject -buildvcs=false; users set GOFLAGS=-buildvcs=false if needed.
+	args := []string{"build", "-o", bin, "./cmd/doctest"}
 	cmd := exec.Command("go", args...)
 	cmd.Dir = absRoot
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return "", fmt.Errorf("go %v: %w\n%s", args, err, out)
+		msg := fmt.Sprintf("go %v: %v\n%s", args, err, out)
+		if hint := build.FormatBuildVCSStatusHint(string(out)); hint != "" {
+			return "", fmt.Errorf("%s\n%s", msg, hint)
+		}
+		return "", fmt.Errorf("%s", msg)
 	}
 	if st, err := os.Stat(bin); err != nil || st.IsDir() || st.Size() == 0 {
 		return "", fmt.Errorf("go build produced no binary at %s", bin)

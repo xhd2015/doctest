@@ -290,11 +290,6 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	if opts.Verbose {
 		flagArgs = append(flagArgs, "-v")
 	}
-	// buildvcs: check first gen root from preps
-	checkRoot := preps[0].GenRoot
-	if NeedsBuildVCSFlag(checkRoot) {
-		flagArgs = append(flagArgs, "-buildvcs=false")
-	}
 	if opts.Count > 0 {
 		flagArgs = append(flagArgs, fmt.Sprintf("-count=%d", opts.Count))
 	}
@@ -413,6 +408,8 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 		stdout.Write(result.stderrData)
 	}
 	printGoTestTimeoutError(stdout, result, style)
+	captureVCSStatusFromBuffers(&result)
+	printGoTestVCSStatusError(stdout, result, style)
 	var allCases []core.TreeCase
 	for _, p := range preps {
 		allCases = append(allCases, p.Cases...)

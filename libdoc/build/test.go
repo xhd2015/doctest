@@ -201,9 +201,6 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	if opts.Verbose {
 		flagArgs = append(flagArgs, "-v")
 	}
-	if NeedsBuildVCSFlag(runDir) {
-		flagArgs = append(flagArgs, "-buildvcs=false")
-	}
 	if opts.Count > 0 {
 		flagArgs = append(flagArgs, fmt.Sprintf("-count=%d", opts.Count))
 	}
@@ -345,8 +342,10 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	if len(result.stderrData) > 0 {
 		stdout.Write(result.stderrData)
 	}
-	// Timeout Error/hint on stdout (before FAIL) so user-facing order is correct.
+	// Timeout / VCS Error+hint on stdout (before FAIL) so user-facing order is correct.
 	printGoTestTimeoutError(stdout, result, style)
+	captureVCSStatusFromBuffers(&result)
+	printGoTestVCSStatusError(stdout, result, style)
 
 	if !opts.SuppressResultSummary {
 		stats.Elapsed = goTestElapsed
@@ -528,6 +527,10 @@ type goTestJSONResult struct {
 	// "test timed out after <d>" (JSON Output events are otherwise buffered
 	// under the test name and dropped because timeout emits no per-test fail).
 	timeoutError string
+	// vcsStatusError is Error + hint lines when go reports
+	// "error obtaining VCS status" (e.g. dubious ownership). Doctest does not
+	// inject -buildvcs=false; this surfaces GOFLAGS guidance instead.
+	vcsStatusError string
 	// buildFailed is true when go test reported [build failed] and no suite
 	// leaf subtests were observed (package never linked/ran leaves).
 	buildFailed bool
@@ -569,6 +572,9 @@ func mergeGoTestJSONResult(dst *goTestJSONResult, src goTestJSONResult) {
 	dst.stderrData = append(dst.stderrData, src.stderrData...)
 	if dst.timeoutError == "" && src.timeoutError != "" {
 		dst.timeoutError = src.timeoutError
+	}
+	if dst.vcsStatusError == "" && src.vcsStatusError != "" {
+		dst.vcsStatusError = src.vcsStatusError
 	}
 	if src.pkgElapsedNs != nil {
 		if dst.pkgElapsedNs == nil {
@@ -995,6 +1001,11 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 				if ev.Output == "" {
 					continue
 				}
+				if res.vcsStatusError == "" {
+					if msg := buildVCSStatusHint(ev.Output); msg != "" {
+						res.vcsStatusError = msg
+					}
+				}
 				if verbose {
 					stdout.Write([]byte(ev.Output))
 					continue
@@ -1013,6 +1024,11 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 				if res.timeoutError == "" {
 					if msg := goTestTimeoutErrorLine(ev.Output); msg != "" {
 						res.timeoutError = msg
+					}
+				}
+				if res.vcsStatusError == "" {
+					if msg := buildVCSStatusHint(ev.Output); msg != "" {
+						res.vcsStatusError = msg
 					}
 				}
 				// Verbose: stream raw Output (presentation only; counts from pass/fail).
@@ -1234,19 +1250,41 @@ func printGoTestTimeoutError(stdout io.Writer, result goTestJSONResult, style co
 	if result.timeoutError == "" || stdout == nil {
 		return
 	}
-	for _, line := range strings.Split(result.timeoutError, "\n") {
-		if line == "" {
-			continue
-		}
-		if style.enabled {
-			switch {
-			case strings.HasPrefix(line, "Error:"):
-				line = style.red(line)
-			case strings.HasPrefix(line, "hint:"):
-				line = style.gray(line)
-			}
-		}
-		fmt.Fprintln(stdout, line)
+	printErrorHintLines(stdout, result.timeoutError, style)
+}
+
+// printGoTestVCSStatusError writes VCS stamping Error + hint lines (if any).
+func printGoTestVCSStatusError(stdout io.Writer, result goTestJSONResult, style colorStyle) {
+	if result.vcsStatusError == "" || stdout == nil {
+		return
+	}
+	printErrorHintLines(stdout, result.vcsStatusError, style)
+}
+
+// captureVCSStatusFromBuffers fills vcsStatusError from buffered go test output
+// when the marker only appeared in quiet-mode buffers / stderr (not live events).
+func captureVCSStatusFromBuffers(res *goTestJSONResult) {
+	if res == nil || res.vcsStatusError != "" {
+		return
+	}
+	var b strings.Builder
+	for _, line := range res.buildOutputLines {
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	for _, line := range res.failLines {
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	for _, line := range res.detailLines {
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	if len(res.stderrData) > 0 {
+		b.Write(res.stderrData)
+	}
+	if msg := buildVCSStatusHint(b.String()); msg != "" {
+		res.vcsStatusError = msg
 	}
 }
 

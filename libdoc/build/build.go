@@ -72,9 +72,6 @@ func Build(dir string, opts core.Options) error {
 
 	goBuildArgs := []string{"build", "-mod=mod"}
 	goBuildArgs = append(goBuildArgs, ctx.goCommandExtraArgs()...)
-	if NeedsBuildVCSFlag(ctx.genRoot) {
-		goBuildArgs = append(goBuildArgs, "-buildvcs=false")
-	}
 	if opts.Verbose {
 		goBuildArgs = append(goBuildArgs, "-v")
 	}
@@ -90,6 +87,9 @@ func Build(dir string, opts core.Options) error {
 	out, err := goBuildCmd.CombinedOutput()
 	os.Stdout.Write(out)
 	if err != nil {
+		if hint := buildVCSStatusHint(string(out)); hint != "" {
+			return fmt.Errorf("go build failed: %v\n%s", err, hint)
+		}
 		return fmt.Errorf("go build failed: %v", err)
 	}
 
