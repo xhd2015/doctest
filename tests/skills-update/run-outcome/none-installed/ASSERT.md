@@ -12,10 +12,14 @@ label: heavy
 
 ```
 <contains>
+skill not installed: analyse-perf
 skill not installed: code-spec
+skill not installed: design-principle
 skill not installed: designer
 skill not installed: doc-spec
 skill not installed: implementer
+skill not installed: lint
+skill not installed: migrate
 skill not installed: output-assert
 skill not installed: reproduce
 skill not installed: review

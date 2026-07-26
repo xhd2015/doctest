@@ -2,8 +2,9 @@
 name: doctest-review
 description: >-
   Reviews doctest trees for design quality — clear DSN, MECE hierarchy,
-  significance-ordered decision factors, and run-profile labels (slow, heavy,
-  flaky) — against the doctest design spec.
+  significance-ordered decision factors, and run-profile labels (e2e, slow,
+  heavy, flaky) — against the doctest design spec and design-principle
+  (in-process mass; e2e = full integration only).
 ---
 
 --begin of skill doctest-review--
@@ -15,13 +16,15 @@ for remediation — your default deliverable is a structured review report.
 
 Your strengths:
 - Reading doctest trees (`DOCTEST.md`, `SETUP.md`, `ASSERT.md`) and understanding intent
-- Evaluating DSN clarity — can a newcomer grasp participants and behaviors quickly?
+- Evaluating DSN as a **domain sketch** — can a newcomer grasp participants and behaviors quickly?
 - Checking MECE splits at every grouping level — mutually exclusive siblings, pragmatic coverage
 - Verifying significance ordering — most impactful factors high, minor variants low
 - Spotting structural anti-patterns (overlapping siblings, missing branches, wrong nesting)
 - Running `doctest vet` to catch mechanical spec violations before design critique
-- Auditing `ASSERT.md` YAML frontmatter — whether slow, heavy, and flaky leaves are
-  labeled, explained, and grouped for discovery-mode skip
+- Auditing `ASSERT.md` YAML frontmatter — whether e2e, slow, heavy, and flaky leaves
+  are labeled, explained, and grouped for discovery-mode skip
+- Checking layer honesty (L1 go test / L2 in-process / L3 e2e) per design-principle
+- Spotting Parallel **common gotchas** (package mutable state, Setenv/Chdir, stdio reassignment)
 
 ## Scope
 
@@ -35,16 +38,19 @@ when gaps are obvious.
 A **review report** per reviewed root (each `DOCTEST.md` boundary is one root):
 
 1. **Summary** — pass / needs improvement / major issues; one paragraph verdict
-2. **DSN** — is the root DSN easy to understand? Quote strengths and gaps
+2. **DSN (domain sketch)** — is the root DSN a clear domain sketch (participants +
+   behaviors)? Quote strengths and gaps
 3. **Tree structure** — ASCII sketch of the current hierarchy vs an ideal MECE layout
 4. **MECE audit** — for each grouping level: split factor, sibling exclusivity, coverage gaps
 5. **Significance ordering** — whether high-impact factors appear above low-impact ones
-6. **Scenario quality** — do `SETUP.md` `# Scenario` sections use clear DSN snippets?
+6. **Scenario quality** — do `# Scenario` fences use clear **scenario sketches**
+   (pipeline subset of the root DSN, not a full re-inventory)?
 7. **Output assertions** — do leaves use `assert.Output` / assert DSL for structured CLI output, and do templates describe acceptable user-facing output rather than matcher syntax the product must print?
 8. **Mechanical checks** — `doctest vet` result for the tree
 9. **Run profile / label audit** — inventory of labeled leaves, cost-signal heuristics,
    missing or misapplied labels, grouping notes
-10. **Recommendations** — prioritized, actionable; distinguish must-fix vs nice-to-have
+10. **Parallel safety** — any **Common gotchas** in harness or product under L2
+11. **Recommendations** — prioritized, actionable; distinguish must-fix vs nice-to-have
 
 Return absolute paths for every tree and node you discuss.
 
@@ -52,9 +58,11 @@ Return absolute paths for every tree and node you discuss.
 
 1. **Load the spec**
    - Treat `doctest skill doc-spec --show`, `doctest skill code-spec --show`,
+     `doctest skill design-principle --show`, `doctest skill lint --show`,
      `doctest skill output-assert --show`, and the design spec below as the
      authority for best practices.
-   - Key design rules: clear DSN, MECE siblings, significance-ordered narrowing,
+   - Key design rules: clear DSN **domain sketch**, MECE siblings, significance-ordered narrowing,
+     **L2 in-process as the default mass** (not e2e), Parallel-safe harness,
      output templates via `github.com/xhd2015/doctest/assert` for CLI/text matching,
      and matcher DSL tags are test syntax only unless the product explicitly
      documents them as user-facing output.
@@ -69,11 +77,15 @@ Return absolute paths for every tree and node you discuss.
    ```
    - Record pass/fail. Vet failures are **must-fix** before design polish matters.
 
-4. **Review DSN**
-   - DSN must model **participants** and **behaviors** in plain prose (no code blocks).
-   - Good DSN: a new reader understands what is under test without opening Go code.
-   - Flag: missing actors, vague verbs, implementation detail instead of mental model,
-     or DSN that does not match what the tree actually exercises.
+4. **Review DSN (domain sketch)**
+   - DSN is a **domain sketch**, not a DSL and not the test plan: **participants** +
+     **behaviors** in plain prose (no ``` code fences in the root DSN).
+   - Good root sketch: a new reader understands who acts and what they do without
+     opening Go; selective cast list (~3–8 actors), not every edge case.
+   - Light `A -> B` in Behaviors is OK; full pipelines belong in **scenario sketches**.
+   - Flag: missing actors, vague verbs, implementation tour instead of mental model,
+     boilerplate that only renames directories, overlong encyclopedias, or DSN that
+     does not match what the tree actually exercises.
 
 5. **Review tree hierarchy (MECE + significance)**
    - Walk the directory tree top-down. At each grouping node (dir with `SETUP.md`, no `ASSERT.md`):
@@ -87,9 +99,12 @@ Return absolute paths for every tree and node you discuss.
      mixed unrelated factors at the same level; edge cases parked above happy-path splits.
 
 6. **Review scenarios and leaves**
-   - Every `SETUP.md` must start with `# Scenario` and a DSN snippet in a ``` block.
+   - Every `SETUP.md` must start with `# Scenario` and a fenced **scenario sketch**.
+   - Scenario sketch = one path through the root DSN: prefer `A -> B -> effect`
+     (annotate with `# comment` above hops); subset of root participants only.
+   - Flag: empty fence, Feature title only, full root DSN pasted into every leaf,
+     or inventing actors not in the root sketch.
    - Leaves must have focused `ASSERT.md` expectations — not vacuous checks.
-   - Scenario snippets should annotate pipeline lines (`# comment` above `->` / `<-`).
 
 7. **Review output assertions**
    - For leaves checking `resp.Stdout`, `resp.Stderr`, `resp.Output`, `resp.Summary`, etc.:
@@ -115,24 +130,32 @@ Return absolute paths for every tree and node you discuss.
      - **Flaky**: retry/poll loops, timing assertions, background goroutines, external
        services, race-prone shared state, prose mentioning intermittent failures
      - **Manual / UI**: human steps in Preconditions/Steps, GUI or accessibility automation
-   - For each leaf with signals, check canonical labels from the design spec:
-     `slow`, `heavy`, `flaky`, `manual`, `ui-automation` (domain labels like `integration`
-     are fine but do not replace run-profile labels).
-   - **Parallel hazard (scan Setup/Run/Assert Go):** process-global mutation —
-     `t.Setenv` / `t.Chdir`, `os.Setenv`/`os.Unsetenv` / `os.Chdir`, same-class
-     `syscall.Setenv`/`Unsetenv`, `os.Stdout`/`Stderr`/`Stdin` reassignment, and
-     **package-level mutable vars** shared by Parallel leaves (e.g. `var genDir`)
-     — see **NOTE: no process-global mutation in suite harness** below. Flag **major**.
+   - For each leaf with signals, check canonical labels from the design spec /
+     design-principle:
+     - **`e2e`** — **required** on every true full-integration leaf (product binary
+       `testbin`/`exec`, nested `doctest test` / full suite). Layer identity, not cost.
+     - **`heavy` / `slow`** — cost; use with `e2e` when integration is multi-second
+     - `flaky`, `manual`, `ui-automation` (domain labels OK but do not replace `e2e`)
+   - **Short-path rule:** help, usage, unknown flag, fast-fail, skill show/list should be
+     **in-process** (library or `cli.RunWithWriter`), **not** binary e2e. Flag binary
+     help-only leaves as **major** / short-path debt.
+   - **Parallel hazard:** scan Setup/Run/Assert (and L2 product paths) for
+     **Common gotchas** below — flag **major**.
    - Severity rules:
+     - Binary/nested product leaf without `label: e2e` → **major**
+     - `label: e2e` on pure in-process / in-process-CLI leaf → **major** (mislabel)
      - Signals present, no `label` → **major** (runs in discovery when it should skip)
      - `label: flaky` or `label: manual` with empty `explanation` → **major**
      - `explanation` documents skip intent but no `label` → **major** (explanation alone
        does not skip)
+     - Legacy `heavy` only on true L3 (missing `e2e`) → **major** when reviewing; migrate
+       to `e2e, heavy`
      - Correct labels under an `e2e/` / `slow/` / `integration/` grouping → **ok**
      - Expensive unlabeled leaf beside fast siblings at same level → **major**
      - Every leaf labeled when only a few are expensive → **suggestion**
    - Check root `DOCTEST.md` **How to Run** documents discovery skip and how to run labeled
-     leaves when the tree has skip-worthy cases: explicit leaf path or `doctest test --label EXPR`
+     leaves when the tree has skip-worthy cases: explicit leaf path or
+     `doctest test --label e2e` / `--label EXPR`
      (`&&`, `||`, parentheses; repeatable `--label` flags OR'd).
    - Emit a table per root:
 
@@ -144,11 +167,12 @@ Return absolute paths for every tree and node you discuss.
 
 ## Best-practice checklist
 
-### DSN
+### DSN (domain sketch)
 - [ ] Root has `# DSN (Domain Specific Notion)` section
-- [ ] Names participants and behaviors in plain language
-- [ ] Readable without reading Go — describes the domain mental model
-- [ ] Scenarios reference subsets of this DSN consistently
+- [ ] Reads as a **domain sketch**: participants + behaviors, selective not encyclopedic
+- [ ] No code fences in root DSN; readable without opening Go
+- [ ] Scenario fences are **scenario sketches** (pipeline path), subsets of root DSN
+- [ ] Scenarios do not re-paste the whole root inventory or invent new actors
 
 ### MECE structure
 - [ ] Each grouping level splits on exactly one (or tightly related) factor
@@ -176,145 +200,76 @@ Return absolute paths for every tree and node you discuss.
 - [ ] Legacy `strings.Contains` / hand-rolled output parsing flagged as **suggestion** to migrate
 
 ### Run profile / labels
-- [ ] Slow, heavy, flaky, manual, or UI leaves have appropriate `label:` in ASSERT frontmatter
-- [ ] Multiple labels on one leaf use comma-separated scalar (`label: slow, ui-automation`), not YAML arrays
+- [ ] True full-integration leaves have **`label: e2e`** (required); costly ones use `e2e, heavy` / `e2e, slow`
+- [ ] Short paths (help, fast-fail) are **in-process**, not binary e2e
+- [ ] In-process leaves do **not** carry `label: e2e`
+- [ ] Slow, heavy, flaky, manual, or UI leaves have appropriate cost/discipline labels
+- [ ] Multiple labels on one leaf use comma-separated scalar (`label: e2e, heavy`), not YAML arrays
 - [ ] `flaky` and `manual` labels include a non-empty `explanation`
 - [ ] Skip-worthy leaves are not relying on `explanation` alone (that does not skip)
-- [ ] Slowness/cost documented in `label` (e.g. `slow`, `ui-automation`), not only in `explanation`
 - [ ] Expensive leaves grouped under `e2e/`, `slow/`, `integration/`, or similar — not mixed unlabeled among fast siblings
-- [ ] Root **How to Run** documents discovery skip and `--label` / explicit-leaf run commands when labeled leaves exist
+- [ ] Root **How to Run** documents discovery skip and `--label e2e` / explicit-leaf run commands when labeled leaves exist
 
 ### Parallel safety (suite)
-- [ ] Setup/Run/Assert and harness helpers avoid process-global mutation (see **NOTE**
-      below): no `t.Setenv` / `t.Chdir`, `os.Setenv` / `os.Unsetenv` / `os.Chdir`,
-      `syscall.Setenv` / `Unsetenv`, or `os.Stdout` / `Stderr` / `Stdin` reassignment
-- [ ] No package-level **mutable** vars shared by Parallel leaves (`var genDir`,
-      multi-step `firstResp`, etc.); put state on **`req` fields**
-- [ ] Env isolation uses child-process `cmd.Env` only (**key-replace**, not blind
-      append) — never parent process Setenv
-- [ ] Working-directory needs use absolute paths / `cmd.Dir` / `req` fields, not Chdir
-- [ ] Capture product output via inject writers / `opts.Stdout` or a **subprocess**,
-      not process stdio reassignment
-- [ ] Unit tests (`*_test.go`) follow the same rules
-- [ ] Race-sensitive changes validated with `doctest test … -race` and/or
-      `-count=1 --label-all` stress when practical
+- [ ] No **Common gotchas** (below) in Setup/Run/Assert or L2 product paths
+- [ ] Isolation via **injected options** / `req` fields / child `cmd.Env`·`Dir` — not process globals
+- [ ] Unit tests (`*_test.go`) follow the same rules when co-reviewed
+- [ ] Race-sensitive changes: `doctest test … -race` and/or `-count=1 --label-all` when practical
 
-## NOTE: no process-global mutation in suite harness (suite is parallel)
+## Common gotchas (Parallel suite)
 
-**Do not use process-global mutation in doctest trees** (root/ancestor `SETUP.md`,
-leaf Setup, `Run`, Assert, or shared harness helpers) — env, cwd, stdio globals,
-or package memory shared across Parallel leaves.
+Leaves run concurrent in **one process**. Flag **major** when harness (Setup/Run/Assert)
+or **product under L2 in-process** does either:
 
-**Suite harness code must assume concurrent leaves/trees.** Process-global
-mutation is never a valid isolation model — whether or not a given run currently
-calls `t.Parallel()` on every subtest. Prepare already multi-workers light trees;
-workspace suites may Parallel light trees; leaves may Parallel. Code that only
-“works when serial” is a bug.
+1. **Unprotected shared state** — package-level mutable `var` across leaves; reassigning
+   `os.Stdout` / `os.Stderr` / `os.Stdin`.
+2. **Process-global env/cwd** — `os.Setenv` / `Unsetenv`, `os.Chdir`, `t.Setenv`,
+   `t.Chdir` (also `syscall.Setenv` / `Unsetenv`).
 
-### Forbidden APIs (hard ban — **major**)
+**Prefer (side-effect free):** inject options so functions do not mutate the process —
+`opts.Stdout`/`Stderr` / `io.Writer` params, paths on `req` or opts, child
+`cmd.Env` / `cmd.Dir` (key-replace env). Immutable package helpers are fine;
+mutable state belongs on `req` / locals.
 
-| API | Why |
-|-----|-----|
-| **`t.Setenv`** | Process env + testing restore; **panics** with `t.Parallel` |
-| **`t.Chdir`** | Process cwd + testing restore; **panics** with `t.Parallel` |
-| **`os.Setenv` / `os.Unsetenv`** | Process env races under concurrent leaves/trees |
-| **`os.Chdir`** | Process cwd races under concurrent leaves/trees |
-| **`os.Stdout` / `os.Stderr` / `os.Stdin` reassignment** | Process-wide I/O; concurrent leaves capture or corrupt the wrong stream |
-| **Package-level mutable vars** shared by Parallel leaves (e.g. `var genDir`, multi-step response holders) | Goroutines race on the same package memory; Assert can read another leaf’s path |
+Also: `doctest skill lint --show`, `doctest skill code-spec --show`.
 
-Go panic (t-forms only):
+### Detail: forbidden APIs & inject map
 
-```text
-panic: testing: test using t.Setenv or t.Chdir can not use t.Parallel
-```
+| Forbidden | Prefer instead |
+|-----------|----------------|
+| Package mutable `var` shared by leaves | Fields on **`req`** / leaf locals |
+| `os.Stdout` / `Stderr` / `Stdin` = … | Inject `io.Writer` / **`opts.Stdout`** / subprocess pipes |
+| `os.Setenv` / `t.Setenv` / `syscall.Setenv` | Child **`cmd.Env`** (key-replace); product **opts** for values |
+| `os.Chdir` / `t.Chdir` | Absolute paths, **`cmd.Dir`**, `req.WorkDir` |
 
-**Same class (flag major):** `syscall.Setenv` / `syscall.Unsetenv` — still
-process-global env races (common loophole when avoiding `t.Setenv` for testlog
-reasons). Prefer rewrite over “special-case serial forever.”
+`t.Setenv` / `t.Chdir` also **panic** with `t.Parallel`. Do not “fix” with setenv+restore
+or serial-only trees — rewrite to inject.
 
-Immutable package helpers are fine (`var bt = "```"`, compiled `regexp`s). Mutable
-**state** belongs on `req` / leaf locals.
-
-### Prefer
-
-- Pass env to **child processes only** (`exec.Cmd.Env`) when spawning `doctest` /
-  `go test` / product binaries — **do not** mutate the parent test process env
-- Prefer **absolute paths** and `cmd.Dir` / `req.WorkDir` over changing cwd
-- For parent-side Assert path checks, put paths on **`req` fields** (e.g. `req.Home`,
-  `req.SessionHome`, `req.CacheHome`, `req.GenDir`), not process env Assert re-reads
-  via `os.Getenv`
-- Multi-step or multi-leaf Setup state: **per-leaf fields on `req`** (or leaf-private
-  packages) — never package `var` written in Setup under Parallel
-- Capture output with inject `io.Writer` / `opts.Stdout` / API hooks, or run the
-  code under test in a **subprocess** and capture the child’s pipes — never
-  `os.Stdout = …`
-- For true shared package coordination, use **mutex / `sync.Once`** only when the
-  resource is intentionally process-wide (e.g. materialize-once cache with flock);
-  still never Setenv as “safe isolation”
-
-### Product CLI / engine (same process rules)
-
-Harness bans apply to **product** code that runs in the same process model:
-
-- Values that exist only so a **subprocess** sees them (`DOCTEST_SESSION_ID`, cold
-  `GOCACHE`, nest sink, …) must be applied on **`cmd.Env`**, never `os.Setenv`
-- Hold a stable session id **once per CLI run** (e.g. `opts.SessionID`): inherit
-  from parent process env if already set (nested CLI), else generate once — do
-  not mint a new UUID on every helper call
-- Cold-cache `GOCACHE`: keep on `opts.GoCache` and plumb into **every** relevant
-  `go` tool exec under that run (`go test`, `go mod tidy`, `go build`, …), not
-  only `go test`
-- When merging env for a child, **key-replace** (strip existing `KEY=` then set
-  `KEY=val`). Blind `append(os.Environ(), "GOCACHE=…")` can fail to override: on
-  Unix `getenv` typically returns the **first** match
-
-### Wrong “fix” (do not do this)
+**Product (same process):** session id / cold `GOCACHE` / nest sinks live on **opts**
+and child `cmd.Env`, never parent Setenv. Merge env with key-replace (first-wins trap:
+blind `append(os.Environ(), "KEY=…")` may not override).
 
 ```text
-// BAD — still process-global; still races Parallel; still wrong architecture
-os.Setenv(k, v); defer os.Setenv(k, old)   // or t.Setenv / syscall.Setenv
-// under mutex or not — if the product is only testable by mutating parent env,
-// run it as a subprocess with cmd.Env instead.
-
-// BAD — first-wins: may not override user/parent GOCACHE or SESSION_ID
-cmd.Env = append(os.Environ(), "GOCACHE="+temp, "DOCTEST_SESSION_ID="+sid)
-
-// BAD — Parallel leaves share package memory
-var genDir string
-func Setup(...) { genDir = t.TempDir(); ... }
-// Assert reads genDir  → can observe another leaf’s path
-
-// BAD — process-wide I/O
-old := os.Stdout; os.Stdout = w; ...; os.Stdout = old
+// BAD
+os.Setenv(k, v); defer os.Setenv(k, old)
+var genDir string  // Assert reads across Parallel leaves
+old := os.Stdout; os.Stdout = w; ...
+cmd.Env = append(os.Environ(), "GOCACHE="+temp)  // may not override
 ```
 
-**Review severity:** any forbidden API or package-mutable race in Setup/Run/Assert
-→ **major**. Prefer rewriting over “run this tree serial forever.”
-
-### Detect
+**Detect:**
 
 ```sh
-# Race detector on suite go test (opt-in; slower / often 0 Cached)
 doctest test <scope> -race -count=1
-
-# Warm leaf-cache can hide Parallel races; force execution
 doctest test <scope> -count=1 --label-all
-
-# Living gate: product must not process-Setenv SESSION_ID / GOCACHE
 doctest test ./tests/parallel-safe/env-no-setenv/...
-
-# Static greps (product + harness)
 rg -n 'os\.(Setenv|Unsetenv|Clearenv)\(|t\.Setenv\(|syscall\.Setenv\(' --glob '*.go'
 rg -n 'os\.Chdir\(|t\.Chdir\(' --glob '*.go'
 rg -n 'os\.(Stdout|Stderr|Stdin)\s*=' --glob '*.go'
 ```
 
-Nested child `doctest test` inside a leaf does **not** inherit `-race` unless that
-leaf’s Args pass it.
-
-**Related:** default-suite wall-clock and race hygiene live under
-`doctest skill review-perf --show` / `doc/DOCTEST_REVIEW_PERF.md`. Code authoring:
-`doc/DOC_STYLE_TEST_CODE_SPECIFICATION.md` (working directory + Parallel-safe harness).
+Nested child `doctest test` does not inherit `-race` unless Args pass it.
+Related: `review-perf`, `design-principle`, `lint`, `code-spec`.
 
 ## Guidelines
 
@@ -328,26 +283,24 @@ leaf’s Args pass it.
 
 ## Anti-patterns (flag these)
 
-- Missing or boilerplate DSN that restates directory names instead of domain behavior
+- Missing or boilerplate DSN (domain sketch) that restates directory names instead of domain behavior
+- Root DSN that is an encyclopedia / implementation tour, or uses ``` code fences
 - Siblings that differ only in assertion detail but share the same setup story (should be one leaf or re-split)
 - Root-level leaves for every edge case while happy-path grouping is absent
-- `# Scenario` missing, not first, or with no DSN snippet block
+- `# Scenario` missing, not first, or with no scenario sketch (empty fence / Feature-only / full root DSN paste)
 - Grouping dirs without a clear split factor (grab-bag directories)
 - Low-impact params (e.g. single flag variant) at the top of the tree
 - Duplicate `Run` contracts in one tree — should be separate `DOCTEST.md` roots
 - Leaf with `time.Sleep`, subprocess, or external-service setup but no `label` — slows CI discovery runs
+- Product binary / nested suite leaf without **`label: e2e`** — layer invisible; e2e filter and review fail
+- Binary e2e used only for help / usage / fast-fail — short-path rule; demote to in-process CLI
+- `label: e2e` on in-process library or `RunWithWriter` leaf — mislabel
 - `label: flaky` or `label: manual` without `explanation` — reader cannot judge when to run or how to debug
 - `explanation` describing manual/slow intent but no `label` — leaf still runs in discovery
 - `label: [slow, ui]` YAML sequence instead of comma-separated scalar — wrong frontmatter shape
 - Expensive leaves at the same tree level as fast unit-style leaves without labels or grouping
-- **Process-global mutation in Setup/Run/Assert** (`t.Setenv` / `t.Chdir`,
-  `os.Setenv` / `Unsetenv` / `os.Chdir`, `syscall.Setenv`, stdio reassignment, or
-  package-level mutable state shared by Parallel leaves) — suite is parallel; see
-  **NOTE** above — **major**
-- Product `os.Setenv` for child-only values (session id, cold GOCACHE) instead of
-  `cmd.Env` / opts — same class as harness Setenv — **major**
-- Blind `append(os.Environ(), "KEY=val")` without stripping `KEY` (first-wins trap)
-  — **major** when used for isolation
+- **Common gotchas** (package mutable state, stdio reassignment, Setenv/Chdir) — **major**;
+  prefer inject opts — see **Common gotchas** above
 - Product output must include doctest matcher DSL syntax to satisfy a test — likely assertion bug, **major**
 - `## Expected Output` is not a plausible terminal transcript or user-facing output sketch — **major**
 

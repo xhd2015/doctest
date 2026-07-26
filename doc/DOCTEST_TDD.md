@@ -7,163 +7,124 @@ description: adversarial multi-agent TDD with doctests (orchestrator + tests des
 
 # Gate
 
-TDD mode is mandatory **unless** one of these applies:
-
-1. **`no tdd:` prefix** — Strip the prefix and handle directly.
-2. **Doc-only change** — Only documentation (`.md`, `README`, etc.); no source code.
-3. **One-liner fix** — Warn that TDD is slow; ask whether to proceed with TDD or use
-   `no tdd:`. Do not start TDD without confirmation.
-
-Otherwise TDD mode is mandatory.
+TDD is mandatory **unless**: (1) `no tdd:` prefix — strip and handle directly;
+(2) doc-only (`.md`, README, etc.); (3) one-liner fix — warn TDD is slow, ask
+TDD vs `no tdd:`, do not start without confirmation.
 
 # One Rule
 
-You are the **orchestrator**. Every code change MUST flow through doctest TDD:
+You are the **orchestrator**. Every code change flows through:
 
 ```
 Classic TDD:       designer → RED → seal → implementer → GREEN
 Coverage backfill: designer → (GREEN OK / mixed OK) → seal → implementer only if RED remains → GREEN
 ```
 
-When the context already has a **plan split into phases** (see **Plan phases**
-below), apply this rule **once per plan phase** — full TDD cycle each time —
-not one mega-cycle for the whole plan.
-
-**You NEVER touch source files.** No Edit/Write on source or config. All code
-changes go through:
-
-- **Designer** — writes doctest trees
-- **Implementer** — writes implementation code
+**You NEVER touch source/config.** Designer writes doctest trees; implementer
+writes implementation. Plan phases in context → one full cycle **per phase**
+(see **Plan phases**), not one mega-cycle.
 
 # Modes
 
-Infer mode from user wording and codebase during TDD step 1. Do not force classic
-RED when the implementation is already present.
+Infer in TDD step 1. Do not force classic RED when implementation is present.
 
-**Classic TDD** when: greenfield / no real implementation; user wants failing
-tests first; paths under change are stubbed or unimplemented.
+| Mode | When |
+|------|------|
+| **Classic TDD** | Greenfield / stubbed / user wants failing tests first |
+| **Coverage backfill** | User asks to **backfill**, or code already implements intended behavior and only doctests are missing |
 
-**Coverage backfill** when: user asks to **backfill** coverage or says the
-fix/feature is already applied and only doctests are missing; source already
-implements the intended behavior; task is missing coverage for working code.
+Ambiguous → ask once; default backfill when evidence is strong. Brainstorm in
+**both** modes (step 1 mandatory for backfill too).
 
-If ambiguous, ask once in TDD step 1 — default toward backfill when evidence is strong.
+**Shortcuts:** bug already RED → start at seal. Backfill: RED not required for
+correct behavior (GREEN expected); skip implementer if all sealed tests GREEN.
 
-**Still brainstorm in both modes** (TDD step 1 is mandatory for backfill too).
+**Backfill handoff (designer)** — REQUIREMENT-DESIGN / spawn must include:
+mode = coverage backfill; intent = backfill missing doctests for correct
+behavior; RED not required / GREEN expected; mixed GREEN/RED OK; no must-fail
+asserts only for classic TDD theater.
 
-### Shortcuts
+# Test layers (L1 / L2 / L3)
 
-- Already-reproduced bug with RED doctests → skip design/RED; start at seal.
-- Backfill: RED not required for leaves documenting correct behavior; GREEN
-  expected. Skip implementer when all sealed tests are already GREEN.
+Sole definition here (guidance, not CI). Deep dive:
+`doctest skill design-principle --show`.
+
+| Layer | ~Cases | Execution | Use for |
+|-------|--------|-----------|---------|
+| **L1** | 10–20% | `*_test.go` tables | Pure / flat edges |
+| **L2** ★ | **70–85%** | Same process: library or `cli.RunWithWriter` | Multi-factor APIs + short CLI |
+| **L3** | 5–10% | Separate process / nested suite; **`label: e2e`** | Full integration only |
+
+Default **L2**. Short path → never L3. L3 needs process-boundary reason +
+`label: e2e`. “Prefer doctests” = prefer L2, not e2e. Requirements: state a
+**layer map** only — do not restate this table.
+
+# Test-first code
+
+Design **easy to test**, not only production-correct: injectable L2 APIs (opts,
+writers, pure cores); no GREEN via Setenv/Chdir/stdio or forced L3 for short
+paths (see **Parallel-safe suite**, **Test layers**); e2e-only / untestable
+glue GREEN is incomplete. Handoffs: apply; do not restate.
+
+# Parallel-safe suite
+
+Leaves use `t.Parallel()` in one process. **Forbidden** in harness and L2
+product: (1) unprotected shared globals / reassigning `os.Stdout|Stderr|Stdin`;
+(2) process-global env/cwd — `os.Setenv`/`Unsetenv`, `os.Chdir`, `t.Setenv`,
+`t.Chdir`, `syscall.Setenv`. **Prefer** inject opts / `req` / child
+`cmd.Env`·`Dir`. Detail: `doctest skill lint --show`, `doctest skill review
+--show` (Common gotchas). Handoffs: apply; do not restate.
 
 # Plan phases (outer loop)
 
-**Plan phase** = a dependency-ordered work unit from a split plan (`P1`, `P2`,
-…; split-phases output; `PHASES.md`; or an equivalent phase list in context).
+**Plan phase** = dependency-ordered unit (`P1`… / split-phases / `PHASES.md`).
+**TDD step** = inner workflow step 1–8 — do not confuse the two.
 
-**TDD step** = one step of the inner workflow below (TDD steps 1–8). Do not
-confuse the two.
-
-**Trigger** — any of:
-
-- Context has a split-phases (or equivalent) plan with plan phases and exit criteria
-- `PHASES.md` (or similar) is the agreed plan
-- User asks to implement phase-by-phase / by plan phase
-
-**If no plan phases in context:** run a single inner TDD cycle as today
-(requirement files omit `PHASE` — see naming below).
-
-**If plan phases are present:**
+**Trigger:** plan phases in context, or user asks phase-by-phase. **None:**
+single cycle (files omit `PHASE` — see **Requirement naming**).
 
 ```text
-for each plan phase Pn in dependency order
-    (or only the subset the user named):
-  1. Scope requirements to Pn only (goal, work, exit criteria, out of scope)
-  2. Run full TDD steps 1→8 for Pn
-  3. On GREEN + verify: auto-continue to the next plan phase
-  4. Stop only when all plan phases in scope are done
+for each Pn in order (or user subset):
+  scope to Pn → TDD steps 1→8 → on GREEN auto-continue → stop when done
 ```
 
-**Hard rules:**
-
-1. **One plan phase = one full TDD cycle** — do not design all phases’ tests
-   then implement everything in one pass.
-2. **Scope to that phase’s exit criteria** — do not pull later plan-phase work
-   forward (stubs/seams OK only if the phase plan allows).
-3. **Mode per plan phase** — classic vs backfill may differ by phase.
-4. **Requirement files** live under `/tmp/` as `REQUIREMENT-DESIGN-…` /
-   `REQUIREMENT-IMPLEMENT-…` (see naming below).
-5. **Doctest tree paths stay normal** (`./tests/<feature>/`) — no required
-   phase subdirs; later plan phases may add leaves under the same tree.
-6. **Seal once per TDD cycle** (i.e. per plan phase when multi-phase) — seal
-   that cycle’s new/changed tests; do not rewrite prior sealed asserts without
-   justification.
-7. **Auto-continue** until every in-scope plan phase is done; then report a
-   short summary across phases.
+| Hard rule | |
+|-----------|---|
+| One phase = one full TDD cycle | No design-all-then-implement-all |
+| Scope to phase exit criteria | Later work only if plan allows stubs/seams |
+| Mode per phase | Classic vs backfill may differ |
+| Paths / trees | **Requirement naming**; normal `./tests/<feature>/` (no phase subdirs) |
+| Seal once per cycle | No unjustified rewrite of prior sealed asserts |
+| Auto-continue | Then short multi-phase summary |
 
 # Delegating to roles
 
-Spawn/resume role subagents via the runner's task tool. Pass a short requirement
-(or file path) — not the role prompt.
-
-Each sub-agent **must** run as its first step:
-
-- Designer: `doctest skill designer --show`
-- Implementer: `doctest skill implementer --show`
-
-Prefix descriptions with `[designer]` / `[implementer]` when supported. Resume
-the **same** session per role for follow-ups. Wait patiently (use ≥1h timeout
-if the runner requires one).
+Spawn/resume via runner task tool; pass requirement path — not the role prompt.
+First step each sub-agent: designer `doctest skill designer --show`;
+implementer `doctest skill implementer --show`. Prefix `[designer]` /
+`[implementer]` when supported. Resume **same** session per role. Wait
+patiently (≥1h timeout if required).
 
 # Workflow (8 TDD steps)
 
 ## TDD step 1 — Requirements
 
-Brainstorm (both modes). Produce a requirement file; get explicit approval.
-
-Auto-detect mode (see **Modes**). State it in the requirement file.
-
-When a plan phase is active: state which plan phase (`Pn`), its goal, exit
-criteria, and out of scope; scope scenarios to that phase only.
-
-Tell the user:
-
-1. Data models and storage layout (if any)
-2. Scenarios and expected output
-3. How you will test (prefer doctests)
-4. **Classic TDD** or **coverage backfill**, and why
-5. Active plan phase (`Pn`) when multi-phase, or that this is a single-cycle run
-
-CLI: user-facing stdout ends with `\n` after the last content line; when using
-doctest assert templates, newline before the raw string's closing backtick.
-
-Bugs: explore/narrow scope first, then designer. Classic → failing doctests;
-backfill (fix applied) → doctests of fixed behavior (GREEN OK).
-
-Clarify until intent is clear.
+Brainstorm both modes; write requirement; get approval. Mode per **Modes**.
+Plan phase active → scope `Pn` (**Plan phases**). Tell user: (1) models/layout
+if any (2) scenarios + expected output (3) layer map (**Test layers**)
+(4) classic vs backfill + why (5) `Pn` or single-cycle. CLI stdout: trailing
+`\n` after last content line; assert templates: newline before closing
+backtick. Bugs: explore then designer; classic → RED doctests; backfill (fix
+applied) → GREEN OK.
 
 ## TDD step 2 — Delegate Test Design
 
-Write `/tmp/REQUIREMENT-DESIGN-<slug>.md` (or
-`/tmp/REQUIREMENT-DESIGN-PHASE-{N}-<slug>.md` when a plan phase is active).
-Spawn designer with that path (+ optional summary). Designer runs
-`doctest skill designer --show` first.
-
-**Backfill — MUST tell the designer** (spawn message and/or requirement):
-
-- Mode: coverage backfill (implementation present)
-- Intent: **backfill** missing doctests for existing correct behavior
-- RED not required; GREEN expected for covered paths
-- Mixed GREEN/RED OK when some behaviors still missing
-- Do not invent must-fail assertions only for classic TDD theater
-
-Wait until the tree is under `./tests/<feature>/`.
+Write design file (**Requirement naming**); spawn designer (**Delegating**);
+wait for `./tests/<feature>/`.
 
 ## TDD step 3 — Designer Questions (optional)
 
-Answer questions by **resuming the same designer session**. Escalate
-domain questions to the user first. Repeat until designer completes.
+Resume same designer; escalate domain to user; until complete.
 
 ## TDD step 4 — Vet then run
 
@@ -172,13 +133,9 @@ doctest vet ./tests/<feature>
 doctest test ./tests/<feature>
 ```
 
-`doctest vet` must pass (tree well-formed; version `__DOCTEST_VERSION__` — see
-SPEC below). Interpret `doctest test` per **Modes**:
-
-- **Classic:** must be RED; any GREEN → re-examine design.
-- **Backfill:** GREEN expected for covered behavior; re-examine only vacuous
-  or wrong asserts.
-- **Mixed:** valid; seal the whole tree as-is.
+`vet` must pass (`__DOCTEST_VERSION__` — SPEC below). Interpret test per
+**Modes**: classic → RED (any GREEN → re-examine); backfill → GREEN expected
+(re-examine vacuous/wrong only); mixed → seal as-is.
 
 ## TDD step 5 — Seal (once)
 
@@ -186,28 +143,17 @@ SPEC below). Interpret `doctest test` per **Modes**:
 git add ./tests/<feature>
 ```
 
-Seal tests only, once per TDD cycle. Outside a git repo, ask before proceeding
-unsealed. **Mixed suites seal as-is** (GREEN + RED together).
+Tests only, once per cycle. No git repo → ask before unsealed. Mixed seal as-is.
 
 ## TDD step 6 — Implement
 
-If backfill and all sealed tests are GREEN → **skip** (no implementer); go to
-TDD step 8.
-
-Else write `/tmp/REQUIREMENT-IMPLEMENT-<slug>.md` (or
-`/tmp/REQUIREMENT-IMPLEMENT-PHASE-{N}-<slug>.md` when a plan phase is active):
-context, summary, tree structure, **"tests are sealed — do not modify"**,
-verify command, which leaves were already GREEN vs still RED. Include active
-plan phase when multi-phase.
-
-Spawn implementer with that path. Implementer runs `doctest skill implementer
---show` first. Wait until all tests pass. Do not weaken already-GREEN sealed
-asserts.
+Backfill + all sealed GREEN → skip to step 8. Else write implement file
+(**Requirement naming**); spawn implementer (**Delegating**); wait GREEN. Do
+not weaken already-GREEN sealed asserts.
 
 ## TDD step 7 — Implementer Questions (optional)
 
-Resume the **same implementer session** with answers or TDD step 8 failures until
-all pass.
+Resume same implementer until pass.
 
 ## TDD step 8 — Verify
 
@@ -215,43 +161,35 @@ all pass.
 git diff ./tests/<feature>            # must be clean
 doctest vet ./tests/<feature>
 doctest test ./tests/<feature>/...    # must be GREEN
-
-doctest test --label "ui-automation" ./tests/<feature>/... # if ASSERT has label header
-doctest test --label 'slow && ui-automation' ./tests/<feature>/... # expr: &&, ||, ()
-
+doctest test --label "ui-automation" ./tests/<feature>/... # if ASSERT has label
+doctest test --label 'slow && ui-automation' ./tests/<feature>/... # &&, ||, ()
 doctest test ./...                    # no regressions
 ```
 
-If RED → resume implementer. Accept test-file changes only with explicit
-justification (wrong expected per spec). Report test count and any accepted
-modifications.
+RED → resume implementer. Test-file edits only with explicit justification.
+Report count + accepted mods. More plan phases → **Plan phases**; else summary.
 
-When plan phases remain in scope: auto-continue to the next plan phase (new
-requirement files, TDD steps 1→8 again). When all in-scope plan phases are
-done: report a short multi-phase summary.
+# Requirement naming
 
-# Requirement File Naming
+Under `/tmp/` (not repo root):
 
-Write ephemeral requirement files under `/tmp/` (not the repo root):
+| Role | Single-cycle | Plan phase N |
+|------|--------------|--------------|
+| Design | `/tmp/REQUIREMENT-DESIGN-<slug>.md` | `/tmp/REQUIREMENT-DESIGN-PHASE-{N}-<slug>.md` |
+| Implement | `/tmp/REQUIREMENT-IMPLEMENT-<slug>.md` | `/tmp/REQUIREMENT-IMPLEMENT-PHASE-{N}-<slug>.md` |
 
-- Design:
-  - single-cycle: `/tmp/REQUIREMENT-DESIGN-<slug>.md`
-  - plan phase N: `/tmp/REQUIREMENT-DESIGN-PHASE-{N}-<slug>.md`
-- Implement:
-  - single-cycle: `/tmp/REQUIREMENT-IMPLEMENT-<slug>.md`
-  - plan phase N: `/tmp/REQUIREMENT-IMPLEMENT-PHASE-{N}-<slug>.md`
+`PHASE-{N}` only when multi-phase — never invent for single-cycle.
 
-`<slug>` is a short feature/context slug. Include `PHASE-{N}` only when plan
-phases are active — never invent `PHASE-1` for a single-cycle run.
+**Must include** (not restated in steps): mode (+ **Backfill handoff** if
+backfill); layer map (**Test layers**); apply **Test-first code** +
+**Parallel-safe suite** (pointers); multi-phase: `Pn` goal/exit/out-of-scope;
+implement: context, tree, **"tests are sealed — do not modify"**, verify cmd,
+GREEN vs RED leaves.
 
-Design file must state mode; backfill includes TDD step 2 handoff bullets;
-multi-phase runs state plan phase `Pn` scope.
+# Followup
 
-# Followup Requests
-
-Every followup restarts at TDD step 1 (for the relevant plan phase if still
-multi-phase). Keep designer and implementer sessions separate; reuse each
-role's session ID within that role.
+Restart at TDD step 1 (relevant plan phase if multi-phase). Separate designer /
+implementer sessions; reuse each role’s session ID within that role.
 
 __DOCTEST_SPEC__
 

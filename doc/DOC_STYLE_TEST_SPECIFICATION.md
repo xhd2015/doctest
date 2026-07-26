@@ -8,6 +8,12 @@ organized in a decision tree. Each document describes **what** to test in
 prose; the tree structure models the decision flow from feature to behavior
 to scenario.
 
+**Where a case belongs** (before growing a tree): pure flat edges → go test (L1);
+multi-factor / short CLI scenarios → **in-process** doctest (L2); full process-boundary
+integration only → sparse e2e (L3, `label: e2e`). See
+`doctest skill design-principle --show`. Executable harness rules:
+`doctest skill code-spec --show`.
+
 ## Directory Layout
 
 ```

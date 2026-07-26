@@ -10,20 +10,36 @@ Doc-style test tool: write test cases as markdown decision trees with embedded G
 go install github.com/xhd2015/doctest/cmd/doctest@latest
 ```
 
+Then, install core `doctest-tdd` skill:
+```sh
+doctest skill doctest-tdd --install --global
+# add a skill to ~/.agents/skills/doctest-tdd/SKILL.md
+```
+
 # Usage
 
-Paste the following prompt into your agent(claude code, codex, opencode etc.):
+Paste the following prompt into your agent(grok, claude code, codex, opencode etc.):
 
 ```md
-Follow the guideline of `doctest skill doc-spec --show` and `doctest skill code-spec --show`, write tests first, run doctest test to ensure them RED(TDD), then seal them(`git add <tests>`); then implement the feature and run doctest until all GREEN.
-
-<your feature here>
+/doctest-tdd <your feature here>
 ```
 
+
+Run doctests yourself:
 
 ```sh
-doctest test -v ./...
+doctest test ./...
 ```
+
+# Execution model (authors)
+
+- Generated tests for one DOCTEST tree run in a **single suite process**; leaves
+  use **`t.Parallel()`**. Harness must not use process `Setenv`/`Chdir` for isolation
+  (`doctest skill lint --show`, `doctest skill code-spec --show`).
+- Prefer **in-process** library / `cli.RunWithWriter` leaves; reserve binary e2e for
+  full integration (`doctest skill design-principle --show`).
+- Inject context via `d *session.Doctest` fields; process cwd is undetermined
+  (`doctest skill migrate --show`).
 
 # Install skills
 ```sh

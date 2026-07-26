@@ -39,6 +39,15 @@ var doctestAnalysePerf string
 //go:embed DOCTEST_OUTPUT_ASSERT.md
 var doctestOutputAssert string
 
+//go:embed DOCTEST_DESIGN_PRINCIPLE.md
+var doctestDesignPrinciple string
+
+//go:embed DOCTEST_LINT.md
+var doctestLint string
+
+//go:embed DOCTEST_MIGRATE.md
+var doctestMigrate string
+
 func Content(fileName string) (string, error) {
 	var content string
 	switch fileName {
@@ -62,6 +71,12 @@ func Content(fileName string) (string, error) {
 		content = doctestAnalysePerf
 	case "DOCTEST_OUTPUT_ASSERT.md":
 		content = doctestOutputAssert
+	case "DOCTEST_DESIGN_PRINCIPLE.md":
+		content = doctestDesignPrinciple
+	case "DOCTEST_LINT.md":
+		content = doctestLint
+	case "DOCTEST_MIGRATE.md":
+		content = doctestMigrate
 	default:
 		return "", fmt.Errorf("unknown file: %s", fileName)
 	}

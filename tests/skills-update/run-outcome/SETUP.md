@@ -27,17 +27,22 @@ import (
 )
 
 func registryCLINames() []string {
+	// Must match libdoc/spec registry keys sorted alphabetically (skills update order).
 	return []string{
+		"analyse-perf",
 		"code-spec",
+		"design-principle",
 		"designer",
 		"doc-spec",
 		"implementer",
+		"lint",
+		"migrate",
 		"output-assert",
-		"tdd-cli-agent",
 		"reproduce",
 		"review",
 		"review-perf",
 		"tdd",
+		"tdd-cli-agent",
 		"tdd-lite",
 	}
 }

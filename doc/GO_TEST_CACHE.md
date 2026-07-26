@@ -1,5 +1,11 @@
 # Go Test Cache Invalidation: Directory mtime Side Effect
 
+> **Status (historical):** investigation notes on Go testcache + directory mtime.
+> Current product generation **does not** leaf-`Chdir` for isolation; authors must
+> not use process `os.Chdir` / `os.Setenv` under Parallel suites. Author contract:
+> `doctest skill code-spec --show`, `doctest skill lint --show`,
+> `doctest skill migrate --show`.
+
 ## Summary
 
 When generating Go test files into a package directory, creating and deleting a
@@ -108,49 +114,38 @@ temp only). In-process reuse is via `processMemo` keyed by session id + key.
 **Do not** store under `UserCacheDir/doctest/sessions/<sid>/` — those paths
 change every CLI run and invalidate the whole package test result cache.
 
-Session id is read with **`syscall.Getenv("DOCTEST_SESSION_ID")` only** (same
-rule as below). Durable artifacts (e.g. selftest binary) should live outside
-Once’s temp `cacheDir` (see `libdoc/testbin`).
+Engine/Once may resolve session id via **`syscall.Getenv`** internally; **harness
+authors use `d.DOCTEST_SESSION_ID` only**. Durable artifacts (e.g. selftest binary)
+should live outside Once’s temp `cacheDir` (see `libdoc/testbin`).
 
 `libdoc/testbin.Ensure` uses `session.Once` for serialization (value shape
 `{"path":"..."}`); the binary path is under a module-hash durable dir.
 
-## Session ID: injected variable, not harness env read
+## Session ID: authors use `d.DOCTEST_SESSION_ID` only
 
-`doctest test` assigns a new UUID per invocation and exports it to child
-`go test` processes as the environment variable `DOCTEST_SESSION_ID`. Generated
-test boilerplate reads it once with `syscall.Getenv` and defines a **package-level
-variable** also named `DOCTEST_SESSION_ID`:
-
-```go
-DOCTEST_SESSION_ID, ok := syscall.Getenv("DOCTEST_SESSION_ID")
-if !ok || DOCTEST_SESSION_ID == "" {
-    t.Fatalf("DOCTEST_SESSION_ID not set")
-}
-```
-
-**In harness code (`SETUP.md` / `ASSERT.md` Go blocks), treat `DOCTEST_SESSION_ID`
-as that injected variable — not an environment variable you re-read.** Use it
-directly:
+**Current author contract** (see `doctest skill code-spec --show`): Setup/Run/Assert
+receive `d *session.Doctest` and read **`d.DOCTEST_SESSION_ID`** (also
+`d.DOCTEST_ROOT` / `d.DOCTEST_CASE`). There are **no** free inject package vars
+and authors must **not** `os.Getenv` / `LookupEnv` / `syscall.Getenv` those names.
 
 ```go
-cacheDir := filepath.Join(os.TempDir(), "my-feature-"+DOCTEST_SESSION_ID)
+cacheDir := filepath.Join(os.TempDir(), "my-feature-"+d.DOCTEST_SESSION_ID)
 ```
 
-Do **not** call `os.Getenv("DOCTEST_SESSION_ID")` or `os.LookupEnv("DOCTEST_SESSION_ID")`.
-`doctest vet` flags those calls. Using `syscall.Getenv` in harness code is also
-redundant — the variable is already in scope.
+**Historical note (below):** older gen used a free `DOCTEST_SESSION_ID` filled via
+`syscall.Getenv` for testlog reasons. Engine may still plumb env for suite/Once
+internals; that is **not** the harness API.
 
-Why: `os.Getenv` is recorded in Go's test-result cache key. A stray read pins the
-cache to one session value or forces misses on every rerun. Generated boilerplate
-uses `syscall.Getenv` so the session id is available without polluting the cache
-key. See `tests/test/go-test-cache/env-getenv/` for proof tests.
+Why getenv in *product* testlog still matters: `os.Getenv` is recorded in Go's
+test-result cache key. Stray `os.Getenv("DOCTEST_SESSION_ID")` on a hot path can
+pin or bust cache. Prefer `d` in harness; in engine code prefer
+`syscall.Getenv` only where intentionally outside author blocks. See
+`tests/test/go-test-cache/env-getenv/` for proof tests.
 
 The same rule applies inside doctest itself. `build.Test` calls
 `core.DoctestSessionIDForRun()` before spawning `go test`; that helper must
 also use `syscall.Getenv`. A stray `os.Getenv("DOCTEST_SESSION_ID")` there is
-recorded in the testlog and pins the cache key to the session value — even when
-the generated test only uses `syscall.Getenv`.
+recorded in the testlog and pins the cache key to the session value.
 
 **Before (broken):**
 ```go

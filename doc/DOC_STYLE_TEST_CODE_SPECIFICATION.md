@@ -527,9 +527,10 @@ inject object instead.
 
 ### Parallel-safe harness (suite is concurrent)
 
-Workspace and tree suites may run leaves with `t.Parallel()`. Author Setup / Run /
-Assert (and package helpers) as if other leaves run in the same process at the
-same time.
+Generated suites run leaves under **`t.Parallel()`** in **one process** (unified
+suite binary per DOCTEST tree — see `doctest skill migrate --show`). Author Setup /
+Run / Assert (and package helpers) as if other leaves run in the same process at
+the same time.
 
 **Do not:**
 
@@ -543,9 +544,10 @@ same time.
 Immutable package helpers are fine (`var bt`, compiled regexes). Multi-step state
 that used to live in `var firstResp` belongs on `req` (or a leaf-private package).
 
-Full review rule and product CLI notes (session id / cold GOCACHE on opts +
-`cmd.Env`): **`doc/DOCTEST_REVIEW.md`** section **NOTE: no process-global mutation
-in suite harness**.
+**Process / demotion checklist:** `doctest skill lint --show`.  
+**Full review rule** and product CLI notes (session id / cold GOCACHE on opts +
+`cmd.Env`): `doctest skill review --show` (**NOTE: no process-global mutation**).  
+**Where a case belongs** (L1 / L2 in-process / L3 e2e): `doctest skill design-principle --show`.
 
 ### `d *session.Doctest`
 
@@ -561,8 +563,9 @@ type Doctest struct {
 }
 ```
 
-Field names match the former free variables (immutable inject contract). They are
-**struct fields**, not environment variables.
+Field names match the former free-variable names (immutable inject contract).
+They are **struct fields on `d`**, not free package vars and not environment
+variables. Authors access them only as `d.DOCTEST_*`.
 
 Author signatures may omit `d`; the assembler still generates a second parameter
 (always declare `d *session.Doctest`; use `_ = d` if unused):

@@ -31,8 +31,8 @@ func TestRunHelpOutput(t *testing.T) {
 		{name: "skill no args", args: []string{"skill"}, wants: []string{"Usage: doctest skill --list", "doc-spec", "code-spec", "--show", "--install"}},
 		{name: "skill long help", args: []string{"skill", "--help"}, wants: []string{"Usage: doctest skill --list", "--install", "--show"}},
 		{name: "skill short help", args: []string{"skill", "-h"}, wants: []string{"Usage: doctest skill --list", "--show"}},
-		{name: "skill list", args: []string{"skill", "--list"}, wants: []string{"doc-spec", "code-spec"}},
-		{name: "skill list short", args: []string{"skill", "-l"}, wants: []string{"doc-spec", "tdd"}},
+		{name: "skill list", args: []string{"skill", "--list"}, wants: []string{"doc-spec", "code-spec", "design-principle", "lint", "migrate"}},
+		{name: "skill list short", args: []string{"skill", "-l"}, wants: []string{"doc-spec", "tdd", "design-principle"}},
 		{name: "agent implement help", args: []string{"agent", "implement", "--help"}, wants: []string{"Usage: doctest agent implement", "--session-id", "--requirement", "--trace"}},
 	}
 

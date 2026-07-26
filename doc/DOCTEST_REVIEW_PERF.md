@@ -160,8 +160,8 @@ process `Setenv` for session id or cold `GOCACHE`.
 
 **Never:** setenv+restore (with or without mutex) as “isolation.”
 
-Full design rule: **`doctest skill review --show`** /
-`doc/DOCTEST_REVIEW.md` section **NOTE: no process-global mutation in suite harness**.
+Full design rule: **`doctest skill review --show`** (NOTE: no process-global
+mutation) and demotion hard-fail checklist **`doctest skill lint --show`**.
 
 **Validate concurrency:**
 

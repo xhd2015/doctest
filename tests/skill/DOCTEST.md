@@ -53,6 +53,7 @@ tests/skill/
 ├── list/                   skill --list
 ├── tdd-show/               skill tdd --show
 ├── tdd-lite-show/          skill tdd-lite --show
+├── designer-show/          skill designer --show
 ├── implementer-show/       skill implementer --show
 ├── doc-spec-show/          skill doc-spec --show
 ├── code-spec-show/         skill code-spec --show
@@ -66,7 +67,8 @@ tests/skill/
 | `list` | `skill --list` | `doc-spec`, `code-spec`, `tdd`, `tdd-cli-agent`, `tdd-lite`, `reproduce`, `review`, `review-perf`, `output-assert`, `implementer` |
 | `tdd-show` | `skill tdd --show` | `doctest-tdd`, `adversarial multi-agent TDD`, plan phases |
 | `tdd-lite-show` | `skill tdd-lite --show` | `doctest-tdd-lite`, single-agent cues; no multi-agent orchestrator phrases |
-| `implementer-show` | `skill implementer --show` | `Implementer`, `yield-pending-questions`, Step 1 |
+| `designer-show` | `skill designer --show` | `Designer`, `Questions`; no `report-progress` / `yield-pending-questions` |
+| `implementer-show` | `skill implementer --show` | `Implementer`, `Questions`; no `report-progress` / `yield-pending-questions` |
 | `doc-spec-show` | `skill doc-spec --show` | `doc-style-test-specification`, Directory Layout |
 | `code-spec-show` | `skill code-spec --show` | `doc-style-test-code-specification`, Setup/Run/Assert |
 | `review-perf-show` | `skill review-perf --show` | `doctest-review-perf`, budgets, metrics flags, WARNING |

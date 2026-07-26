@@ -87,8 +87,9 @@ const skillUsage = `Usage: doctest skill --list
 List, print, or install a registered doctest skill.
 
 Registered skills:
-  doc-spec, code-spec, tdd, tdd-cli-agent, tdd-lite,
-  reproduce, review, review-perf, analyse-perf, output-assert, implementer, designer
+  doc-spec, code-spec, design-principle, lint, migrate,
+  tdd, tdd-cli-agent, tdd-lite, reproduce, review, review-perf,
+  analyse-perf, output-assert, implementer, designer
 
 Both flag orders are valid (--show/--install before or after <name>).
 
@@ -709,6 +710,9 @@ func runSkill(io stdio, args []string) error {
 		for _, name := range []string{
 			"doc-spec",
 			"code-spec",
+			"design-principle",
+			"lint",
+			"migrate",
 			"tdd",
 			"tdd-cli-agent",
 			"tdd-lite",
