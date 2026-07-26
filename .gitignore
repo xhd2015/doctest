@@ -11,5 +11,10 @@
 
 /doctest
 
+# GitHub release credentials (scaff github/release)
+.upload-credentials.json
+# multi-platform release build artifacts
+/doctest-v*-*
+
 handoff_*
 /external
