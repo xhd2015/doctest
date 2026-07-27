@@ -55,6 +55,7 @@ races other leaves.
 | `os.Setenv` / `os.Unsetenv` / `syscall.Setenv` for leaf isolation | Process-global race |
 | `os.Chdir` / `t.Chdir` for leaf workdir | Process-global race |
 | Package-level mutable “session / GOCACHE / genDir” globals written per leaf | Same class of bug |
+| **Package `inject*` / stash of `d.DOCTEST_*` in Setup** (e.g. `injectDoctestRoot = d.DOCTEST_ROOT`) | Same Parallel class; reintroduces free inject under new names. Prefer helpers that take `d` or path/session **strings**, or fields on `req` — full BAD/GOOD: `doctest skill code-spec --show` (**Do not re-stash d**) |
 | Dual-mode that “helps” by Setenv when `Env` is non-empty | Quietly reintroduces the race |
 
 ### Required instead
@@ -165,7 +166,8 @@ Before rewriting a `func Run`:
 5. **Bulk implementer leaf deletion for share** — completeness risk; prefer planned sparse smokes + map.  
 6. **All phases in parallel agents** — partial apply, hard to bisect.  
 7. **Root dual-mode without forbidding Env on in-process path** — invites Setenv.  
-8. **Keep-e2e Setup without `UseCLI` + `Bin`** after dual-mode default — wrong path or empty Bin.
+8. **Keep-e2e Setup without `UseCLI` + `Bin`** after dual-mode default — wrong path or empty Bin.  
+9. **Setup inject-stash** (`injectDoctestRoot = d.DOCTEST_ROOT`, …) — Parallel race + free-inject rename; see §1 / `code-spec`.
 
 ---
 
@@ -175,7 +177,8 @@ Before rewriting a `func Run`:
 2. Policy → package APIs in-process.  
 3. True integration → sparse leaves, `label: e2e, heavy`, `cmd.Env`/`cmd.Dir` only.  
 4. Product + harness: never process Setenv for session/GOCACHE isolation.  
-5. One tree green before the next.
+5. Helpers take `d` or path/session strings — not package `inject*` stashed from Setup.  
+6. One tree green before the next.
 
 ---
 
@@ -192,6 +195,6 @@ Before rewriting a `func Run`:
 
 ## 10. One-line summary
 
-**One tree at a time; never Setenv/Chdir for isolation; short paths in-process; true e2e sparse + labeled; no mass Run rewrites or fixture e2e labels; verify green before the next change.**
+**One tree at a time; never Setenv/Chdir or package inject-stash for isolation; short paths in-process; true e2e sparse + labeled; no mass Run rewrites or fixture e2e labels; verify green before the next change.**
 
 --end of skill doctest-lint--

@@ -213,6 +213,7 @@ Return absolute paths for every tree and node you discuss.
 ### Parallel safety (suite)
 - [ ] No **Common gotchas** (below) in Setup/Run/Assert or L2 product paths
 - [ ] Isolation via **injected options** / `req` fields / child `cmd.Env`·`Dir` — not process globals
+- [ ] No package **inject-stash** of `d.DOCTEST_*` (see **Common gotchas** / `doctest skill code-spec --show`)
 - [ ] Unit tests (`*_test.go`) follow the same rules when co-reviewed
 - [ ] Race-sensitive changes: `doctest test … -race` and/or `-count=1 --label-all` when practical
 
@@ -222,7 +223,11 @@ Leaves run concurrent in **one process**. Flag **major** when harness (Setup/Run
 or **product under L2 in-process** does either:
 
 1. **Unprotected shared state** — package-level mutable `var` across leaves; reassigning
-   `os.Stdout` / `os.Stderr` / `os.Stdin`.
+   `os.Stdout` / `os.Stderr` / `os.Stdin`. Includes **package inject-stash**: Setup/Run
+   copies `d.DOCTEST_*` into `injectDoctestRoot` / `injectSessionID` / similar for later
+   helpers (**major**). Prefer helpers that take `d` or strings, or fields on `req` —
+   full rule: `doctest skill code-spec --show` (**Do not re-stash d**); lint class:
+   `doctest skill lint --show` §1.
 2. **Process-global env/cwd** — `os.Setenv` / `Unsetenv`, `os.Chdir`, `t.Setenv`,
    `t.Chdir` (also `syscall.Setenv` / `Unsetenv`).
 
@@ -266,6 +271,7 @@ doctest test ./tests/parallel-safe/env-no-setenv/...
 rg -n 'os\.(Setenv|Unsetenv|Clearenv)\(|t\.Setenv\(|syscall\.Setenv\(' --glob '*.go'
 rg -n 'os\.Chdir\(|t\.Chdir\(' --glob '*.go'
 rg -n 'os\.(Stdout|Stderr|Stdin)\s*=' --glob '*.go'
+rg -n 'inject(Doctest|Session)|\w+\s*=\s*d\.DOCTEST_' -g '{SETUP,DOCTEST}.md'
 ```
 
 Nested child `doctest test` does not inherit `-race` unless Args pass it.
@@ -299,8 +305,9 @@ Related: `review-perf`, `design-principle`, `lint`, `code-spec`.
 - `explanation` describing manual/slow intent but no `label` — leaf still runs in discovery
 - `label: [slow, ui]` YAML sequence instead of comma-separated scalar — wrong frontmatter shape
 - Expensive leaves at the same tree level as fast unit-style leaves without labels or grouping
-- **Common gotchas** (package mutable state, stdio reassignment, Setenv/Chdir) — **major**;
-  prefer inject opts — see **Common gotchas** above
+- **Common gotchas** (package mutable state including **inject-stash** of `d.DOCTEST_*`,
+  stdio reassignment, Setenv/Chdir) — **major**; prefer inject opts / `d` on the call
+  chain — see **Common gotchas** above
 - Product output must include doctest matcher DSL syntax to satisfy a test — likely assertion bug, **major**
 - `## Expected Output` is not a plausible terminal transcript or user-facing output sketch — **major**
 

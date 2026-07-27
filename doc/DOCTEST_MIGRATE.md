@@ -87,11 +87,12 @@ import "github.com/xhd2015/doctest/session"
 | `os.ReadFile("ASSERT.md")` assuming leaf cwd | `os.ReadFile(filepath.Join(d.DOCTEST_CASE, "ASSERT.md"))` |
 | `os.Chdir(...)` in harness for “be in case dir” | **Delete**; use absolute paths from `d` |
 | Free `DOCTEST_ROOT` / `DOCTEST_CASE` in SETUP helpers | `d.DOCTEST_ROOT` / `d.DOCTEST_CASE` |
+| Package `injectDoctestRoot` / `injectSessionID` filled from `d` in Setup | Helpers take `d` or path/session **strings**; optional leaf-local fields on `req`. Do not re-stash `d` — full rule: `doctest skill code-spec --show` (**Do not re-stash d**); Parallel class: `doctest skill lint --show` §1 |
 | Nested subprocesses that inherit “we chdired already” | Pass absolute paths explicitly; set `cmd.Dir` only if you truly need a child cwd |
 
 ### Helpers
 
-- If a helper needs root/case paths, add `d *session.Doctest` (or pass the strings) — do not reintroduce package free vars.
+- If a helper needs root/case paths, add `d *session.Doctest` (or pass the strings) — do not reintroduce package free vars (**including `inject*` renames** of free inject).
 - Package-level helpers shared across SETUP hops still work; they just should not assume cwd.
 - Leaves run under **`t.Parallel()`** — never use process `Setenv`/`Chdir` for isolation (`doctest skill lint --show`).
 

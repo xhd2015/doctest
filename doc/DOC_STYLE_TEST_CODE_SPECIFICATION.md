@@ -601,6 +601,56 @@ internally for cross-process coordination — harness path construction should u
 Package-level helpers that need paths or the session id must take
 `d *session.Doctest` (there are no package free vars).
 
+#### Do not re-stash `d` into package inject vars
+
+**Ban:** copying `d.DOCTEST_*` into package-level mutables in Setup (or Run) so
+helpers can read globals later. That reintroduces free inject under new names
+and races under `t.Parallel()` (same class as `var genDir` — see **Parallel-safe
+harness** above). Parallel hard-fail class: `doctest skill lint --show` §1.
+
+```go
+// BAD — package inject-stash (Parallel race + fake migration)
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+    injectSessionID = d.DOCTEST_SESSION_ID
+    injectDoctestRoot = d.DOCTEST_ROOT
+    return nil
+}
+var (
+    injectDoctestRoot string
+    injectDoctestCase string
+    injectSessionID   string
+)
+func repoRoot(t *testing.T) string {
+    return filepath.Join(injectDoctestRoot, "..", "..", "..") // races / undeclared drift
+}
+```
+
+```go
+// GOOD — pure helpers; pass d fields or strings; optional leaf-local fields on req
+func repoRootFromDoctest(t *testing.T, doctestRoot string) string {
+    t.Helper()
+    root, err := filepath.Abs(filepath.Join(doctestRoot, "..", "..", ".."))
+    if err != nil {
+        t.Fatalf("repo root: %v", err)
+    }
+    return root
+}
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
+    root := repoRootFromDoctest(t, d.DOCTEST_ROOT)
+    cache := filepath.Join(os.TempDir(), "my-feature-"+d.DOCTEST_SESSION_ID)
+    // or once per leaf: req.RepoRoot = repoRootFromDoctest(t, d.DOCTEST_ROOT)
+    _ = root
+    _ = cache
+    return &Response{}, nil
+}
+```
+
+Detect (author trees):
+
+```sh
+rg -n 'inject(Doctest|Session)|\w+\s*=\s*d\.DOCTEST_' -g '{SETUP,DOCTEST}.md'
+```
+
 See **Session-scoped shared setup** in the design spec for the file-lock + cache
 pattern used to amortize heavy setup across parallel leaf packages.
 
