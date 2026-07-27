@@ -7,7 +7,7 @@ require (
 	github.com/xhd2015/agent-pro v0.0.83
 	github.com/xhd2015/dot-pkgs/go-pkgs v0.0.89
 	github.com/xhd2015/gitops v0.0.27
-	github.com/xhd2015/kool v0.0.128
+	github.com/xhd2015/kool v0.0.129
 	github.com/xhd2015/less-flags v1.0.2
 	github.com/xhd2015/skills v0.0.22
 	golang.org/x/mod v0.36.0

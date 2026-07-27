@@ -81,7 +81,7 @@ func handle() error {
 		return nil
 	}
 
-	result, err := release.BuildRelease("doctest", nil, release.DefaultSpecs)
+	result, err := release.BuildRelease("doctest", nil, release.DefaultSpecs, release.WithPackagePath("./cmd/doctest"))
 	if err != nil {
 		return err
 	}
