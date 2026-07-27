@@ -2,8 +2,10 @@
 //
 // Proposed behavior (sketch):
 //   1. Parse --dry-run / --help flags.
-//   2. Dry-run: print tag, planned artifacts, and upload target without writing.
-//   3. Live: load credentials, build multi-platform assets, create/upload GitHub Release.
+//   2. Resolve tag and credentials (soft-warn on dry-run; hard-fail live).
+//   3. Plan artifact names with the same formula as BuildRelease.
+//   4. Dry-run: print plan without building or uploading.
+//   5. Live: build multi-platform assets, create/upload GitHub Release.
 package main
 
 import (
@@ -46,13 +48,37 @@ func handle() error {
 		return fmt.Errorf("unrecognized extra args: %s", strings.Join(args, " "))
 	}
 
-	if dryRun {
-		return handleDryRun()
+	tag, err := release.GetTag()
+	if err != nil {
+		if !dryRun {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "[dry-run] warning: %v\n", err)
+		tag = "(unknown)"
 	}
 
 	creds, err := release.LoadCredentials(".upload-credentials.json")
 	if err != nil {
-		return err
+		if !dryRun {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "[dry-run] warning: %v\n", err)
+		creds = &release.Credentials{Owner: "xhd2015", Repo: "doctest"}
+	}
+
+	// Same naming formula as release.BuildRelease.
+	var planned []string
+	for _, spec := range release.DefaultSpecs {
+		planned = append(planned, fmt.Sprintf("doctest-%s-%s-%s", tag, spec.OS, spec.Arch))
+	}
+
+	if dryRun {
+		fmt.Printf("[dry-run] tag: %s\n", tag)
+		for _, name := range planned {
+			fmt.Printf("[dry-run] would build: %s\n", name)
+		}
+		fmt.Printf("[dry-run] would upload to %s/%s release (creates if 404)\n", creds.Owner, creds.Repo)
+		return nil
 	}
 
 	result, err := release.BuildRelease("doctest", nil, release.DefaultSpecs)
@@ -73,26 +99,5 @@ func handle() error {
 		}
 		fmt.Printf("Uploaded %s\n", file)
 	}
-	return nil
-}
-
-func handleDryRun() error {
-	tag, tagErr := release.GetTag()
-	if tagErr != nil {
-		fmt.Fprintf(os.Stderr, "[dry-run] warning: %v\n", tagErr)
-		tag = "(unknown)"
-	}
-
-	creds, credsErr := release.LoadCredentials(".upload-credentials.json")
-	if credsErr != nil {
-		fmt.Fprintf(os.Stderr, "[dry-run] warning: %v\n", credsErr)
-		creds = &release.Credentials{Owner: "xhd2015", Repo: "doctest"}
-	}
-
-	fmt.Printf("[dry-run] tag: %s\n", tag)
-	for _, spec := range release.DefaultSpecs {
-		fmt.Printf("[dry-run] would build: doctest-%s-%s-%s\n", tag, spec.OS, spec.Arch)
-	}
-	fmt.Printf("[dry-run] would upload to %s/%s release (creates if 404)\n", creds.Owner, creds.Repo)
 	return nil
 }
