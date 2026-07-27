@@ -241,6 +241,14 @@ func assertNoDoctestRunDirs(t *testing.T, root string) {
 		t.Fatalf("expected no .doctest_run_* dirs under %s, found: %v", root, dirs)
 	}
 }
+
+// assertNoInternalModfileArtifacts ensures internal-compile cleaned the parent
+// module: both the temp -modfile (.doctest.mod) and Go's companion sum (.doctest.sum).
+func assertNoInternalModfileArtifacts(t *testing.T, moduleRoot string) {
+	t.Helper()
+	assertFileNotExists(t, filepath.Join(moduleRoot, ".doctest.mod"))
+	assertFileNotExists(t, filepath.Join(moduleRoot, ".doctest.sum"))
+}
 func assertStderrUsesTempCompile(t *testing.T, resp *Response) {
 	t.Helper()
 	combined := resp.Stdout + resp.Stderr

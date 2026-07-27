@@ -65,7 +65,7 @@ embed-assert/
 | `compile-strategy/nested-module/assert-output-passes` | C2 — subprocess `doctest test` passes with assert.Output |
 | `compile-strategy/nested-module/import-alias-preserved` | C4 — `outputassert` alias preserved in generated test |
 | `compile-strategy/nested-module/no-assert-no-replace` | C3 — no author assert import, nested go.mod still has assert replace |
-| `compile-strategy/internal-compile/internal-and-assert-modfile` | D1 — internal + assert compiles via `-modfile` |
+| `compile-strategy/internal-compile/internal-and-assert-modfile` | D1 — internal + assert via `-modfile`; cleans `.doctest.mod` + `.doctest.sum` |
 | `compile-strategy/internal-compile/no-nested-gomod-in-dump` | D2 — gen-dir dump has test files, no go.mod |
 | `compile-strategy/internal-compile/internal-only-no-assert-replace` | D3 — internal only, still uses `-modfile` (always-on assert+session) |
 | `cache/first-run-materializes` | B1 — first run creates `$CACHE/doctest/assert-mod/<md5>/` |

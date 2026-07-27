@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/xhd2015/doctest/libdoc/core"
@@ -168,7 +169,13 @@ func newGenerateContext(dir string, opts core.Options, cases []core.TreeCase, w 
 // removeTempsLocked deletes interrupt-scoped temps. Caller must hold lifecycleMu.
 func (ctx *generateContext) removeTempsLocked() {
 	if ctx.modfilePath != "" {
+		// Internal-compile writes <modRoot>/.doctest.mod and runs go with
+		// -modfile=…. Go's sum companion is the same path with .mod → .sum
+		// (e.g. .doctest.sum). Remove both so consumer module roots stay clean.
 		os.Remove(ctx.modfilePath)
+		if sumPath := modfileCompanionSum(ctx.modfilePath); sumPath != "" {
+			os.Remove(sumPath)
+		}
 	}
 	if ctx.compileRoot != "" {
 		os.RemoveAll(ctx.compileRoot)
@@ -176,6 +183,15 @@ func (ctx *generateContext) removeTempsLocked() {
 	if ctx.removeLegacyTmp && ctx.dumpDir == "" {
 		os.RemoveAll(ctx.genRoot)
 	}
+}
+
+// modfileCompanionSum returns the go.sum path that accompanies a -modfile path.
+// Go derives it by replacing a trailing ".mod" with ".sum" (see cmd/go modload).
+func modfileCompanionSum(modfilePath string) string {
+	if !strings.HasSuffix(modfilePath, ".mod") {
+		return ""
+	}
+	return strings.TrimSuffix(modfilePath, ".mod") + ".sum"
 }
 
 func (ctx *generateContext) Close() {

@@ -7,6 +7,8 @@ label: e2e, heavy
 - `doctest test` exits 0 via internal-compile temp dir.
 - Verbose output shows `-modfile=` flag (assert replace wired through temp modfile).
 - No `.doctest_run_*` dirs remain after run.
+- No leftover `.doctest.mod` / `.doctest.sum` under the consumer module root
+  (go `-modfile` companion sum must be cleaned with the temp modfile).
 
 ## Exit Code
 
@@ -25,5 +27,6 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 	assertStderrUsesTempCompile(t, resp)
 	assertStderrUsesModfile(t, resp)
 	assertNoDoctestRunDirs(t, req.ModuleRoot)
+	assertNoInternalModfileArtifacts(t, req.ModuleRoot)
 }
 ```
