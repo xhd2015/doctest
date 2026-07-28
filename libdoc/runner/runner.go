@@ -474,8 +474,11 @@ func expandTestArgs(args []string) ([]suiteTarget, error) {
 				if !ok || root == "" {
 					root = d
 				}
-				// Full-tree under ./...: SubDir = root (same as historical workspace path).
-				add(suiteTarget{Root: root, SubDir: root, ExplicitLeaf: false})
+				// SubDir is the discovered path d, not always root.
+				// Mid-tree path/... (e.g. suite-selection/...) must filter parent
+				// DOCTEST leaves to under d; when d is itself a DOCTEST root,
+				// ResolveRoot(d)==d so SubDir==root (full tree for that root).
+				add(suiteTarget{Root: root, SubDir: d, ExplicitLeaf: false})
 			}
 			continue
 		}
