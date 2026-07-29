@@ -229,10 +229,10 @@ func anyPathScoped(preps []TreePrep) bool {
 	return false
 }
 
-// runPathScopedSuites runs each prep's path-local suite package under genRoot.
-// Single-cmd when one unique suite; multi-cmd when multiple scopes share a gen.
-// Each suite is paired only with its preps (leaf-cache + accounting), then totals
-// are summed across cmds.
+// runPathScopedSuites runs go test ./<suiteRel>/... per distinct path scope under
+// genRoot. Nested scopes (or nested DOCTEST roots under mid) yield multi-cmd;
+// nested go.mod is a separate gen root handled by runPathScopedAcrossGens.
+// Each pattern is paired only with its preps (leaf-cache + accounting).
 func runPathScopedSuites(preps []TreePrep, genRoot string, stats TestRunStats, opts core.Options) (TestRunStats, error) {
 	// Tidy only — no workspace extras rewrite outside path scope.
 	unlock := core.LockGenRootWrites(genRoot)
@@ -262,16 +262,13 @@ func runPathScopedSuites(preps []TreePrep, genRoot string, stats TestRunStats, o
 			jobs[idx].group = append(jobs[idx].group, p)
 			continue
 		}
-		suiteDir := core.UnifiedSuiteDirForTree(genRoot, sr)
-		pat, err := gotestmap.SuitePatternFromGen(genRoot, suiteDir)
-		if err != nil {
-			return stats, err
-		}
+		// Path-shaped pattern: ./tree/mid/... not ./tree/mid/suite.
+		pat := pathScopedGoTestPattern(sr)
 		seen[sr] = len(jobs)
 		jobs = append(jobs, suiteJob{sr: sr, pat: pat, group: []TreePrep{p}})
 	}
 	if len(jobs) == 0 {
-		return stats, fmt.Errorf("workspace: no path-scoped suite cmds")
+		return stats, fmt.Errorf("workspace: no path-scoped go test cmds")
 	}
 
 	// Preserve planned/skipped from outer stats; rewrite run totals from cmds.

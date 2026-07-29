@@ -53,11 +53,15 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 	if midPlans[0] == sibPlans[0] {
 		t.Fatalf("mid and sibling share the same go test plan (path scope lost):\n  mid: %s\n  sib: %s", midPlans[0], sibPlans[0])
 	}
-	if !strings.Contains(midPlans[0], "mid") {
-		t.Fatalf("mid plan not path-scoped under mid:\n  %s\n%s", midPlans[0], midOut)
+	// Expect ./tree/mid/... and ./tree/sibling/... (not */suite).
+	if !strings.Contains(midPlans[0], "mid") || !strings.Contains(midPlans[0], "/...") {
+		t.Fatalf("mid plan want ... under mid:\n  %s\n%s", midPlans[0], midOut)
 	}
-	if !strings.Contains(sibPlans[0], "sibling") {
-		t.Fatalf("sibling plan not path-scoped under sibling:\n  %s\n%s", sibPlans[0], sibOut)
+	if !strings.Contains(sibPlans[0], "sibling") || !strings.Contains(sibPlans[0], "/...") {
+		t.Fatalf("sibling plan want ... under sibling:\n  %s\n%s", sibPlans[0], sibOut)
+	}
+	if strings.Contains(midPlans[0], "/suite") && !strings.Contains(midPlans[0], "/...") {
+		t.Fatalf("mid plan must not hard-code suite package: %s", midPlans[0])
 	}
 }
 ```

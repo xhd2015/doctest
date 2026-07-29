@@ -179,13 +179,20 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 
 	var packageArgs []string
 	if ctx.unifiedMode {
-		// Always suite-only packaging (even for a single leaf).
-		runDir = ctx.scopedMultiRunDir(absRoot)
-		var pkgErr error
-		packageArgs, pkgErr = ctx.packageArgsForCases(runDir, absRoot, cases)
-		if pkgErr != nil {
-			stats.Phases = phases
-			return stats, pkgErr
+		if ctx.isPathScoped() {
+			// Path scope: cd gen && go test ./tree/mid/... (multi-package under prefix).
+			// Nested go.mod under the prefix is handled by separate preps/cmds.
+			runDir = ctx.genRoot
+			packageArgs = []string{pathScopedGoTestPattern(ctx.suiteRel())}
+		} else {
+			// Full tree: one suite package under the tree.
+			runDir = ctx.scopedMultiRunDir(absRoot)
+			var pkgErr error
+			packageArgs, pkgErr = ctx.packageArgsForCases(runDir, absRoot, cases)
+			if pkgErr != nil {
+				stats.Phases = phases
+				return stats, pkgErr
+			}
 		}
 	} else if isSingleLeaf {
 		packageArgs = []string{"."}

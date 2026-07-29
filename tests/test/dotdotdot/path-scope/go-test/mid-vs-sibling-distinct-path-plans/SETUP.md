@@ -2,8 +2,8 @@
 
 **Case**: mid vs sibling scopes must produce **distinct, path-scoped** go test plans.
 
-Not the same `go test ./__workspace/suite` for both — filter lives at go-test
-level as path patterns under the selected subpath.
+Expect `go test ./tree/mid/...` vs `./tree/sibling/...` — not shared
+`./__workspace/suite` and not a hard-coded `*/suite` package.
 
 ```go
 import (

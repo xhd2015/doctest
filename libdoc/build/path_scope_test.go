@@ -308,16 +308,17 @@ func TestPathScope_GoTest_MidVsSiblingDistinctPathScopedPlans(t *testing.T) {
 	if midPlans[0] == sibPlans[0] {
 		t.Fatalf("mid and sibling scopes share the same go test plan (filter lost at go-test level):\n  mid: %s\n  sib: %s\n", midPlans[0], sibPlans[0])
 	}
-	// Path-scoped: plan for mid must mention mid (package pattern under mid),
-	// not only a root fan-in that is identical for every SubDir.
-	if !strings.Contains(midPlans[0], "mid") {
-		t.Fatalf("mid go test plan is not path-scoped under mid:\n  %s\nfull:\n%s", midPlans[0], midOut)
+	// Path-scoped: ./…/mid/... and ./…/sibling/... (not hard-coded */suite).
+	if !strings.Contains(midPlans[0], "mid") || !strings.Contains(midPlans[0], "/...") {
+		t.Fatalf("mid go test plan want path ... under mid, got:\n  %s\nfull:\n%s", midPlans[0], midOut)
 	}
-	if !strings.Contains(sibPlans[0], "sibling") {
-		t.Fatalf("sibling go test plan is not path-scoped under sibling:\n  %s\nfull:\n%s", sibPlans[0], sibOut)
+	if !strings.Contains(sibPlans[0], "sibling") || !strings.Contains(sibPlans[0], "/...") {
+		t.Fatalf("sibling go test plan want path ... under sibling, got:\n  %s\nfull:\n%s", sibPlans[0], sibOut)
 	}
-	// Shared-root suite alone is not a path-scoped mid plan.
-	if strings.Contains(midPlans[0], "__workspace/suite") && !strings.Contains(midPlans[0], "mid") {
+	if strings.Contains(midPlans[0], "/suite") && !strings.Contains(midPlans[0], "/...") {
+		t.Fatalf("mid plan must not be */suite workaround: %s", midPlans[0])
+	}
+	if strings.Contains(midPlans[0], "__workspace/suite") {
 		t.Fatalf("mid plan uses root workspace suite without mid path scope:\n  %s", midPlans[0])
 	}
 }

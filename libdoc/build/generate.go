@@ -574,10 +574,25 @@ func (ctx *generateContext) scopedMultiRunDir(absRoot string) string {
 	return runDir
 }
 
+// pathScopedGoTestPattern returns the go test package pattern for a gen-relative
+// path scope (e.g. tree/mid → ./tree/mid/...). Suite packages still live under
+// that prefix; ... selects them without hard-coding */suite.
+func pathScopedGoTestPattern(suiteRel string) string {
+	suiteRel = filepath.ToSlash(filepath.Clean(suiteRel))
+	if suiteRel == "" || suiteRel == "." {
+		return "./..."
+	}
+	return "./" + strings.TrimPrefix(suiteRel, "./") + "/..."
+}
+
 func (ctx *generateContext) packageArgsForCases(runDir, absRoot string, cases []core.TreeCase) ([]string, error) {
 	if ctx.unifiedMode {
-		// Single suite package under suiteRel (tree-wide or path-local mid/leaf).
-		suiteDir := core.UnifiedSuiteDirForTree(ctx.genRoot, ctx.suiteRel())
+		// Path-scoped: go test ./<suiteRel>/... (not a hard-coded */suite package).
+		if ctx.isPathScoped() {
+			return []string{pathScopedGoTestPattern(ctx.suiteRel())}, nil
+		}
+		// Full tree: single suite package under treeRel.
+		suiteDir := core.UnifiedSuiteDirForTree(ctx.genRoot, ctx.treeRel())
 		rel, err := filepath.Rel(runDir, suiteDir)
 		if err != nil {
 			return nil, fmt.Errorf("package path for suite: %w", err)
