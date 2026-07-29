@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/xhd2015/doctest/libdoc/core"
+	"github.com/xhd2015/doctest/libdoc/gotestmap"
 	"github.com/xhd2015/doctest/libdoc/leafcache"
 	"github.com/xhd2015/dot-pkgs/go-pkgs/pathfmt"
 )
@@ -137,16 +138,19 @@ func runWorkspaceSingleGen(preps []TreePrep, genRoot string, stats TestRunStats,
 	}
 
 	suiteDir := core.WorkspaceSuiteDir(genRoot)
-	rel, err := filepath.Rel(genRoot, suiteDir)
+	suitePat, err := gotestmap.SuitePatternFromGen(genRoot, suiteDir)
 	if err != nil {
 		return stats, err
 	}
-	packageArgs := []string{"."}
-	if rel != "." {
-		packageArgs = []string{"./" + filepath.ToSlash(rel)}
+	cmds, err := gotestmap.Plan(gotestmap.PlanInput{
+		Mode:         gotestmap.ModeWorkspaceSuite,
+		RunDir:       genRoot,
+		SuitePattern: suitePat,
+	})
+	if err != nil {
+		return stats, err
 	}
-
-	return finishWorkspaceGoTest(preps, genRoot, genRoot, packageArgs, len(treeRels), stats, opts)
+	return finishWorkspaceGoTestCmds(preps, cmds, genRoot, len(treeRels), stats, opts)
 }
 
 // prepareWorkspaceGen writes hub packages, tidies, and prunes under genRoot.
@@ -254,7 +258,49 @@ func runWorkspaceMultiModHub(preps []TreePrep, byGen map[string][]TreePrep, genO
 		return stats, fmt.Errorf("workspace multi-mod hub: %w", err)
 	}
 
-	return finishWorkspaceGoTest(preps, hubDir, hubDir, []string{"./suite"}, len(preps), stats, opts)
+	cmds, err := gotestmap.Plan(gotestmap.PlanInput{
+		Mode:         gotestmap.ModeHubSuite,
+		RunDir:       hubDir,
+		SuitePattern: "./suite",
+	})
+	if err != nil {
+		return stats, err
+	}
+	return finishWorkspaceGoTestCmds(preps, cmds, hubDir, len(preps), stats, opts)
+}
+
+// finishWorkspaceGoTestCmds runs go test for each gotestmap.Cmd (usually one suite/hub cmd).
+// genRootLabel is used for stats.GenRoot (typically gen root or hub dir).
+func finishWorkspaceGoTestCmds(preps []TreePrep, cmds []gotestmap.Cmd, genRootLabel string, treeCount int, stats TestRunStats, opts core.Options) (TestRunStats, error) {
+	if len(cmds) == 0 {
+		return stats, fmt.Errorf("workspace: no go test cmds from gotestmap")
+	}
+	// Phase 1: suite/hub is a single cmd; multi-cmd path-shaped runs loop below.
+	var lastStats TestRunStats
+	var firstErr error
+	for i, cmd := range cmds {
+		st, err := finishWorkspaceGoTest(preps, cmd.Dir, genRootLabel, []string{cmd.Pattern}, treeCount, stats, opts)
+		if i == 0 {
+			lastStats = st
+		} else {
+			// Merge pass/fail counts from extra cmds (path-shaped multi-module).
+			lastStats.Passed += st.Passed
+			lastStats.Total += st.Total
+			lastStats.SkipCount += st.SkipCount
+			lastStats.Skipped = append(lastStats.Skipped, st.Skipped...)
+			lastStats.LeafTimings = append(lastStats.LeafTimings, st.LeafTimings...)
+			if st.TimedOut {
+				lastStats.TimedOut = true
+			}
+			if st.BuildFailed {
+				lastStats.BuildFailed = true
+			}
+		}
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return lastStats, firstErr
 }
 
 // finishWorkspaceGoTest runs go test for workspace (single-gen or multi-mod hub).

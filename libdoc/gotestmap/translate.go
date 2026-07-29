@@ -1,27 +1,32 @@
-// Package gotestmap defines the ideal mapping from doctest path args to go test
-// commands under the current generation model (synthetic testcase modules).
+// Package gotestmap is the single place that decides go test Dir+Pattern plans.
 //
-// Perfect run is path-shaped, not hub:
+// Discovery/prepare/gen stay elsewhere. At the go-test call site, Plan() yields
+// one or more Cmds:
 //
-//	(cd genOuter && go test ./tree/mid/...) && (cd genNested && go test ./...)
+//   - default single-gen workspace: (cd gen && go test ./__workspace/suite)
+//   - default multi-mod hub:        (cd hub && go test ./suite)
+//   - mid-path / cross-go.mod:      path-shaped fixture cmds (TranslatePath)
 //
-// Translate is intentionally not yet ideal (broken / stub) so tests stay RED
-// until the product mapping is fixed.
+// Path-shaped rules (mid / nested modules):
+//
+//	go test ./tree/mid/...
+//	(cd tree/mid/nestedmod && go test ./...)
 package gotestmap
 
 import (
 	"fmt"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 )
 
-// Cmd is one go test invocation: run with Dir as cwd (project-relative).
+// Cmd is one go test invocation: run with Dir as cwd.
 type Cmd struct {
-	// Dir is the module root to cd into before go test (relative to project root).
-	// "." = outer module.
+	// Dir is the cwd for go test (project-relative, or absolute gen/hub path).
+	// "." = outer project module (path-shaped fixture mapping).
 	Dir string
-	// Pattern is the go test package pattern, e.g. "./tree/mid/..." or "./...".
+	// Pattern is the go test package pattern, e.g. "./__workspace/suite", "./suite", "./tree/mid/...".
 	Pattern string
 }
 
@@ -30,7 +35,7 @@ func (c Cmd) String() string {
 	if c.Dir == "" || c.Dir == "." {
 		return "go test " + c.Pattern
 	}
-	return "(cd " + path.Clean(c.Dir) + " && go test " + c.Pattern + ")"
+	return "(cd " + c.Dir + " && go test " + c.Pattern + ")"
 }
 
 // Layout describes fixture modules on disk (dirs that contain go.mod), relative to project root.
@@ -39,20 +44,76 @@ type Layout struct {
 	ModuleRoots []string // e.g. ".", "tree/mid/nestedmod"
 }
 
-// Translate maps a doctest path arg to path-shaped go test commands.
+// Mode selects which go-test plan family Plan returns.
+type Mode int
+
+const (
+	// ModeWorkspaceSuite is today's single-gen fan-in: go test ./__workspace/suite (or equivalent).
+	ModeWorkspaceSuite Mode = iota
+	// ModeHubSuite is today's multi-mod hub: go test ./suite under __hub.
+	ModeHubSuite
+	// ModePathShaped is mid-leaf and/or cross-go.mod: fixture path patterns from TranslatePath.
+	ModePathShaped
+)
+
+// PlanInput is everything needed to produce go test cmds at the run site.
+type PlanInput struct {
+	Mode Mode
+
+	// --- ModeWorkspaceSuite / ModeHubSuite (absolute run dirs) ---
+	// RunDir is the process cwd for go test (gen root or hub dir). Absolute preferred.
+	RunDir string
+	// SuitePattern is the package arg, e.g. "./__workspace/suite" or "./suite".
+	SuitePattern string
+
+	// --- ModePathShaped (fixture-relative) ---
+	UserArg string
+	Layout  Layout
+}
+
+// Plan returns go test commands for the run site.
+// Default suite/hub modes preserve today's single-command shape.
+// ModePathShaped uses TranslatePath (mid / nested modules).
+func Plan(in PlanInput) ([]Cmd, error) {
+	switch in.Mode {
+	case ModeWorkspaceSuite, ModeHubSuite:
+		if strings.TrimSpace(in.RunDir) == "" {
+			return nil, fmt.Errorf("gotestmap: RunDir required for suite/hub mode")
+		}
+		pat := strings.TrimSpace(in.SuitePattern)
+		if pat == "" {
+			if in.Mode == ModeHubSuite {
+				pat = "./suite"
+			} else {
+				pat = "./__workspace/suite"
+			}
+		}
+		return []Cmd{{Dir: in.RunDir, Pattern: pat}}, nil
+	case ModePathShaped:
+		return TranslatePath(in.UserArg, in.Layout)
+	default:
+		return nil, fmt.Errorf("gotestmap: unknown mode %d", in.Mode)
+	}
+}
+
+// Translate is an alias for TranslatePath (fixture path → path-shaped cmds).
+func Translate(userArg string, layout Layout) ([]Cmd, error) {
+	return TranslatePath(userArg, layout)
+}
+
+// IdealTranslate is an alias for TranslatePath (historical test name).
+func IdealTranslate(userArg string, layout Layout) ([]Cmd, error) {
+	return TranslatePath(userArg, layout)
+}
+
+// TranslatePath maps a doctest path arg to path-shaped go test commands (fixture-relative).
 //
-// Rules (locked by tests):
-//   - path/... → go test ./path/... in the module that owns path (outer)
+// Rules:
+//   - path/... → go test ./path/... in the module that owns path
 //   - never expand to parent siblings (not go test ./tree/... when user said ./tree/mid/...)
 //   - each nested go.mod under the path base → extra (cd nestedRoot && go test ./...)
 //   - path without ... → go test ./path (single package pattern, no recursion)
-func Translate(userArg string, layout Layout) ([]Cmd, error) {
-	return IdealTranslate(userArg, layout)
-}
-
-// IdealTranslate is the correct mapping (for reference / future product).
-// Tests assert against this; wire Translate to IdealTranslate to go green.
-func IdealTranslate(userArg string, layout Layout) ([]Cmd, error) {
+func TranslatePath(userArg string, layout Layout) ([]Cmd, error) {
 	arg := strings.TrimSpace(userArg)
 	if arg == "" {
 		return nil, fmt.Errorf("empty path")
@@ -74,9 +135,7 @@ func IdealTranslate(userArg string, layout Layout) ([]Cmd, error) {
 
 	mods := normalizeModules(layout.ModuleRoots)
 
-	// Outer module root that owns base (deepest module root that is a prefix of base).
 	owner := owningModule(base, mods)
-	// Pattern relative to owner module root.
 	var pattern string
 	if owner == "." {
 		if base == "." {
@@ -91,7 +150,6 @@ func IdealTranslate(userArg string, layout Layout) ([]Cmd, error) {
 			pattern = "./" + base
 		}
 	} else {
-		// base under nested module path owner
 		rel := base
 		if base == owner {
 			rel = ""
@@ -116,7 +174,6 @@ func IdealTranslate(userArg string, layout Layout) ([]Cmd, error) {
 	var out []Cmd
 	out = append(out, Cmd{Dir: owner, Pattern: pattern})
 
-	// Nested modules under path base only for recursive path/... (B/C).
 	if recursive {
 		prefix := base
 		for _, m := range mods {
@@ -124,11 +181,9 @@ func IdealTranslate(userArg string, layout Layout) ([]Cmd, error) {
 				continue
 			}
 			if prefix == "." {
-				// ./... → every other module root
 				out = append(out, Cmd{Dir: m, Pattern: "./..."})
 				continue
 			}
-			// Module root under selected base (including base itself as module root).
 			if m == prefix || strings.HasPrefix(m, prefix+"/") {
 				out = append(out, Cmd{Dir: m, Pattern: "./..."})
 			}
@@ -136,6 +191,75 @@ func IdealTranslate(userArg string, layout Layout) ([]Cmd, error) {
 	}
 
 	return dedupeCmds(out), nil
+}
+
+// NeedsPathShaped reports whether userArg + layout should use ModePathShaped
+// instead of ModeWorkspaceSuite / ModeHubSuite.
+//
+// True when the path selection crosses nested go.mod roots under the base
+// (policy B/C multi-cmd). Mid-branch suite filtering stays in discovery
+// (SubDir); default go test remains workspace/hub unless nested modules
+// under the path require extra (cd nested && go test ./...) cmds.
+//
+// Optional TreeRoots (if set later) can mark mid-under-tree without go.mod.
+func NeedsPathShaped(userArg string, layout Layout) bool {
+	arg := strings.TrimSpace(userArg)
+	if arg == "" || arg == "..." {
+		return false
+	}
+	recursive := strings.HasSuffix(arg, "/...")
+	if !recursive {
+		// Non-recursive mid leaf still uses today's suite (one leaf filtered).
+		// Path-shaped only when the path itself sits inside a nested module.
+		base := strings.TrimPrefix(strings.TrimSuffix(arg, "/..."), "./")
+		base = path.Clean(base)
+		owner := owningModule(base, normalizeModules(layout.ModuleRoots))
+		return owner != "."
+	}
+	base := strings.TrimSuffix(arg, "/...")
+	base = strings.TrimPrefix(base, "./")
+	if base == "" {
+		base = "."
+	}
+	base = path.Clean(base)
+	if base == "." {
+		return hasNestedModule(layout)
+	}
+	return nestedModuleUnder(base, layout)
+}
+
+func hasNestedModule(layout Layout) bool {
+	for _, m := range normalizeModules(layout.ModuleRoots) {
+		if m != "." {
+			return true
+		}
+	}
+	return false
+}
+
+func nestedModuleUnder(prefix string, layout Layout) bool {
+	prefix = path.Clean(prefix)
+	for _, m := range normalizeModules(layout.ModuleRoots) {
+		if m == "." {
+			continue
+		}
+		if m == prefix || strings.HasPrefix(m, prefix+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// SuitePatternFromGen returns the package pattern for a workspace suite under genRoot.
+func SuitePatternFromGen(genRoot, suiteAbsDir string) (string, error) {
+	rel, err := filepath.Rel(genRoot, suiteAbsDir)
+	if err != nil {
+		return "", err
+	}
+	if rel == "." {
+		return ".", nil
+	}
+	return "./" + filepath.ToSlash(rel), nil
 }
 
 func normalizeModules(roots []string) []string {
@@ -156,7 +280,6 @@ func normalizeModules(roots []string) []string {
 		out = append(out, r)
 	}
 	sort.Slice(out, func(i, j int) bool {
-		// deeper first for owningModule
 		if strings.Count(out[i], "/") != strings.Count(out[j], "/") {
 			return strings.Count(out[i], "/") > strings.Count(out[j], "/")
 		}
@@ -166,7 +289,6 @@ func normalizeModules(roots []string) []string {
 }
 
 func owningModule(base string, mods []string) string {
-	// mods sorted deeper first
 	if base == "." {
 		return "."
 	}
@@ -193,7 +315,6 @@ func dedupeCmds(in []Cmd) []Cmd {
 		seen[k] = true
 		out = append(out, c)
 	}
-	// stable: outer (Dir ".") first, then by Dir
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Dir == "." && out[j].Dir != "." {
 			return true
