@@ -151,8 +151,9 @@ func vendorModuleDir(req *Request, modPath string) string {
 	return filepath.Join(req.ModRoot, "vendor", filepath.FromSlash(modPath))
 }
 
-// hasReplaceToVendor reports whether go.mod has a replace of modPath whose
-// target contains the project's vendor directory path (filesystem replace).
+// hasReplaceToVendor reports whether go.mod has a filesystem replace of modPath
+// targeting project vendor/… or gen vendor-bridge/… (shadow for modules without
+// go.mod — project vendor stays read-only).
 func hasReplaceToVendor(goMod, modPath, modRoot string) bool {
 	vendorPrefix := filepath.Join(modRoot, "vendor")
 	for _, line := range strings.Split(goMod, "\n") {
@@ -190,6 +191,11 @@ func hasReplaceToVendor(goMod, modPath, modRoot string) bool {
 		if strings.Contains(slashRight, "/vendor/"+modPath) || strings.HasSuffix(slashRight, "/vendor/"+modPath) {
 			return true
 		}
+		// Shadow module under genDir/vendor-bridge/<modPath> (no project write).
+		if strings.Contains(slashRight, "/vendor-bridge/"+modPath) ||
+			strings.HasSuffix(slashRight, "/vendor-bridge/"+modPath) {
+			return true
+		}
 	}
 	return false
 }
@@ -214,7 +220,10 @@ func countVendorReplaces(goMod, modRoot string) int {
 		if !strings.HasPrefix(line, "replace ") {
 			continue
 		}
-		if strings.Contains(filepath.ToSlash(line), "/vendor/") || strings.Contains(filepath.ToSlash(line), needle) {
+		slash := filepath.ToSlash(line)
+		// Project vendor/… or gen vendor-bridge/… (shadow modules).
+		if strings.Contains(slash, "/vendor/") || strings.Contains(slash, needle) ||
+			strings.Contains(slash, "/vendor-bridge/") {
 			n++
 		}
 	}
