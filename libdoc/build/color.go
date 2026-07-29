@@ -139,6 +139,10 @@ type TestRunStats struct {
 	// Filled when GenerateOnly: shared gen module path and tree scope.
 	GenRoot string
 	TreeRel string
+	// SuiteRel is gen-relative suite placement (path-local when PathScoped).
+	SuiteRel string
+	// PathScoped is true when the run is under a mid/leaf path, not whole tree.
+	PathScoped bool
 	// Unified is true when hierarchical suite gen was used (not internal-compile).
 	Unified bool
 	AbsRoot string

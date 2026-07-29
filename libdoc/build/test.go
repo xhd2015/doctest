@@ -148,11 +148,13 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	}
 	track("generate", tGen)
 
-	// Multi-root workspace prep: generate only; caller runs __workspace/suite.
+	// Multi-root workspace prep: generate only; caller runs suite/workspace.
 	if opts.GenerateOnly {
 		stats.Phases = phases
 		stats.GenRoot = ctx.genRoot
 		stats.TreeRel = ctx.treeRel()
+		stats.SuiteRel = ctx.suiteRel()
+		stats.PathScoped = ctx.isPathScoped()
 		stats.Unified = ctx.unifiedMode
 		stats.AbsRoot = absRoot
 		return stats, nil
@@ -163,6 +165,8 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		stats.Phases = phases
 		stats.GenRoot = ctx.genRoot
 		stats.TreeRel = ctx.treeRel()
+		stats.SuiteRel = ctx.suiteRel()
+		stats.PathScoped = ctx.isPathScoped()
 		stats.Unified = ctx.unifiedMode
 		stats.AbsRoot = absRoot
 		stats.GoTestBypassed = true

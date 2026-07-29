@@ -46,7 +46,10 @@ type generateContext struct {
 	// Always true for normal generation; false only for internal-compile trees
 	// (module-internal import path layout still uses classic AssembleTestSource).
 	unifiedMode bool
-	closeOnce   sync.Once
+	// subDir is the path-scope filter (opts.SubDir): abs or relative source path
+	// under the DOCTEST tree (mid branch, leaf, or equal to tree root for full tree).
+	subDir string
+	closeOnce sync.Once
 	// lifecycleMu serializes gen writes against interrupt cleanup. The SIGINT
 	// handler acquires it and holds it through os.Exit so writeCases cannot
 	// recreate .doctest_run_* / temp roots after RemoveAll.
@@ -93,6 +96,7 @@ func newGenerateContext(dir string, opts core.Options, cases []core.TreeCase, w 
 		generateOnly:    opts.GenerateOnly,
 		forceA:          opts.ForceWithFlagA,
 		unifiedMode:     unifiedMode,
+		subDir:          opts.SubDir,
 	}
 
 	if assertImport {
@@ -345,13 +349,52 @@ func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) 
 // Deferred when GenerateOnly (multi-tree workspace prunes later).
 // Never full-gen-prunes: shared mapping-gen holds many trees / nested suite leaves.
 // Releases gen-root write lock after prune so go test does not hold it.
+//
+// Path-scoped runs (SubDir under the tree) prune only under suiteRel (e.g.
+// tree/mid) so sibling packages outside the user path are never orphan-deleted.
 func (ctx *generateContext) finishGenOrphans() error {
 	defer ctx.releaseGenWrite()
 	if ctx.internalCompile || ctx.generateOnly || ctx.genBatch == nil {
 		return nil
 	}
 	// Single-tree path: no sibling treeRels to exclude.
-	return ctx.genBatch.PruneTree(ctx.genRoot, ctx.treeRel(), nil)
+	// Path-scoped: prune only under the selected prefix (suiteRel).
+	return ctx.genBatch.PruneTree(ctx.genRoot, ctx.suiteRel(), nil)
+}
+
+// suiteRel is the gen-relative placement for suite/registry/allleaves.
+// Full tree (no SubDir, or SubDir == tree root) → treeRel.
+// Mid/leaf path scope → path under module (e.g. tree/mid).
+func (ctx *generateContext) suiteRel() string {
+	treeRel := ctx.treeRel()
+	if ctx.subDir == "" {
+		return treeRel
+	}
+	subAbs := ctx.subDir
+	if !filepath.IsAbs(subAbs) {
+		subAbs = filepath.Join(ctx.absRoot, subAbs)
+	}
+	subAbs = filepath.Clean(subAbs)
+	if subAbs == filepath.Clean(ctx.absRoot) {
+		return treeRel
+	}
+	rel, err := filepath.Rel(ctx.absModRoot, subAbs)
+	if err != nil || rel == "" || rel == "." {
+		return treeRel
+	}
+	// Stay inside the tree: never place suite outside treeRel.
+	treeClean := filepath.ToSlash(filepath.Clean(treeRel))
+	relSlash := filepath.ToSlash(filepath.Clean(rel))
+	if treeClean != "." && relSlash != treeClean && !strings.HasPrefix(relSlash, treeClean+"/") {
+		return treeRel
+	}
+	return rel
+}
+
+// isPathScoped is true when the user path is a proper sub-prefix of the DOCTEST tree
+// (mid branch or leaf), not the whole tree.
+func (ctx *generateContext) isPathScoped() bool {
+	return filepath.ToSlash(filepath.Clean(ctx.suiteRel())) != filepath.ToSlash(filepath.Clean(ctx.treeRel()))
 }
 
 // releaseGenWrite detaches the batch and unlocks gen-root serialize lock.
@@ -388,9 +431,13 @@ func (ctx *generateContext) writeUnifiedCases(cases []core.TreeCase, compileOnly
 	}
 
 	treeRel := ctx.treeRel()
+	// Path-scoped mid/leaf: suite + registry + allleaves live under suiteRel
+	// (e.g. tree/mid) so we do not rewrite tree-wide suite outside the path.
+	// droot stays tree-scoped (shared types/Run for the DOCTEST root).
+	suiteRel := ctx.suiteRel()
 	rootDir := core.RefRootDirForTree(ctx.genRoot, treeRel)
 	rootImport := core.RefRootImportForTree(treeRel)
-	registryImport := core.UnifiedRegistryImportForTree(treeRel)
+	registryImport := core.UnifiedRegistryImportForTree(suiteRel)
 	if err := os.MkdirAll(rootDir, 0755); err != nil {
 		return err
 	}
@@ -456,19 +503,24 @@ func (ctx *generateContext) writeUnifiedCases(cases []core.TreeCase, compileOnly
 		leafImports = append(leafImports, core.LeafImportForTree(leafRel))
 	}
 
-	if err := core.WriteUnifiedTreeExtras(ctx.genRoot, treeRel, ctx.absRoot, leafImports); err != nil {
+	// Suite/registry/allleaves under suiteRel (path-local when path-scoped).
+	if err := core.WriteUnifiedTreeExtras(ctx.genRoot, suiteRel, ctx.absRoot, leafImports); err != nil {
 		return err
 	}
-	// Workspace registration plane: each tree's __wreg registers into
-	// __workspace/__registry (fan-in rewritten when multi-root runs).
-	if err := core.WriteTreeWreg(ctx.genRoot, treeRel, ctx.absRoot); err != nil {
-		return fmt.Errorf("write tree wreg: %w", err)
+	// Workspace __wreg is tree-wide fan-in; skip on path-scoped runs so we do
+	// not rewrite packages outside the user path. Full-tree runs still write it.
+	if !ctx.isPathScoped() {
+		if err := core.WriteTreeWreg(ctx.genRoot, treeRel, ctx.absRoot); err != nil {
+			return fmt.Errorf("write tree wreg: %w", err)
+		}
 	}
 	if ctx.verbose && ctx.w != nil {
-		fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(core.UnifiedRegistryDirForTree(ctx.genRoot, treeRel)))
-		fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(core.UnifiedAllLeavesDirForTree(ctx.genRoot, treeRel)))
-		fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(core.UnifiedSuiteDirForTree(ctx.genRoot, treeRel)))
-		fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(core.TreeWregDirForTree(ctx.genRoot, treeRel)))
+		fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(core.UnifiedRegistryDirForTree(ctx.genRoot, suiteRel)))
+		fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(core.UnifiedAllLeavesDirForTree(ctx.genRoot, suiteRel)))
+		fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(core.UnifiedSuiteDirForTree(ctx.genRoot, suiteRel)))
+		if !ctx.isPathScoped() {
+			fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(core.TreeWregDirForTree(ctx.genRoot, treeRel)))
+		}
 	}
 
 	if ctx.hasMod && !ctx.internalCompile {
@@ -524,8 +576,8 @@ func (ctx *generateContext) scopedMultiRunDir(absRoot string) string {
 
 func (ctx *generateContext) packageArgsForCases(runDir, absRoot string, cases []core.TreeCase) ([]string, error) {
 	if ctx.unifiedMode {
-		// Single suite package → one test binary per DOCTEST tree.
-		suiteDir := core.UnifiedSuiteDirForTree(ctx.genRoot, ctx.treeRel())
+		// Single suite package under suiteRel (tree-wide or path-local mid/leaf).
+		suiteDir := core.UnifiedSuiteDirForTree(ctx.genRoot, ctx.suiteRel())
 		rel, err := filepath.Rel(runDir, suiteDir)
 		if err != nil {
 			return nil, fmt.Errorf("package path for suite: %w", err)

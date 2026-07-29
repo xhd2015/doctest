@@ -19,15 +19,22 @@ import (
 type TreePrep struct {
 	AbsRoot string
 	TreeRel string
-	GenRoot string
-	Unified bool
-	Cases   []core.TreeCase
-	Skipped []core.SkippedCase
-	Stats   TestRunStats // phases + totals from generate-only
+	// SuiteRel is gen-relative suite/registry placement (treeRel for full tree;
+	// e.g. tree/mid when path-scoped under mid).
+	SuiteRel string
+	// PathScoped is true when SuiteRel is a proper sub-prefix of TreeRel
+	// (user path was mid/leaf, not whole tree).
+	PathScoped bool
+	GenRoot    string
+	Unified    bool
+	Cases      []core.TreeCase
+	Skipped    []core.SkippedCase
+	Stats      TestRunStats // phases + totals from generate-only
 }
 
 // PrepareTree discovers, filters, and generates one tree without go test.
-// Unified trees write __wreg for later workspace fan-in.
+// Full-tree unified trees write __wreg for later workspace fan-in.
+// Path-scoped trees emit a suite under SuiteRel only (no tree-wide __wreg).
 func PrepareTree(dir string, opts core.Options) (TreePrep, error) {
 	o := opts
 	// Share GenBatch across multi-tree prepare when caller provided one; else
@@ -39,19 +46,47 @@ func PrepareTree(dir string, opts core.Options) (TreePrep, error) {
 	o.SuppressResultSummary = true
 	stats, err := TestWithStats(dir, o)
 	prep := TreePrep{
-		AbsRoot: stats.AbsRoot,
-		TreeRel: stats.TreeRel,
-		GenRoot: stats.GenRoot,
-		Unified: stats.Unified,
-		Skipped: stats.Skipped,
-		Cases:   stats.Cases, // reuse filtered cases — avoid second full discover
-		Stats:   stats,
+		AbsRoot:  stats.AbsRoot,
+		TreeRel:  stats.TreeRel,
+		SuiteRel: stats.SuiteRel,
+		// PathScoped from stats when set; else derive from SubDir vs tree root.
+		PathScoped: stats.PathScoped,
+		GenRoot:    stats.GenRoot,
+		Unified:    stats.Unified,
+		Skipped:    stats.Skipped,
+		Cases:      stats.Cases, // reuse filtered cases — avoid second full discover
+		Stats:      stats,
 	}
 	if prep.AbsRoot == "" {
 		if abs, aerr := filepath.Abs(dir); aerr == nil {
 			prep.AbsRoot = abs
 		} else {
 			prep.AbsRoot = dir
+		}
+	}
+	if prep.SuiteRel == "" {
+		prep.SuiteRel = prep.TreeRel
+		if prep.SuiteRel == "" {
+			prep.SuiteRel = "."
+		}
+	}
+	if !prep.PathScoped && opts.SubDir != "" {
+		// Derive path scope when stats predate SuiteRel plumbing.
+		sub := opts.SubDir
+		if !filepath.IsAbs(sub) {
+			sub = filepath.Join(prep.AbsRoot, sub)
+		}
+		if filepath.Clean(sub) != filepath.Clean(prep.AbsRoot) {
+			if rel, rerr := filepath.Rel(prep.AbsRoot, sub); rerr == nil && rel != "." {
+				// SuiteRel under module: TreeRel/mid
+				tr := prep.TreeRel
+				if tr == "" || tr == "." {
+					prep.SuiteRel = rel
+				} else {
+					prep.SuiteRel = filepath.Join(tr, rel)
+				}
+				prep.PathScoped = true
+			}
 		}
 	}
 	if err != nil {
@@ -114,6 +149,12 @@ func RunWorkspace(preps []TreePrep, opts core.Options) (TestRunStats, error) {
 }
 
 func runWorkspaceSingleGen(preps []TreePrep, genRoot string, stats TestRunStats, opts core.Options) (TestRunStats, error) {
+	// Path-scoped mid/leaf: go test the path-local suite(s), not __workspace.
+	// Do not rewrite workspace fan-in (outside the user path).
+	if allPathScoped(preps) {
+		return runPathScopedSuites(preps, genRoot, stats, opts)
+	}
+
 	treeRels := make([]string, 0, len(preps))
 	seen := map[string]bool{}
 	for _, p := range preps {
@@ -151,6 +192,87 @@ func runWorkspaceSingleGen(preps []TreePrep, genRoot string, stats TestRunStats,
 		return stats, err
 	}
 	return finishWorkspaceGoTestCmds(preps, cmds, genRoot, len(treeRels), stats, opts)
+}
+
+func allPathScoped(preps []TreePrep) bool {
+	if len(preps) == 0 {
+		return false
+	}
+	for _, p := range preps {
+		if !p.PathScoped {
+			return false
+		}
+	}
+	return true
+}
+
+// runPathScopedSuites runs each prep's path-local suite package under genRoot.
+// Single-cmd when one unique suite; multi-cmd when multiple scopes share a gen.
+func runPathScopedSuites(preps []TreePrep, genRoot string, stats TestRunStats, opts core.Options) (TestRunStats, error) {
+	// Tidy only — no workspace extras rewrite outside path scope.
+	unlock := core.LockGenRootWrites(genRoot)
+	if err := core.CondTidyGoMod(genRoot, opts.GoCache); err != nil {
+		unlock()
+		return stats, err
+	}
+	unlock()
+
+	type suiteKey struct {
+		rel string
+	}
+	seen := map[string]bool{}
+	var cmds []gotestmap.Cmd
+	for _, p := range preps {
+		sr := p.SuiteRel
+		if sr == "" {
+			sr = p.TreeRel
+		}
+		if sr == "" {
+			sr = "."
+		}
+		sr = filepath.ToSlash(filepath.Clean(sr))
+		if seen[sr] {
+			continue
+		}
+		seen[sr] = true
+		suiteDir := core.UnifiedSuiteDirForTree(genRoot, sr)
+		pat, err := gotestmap.SuitePatternFromGen(genRoot, suiteDir)
+		if err != nil {
+			return stats, err
+		}
+		// Run from gen root so the printed pattern includes the path prefix (mid/…).
+		plan, err := gotestmap.Plan(gotestmap.PlanInput{
+			Mode:         gotestmap.ModeWorkspaceSuite,
+			RunDir:       genRoot,
+			SuitePattern: pat,
+		})
+		if err != nil {
+			return stats, err
+		}
+		cmds = append(cmds, plan...)
+	}
+	if len(cmds) == 0 {
+		return stats, fmt.Errorf("workspace: no path-scoped suite cmds")
+	}
+	// Single scope is the common case (mid/...). Multi-scope needs multi-cmd exec.
+	if len(cmds) == 1 {
+		return finishWorkspaceGoTestCmds(preps, cmds, genRoot, len(preps), stats, opts)
+	}
+	// Sequential multi-cmd until a fuller path-shaped executor exists.
+	var last TestRunStats
+	var firstErr error
+	for i, cmd := range cmds {
+		s, err := finishWorkspaceGoTest(preps, cmd.Dir, genRoot, []string{cmd.Pattern}, len(preps), stats, opts)
+		last = s
+		if err != nil && firstErr == nil {
+			firstErr = fmt.Errorf("path-scoped go test [%d]: %w", i, err)
+		}
+		// Accumulate pass/fail into stats for next iterations.
+		stats.Passed = s.Passed
+		stats.Total = s.Total
+		stats.Phases = s.Phases
+	}
+	return last, firstErr
 }
 
 // prepareWorkspaceGen writes hub packages, tidies, and prunes under genRoot.
