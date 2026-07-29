@@ -2,10 +2,19 @@ package core
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 )
+
+// vendorBridgeDir is the gen-relative tree of shadow module roots for vendored
+// modules that lack a go.mod. Each shadow holds a placeholder go.mod plus
+// hardlinks (or copies) of project vendor package files — project vendor is
+// never written. Go ignores symlinks under module roots, so we must hardlink
+// or copy (xgo uses -overlay for go.mod only; we avoid -overlay for xgo
+// instrument compatibility).
+const vendorBridgeDir = "vendor-bridge"
 
 // zeroPseudoVersion is used when modules.txt records a module with no version
 // (matches xgo / go mod replace-without-require default).
@@ -105,8 +114,12 @@ func parseVendorModulesTxt(content string) []vendorMod {
 	return list
 }
 
-// vendorBridgeForModRoot returns require+replace lines for gen go.mod and
-// ensures placeholder go.mod files exist under vendor modules that lack them.
+// vendorBridgeForModRoot returns require+replace lines for gen go.mod.
+// Modules that already have vendor/<mod>/go.mod get replace => that path.
+// Modules missing go.mod get a shadow root under genDir/vendor-bridge/<mod>/
+// with a placeholder go.mod and symlinks into the project vendor packages —
+// project vendor/ is never modified (xgo-aligned isolation).
+//
 // parentGoVersion is e.g. "1.19" (no "go " prefix).
 // parentPathReplaced / parentModuleReplaced list module paths that parent
 // go.mod already replaces (filesystem path RHS vs module→module RHS).
@@ -119,7 +132,8 @@ func parseVendorModulesTxt(content string) []vendorMod {
 // bare network require of private B).
 //
 // Returns empty requireReplace when vendor/ or modules.txt is absent.
-func vendorBridgeForModRoot(modRoot, parentGoVersion string, parentPathReplaced, parentModuleReplaced map[string]bool) (requireReplace string, suppressParentModule map[string]bool, err error) {
+// genDir may be empty only when no shadow roots are needed.
+func vendorBridgeForModRoot(modRoot, genDir, parentGoVersion string, parentPathReplaced, parentModuleReplaced map[string]bool) (requireReplace string, suppressParentModule map[string]bool, err error) {
 	suppressParentModule = make(map[string]bool)
 	vendorDir := filepath.Join(modRoot, "vendor")
 	st, err := os.Stat(vendorDir)
@@ -177,11 +191,15 @@ func vendorBridgeForModRoot(modRoot, parentGoVersion string, parentPathReplaced,
 			suppressParentModule[reqPath] = true
 		}
 
-		b.WriteString(fmt.Sprintf("replace %s => %s\n", reqPath, vendorModPath))
-
-		// Placeholder go.mod when missing (xgo-style: module + go).
-		goModFile := filepath.Join(vendorModPath, "go.mod")
-		if _, serr := os.Stat(goModFile); os.IsNotExist(serr) {
+		replaceTarget := vendorModPath
+		projectGoMod := filepath.Join(vendorModPath, "go.mod")
+		if _, serr := os.Stat(projectGoMod); os.IsNotExist(serr) {
+			// Shadow module under gen: placeholder go.mod + symlinks to packages.
+			// Avoids writing into project vendor and avoids -overlay (breaks xgo
+			// instrument package load when passed through).
+			if genDir == "" {
+				return "", suppressParentModule, fmt.Errorf("vendor placeholder for %s needs genDir (project vendor is read-only)", reqPath)
+			}
 			goVer := m.GoVersion
 			if goVer == "" {
 				goVer = parentGoVersion
@@ -189,18 +207,132 @@ func vendorBridgeForModRoot(modRoot, parentGoVersion string, parentPathReplaced,
 			if goVer == "" {
 				goVer = "1.19"
 			}
-			if err := os.MkdirAll(vendorModPath, 0755); err != nil {
-				return "", suppressParentModule, err
+			shadow, serr := materializeVendorShadow(genDir, reqPath, vendorModPath, goVer)
+			if serr != nil {
+				return "", suppressParentModule, serr
 			}
-			// Blank line between module and go matches common go.mod style;
-			// tests only require contains of both directives.
-			placeholder := fmt.Sprintf("module %s\n\ngo %s\n", reqPath, goVer)
-			if err := os.WriteFile(goModFile, []byte(placeholder), 0644); err != nil {
-				return "", suppressParentModule, err
+			replaceTarget = shadow
+		}
+
+		b.WriteString(fmt.Sprintf("replace %s => %s\n", reqPath, replaceTarget))
+	}
+
+	return b.String(), suppressParentModule, nil
+}
+
+// materializeVendorShadow builds genDir/vendor-bridge/<modPath> with a
+// placeholder go.mod and hardlinked (or copied) package trees from
+// vendorModPath. Returns the absolute shadow directory path.
+//
+// Critical: shadow must be a real directory, never a symlink into project
+// vendor. Cleaning must use Lstat so we never RemoveAll through a symlink into
+// the consumer tree.
+func materializeVendorShadow(genDir, modPath, vendorModPath, goVer string) (string, error) {
+	shadow := filepath.Join(genDir, vendorBridgeDir, filepath.FromSlash(modPath))
+	// Drop any previous shadow (dir or mistaken symlink) without following links.
+	if fi, err := os.Lstat(shadow); err == nil {
+		if fi.Mode()&os.ModeSymlink != 0 {
+			if err := os.Remove(shadow); err != nil {
+				return "", err
+			}
+		} else if fi.IsDir() {
+			if err := os.RemoveAll(shadow); err != nil {
+				return "", err
+			}
+		} else {
+			if err := os.Remove(shadow); err != nil {
+				return "", err
 			}
 		}
 	}
-	return b.String(), suppressParentModule, nil
+	if err := os.MkdirAll(shadow, 0755); err != nil {
+		return "", err
+	}
+	if fi, err := os.Lstat(shadow); err != nil || !fi.IsDir() || fi.Mode()&os.ModeSymlink != 0 {
+		return "", fmt.Errorf("vendor shadow %s is not a plain directory", shadow)
+	}
+	placeholder := fmt.Sprintf("module %s\n\ngo %s\n", modPath, goVer)
+	if err := os.WriteFile(filepath.Join(shadow, "go.mod"), []byte(placeholder), 0644); err != nil {
+		return "", err
+	}
+	// Hardlink/copy package sources from project vendor (read-only; no symlinks —
+	// go list ignores symlinks under module roots).
+	if st, err := os.Stat(vendorModPath); err == nil && st.IsDir() {
+		srcEntries, err := os.ReadDir(vendorModPath)
+		if err != nil {
+			return "", err
+		}
+		for _, e := range srcEntries {
+			name := e.Name()
+			if name == "go.mod" || name == "go.sum" {
+				continue
+			}
+			src := filepath.Join(vendorModPath, name)
+			dst := filepath.Join(shadow, name)
+			if err := hardlinkOrCopyTree(src, dst); err != nil {
+				return "", fmt.Errorf("mirror %s -> %s: %w", src, dst, err)
+			}
+		}
+	}
+	absShadow, err := filepath.Abs(shadow)
+	if err != nil {
+		return shadow, nil
+	}
+	return absShadow, nil
+}
+
+// hardlinkOrCopyTree mirrors src to dst using hardlinks when possible, else copy.
+func hardlinkOrCopyTree(src, dst string) error {
+	fi, err := os.Lstat(src)
+	if err != nil {
+		return err
+	}
+	// Do not follow symlinks in the vendor tree into unexpected places.
+	if fi.Mode()&os.ModeSymlink != 0 {
+		target, err := os.Readlink(src)
+		if err != nil {
+			return err
+		}
+		return os.Symlink(target, dst)
+	}
+	if fi.IsDir() {
+		if err := os.MkdirAll(dst, fi.Mode().Perm()|0o755); err != nil {
+			return err
+		}
+		entries, err := os.ReadDir(src)
+		if err != nil {
+			return err
+		}
+		for _, e := range entries {
+			if err := hardlinkOrCopyTree(filepath.Join(src, e.Name()), filepath.Join(dst, e.Name())); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	// Regular file: hardlink, else copy.
+	if err := os.Link(src, dst); err == nil {
+		return nil
+	}
+	return copyFile(src, dst, fi.Mode())
+}
+
+func copyFile(src, dst string, mode os.FileMode) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode.Perm())
+	if err != nil {
+		return err
+	}
+	_, copyErr := io.Copy(out, in)
+	closeErr := out.Close()
+	if copyErr != nil {
+		return copyErr
+	}
+	return closeErr
 }
 
 func isLocalFilesystemPath(p string) bool {

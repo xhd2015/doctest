@@ -521,12 +521,11 @@ func WriteGoMod(genDir, modRoot, modPath string, hasMod bool, withAssertReplace 
 	}
 
 	// When modRoot has vendor/modules.txt, inject xgo-style require+replace for
-	// each vendored module and ensure placeholder go.mod under modules that
-	// lack one. Always on when vendor/ exists — no user flag. Skip vendor
-	// replace for modules already covered by parent path replace or (non-fork)
-	// parent module→module replace.
+	// each vendored module. Missing go.mod files get shadow roots under
+	// genDir/vendor-bridge (placeholder + package symlinks; project vendor
+	// read-only). Always on when vendor/ exists — no user flag.
 	parentGoVer := strings.TrimPrefix(goLine, "go ")
-	vendorExtra, suppressParentModule, err := vendorBridgeForModRoot(modRoot, parentGoVer, parentPathReplaced, parentModuleReplaced)
+	vendorExtra, suppressParentModule, err := vendorBridgeForModRoot(modRoot, genDir, parentGoVer, parentPathReplaced, parentModuleReplaced)
 	if err != nil {
 		return err
 	}
