@@ -11,7 +11,8 @@ import (
 
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.WorkDir = createMidTreePrefixProject(t)
-	req.Args = []string{"test", "-v", "--label-all", "./tree/mid/..."}
+	// -count=1 disables leaf-cache skip so Setup MARKER logs always appear.
+	req.Args = []string{"test", "-v", "--label-all", "-count=1", "./tree/mid/..."}
 	return nil
 }
 ```

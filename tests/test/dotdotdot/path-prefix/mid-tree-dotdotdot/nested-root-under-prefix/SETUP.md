@@ -13,7 +13,7 @@ import (
 
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.WorkDir = createMidTreePrefixProject(t)
-	req.Args = []string{"test", "-v", "--label-all", "./tree/mid/..."}
+	req.Args = []string{"test", "-v", "--label-all", "-count=1", "./tree/mid/..."}
 	return nil
 }
 ```

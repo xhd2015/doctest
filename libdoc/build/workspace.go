@@ -142,19 +142,45 @@ func RunWorkspace(preps []TreePrep, opts core.Options) (TestRunStats, error) {
 	}
 	sort.Strings(genOrder)
 
+	// Path-scoped preps (mid/leaf) skip tree-wide __wreg; hub/workspace fan-in
+	// cannot bind them. Run each prep's SuiteRel suite per gen root instead.
+	if anyPathScoped(active) {
+		return runPathScopedAcrossGens(byGen, genOrder, stats, opts)
+	}
+
 	if len(genOrder) == 1 {
 		return runWorkspaceSingleGen(active, genOrder[0], stats, opts)
 	}
 	return runWorkspaceMultiModHub(active, byGen, genOrder, stats, opts)
 }
 
-func runWorkspaceSingleGen(preps []TreePrep, genRoot string, stats TestRunStats, opts core.Options) (TestRunStats, error) {
-	// Path-scoped mid/leaf: go test the path-local suite(s), not __workspace.
-	// Do not rewrite workspace fan-in (outside the user path).
-	if allPathScoped(preps) {
-		return runPathScopedSuites(preps, genRoot, stats, opts)
+// runPathScopedAcrossGens runs path-local suites for each gen root group.
+func runPathScopedAcrossGens(byGen map[string][]TreePrep, genOrder []string, stats TestRunStats, opts core.Options) (TestRunStats, error) {
+	var last TestRunStats
+	var firstErr error
+	// Start from planned totals already on stats; accumulate execution results.
+	acc := stats
+	for _, genRoot := range genOrder {
+		group := byGen[genRoot]
+		if len(group) == 0 {
+			continue
+		}
+		s, err := runPathScopedSuites(group, genRoot, acc, opts)
+		last = s
+		acc = s
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
 	}
+	if firstErr != nil {
+		return last, firstErr
+	}
+	return last, nil
+}
 
+func runWorkspaceSingleGen(preps []TreePrep, genRoot string, stats TestRunStats, opts core.Options) (TestRunStats, error) {
+	// Path-scoped routing is handled in RunWorkspace (anyPathScoped). This path
+	// is full-tree workspace fan-in only.
 	treeRels := make([]string, 0, len(preps))
 	seen := map[string]bool{}
 	for _, p := range preps {
@@ -194,20 +220,19 @@ func runWorkspaceSingleGen(preps []TreePrep, genRoot string, stats TestRunStats,
 	return finishWorkspaceGoTestCmds(preps, cmds, genRoot, len(treeRels), stats, opts)
 }
 
-func allPathScoped(preps []TreePrep) bool {
-	if len(preps) == 0 {
-		return false
-	}
+func anyPathScoped(preps []TreePrep) bool {
 	for _, p := range preps {
-		if !p.PathScoped {
-			return false
+		if p.PathScoped {
+			return true
 		}
 	}
-	return true
+	return false
 }
 
 // runPathScopedSuites runs each prep's path-local suite package under genRoot.
 // Single-cmd when one unique suite; multi-cmd when multiple scopes share a gen.
+// Each suite is paired only with its preps (leaf-cache + accounting), then totals
+// are summed across cmds.
 func runPathScopedSuites(preps []TreePrep, genRoot string, stats TestRunStats, opts core.Options) (TestRunStats, error) {
 	// Tidy only — no workspace extras rewrite outside path scope.
 	unlock := core.LockGenRootWrites(genRoot)
@@ -217,11 +242,13 @@ func runPathScopedSuites(preps []TreePrep, genRoot string, stats TestRunStats, o
 	}
 	unlock()
 
-	type suiteKey struct {
-		rel string
+	type suiteJob struct {
+		sr    string
+		pat   string
+		group []TreePrep
 	}
-	seen := map[string]bool{}
-	var cmds []gotestmap.Cmd
+	var jobs []suiteJob
+	seen := map[string]int{} // suiteRel → jobs index
 	for _, p := range preps {
 		sr := p.SuiteRel
 		if sr == "" {
@@ -231,48 +258,61 @@ func runPathScopedSuites(preps []TreePrep, genRoot string, stats TestRunStats, o
 			sr = "."
 		}
 		sr = filepath.ToSlash(filepath.Clean(sr))
-		if seen[sr] {
+		if idx, ok := seen[sr]; ok {
+			jobs[idx].group = append(jobs[idx].group, p)
 			continue
 		}
-		seen[sr] = true
 		suiteDir := core.UnifiedSuiteDirForTree(genRoot, sr)
 		pat, err := gotestmap.SuitePatternFromGen(genRoot, suiteDir)
 		if err != nil {
 			return stats, err
 		}
-		// Run from gen root so the printed pattern includes the path prefix (mid/…).
-		plan, err := gotestmap.Plan(gotestmap.PlanInput{
-			Mode:         gotestmap.ModeWorkspaceSuite,
-			RunDir:       genRoot,
-			SuitePattern: pat,
-		})
-		if err != nil {
-			return stats, err
-		}
-		cmds = append(cmds, plan...)
+		seen[sr] = len(jobs)
+		jobs = append(jobs, suiteJob{sr: sr, pat: pat, group: []TreePrep{p}})
 	}
-	if len(cmds) == 0 {
+	if len(jobs) == 0 {
 		return stats, fmt.Errorf("workspace: no path-scoped suite cmds")
 	}
-	// Single scope is the common case (mid/...). Multi-scope needs multi-cmd exec.
-	if len(cmds) == 1 {
-		return finishWorkspaceGoTestCmds(preps, cmds, genRoot, len(preps), stats, opts)
-	}
-	// Sequential multi-cmd until a fuller path-shaped executor exists.
-	var last TestRunStats
+
+	// Preserve planned/skipped from outer stats; rewrite run totals from cmds.
+	out := stats
+	out.Passed = 0
+	out.Total = 0
+	out.SkipCount = 0
+	out.Phases = append([]PhaseTiming(nil), stats.Phases...)
 	var firstErr error
-	for i, cmd := range cmds {
-		s, err := finishWorkspaceGoTest(preps, cmd.Dir, genRoot, []string{cmd.Pattern}, len(preps), stats, opts)
-		last = s
-		if err != nil && firstErr == nil {
-			firstErr = fmt.Errorf("path-scoped go test [%d]: %w", i, err)
+	for i, job := range jobs {
+		// Seed planned case count for this suite only.
+		st := stats
+		st.Total = 0
+		st.Passed = 0
+		st.Planned = 0
+		for _, p := range job.group {
+			st.Total += len(p.Cases)
+			st.Planned += len(p.Cases)
 		}
-		// Accumulate pass/fail into stats for next iterations.
-		stats.Passed = s.Passed
-		stats.Total = s.Total
-		stats.Phases = s.Phases
+		s, err := finishWorkspaceGoTest(job.group, genRoot, genRoot, []string{job.pat}, len(job.group), st, opts)
+		out.Passed += s.Passed
+		out.Total += s.Total
+		out.SkipCount += s.SkipCount
+		out.Phases = append(out.Phases, s.Phases...)
+		out.LeafTimings = append(out.LeafTimings, s.LeafTimings...)
+		out.GenRoot = s.GenRoot
+		out.Unified = true
+		if s.TimedOut {
+			out.TimedOut = true
+		}
+		if s.BuildFailed {
+			out.BuildFailed = true
+		}
+		if s.GoTestBypassed {
+			out.GoTestBypassed = true
+		}
+		if err != nil && firstErr == nil {
+			firstErr = fmt.Errorf("path-scoped go test [%d %s]: %w", i, job.sr, err)
+		}
 	}
-	return last, firstErr
+	return out, firstErr
 }
 
 // prepareWorkspaceGen writes hub packages, tidies, and prunes under genRoot.
