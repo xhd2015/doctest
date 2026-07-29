@@ -229,10 +229,14 @@ func anyPathScoped(preps []TreePrep) bool {
 	return false
 }
 
-// runPathScopedSuites runs go test ./<suiteRel>/... per distinct path scope under
-// genRoot. Nested scopes (or nested DOCTEST roots under mid) yield multi-cmd;
-// nested go.mod is a separate gen root handled by runPathScopedAcrossGens.
-// Each pattern is paired only with its preps (leaf-cache + accounting).
+// runPathScopedSuites runs one go test under genRoot for all path-scoped preps.
+//
+// Same RunDir invariant: never emit multiple go test processes for one gen root.
+// Patterns are the minimal covering set of ./SuiteRel/... after dropping scopes
+// already covered by a parent prefix (e.g. tree/mid/nested under tree/mid → only
+// ./tree/mid/...). Incomparable scopes (e.g. suite vs tree/mid) become multi-
+// pattern args on that single go test.
+// Nested go.mod with a *different* gen root is handled by runPathScopedAcrossGens.
 func runPathScopedSuites(preps []TreePrep, genRoot string, stats TestRunStats, opts core.Options) (TestRunStats, error) {
 	// Tidy only — no workspace extras rewrite outside path scope.
 	unlock := core.LockGenRootWrites(genRoot)
@@ -242,74 +246,99 @@ func runPathScopedSuites(preps []TreePrep, genRoot string, stats TestRunStats, o
 	}
 	unlock()
 
-	type suiteJob struct {
-		sr    string
-		pat   string
-		group []TreePrep
-	}
-	var jobs []suiteJob
-	seen := map[string]int{} // suiteRel → jobs index
-	for _, p := range preps {
-		sr := p.SuiteRel
-		if sr == "" {
-			sr = p.TreeRel
-		}
-		if sr == "" {
-			sr = "."
-		}
-		sr = filepath.ToSlash(filepath.Clean(sr))
-		if idx, ok := seen[sr]; ok {
-			jobs[idx].group = append(jobs[idx].group, p)
-			continue
-		}
-		// Path-shaped pattern: ./tree/mid/... not ./tree/mid/suite.
-		pat := pathScopedGoTestPattern(sr)
-		seen[sr] = len(jobs)
-		jobs = append(jobs, suiteJob{sr: sr, pat: pat, group: []TreePrep{p}})
-	}
-	if len(jobs) == 0 {
+	if len(preps) == 0 {
 		return stats, fmt.Errorf("workspace: no path-scoped go test cmds")
 	}
 
-	// Preserve planned/skipped from outer stats; rewrite run totals from cmds.
-	out := stats
-	out.Passed = 0
-	out.Total = 0
-	out.SkipCount = 0
-	out.Phases = append([]PhaseTiming(nil), stats.Phases...)
-	var firstErr error
-	for i, job := range jobs {
-		// Seed planned case count for this suite only.
-		st := stats
-		st.Total = 0
-		st.Passed = 0
-		st.Planned = 0
-		for _, p := range job.group {
-			st.Total += len(p.Cases)
-			st.Planned += len(p.Cases)
+	patterns, treeCount := pathScopedPlanForPreps(preps)
+	if len(patterns) == 0 {
+		return stats, fmt.Errorf("workspace: no path-scoped go test patterns")
+	}
+
+	// Seed planned case count once across all preps (no double-count).
+	st := stats
+	st.Total = 0
+	st.Passed = 0
+	st.Planned = 0
+	for _, p := range preps {
+		st.Total += len(p.Cases)
+		st.Planned += len(p.Cases)
+	}
+	return finishWorkspaceGoTest(preps, genRoot, genRoot, patterns, treeCount, st, opts)
+}
+
+// pathScopedSuiteRel is the gen-relative suite/registry placement for a prep.
+func pathScopedSuiteRel(p TreePrep) string {
+	sr := p.SuiteRel
+	if sr == "" {
+		sr = p.TreeRel
+	}
+	if sr == "" {
+		sr = "."
+	}
+	return filepath.ToSlash(filepath.Clean(sr))
+}
+
+// pathScopedDominantSuiteRels drops suiteRels covered by a proper-prefix peer.
+// If r is under s (r == s+"/"+…), then ./s/... already selects packages under r.
+// A suiteRel of "." covers every other rel (pattern ./...).
+func pathScopedDominantSuiteRels(rels []string) []string {
+	seen := map[string]bool{}
+	var uniq []string
+	for _, r := range rels {
+		r = filepath.ToSlash(filepath.Clean(r))
+		if r == "" {
+			r = "."
 		}
-		s, err := finishWorkspaceGoTest(job.group, genRoot, genRoot, []string{job.pat}, len(job.group), st, opts)
-		out.Passed += s.Passed
-		out.Total += s.Total
-		out.SkipCount += s.SkipCount
-		out.Phases = append(out.Phases, s.Phases...)
-		out.LeafTimings = append(out.LeafTimings, s.LeafTimings...)
-		out.GenRoot = s.GenRoot
-		out.Unified = true
-		if s.TimedOut {
-			out.TimedOut = true
+		if seen[r] {
+			continue
 		}
-		if s.BuildFailed {
-			out.BuildFailed = true
+		seen[r] = true
+		uniq = append(uniq, r)
+	}
+	var keep []string
+	for _, r := range uniq {
+		dominated := false
+		for _, s := range uniq {
+			if s == r {
+				continue
+			}
+			if s == "." {
+				// ./... covers everything.
+				dominated = true
+				break
+			}
+			if r != "." && (r == s || strings.HasPrefix(r, s+"/")) {
+				dominated = true
+				break
+			}
 		}
-		if s.GoTestBypassed {
-			out.GoTestBypassed = true
-		}
-		if err != nil && firstErr == nil {
-			firstErr = fmt.Errorf("path-scoped go test [%d %s]: %w", i, job.sr, err)
+		if !dominated {
+			keep = append(keep, r)
 		}
 	}
-	return out, firstErr
+	sort.Strings(keep)
+	return keep
+}
+
+// pathScopedPlanForPreps returns sorted go test package patterns and distinct
+// tree count for a single-gen path-scoped finish.
+func pathScopedPlanForPreps(preps []TreePrep) (patterns []string, treeCount int) {
+	var rels []string
+	trees := map[string]bool{}
+	for _, p := range preps {
+		rels = append(rels, pathScopedSuiteRel(p))
+		tr := p.TreeRel
+		if tr == "" {
+			tr = "."
+		}
+		trees[filepath.ToSlash(filepath.Clean(tr))] = true
+	}
+	for _, sr := range pathScopedDominantSuiteRels(rels) {
+		patterns = append(patterns, pathScopedGoTestPattern(sr))
+	}
+	sort.Strings(patterns)
+	return patterns, len(trees)
 }
 
 // prepareWorkspaceGen writes hub packages, tidies, and prunes under genRoot.
