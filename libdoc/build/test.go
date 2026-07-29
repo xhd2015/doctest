@@ -249,11 +249,41 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		flagArgs = append(flagArgs, "-race")
 	}
 
+	// Resolve go vs xgo for this suite (--go-cmd=auto|xgo|go).
+	goTestBin, err := resolveGoTestBinary(ctx.modRoot, cases, opts)
+	if err != nil {
+		stats.Phases = phases
+		return stats, err
+	}
+
+	// When using xgo, apply project test.config.json (abs path under modRoot):
+	// mock_rules → --mock-rule, flags/env, and include-as-main when suite ≠ project
+	// (mapping-gen module is typically "testcase").
+	suiteModPath := suiteModulePath(runDir)
+	xgoApply, err := core.BuildXgoTestConfigApply(goTestBin, ctx.modRoot, ctx.modPath, suiteModPath)
+	if err != nil {
+		stats.Phases = phases
+		return stats, err
+	}
+	if len(xgoApply.Flags) > 0 {
+		flagArgs = append(flagArgs, xgoApply.Flags...)
+	}
+	if opts.Verbose && xgoApply.ConfigPath != "" {
+		fmt.Fprintf(w, "doctest: xgo config %s\n", pathfmt.Short(xgoApply.ConfigPath))
+		if xgoApply.IncludeAsMainModule != "" {
+			fmt.Fprintf(w, "doctest: mock-rule-include-as-main-module=%s\n", xgoApply.IncludeAsMainModule)
+		}
+	}
+
 	displayArgs := displayGoArgs(append(append([]string(nil), flagArgs...), packageArgs...))
+	if len(xgoApply.ProgArgs) > 0 {
+		displayArgs = append(displayArgs, "-args")
+		displayArgs = append(displayArgs, xgoApply.ProgArgs...)
+	}
 	if opts.Verbose {
-		fmt.Fprintf(w, "cd %s && go %s\n\n", pathfmt.Short(runDir), strings.Join(displayArgs, " "))
+		fmt.Fprintf(w, "cd %s && %s %s\n\n", pathfmt.Short(runDir), goTestBin, strings.Join(displayArgs, " "))
 	} else {
-		fmt.Fprintf(w, "cd %s && go %s\n", pathfmt.Short(runDir), strings.Join(displayArgs, " "))
+		fmt.Fprintf(w, "cd %s && %s %s\n", pathfmt.Short(runDir), goTestBin, strings.Join(displayArgs, " "))
 	}
 
 	sessionID := core.SessionIDFromOpts(opts)
@@ -288,9 +318,9 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	var result goTestJSONResult
 	var goTestErr error
 	if singlePkgInvocations {
-		result, goTestErr = runGoTestJSONPerPackage(runDir, flagArgs, packageArgs, sessionID, goCache, opts.MetricsNestSink, leafSkipEnv, leafKeys, stdout, style, opts.Verbose)
+		result, goTestErr = runGoTestJSONPerPackage(goTestBin, runDir, flagArgs, packageArgs, sessionID, goCache, opts.MetricsNestSink, leafSkipEnv, xgoApply.Env, xgoApply.ProgArgs, leafKeys, stdout, style, opts.Verbose)
 	} else {
-		result, goTestErr = runGoTestJSONShards(runDir, flagArgs, packageArgs, sessionID, goCache, opts.MetricsNestSink, leafSkipEnv, leafKeys, stdout, style, opts.Verbose)
+		result, goTestErr = runGoTestJSONShards(goTestBin, runDir, flagArgs, packageArgs, sessionID, goCache, opts.MetricsNestSink, leafSkipEnv, xgoApply.Env, xgoApply.ProgArgs, leafKeys, stdout, style, opts.Verbose)
 	}
 	goTestElapsed := time.Since(tGo)
 	track("go_test", tGo)
@@ -658,13 +688,14 @@ const envMetricsNestSink = "DOCTEST_METRICS_NEST_SINK"
 // d.Metrics.NestSink via read-only getenv); prefer opts.MetricsNestSink +
 // goTestEnvFromOpts over mid-suite process env mutation.
 func goTestEnv(sessionID, goCache string) []string {
-	return goTestEnvFull(sessionID, goCache, "", "", "")
+	return goTestEnvFull(sessionID, goCache, "", "", "", nil)
 }
 
 // goTestEnvFull builds child env with key-replace (core.ChildEnv) so SESSION_ID,
 // GOCACHE, nest sink, GOWORK, and leaf-skip paths override process values
-// without blind append duplicates.
-func goTestEnvFull(sessionID, goCache, nestSink, goWork, leafSkipPaths string) []string {
+// without blind append duplicates. extraEnv is KEY=value pairs (e.g. from
+// project test.config.json) applied after built-in overrides.
+func goTestEnvFull(sessionID, goCache, nestSink, goWork, leafSkipPaths string, extraEnv []string) []string {
 	overrides := []string{core.DoctestSessionIDEnv + "=" + sessionID}
 	if goCache != "" {
 		overrides = append(overrides, "GOCACHE="+goCache)
@@ -682,6 +713,9 @@ func goTestEnvFull(sessionID, goCache, nestSink, goWork, leafSkipPaths string) [
 	if leafSkipPaths != "" {
 		overrides = append(overrides, leafcache.EnvSkipPaths+"="+leafSkipPaths)
 	}
+	if len(extraEnv) > 0 {
+		overrides = append(overrides, extraEnv...)
+	}
 	return core.ChildEnv(nil, overrides...)
 }
 
@@ -689,17 +723,17 @@ func goTestEnvFromOpts(sessionID string, opts core.Options) []string {
 	if sessionID == "" {
 		sessionID = core.SessionIDFromOpts(opts)
 	}
-	return goTestEnvFull(sessionID, opts.GoCache, opts.MetricsNestSink, "", "")
+	return goTestEnvFull(sessionID, opts.GoCache, opts.MetricsNestSink, "", "", nil)
 }
 
-// runGoTestJSONPerPackage runs one go test process per package (serial) so
+// runGoTestJSONPerPackage runs one go/xgo test process per package (serial) so
 // profile flags that go rejects with multi-package lists still work.
-func runGoTestJSONPerPackage(runDir string, flagArgs, packageArgs []string, sessionID, goCache, nestSink, leafSkipPaths string, leafKeys map[string]string, stdout io.Writer, style colorStyle, verbose bool) (goTestJSONResult, error) {
+func runGoTestJSONPerPackage(goTestBin, runDir string, flagArgs, packageArgs []string, sessionID, goCache, nestSink, leafSkipPaths string, extraEnv, progArgs []string, leafKeys map[string]string, stdout io.Writer, style colorStyle, verbose bool) (goTestJSONResult, error) {
 	var merged goTestJSONResult
 	var firstErr error
 	for _, pkg := range packageArgs {
 		args := append(append([]string(nil), flagArgs...), pkg)
-		res, err := runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, leafKeys, stdout, style, verbose)
+		res, err := runGoTestJSONOnce(goTestBin, runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, extraEnv, progArgs, leafKeys, stdout, style, verbose)
 		mergeGoTestJSONResult(&merged, res)
 		if err != nil && firstErr == nil {
 			firstErr = err
@@ -739,15 +773,15 @@ func lockGoTestModule(runDir string) func() {
 	return mu.Unlock
 }
 
-func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionID, goCache, nestSink, leafSkipPaths string, leafKeys map[string]string, stdout io.Writer, style colorStyle, verbose bool) (goTestJSONResult, error) {
-	// Single go test process per tree. Package sharding multiplies nested
+func runGoTestJSONShards(goTestBin, runDir string, flagArgs, packageArgs []string, sessionID, goCache, nestSink, leafSkipPaths string, extraEnv, progArgs []string, leafKeys map[string]string, stdout io.Writer, style colorStyle, verbose bool) (goTestJSONResult, error) {
+	// Single go/xgo test process per tree. Package sharding multiplies nested
 	// self-test fan-out and has raced go.mod; wall cut is tree concurrency +
 	// suite-level t.Parallel.
 	workers := 1
 	shards := packageTestShards(packageArgs, workers)
 	if len(shards) <= 1 {
 		args := append(append([]string(nil), flagArgs...), packageArgs...)
-		return runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, leafKeys, stdout, style, verbose)
+		return runGoTestJSONOnce(goTestBin, runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, extraEnv, progArgs, leafKeys, stdout, style, verbose)
 	}
 
 	// Multi-shard: readonly module mode so concurrent go tests share genDir safely.
@@ -773,7 +807,7 @@ func runGoTestJSONShards(runDir string, flagArgs, packageArgs []string, sessionI
 			defer wg.Done()
 			args := append(append([]string(nil), shardFlags...), shard...)
 			// Locked stdout keeps progress dots incremental and non-interleaved by byte.
-			res, err := runGoTestJSONOnce(runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, leafKeys, &lockedWriter{w: stdout, mu: &mu}, style, verbose)
+			res, err := runGoTestJSONOnce(goTestBin, runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, extraEnv, progArgs, leafKeys, &lockedWriter{w: stdout, mu: &mu}, style, verbose)
 			mu.Lock()
 			defer mu.Unlock()
 			mergeGoTestJSONResult(&merged, res)
@@ -797,12 +831,16 @@ func (l *lockedWriter) Write(p []byte) (int, error) {
 	return l.w.Write(p)
 }
 
-func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nestSink, goWork, leafSkipPaths string, leafKeys map[string]string, stdout io.Writer, style colorStyle, verbose bool) (goTestJSONResult, error) {
+func runGoTestJSONOnce(goTestBin, runDir string, testArgs []string, sessionID, goCache, nestSink, goWork, leafSkipPaths string, extraEnv, progArgs []string, leafKeys map[string]string, stdout io.Writer, style colorStyle, verbose bool) (goTestJSONResult, error) {
 	goTestSlots <- struct{}{}
 	defer func() { <-goTestSlots }()
 
 	unlockMod := lockGoTestModule(runDir)
 	defer unlockMod()
+
+	if goTestBin == "" {
+		goTestBin = "go"
+	}
 
 	// Always -json for suite accounting. Drop -v from the real invocation:
 	// go test -json already emits Output for fmt.Print/t.Logf; combining -v
@@ -810,7 +848,8 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 	// when nested suites print "--- FAIL:" / "=== RUN" into a passing leaf.
 	// Display still shows -v (flagArgs) so verbose-go-flag / user-facing cd
 	// lines keep advertising presentation mode.
-	execArgs := make([]string, 0, len(testArgs)+1)
+	// -json must stay before -args so it is not forwarded to the test binary.
+	execArgs := make([]string, 0, len(testArgs)+2+len(progArgs))
 	for _, a := range testArgs {
 		if a == "-v" {
 			continue
@@ -818,9 +857,13 @@ func runGoTestJSONOnce(runDir string, testArgs []string, sessionID, goCache, nes
 		execArgs = append(execArgs, a)
 	}
 	execArgs = append(execArgs, "-json")
-	goTestCmd := exec.Command("go", execArgs...)
+	if len(progArgs) > 0 {
+		execArgs = append(execArgs, "-args")
+		execArgs = append(execArgs, progArgs...)
+	}
+	goTestCmd := exec.Command(goTestBin, execArgs...)
 	goTestCmd.Dir = runDir
-	goTestCmd.Env = goTestEnvFull(sessionID, goCache, nestSink, goWork, leafSkipPaths)
+	goTestCmd.Env = goTestEnvFull(sessionID, goCache, nestSink, goWork, leafSkipPaths, extraEnv)
 
 	stdoutPipe, err := goTestCmd.StdoutPipe()
 	if err != nil {
@@ -1495,4 +1538,61 @@ func displayGoArgs(args []string) []string {
 		out = append(out, a)
 	}
 	return out
+}
+
+// suiteModulePath returns the go.mod module path for runDir (gen suite or
+// project). Empty when no go.mod is found.
+func suiteModulePath(runDir string) string {
+	_, modPath, ok := core.FindModuleRoot(runDir)
+	if !ok {
+		return ""
+	}
+	return modPath
+}
+
+// resolveGoTestBinary picks "go" or "xgo" from --go-cmd policy and (for auto)
+// transitive mock detection from case entry imports under modRoot.
+func resolveGoTestBinary(modRoot string, cases []core.TreeCase, opts core.Options) (string, error) {
+	entries := core.EntryImportPathsFromCases(cases)
+	cmd, _, err := core.ResolveAndEnsureGoTestCmd(opts.GoCmd, modRoot, entries)
+	if err != nil {
+		return "", err
+	}
+	return cmd, nil
+}
+
+// resolveWorkspaceGoTestBinary resolves go/xgo for a multi-tree workspace run.
+// Under auto, any prep whose project module transitively imports xgo mock
+// selects xgo.
+func resolveWorkspaceGoTestBinary(preps []TreePrep, opts core.Options) (string, error) {
+	mode := strings.TrimSpace(opts.GoCmd)
+	if mode == "" {
+		mode = "auto"
+	}
+	needsXgo := false
+	if mode == "auto" {
+		for _, p := range preps {
+			modRoot, _, ok := core.FindModuleRoot(p.AbsRoot)
+			if !ok || modRoot == "" {
+				continue
+			}
+			entries := core.EntryImportPathsFromCases(p.Cases)
+			yes, err := core.DetectXgoMockUsage(modRoot, entries)
+			if err != nil {
+				return "", err
+			}
+			if yes {
+				needsXgo = true
+				break
+			}
+		}
+	}
+	cmd, err := core.ResolveGoTestCmd(mode, needsXgo)
+	if err != nil {
+		return "", err
+	}
+	if err := core.EnsureGoTestCmdAvailable(cmd, ""); err != nil {
+		return "", err
+	}
+	return cmd, nil
 }

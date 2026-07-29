@@ -933,8 +933,12 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 		String("-coverprofile", &opts.CoverProfile).
 		Bool("-cover", &opts.Cover).
 		Bool("-race", &opts.Race).
+		String("--go-cmd", &opts.GoCmd).
 		Parse(args)
 	if err != nil {
+		return core.Options{}, nil, err
+	}
+	if err := core.ValidateGoCmdMode(opts.GoCmd); err != nil {
 		return core.Options{}, nil, err
 	}
 	if colorFlag {

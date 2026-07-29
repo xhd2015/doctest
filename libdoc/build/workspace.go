@@ -337,7 +337,26 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 		flagArgs = append(flagArgs, "-race")
 	}
 
+	goTestBin, err := resolveWorkspaceGoTestBinary(preps, opts)
+	if err != nil {
+		return stats, err
+	}
+
+	// Apply project test.config.json for xgo (first prep with a readable config;
+	// multi-module workspaces typically share one consumer project).
+	xgoApply, err := workspaceXgoTestConfigApply(goTestBin, preps)
+	if err != nil {
+		return stats, err
+	}
+	if len(xgoApply.Flags) > 0 {
+		flagArgs = append(flagArgs, xgoApply.Flags...)
+	}
+
 	displayArgs := displayGoArgs(append(append([]string(nil), flagArgs...), packageArgs...))
+	if len(xgoApply.ProgArgs) > 0 {
+		displayArgs = append(displayArgs, "-args")
+		displayArgs = append(displayArgs, xgoApply.ProgArgs...)
+	}
 	// Always print planned trees/tests before go test, including Verbose.
 	label := "workspace"
 	if strings.Contains(runDir, HubDirName) {
@@ -345,9 +364,12 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	}
 	fmt.Fprintf(w, "doctest: %s (%d trees, %d tests)\n", label, treeCount, stats.Total)
 	if opts.Verbose {
-		fmt.Fprintf(w, "cd %s && go %s\n\n", pathfmt.Short(runDir), strings.Join(displayArgs, " "))
+		if xgoApply.ConfigPath != "" {
+			fmt.Fprintf(w, "doctest: xgo config %s\n", pathfmt.Short(xgoApply.ConfigPath))
+		}
+		fmt.Fprintf(w, "cd %s && %s %s\n\n", pathfmt.Short(runDir), goTestBin, strings.Join(displayArgs, " "))
 	} else {
-		fmt.Fprintf(w, "cd %s && go %s\n", pathfmt.Short(runDir), strings.Join(displayArgs, " "))
+		fmt.Fprintf(w, "cd %s && %s %s\n", pathfmt.Short(runDir), goTestBin, strings.Join(displayArgs, " "))
 	}
 
 	sessionID := core.SessionIDFromOpts(opts)
@@ -362,7 +384,7 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	// Always use go test -json for Pass/Fail/Run suite accounting. Verbose is
 	// presentation only (stream more Output events); same counts as quiet.
 	tGo := time.Now()
-	result, runErr := runGoTestJSONOnce(runDir, append(append([]string(nil), flagArgs...), packageArgs...), sessionID, goCache, opts.MetricsNestSink, "", leafSkipEnv, leafKeys, stdout, style, opts.Verbose)
+	result, runErr := runGoTestJSONOnce(goTestBin, runDir, append(append([]string(nil), flagArgs...), packageArgs...), sessionID, goCache, opts.MetricsNestSink, "", leafSkipEnv, xgoApply.Env, xgoApply.ProgArgs, leafKeys, stdout, style, opts.Verbose)
 	goTestElapsed := time.Since(tGo)
 	stats.Phases = append(stats.Phases, PhaseTiming{Name: "go_test", ElapsedNs: goTestElapsed.Nanoseconds()})
 	// Discovery planned count before Total is rewritten to actual_run.
@@ -427,6 +449,35 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 		return stats, fmt.Errorf("go test: %w", runErr)
 	}
 	return stats, nil
+}
+
+// workspaceXgoTestConfigApply picks project test.config.json from the first
+// prep that has one under its module root. Suite module is empty so include-as
+// always applies when a project module path is known (workspace runs from gen/hub).
+func workspaceXgoTestConfigApply(goTestBin string, preps []TreePrep) (core.XgoTestConfigApply, error) {
+	if strings.TrimSpace(goTestBin) != "xgo" {
+		return core.XgoTestConfigApply{}, nil
+	}
+	for _, p := range preps {
+		modRoot, modPath, ok := core.FindModuleRoot(p.AbsRoot)
+		if !ok || modRoot == "" {
+			continue
+		}
+		if core.FindXgoTestConfigPath(modRoot) == "" {
+			continue
+		}
+		// Empty suite path → always request include-as (gen/hub ≠ project).
+		return core.BuildXgoTestConfigApply(goTestBin, modRoot, modPath, "")
+	}
+	// No config file: still try include-as from first prep module.
+	for _, p := range preps {
+		modRoot, modPath, ok := core.FindModuleRoot(p.AbsRoot)
+		if !ok || modPath == "" {
+			continue
+		}
+		return core.BuildXgoTestConfigApply(goTestBin, modRoot, modPath, "")
+	}
+	return core.XgoTestConfigApply{}, nil
 }
 
 // prepareWorkspaceLeafCache builds multi-tree PassPlan keys (FormatLeafIdentity)

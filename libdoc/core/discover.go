@@ -488,16 +488,27 @@ func WriteGoMod(genDir, modRoot, modPath string, hasMod bool, withAssertReplace 
 		return err
 	}
 
+	// Prefer the source module's go directive so tidy under kool with-go1.19
+	// (or any older toolchain) does not fail with "go.mod indicates go 1.21".
+	goLine := "go 1.19"
+	if hasMod {
+		if v := readGoDirective(modRoot); v != "" {
+			goLine = "go " + v
+		}
+	}
 	var content string
 	if hasMod {
-		content = fmt.Sprintf("module testcase\n\ngo 1.21\n\nreplace %s => %s\n", modPath, modRoot)
+		content = fmt.Sprintf("module testcase\n\n%s\n\nreplace %s => %s\n", goLine, modPath, modRoot)
 	} else {
-		content = "module testcase\n\ngo 1.21\n"
+		content = fmt.Sprintf("module testcase\n\n%s\n", goLine)
 	}
+	// Modules parent already replaces (path or module→module): vendor inject
+	// must not dual-replace the same path (parent wins), except private-fork
+	// offline safety where vendor FS replace of A suppresses parent module→module.
+	var extraReplaces string
+	var parentPathReplaced, parentModuleReplaced map[string]bool
 	if hasMod {
-		if extraReplaces := readExtraReplaces(modRoot, modPath); extraReplaces != "" {
-			content += extraReplaces
-		}
+		extraReplaces, parentPathReplaced, parentModuleReplaced = readExtraReplaces(modRoot, modPath)
 	}
 	// Effective-only: raw flags that do not affect content (doctest self-module)
 	// must not produce different desired bytes — multi-tree ./... prepare calls
@@ -507,6 +518,26 @@ func WriteGoMod(genDir, modRoot, modPath string, hasMod bool, withAssertReplace 
 	}
 	if withSessionReplace && sessionCacheDir != "" && modPath != "github.com/xhd2015/doctest" {
 		content += fmt.Sprintf("replace %s => %s\n", SessionImportPath, sessionCacheDir)
+	}
+
+	// When modRoot has vendor/modules.txt, inject xgo-style require+replace for
+	// each vendored module and ensure placeholder go.mod under modules that
+	// lack one. Always on when vendor/ exists — no user flag. Skip vendor
+	// replace for modules already covered by parent path replace or (non-fork)
+	// parent module→module replace.
+	parentGoVer := strings.TrimPrefix(goLine, "go ")
+	vendorExtra, suppressParentModule, err := vendorBridgeForModRoot(modRoot, parentGoVer, parentPathReplaced, parentModuleReplaced)
+	if err != nil {
+		return err
+	}
+	// Parent replaces first (minus any suppressed by private-fork vendor FS win),
+	// then vendor require/replace so offline vendor targets are last writer for
+	// those paths when they override parent module→module.
+	if extraReplaces != "" {
+		content += filterReplaceLinesByLHS(extraReplaces, suppressParentModule)
+	}
+	if vendorExtra != "" {
+		content += vendorExtra
 	}
 
 	man, err := cachedGenManifestLocked(genDir)
@@ -551,17 +582,29 @@ func WriteGoMod(genDir, modRoot, modPath string, hasMod bool, withAssertReplace 
 	return nil
 }
 
-func readExtraReplaces(modRoot, mainModPath string) string {
+// readExtraReplaces copies parent go.mod replace directives into gen form
+// (absolute-izing filesystem path targets). Returns:
+//   - extra replace text for gen go.mod
+//   - parentPathReplaced: left-hand paths with filesystem path RHS
+//   - parentModuleReplaced: left-hand paths with module→module RHS
+// Vendor inject uses these so parent path replace always wins, parent
+// module→module wins unless private-fork offline safety prefers vendor FS.
+func readExtraReplaces(modRoot, mainModPath string) (string, map[string]bool, map[string]bool) {
+	parentPathReplaced := make(map[string]bool)
+	parentModuleReplaced := make(map[string]bool)
 	goModPath := filepath.Join(modRoot, "go.mod")
 	data, err := os.ReadFile(goModPath)
 	if err != nil {
-		return ""
+		return "", parentPathReplaced, parentModuleReplaced
 	}
 	lines := strings.Split(string(data), "\n")
 	inReplace := false
 	var replaces []string
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "//") {
+			continue
+		}
 		if trimmed == "replace (" {
 			inReplace = true
 			continue
@@ -583,24 +626,118 @@ func readExtraReplaces(modRoot, mainModPath string) string {
 	}
 	var result strings.Builder
 	for _, r := range replaces {
+		// Skip comments / empty after trim
+		if r == "" || strings.HasPrefix(r, "//") {
+			continue
+		}
+		// Drop replace of the main module itself (WriteGoMod already emits that).
 		if strings.HasPrefix(r, mainModPath+" ") || strings.HasPrefix(r, mainModPath+"\t") || r == mainModPath {
 			continue
 		}
 		parts := strings.Fields(r)
-		if len(parts) >= 3 {
-			arrowIdx := len(parts) - 2
-			if arrowIdx >= 1 && parts[arrowIdx] == "=>" {
-				absPath := parts[len(parts)-1]
-				if !filepath.IsAbs(absPath) {
-					absPath = filepath.Join(modRoot, absPath)
-				}
-				absPath = filepath.Clean(absPath)
-				modPath := strings.Join(parts[:arrowIdx], " ")
-				result.WriteString(fmt.Sprintf("replace %s => %s\n", modPath, absPath))
+		arrowIdx := -1
+		for i, p := range parts {
+			if p == "=>" {
+				arrowIdx = i
+				break
 			}
 		}
+		if arrowIdx < 1 || arrowIdx+1 >= len(parts) {
+			continue
+		}
+		// Left may be "path" or "path version"; module path is the first token.
+		leftModPath := parts[0]
+		left := strings.Join(parts[:arrowIdx], " ")
+		rightParts := parts[arrowIdx+1:]
+		// Path replace: single token that looks like a filesystem path.
+		// Module→module replace: "module/path v1.2.3" (keep as-is).
+		if len(rightParts) == 1 {
+			right := rightParts[0]
+			if isFilesystemReplaceTarget(right) {
+				if !filepath.IsAbs(right) {
+					right = filepath.Join(modRoot, right)
+				}
+				right = filepath.Clean(right)
+				result.WriteString(fmt.Sprintf("replace %s => %s\n", left, right))
+				if leftModPath != "" {
+					parentPathReplaced[leftModPath] = true
+				}
+				continue
+			}
+			// Single-token module path without version — still valid replace.
+			result.WriteString(fmt.Sprintf("replace %s => %s\n", left, right))
+			if leftModPath != "" {
+				parentModuleReplaced[leftModPath] = true
+			}
+			continue
+		}
+		// module => other/module vX.Y.Z  (or more tokens; preserve verbatim)
+		result.WriteString(fmt.Sprintf("replace %s => %s\n", left, strings.Join(rightParts, " ")))
+		if leftModPath != "" {
+			parentModuleReplaced[leftModPath] = true
+		}
 	}
-	return result.String()
+	return result.String(), parentPathReplaced, parentModuleReplaced
+}
+
+// filterReplaceLinesByLHS drops "replace …" lines whose left-hand module path
+// (first field after "replace ") is in drop. Used when private-fork vendor FS
+// replace of A supersedes parent module→module for A.
+func filterReplaceLinesByLHS(replaces string, drop map[string]bool) string {
+	if replaces == "" || len(drop) == 0 {
+		return replaces
+	}
+	var b strings.Builder
+	for _, line := range strings.Split(replaces, "\n") {
+		if line == "" {
+			continue
+		}
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "replace ") {
+			rest := strings.TrimSpace(strings.TrimPrefix(trimmed, "replace "))
+			fields := strings.Fields(rest)
+			if len(fields) >= 1 && drop[fields[0]] {
+				continue
+			}
+		}
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
+// readGoDirective returns the version from the first "go X.Y" line in modRoot/go.mod.
+func readGoDirective(modRoot string) string {
+	data, err := os.ReadFile(filepath.Join(modRoot, "go.mod"))
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(strings.TrimSpace(line))
+		if len(fields) >= 2 && fields[0] == "go" {
+			return fields[1]
+		}
+	}
+	return ""
+}
+
+// isFilesystemReplaceTarget reports whether right-hand side of a replace is a
+// local path (absolutize against modRoot) rather than a module path.
+func isFilesystemReplaceTarget(right string) bool {
+	if right == "" {
+		return false
+	}
+	if filepath.IsAbs(right) {
+		return true
+	}
+	if strings.HasPrefix(right, "./") || strings.HasPrefix(right, "../") {
+		return true
+	}
+	// Bare relative dir/file occasionally used in replace (rare).
+	if strings.HasPrefix(right, ".") {
+		return true
+	}
+	return false
 }
 
 // TidyGoMod runs `go mod tidy` in genDir. When goCache is non-empty it is

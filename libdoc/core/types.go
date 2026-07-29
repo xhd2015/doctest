@@ -179,6 +179,12 @@ type Options struct {
 	// often disables go testcache hits. Nested child doctest processes do not
 	// inherit this unless their Args pass -race.
 	Race bool
+
+	// GoCmd is the --go-cmd policy: "", "auto", "xgo", or "go".
+	// Empty and "auto" mean: detect transitive xgo/runtime/mock usage and
+	// choose xgo vs go. Force "xgo"/"go" ignore detection. Invalid values
+	// are rejected at parse time.
+	GoCmd string
 }
 
 type ValidationError struct {
