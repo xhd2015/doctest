@@ -269,38 +269,18 @@ func runWorkspaceMultiModHub(preps []TreePrep, byGen map[string][]TreePrep, genO
 	return finishWorkspaceGoTestCmds(preps, cmds, hubDir, len(preps), stats, opts)
 }
 
-// finishWorkspaceGoTestCmds runs go test for each gotestmap.Cmd (usually one suite/hub cmd).
+// finishWorkspaceGoTestCmds runs go test for a single gotestmap suite/hub cmd.
 // genRootLabel is used for stats.GenRoot (typically gen root or hub dir).
+// Multi-cmd ModePathShaped plans are Phase 2 and must not be executed here.
 func finishWorkspaceGoTestCmds(preps []TreePrep, cmds []gotestmap.Cmd, genRootLabel string, treeCount int, stats TestRunStats, opts core.Options) (TestRunStats, error) {
 	if len(cmds) == 0 {
 		return stats, fmt.Errorf("workspace: no go test cmds from gotestmap")
 	}
-	// Phase 1: suite/hub is a single cmd; multi-cmd path-shaped runs loop below.
-	var lastStats TestRunStats
-	var firstErr error
-	for i, cmd := range cmds {
-		st, err := finishWorkspaceGoTest(preps, cmd.Dir, genRootLabel, []string{cmd.Pattern}, treeCount, stats, opts)
-		if i == 0 {
-			lastStats = st
-		} else {
-			// Merge pass/fail counts from extra cmds (path-shaped multi-module).
-			lastStats.Passed += st.Passed
-			lastStats.Total += st.Total
-			lastStats.SkipCount += st.SkipCount
-			lastStats.Skipped = append(lastStats.Skipped, st.Skipped...)
-			lastStats.LeafTimings = append(lastStats.LeafTimings, st.LeafTimings...)
-			if st.TimedOut {
-				lastStats.TimedOut = true
-			}
-			if st.BuildFailed {
-				lastStats.BuildFailed = true
-			}
-		}
-		if err != nil && firstErr == nil {
-			firstErr = err
-		}
+	if len(cmds) != 1 {
+		return stats, fmt.Errorf("workspace: multi-cmd go test plan not supported until Phase 2 path-shaped executor (got %d cmds)", len(cmds))
 	}
-	return lastStats, firstErr
+	cmd := cmds[0]
+	return finishWorkspaceGoTest(preps, cmd.Dir, genRootLabel, []string{cmd.Pattern}, treeCount, stats, opts)
 }
 
 // finishWorkspaceGoTest runs go test for workspace (single-gen or multi-mod hub).

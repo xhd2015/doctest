@@ -360,3 +360,48 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 		t.Fatalf("expected FAIL summary when survivors ran:\nstdout=%q\nerr=%v", out, runErr)
 	}
 }
+
+// TestExpandTestArgsMidPathSubDir checks that path/... under a mid branch sets
+// SubDir to the mid path (not only the full DOCTEST tree root).
+func TestExpandTestArgsMidPathSubDir(t *testing.T) {
+	// tree/DOCTEST.md is the suite root; mid/ is a sub-branch with leaves.
+	// expandTestArgs("tree/mid/...") must filter under mid, not the whole tree.
+	base := t.TempDir()
+	tree := filepath.Join(base, "tree")
+	mid := filepath.Join(tree, "mid")
+	writeTreeFile(t, tree, "DOCTEST.md", doctestDoc(`
+type Request struct{}
+type Response struct{}
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
+`))
+	writeTreeFile(t, mid, "leaf/SETUP.md", setupDoc(`
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
+`))
+	writeTreeFile(t, mid, "leaf/ASSERT.md", assertDoc(`
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
+`))
+	writeTreeFile(t, tree, "sibling/SETUP.md", setupDoc(`
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
+`))
+	writeTreeFile(t, tree, "sibling/ASSERT.md", assertDoc(`
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
+`))
+
+	targets, err := expandTestArgs([]string{mid + "/..."})
+	if err != nil {
+		t.Fatalf("expandTestArgs: %v", err)
+	}
+	if len(targets) != 1 {
+		t.Fatalf("want 1 target, got %d: %+v", len(targets), targets)
+	}
+	midClean := filepath.Clean(mid)
+	treeClean := filepath.Clean(tree)
+	gotRoot := filepath.Clean(targets[0].Root)
+	gotSub := filepath.Clean(targets[0].SubDir)
+	if gotRoot != treeClean {
+		t.Errorf("Root=%q want %q", gotRoot, treeClean)
+	}
+	if gotSub != midClean {
+		t.Errorf("SubDir=%q want mid %q (not full tree only)", gotSub, midClean)
+	}
+}

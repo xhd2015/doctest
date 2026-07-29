@@ -4,8 +4,9 @@ label: heavy
 
 ## Expected
 
-- CLI still succeeds (workspace suite for single-mod).
-- `gotestmap.TranslatePath("./tree/mid/...", layout)` yields mid pattern + nested mod, not `./tree/...`.
+- CLI still succeeds with **single** workspace suite plan (not multi-cmd path-shaped execution).
+- Pure `TranslatePath` / `Plan(ModePathShaped)` mid+nestedmod: two fixture cmds, not `./tree/...`.
+- Phase 2 only: wiring those multi cmds into production go-test finish.
 
 ```go
 import (
@@ -24,8 +25,8 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 	if resp.ExitCode != 0 {
 		t.Fatalf("exit=%d\n%s", resp.ExitCode, out)
 	}
-	// Current single-mod CLI path: workspace suite (not path-shaped multi-cmd).
-	assertContainsGoTestLine(t, out, "__workspace/suite")
+	// Phase 1 CLI: single workspace suite — not path-shaped multi-cmd finish.
+	assertExactlyOneGoTestPlanFamily(t, out, "__workspace/suite")
 
 	layout := gotestmap.Layout{ModuleRoots: []string{".", "tree/mid/nestedmod"}}
 	got, err := gotestmap.TranslatePath("./tree/mid/...", layout)
@@ -38,6 +39,18 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("TranslatePath:\n got %v\nwant %v", got, want)
+	}
+	// Same contract via Plan(ModePathShaped) — multi-cmd is pure plan only (Phase 2 exec).
+	viaPlan, err := gotestmap.Plan(gotestmap.PlanInput{
+		Mode:    gotestmap.ModePathShaped,
+		UserArg: "./tree/mid/...",
+		Layout:  layout,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(viaPlan, want) {
+		t.Fatalf("Plan(ModePathShaped):\n got %v\nwant %v", viaPlan, want)
 	}
 	// Must not widen to whole tree.
 	for _, c := range got {

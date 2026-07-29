@@ -2,8 +2,14 @@
 
 **Feature**: go-test plan at run site (gotestmap / suite / hub)
 
-Backfill: verbose `cd … && go test …` lines after `doctest test`, plus pure
-TranslatePath checks where path-shaped rules are the contract.
+Backfill (audit compliance): production go-test path is **single-cmd only**
+until Phase 2 multi-cmd path-shaped execution exists.
+
+- **ModeWorkspaceSuite** → one plan: `cd <gen> && go test ./__workspace/suite`
+- **ModeHubSuite** → one plan: `cd <…/__hub> && go test ./suite`
+- **ModePathShaped** → pure TranslatePath / Plan contract only (may return
+  multiple Cmds); **not** exercised via multi-cmd `finishWorkspaceGoTestCmds`
+  in production CLI until Phase 2.
 
 ```go
 import (
@@ -21,6 +27,30 @@ func gotestPlanOut(resp *Response) string {
 		return ""
 	}
 	return resp.Stdout + "\n" + resp.Stderr
+}
+
+// countCdGoTestPlanLines counts production plan lines printed as
+// `cd <dir> && go test …` (finishWorkspaceGoTest). Not package FAIL/ok lines.
+func countCdGoTestPlanLines(out string) int {
+	n := 0
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.Contains(line, "&& go test") {
+			n++
+		}
+	}
+	return n
+}
+
+// assertExactlyOneGoTestPlanFamily requires a single cd…&& go test plan line
+// that contains sub (e.g. __workspace/suite or __hub). Locks single-cmd suite/hub.
+func assertExactlyOneGoTestPlanFamily(t *testing.T, out, sub string) {
+	t.Helper()
+	n := countCdGoTestPlanLines(out)
+	if n != 1 {
+		t.Fatalf("want exactly 1 cd…&& go test plan line (single-cmd suite/hub), got %d:\n%s", n, out)
+	}
+	assertContainsGoTestLine(t, out, sub)
 }
 
 // createSingleModTwoTrees: one go.mod, two DOCTEST roots → single-gen workspace suite.

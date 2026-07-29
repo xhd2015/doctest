@@ -1,16 +1,22 @@
 // Package gotestmap is the single place that decides go test Dir+Pattern plans.
 //
 // Discovery/prepare/gen stay elsewhere. At the go-test call site, Plan() yields
-// one or more Cmds:
+// one or more Cmds.
 //
-//   - default single-gen workspace: (cd gen && go test ./__workspace/suite)
-//   - default multi-mod hub:        (cd hub && go test ./suite)
-//   - mid-path / cross-go.mod:      path-shaped fixture cmds (TranslatePath)
+// Production go-test path (Phase 1, wired via Plan into the workspace runner):
 //
-// Path-shaped rules (mid / nested modules):
+//   - ModeWorkspaceSuite: (cd gen && go test ./__workspace/suite)
+//   - ModeHubSuite:       (cd hub && go test ./suite)
 //
-//	go test ./tree/mid/...
-//	(cd tree/mid/nestedmod && go test ./...)
+// Phase 2 (plan/contract only — not wired into the workspace runner):
+//
+//   - ModePathShaped / NeedsPathShaped / TranslatePath multi-cmd: mid-path and
+//     cross-go.mod fixture cmds. Example for mid + nested module:
+//     go test ./tree/mid/...
+//     (cd tree/mid/nestedmod && go test ./...)
+//
+// finishWorkspaceGoTestCmds requires len(cmds)==1; multi-cmd path-shaped
+// execution is deferred to a Phase 2 path-shaped executor.
 package gotestmap
 
 import (
@@ -49,10 +55,15 @@ type Mode int
 
 const (
 	// ModeWorkspaceSuite is today's single-gen fan-in: go test ./__workspace/suite (or equivalent).
+	// Production go-test path uses this mode (or ModeHubSuite) via Plan.
 	ModeWorkspaceSuite Mode = iota
 	// ModeHubSuite is today's multi-mod hub: go test ./suite under __hub.
+	// Production go-test path uses this mode (or ModeWorkspaceSuite) via Plan.
 	ModeHubSuite
-	// ModePathShaped is mid-leaf and/or cross-go.mod: fixture path patterns from TranslatePath.
+	// ModePathShaped is Phase 2 (plan/contract only): mid-leaf and/or cross-go.mod
+	// fixture path patterns from TranslatePath. May return multiple Cmds.
+	// Not wired into the workspace runner; do not pass multi-cmd results to
+	// finishWorkspaceGoTestCmds (which requires len==1).
 	ModePathShaped
 )
 
@@ -72,8 +83,9 @@ type PlanInput struct {
 }
 
 // Plan returns go test commands for the run site.
-// Default suite/hub modes preserve today's single-command shape.
-// ModePathShaped uses TranslatePath (mid / nested modules).
+// Default suite/hub modes preserve today's single-command shape (production path).
+// ModePathShaped uses TranslatePath (mid / nested modules) — Phase 2 plan/contract
+// only; production runner does not execute multi-cmd path-shaped plans yet.
 func Plan(in PlanInput) ([]Cmd, error) {
 	switch in.Mode {
 	case ModeWorkspaceSuite, ModeHubSuite:
@@ -107,6 +119,9 @@ func IdealTranslate(userArg string, layout Layout) ([]Cmd, error) {
 }
 
 // TranslatePath maps a doctest path arg to path-shaped go test commands (fixture-relative).
+//
+// Phase 2 plan/contract only: may return multiple Cmds for nested modules.
+// Production go-test execution still uses ModeWorkspaceSuite / ModeHubSuite.
 //
 // Rules:
 //   - path/... → go test ./path/... in the module that owns path
@@ -195,6 +210,9 @@ func TranslatePath(userArg string, layout Layout) ([]Cmd, error) {
 
 // NeedsPathShaped reports whether userArg + layout should use ModePathShaped
 // instead of ModeWorkspaceSuite / ModeHubSuite.
+//
+// Phase 2 (plan/contract only): production still runs ModeWorkspaceSuite /
+// ModeHubSuite via Plan; this helper is not wired into the workspace runner.
 //
 // True when the path selection crosses nested go.mod roots under the base
 // (policy B/C multi-cmd). Mid-branch suite filtering stays in discovery

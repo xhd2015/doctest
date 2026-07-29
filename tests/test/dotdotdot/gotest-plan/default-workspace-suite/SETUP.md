@@ -1,9 +1,12 @@
 # Scenario
 
-**Feature**: single-gen run uses workspace suite go test (today’s shape via gotestmap.Plan)
+**Feature**: single-gen run uses **one** workspace suite go test (ModeWorkspaceSuite)
+
+Production path (Phase 1): single-cmd only — no multi-cmd path-shaped merge.
 
 ```
-doctest test -v ./...  →  cd <gen> && go test ./__workspace/suite
+doctest test -v ./...  →  exactly one plan:
+  cd <gen> && go test ./__workspace/suite
 ```
 
 ```go

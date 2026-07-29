@@ -2,8 +2,14 @@
 
 **Feature**: path-shaped TranslatePath contract (mid + nested go.mod)
 
-Does not require path-shaped **execution** yet: locks pure gotestmap rules used
-when ModePathShaped is selected. CLI smoke uses a tiny no-op path.
+**Phase 1 (locked here):** pure `gotestmap.TranslatePath` / `Plan(ModePathShaped)`
+rules — mid pattern + nested go.mod cmds, no widen to parent siblings.
+
+**Phase 2 (not this leaf):** path-shaped *execution* via multi-cmd
+`finishWorkspaceGoTestCmds`. Production CLI still uses single workspace/hub
+suite until that executor exists — do not require multi-cmd finish here.
+
+CLI smoke: single-mod `./alpha/...` → still **one** workspace suite plan.
 
 ```go
 import (
