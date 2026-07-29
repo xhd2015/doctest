@@ -16,9 +16,10 @@
 - **Parent go.mod directives** — the project's `go` version line and any
   filesystem path `replace` directives that `WriteGoMod` already copies into the
   gen module (absolute-ized).
-- **Placeholder go.mod** — a minimal `module <path>` + `go <ver>` file written
-  under a vendored module directory when that module lacks a real `go.mod`, so
-  the replace target is a valid Go module (xgo-style).
+- **Shadow vendor module** — when a vendored module lacks `go.mod`, genDir gets
+  `vendor-bridge/<module>/` with a placeholder `go.mod` and **hardlinks/copies**
+  of package files from project `vendor/` (project tree is never written; Go
+  ignores symlinks under module roots).
 
 **Behaviors**
 
@@ -32,10 +33,11 @@
    - `replace <module> => <modRoot>/vendor/<module-path>` (or replacement path
      rules aligned with xgo when modules.txt records a non-local `=>` replace)
 3. For each such replace target, if `go.mod` is missing under the vendored path,
-   WriteGoMod ensures a **placeholder** `go.mod` exists there (`module` + `go`).
-4. Resolution prefers vendored sources: gen `go.mod` replace targets point at the
-   project vendor tree (observable on the written file; optional read of
-   distinctive fixture content at the replace target).
+   WriteGoMod builds a **shadow** under `genDir/vendor-bridge/…` (placeholder +
+   package symlinks) and `replace` points at that shadow — project `vendor/` is
+   not modified.
+4. When `go.mod` already exists under vendor, replace still points at the project
+   vendor path (unchanged).
 5. Parent `go` directive and parent path replaces remain present **alongside**
    vendor requires/replaces for **other** modules (not dropped or overwritten).
 6. When parent `go.mod` already has a **filesystem path** `replace` for module M

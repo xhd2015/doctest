@@ -12,7 +12,7 @@ modRoot
        replace <project> => <modRoot>
        [parent path replaces]
        [require+replace each vendor modules.txt entry when vendor/ exists]
-       [placeholder go.mod under vendor/<mod> when missing]
+       [shadow vendor-bridge under genDir when go.mod missing; project vendor read-only]
 ```
 
 ## Preconditions

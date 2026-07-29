@@ -4,7 +4,8 @@
 - Gen `go.mod` includes `require example.com/dep v1.2.3` (or equivalent require
   block form) and `replace example.com/dep =>` targeting
   `<modRoot>/vendor/example.com/dep`.
-- Same for `example.com/nogo` at `v0.4.0` and its vendor path.
+- Same require for `example.com/nogo` at `v0.4.0`; its replace targets gen
+  `vendor-bridge/…` (shadow; no project `go.mod`).
 - Project replace `replace example.com/app => <modRoot>` still present.
 
 ## Errors
@@ -41,13 +42,13 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 			req.SampleModPath, req.ModRoot, goMod)
 	}
 
-	// Second module from modules.txt
+	// Second module from modules.txt (no project go.mod → vendor-bridge shadow)
 	if !hasRequire(goMod, req.NoGoModPath, req.NoGoModVersion) {
 		t.Fatalf("expected require %s %s, got:\n%s",
 			req.NoGoModPath, req.NoGoModVersion, goMod)
 	}
-	if !hasReplaceToVendor(goMod, req.NoGoModPath, req.ModRoot) {
-		t.Fatalf("expected replace %s => vendor path, got:\n%s",
+	if !strings.Contains(filepath.ToSlash(goMod), "vendor-bridge/"+req.NoGoModPath) {
+		t.Fatalf("expected replace %s => vendor-bridge shadow, got:\n%s",
 			req.NoGoModPath, goMod)
 	}
 
