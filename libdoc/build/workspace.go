@@ -24,12 +24,13 @@ type TreePrep struct {
 	SuiteRel string
 	// PathScoped is true when SuiteRel is a proper sub-prefix of TreeRel
 	// (user path was mid/leaf, not whole tree).
-	PathScoped bool
-	GenRoot    string
-	Unified    bool
-	Cases      []core.TreeCase
-	Skipped    []core.SkippedCase
-	Stats      TestRunStats // phases + totals from generate-only
+	PathScoped    bool
+	GenRoot       string
+	Unified       bool
+	Cases         []core.TreeCase
+	Skipped       []core.SkippedCase
+	VendorBridges []core.VendorBridgeMapping
+	Stats         TestRunStats // phases + totals from generate-only
 }
 
 // PrepareTree discovers, filters, and generates one tree without go test.
@@ -50,12 +51,13 @@ func PrepareTree(dir string, opts core.Options) (TreePrep, error) {
 		TreeRel:  stats.TreeRel,
 		SuiteRel: stats.SuiteRel,
 		// PathScoped from stats when set; else derive from SubDir vs tree root.
-		PathScoped: stats.PathScoped,
-		GenRoot:    stats.GenRoot,
-		Unified:    stats.Unified,
-		Skipped:    stats.Skipped,
-		Cases:      stats.Cases, // reuse filtered cases — avoid second full discover
-		Stats:      stats,
+		PathScoped:    stats.PathScoped,
+		GenRoot:       stats.GenRoot,
+		Unified:       stats.Unified,
+		Skipped:       stats.Skipped,
+		Cases:         stats.Cases, // reuse filtered cases — avoid second full discover
+		VendorBridges: append([]core.VendorBridgeMapping(nil), stats.VendorBridges...),
+		Stats:         stats,
 	}
 	if prep.AbsRoot == "" {
 		if abs, aerr := filepath.Abs(dir); aerr == nil {
@@ -687,7 +689,7 @@ func workspaceProjectTestConfigApply(goTestBin string, preps []TreePrep) (core.X
 			continue
 		}
 		// Empty suite path → always request include-as (gen/hub ≠ project).
-		return applyProjectTestConfig(goTestBin, modRoot, modPath, "")
+		return applyProjectTestConfig(goTestBin, modRoot, modPath, "", p.VendorBridges)
 	}
 	// No config file: still try include-as from first prep module (xgo only).
 	if strings.TrimSpace(goTestBin) == "xgo" {
@@ -712,7 +714,7 @@ func workspacePreTestHooksApply(preps []TreePrep) (core.PreTestHookApply, error)
 		if !ok || core.FindXgoTestConfigPath(modRoot) == "" {
 			continue
 		}
-		return applyProjectPreTestHooks(modRoot)
+		return applyProjectPreTestHooks(modRoot, p.VendorBridges)
 	}
 	return core.PreTestHookApply{}, nil
 }

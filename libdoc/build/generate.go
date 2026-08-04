@@ -31,6 +31,10 @@ type generateContext struct {
 	sessionImport   bool
 	sessionCacheDir string
 	modfilePath     string
+	// vendorBridges is current-generation metadata returned while writing the
+	// generated go.mod. It is passed to pre_test overlay normalization rather
+	// than rediscovered from a retained generated root.
+	vendorBridges   []core.VendorBridgeMapping
 	removeLegacyTmp bool
 	// goCache is optional isolated GOCACHE for go mod tidy / go build children.
 	goCache string
@@ -48,7 +52,7 @@ type generateContext struct {
 	unifiedMode bool
 	// subDir is the path-scope filter (opts.SubDir): abs or relative source path
 	// under the DOCTEST tree (mid branch, leaf, or equal to tree root for full tree).
-	subDir string
+	subDir    string
 	closeOnce sync.Once
 	// lifecycleMu serializes gen writes against interrupt cleanup. The SIGINT
 	// handler acquires it and holds it through os.Exit so writeCases cannot
@@ -265,9 +269,11 @@ func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) 
 
 	if err := ctx.withGenLock(func() error {
 		if !ctx.internalCompile {
-			if err := core.WriteGoMod(ctx.genRoot, ctx.absModRoot, ctx.modPath, ctx.hasMod, ctx.assertImport, ctx.assertCacheDir, ctx.sessionImport, ctx.sessionCacheDir); err != nil {
+			bridges, err := core.WriteGoModWithVendorBridges(ctx.genRoot, ctx.absModRoot, ctx.modPath, ctx.hasMod, ctx.assertImport, ctx.assertCacheDir, ctx.sessionImport, ctx.sessionCacheDir)
+			if err != nil {
 				return err
 			}
+			ctx.vendorBridges = bridges
 			if ctx.verbose && ctx.w != nil {
 				fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(filepath.Join(ctx.genRoot, "go.mod")))
 			}

@@ -6,7 +6,6 @@
 
 ```go
 import (
-	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -21,16 +20,12 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 	if resp.OverlayDir != "" || resp.OverlayFile != "" || len(resp.GoFlags) != 0 {
 		t.Fatalf("unexpected overlay state: %#v", resp)
 	}
-	root, absErr := filepath.Abs(filepath.Join(d.DOCTEST_ROOT, "project"))
-	if absErr != nil {
-		t.Fatalf("abs project root: %v", absErr)
-	}
-	wantConfig := "--config=" + root + "/cfg"
+	wantConfig := "--config=" + resp.ProjectRoot + "/cfg"
 	want := [][]string{{"tool", wantConfig, "--literal=$OTHER"}}
 	if !reflect.DeepEqual(resp.Calls, want) {
 		t.Fatalf("calls=%#v want %#v", resp.Calls, want)
 	}
-	if !reflect.DeepEqual(resp.WorkDirs, []string{filepath.Join(d.DOCTEST_ROOT, "project")}) {
+	if !reflect.DeepEqual(resp.WorkDirs, []string{resp.ProjectRoot}) {
 		t.Fatalf("workdirs=%#v", resp.WorkDirs)
 	}
 }

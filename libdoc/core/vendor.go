@@ -22,9 +22,9 @@ const zeroPseudoVersion = "v0.0.0-00010101000000-000000000000"
 
 // vendorMod is one module entry from vendor/modules.txt.
 type vendorMod struct {
-	Path           string
-	Version        string
-	GoVersion      string // from "## …; go X.Y" when present
+	Path            string
+	Version         string
+	GoVersion       string // from "## …; go X.Y" when present
 	ReplacementPath string // non-empty when modules.txt records "=> path"
 }
 
@@ -134,28 +134,36 @@ func parseVendorModulesTxt(content string) []vendorMod {
 // Returns empty requireReplace when vendor/ or modules.txt is absent.
 // genDir may be empty only when no shadow roots are needed.
 func vendorBridgeForModRoot(modRoot, genDir, parentGoVersion string, parentPathReplaced, parentModuleReplaced map[string]bool) (requireReplace string, suppressParentModule map[string]bool, err error) {
+	requireReplace, suppressParentModule, _, err = vendorBridgeForModRootWithMappings(modRoot, genDir, parentGoVersion, parentPathReplaced, parentModuleReplaced)
+	return requireReplace, suppressParentModule, err
+}
+
+// vendorBridgeForModRootWithMappings is vendorBridgeForModRoot plus the exact
+// shadow modules created for this generation. A normal vendor replace is not a
+// bridge mapping and is intentionally omitted.
+func vendorBridgeForModRootWithMappings(modRoot, genDir, parentGoVersion string, parentPathReplaced, parentModuleReplaced map[string]bool) (requireReplace string, suppressParentModule map[string]bool, bridges []VendorBridgeMapping, err error) {
 	suppressParentModule = make(map[string]bool)
 	vendorDir := filepath.Join(modRoot, "vendor")
 	st, err := os.Stat(vendorDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", suppressParentModule, nil
+			return "", suppressParentModule, nil, nil
 		}
-		return "", suppressParentModule, err
+		return "", suppressParentModule, nil, err
 	}
 	if !st.IsDir() {
-		return "", suppressParentModule, nil
+		return "", suppressParentModule, nil, nil
 	}
 	data, err := os.ReadFile(filepath.Join(vendorDir, "modules.txt"))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", suppressParentModule, nil
+			return "", suppressParentModule, nil, nil
 		}
-		return "", suppressParentModule, err
+		return "", suppressParentModule, nil, err
 	}
 	mods := parseVendorModulesTxt(string(data))
 	if len(mods) == 0 {
-		return "", suppressParentModule, nil
+		return "", suppressParentModule, nil, nil
 	}
 
 	var b strings.Builder
@@ -198,7 +206,7 @@ func vendorBridgeForModRoot(modRoot, genDir, parentGoVersion string, parentPathR
 			// Avoids writing into project vendor and avoids -overlay (breaks xgo
 			// instrument package load when passed through).
 			if genDir == "" {
-				return "", suppressParentModule, fmt.Errorf("vendor placeholder for %s needs genDir (project vendor is read-only)", reqPath)
+				return "", suppressParentModule, nil, fmt.Errorf("vendor placeholder for %s needs genDir (project vendor is read-only)", reqPath)
 			}
 			goVer := m.GoVersion
 			if goVer == "" {
@@ -209,15 +217,18 @@ func vendorBridgeForModRoot(modRoot, genDir, parentGoVersion string, parentPathR
 			}
 			shadow, serr := materializeVendorShadow(genDir, reqPath, vendorModPath, goVer)
 			if serr != nil {
-				return "", suppressParentModule, serr
+				return "", suppressParentModule, nil, serr
 			}
 			replaceTarget = shadow
+			bridges = append(bridges, VendorBridgeMapping{
+				ModulePath: reqPath, OriginalVendorRoot: vendorModPath, BridgeRoot: shadow,
+			})
 		}
 
 		b.WriteString(fmt.Sprintf("replace %s => %s\n", reqPath, replaceTarget))
 	}
 
-	return b.String(), suppressParentModule, nil
+	return b.String(), suppressParentModule, bridges, nil
 }
 
 // materializeVendorShadow builds genDir/vendor-bridge/<modPath> with a

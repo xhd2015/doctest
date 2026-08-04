@@ -53,6 +53,15 @@ type PreTestHookApply struct {
 	HookCount int
 }
 
+// VendorBridgeMapping identifies a vendor module shadow that was materialized
+// for the current generated workspace. It is explicit run metadata: callers
+// must not infer it by looking for retained vendor-bridge directories.
+type VendorBridgeMapping struct {
+	ModulePath         string
+	OriginalVendorRoot string
+	BridgeRoot         string
+}
+
 const (
 	goInstrumentOverlayDirPlaceholder  = "$GO_INSTRUMENT_OVERLAY_DIR"
 	goInstrumentOverlayFilePlaceholder = "$GO_INSTRUMENT_OVERLAY_FILE"
@@ -165,6 +174,14 @@ func parseXgoTestConfig(data []byte) (*XgoTestConfig, error) {
 // Placeholder vocabulary: $PROJECT_ROOT, $GO_INSTRUMENT_OVERLAY_DIR,
 // $GO_INSTRUMENT_OVERLAY_FILE. Unknown $TOKEN values are left untouched.
 func ApplyPreTestHooks(config *XgoTestConfig, projectRoot string, overlayRoot string, execute PreTestHookExecutor) (PreTestHookApply, error) {
+	return ApplyPreTestHooksWithVendorBridges(config, projectRoot, overlayRoot, nil, execute)
+}
+
+// ApplyPreTestHooksWithVendorBridges is ApplyPreTestHooks with explicit
+// current-run vendor bridge metadata. After all hooks have succeeded, it
+// updates only matching overlay Replace source keys to their compiled bridge
+// paths. Replacement values are never changed.
+func ApplyPreTestHooksWithVendorBridges(config *XgoTestConfig, projectRoot string, overlayRoot string, bridges []VendorBridgeMapping, execute PreTestHookExecutor) (PreTestHookApply, error) {
 	var out PreTestHookApply
 	if config == nil || len(config.PreTest) == 0 {
 		return out, nil
@@ -248,11 +265,97 @@ func ApplyPreTestHooks(config *XgoTestConfig, projectRoot string, overlayRoot st
 			return PreTestHookApply{}, fmt.Errorf("pre_test: inspect overlay file: %w", err)
 		}
 		if st.Size() > 0 {
+			if err := normalizeOverlayVendorBridgeSources(out.OverlayFile, bridges); err != nil {
+				return PreTestHookApply{}, err
+			}
 			out.GoFlags = []string{"-overlay=" + out.OverlayFile}
 		}
 	}
 	out.HookCount = len(config.PreTest)
 	return out, nil
+}
+
+// normalizeOverlayVendorBridgeSources translates a standard Go overlay only
+// from explicit current-run bridge metadata. It deliberately does not inspect
+// the filesystem for bridge roots: a warm cache is not proof a bridge was used
+// by this run.
+func normalizeOverlayVendorBridgeSources(overlayFile string, bridges []VendorBridgeMapping) error {
+	if len(bridges) == 0 {
+		return nil
+	}
+	data, err := os.ReadFile(overlayFile)
+	if err != nil {
+		return fmt.Errorf("pre_test: read overlay file: %w", err)
+	}
+	var overlay map[string]json.RawMessage
+	if err := json.Unmarshal(data, &overlay); err != nil {
+		return fmt.Errorf("pre_test: parse overlay file: %w", err)
+	}
+	replaceRaw, ok := overlay["Replace"]
+	if !ok {
+		return nil
+	}
+	var replace map[string]string
+	if err := json.Unmarshal(replaceRaw, &replace); err != nil {
+		return fmt.Errorf("pre_test: parse overlay Replace: %w", err)
+	}
+	changed := false
+	normalized := make(map[string]string, len(replace))
+	for source, value := range replace {
+		candidate := source
+		for _, bridge := range bridges {
+			if mapped, ok := bridgeOverlaySource(source, bridge); ok {
+				candidate = mapped
+				break
+			}
+		}
+		normalized[candidate] = value
+		changed = changed || candidate != source
+	}
+	if !changed {
+		return nil
+	}
+	replaceData, err := json.Marshal(normalized)
+	if err != nil {
+		return fmt.Errorf("pre_test: encode overlay Replace: %w", err)
+	}
+	overlay["Replace"] = replaceData
+	data, err = json.Marshal(overlay)
+	if err != nil {
+		return fmt.Errorf("pre_test: encode overlay file: %w", err)
+	}
+	if err := os.WriteFile(overlayFile, data, 0o644); err != nil {
+		return fmt.Errorf("pre_test: write overlay file: %w", err)
+	}
+	return nil
+}
+
+func bridgeOverlaySource(source string, bridge VendorBridgeMapping) (string, bool) {
+	if strings.TrimSpace(bridge.ModulePath) == "" || strings.TrimSpace(bridge.OriginalVendorRoot) == "" || strings.TrimSpace(bridge.BridgeRoot) == "" {
+		return "", false
+	}
+	originalRoot, err := filepath.Abs(bridge.OriginalVendorRoot)
+	if err != nil {
+		return "", false
+	}
+	bridgeRoot, err := filepath.Abs(bridge.BridgeRoot)
+	if err != nil {
+		return "", false
+	}
+	sourceAbs, err := filepath.Abs(source)
+	if err != nil {
+		return "", false
+	}
+	rel, err := filepath.Rel(originalRoot, sourceAbs)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	candidate := filepath.Join(bridgeRoot, rel)
+	st, err := os.Stat(candidate)
+	if err != nil || st.IsDir() {
+		return "", false
+	}
+	return candidate, true
 }
 
 // XgoTestConfigApply describes how project test.config.json is applied when

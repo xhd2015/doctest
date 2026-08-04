@@ -480,12 +480,20 @@ func writeFileIfChanged(path string, data []byte, perm os.FileMode) (wrote bool,
 // Assert/session replaces are omitted for the doctest self-module so multi-tree
 // ./... prepare with differing ineffective flags does not churn mtimes.
 func WriteGoMod(genDir, modRoot, modPath string, hasMod bool, withAssertReplace bool, assertCacheDir string, withSessionReplace bool, sessionCacheDir string) error {
+	_, err := WriteGoModWithVendorBridges(genDir, modRoot, modPath, hasMod, withAssertReplace, assertCacheDir, withSessionReplace, sessionCacheDir)
+	return err
+}
+
+// WriteGoModWithVendorBridges writes the generated module and returns only the
+// vendor bridges materialized during this call. The metadata is consumed by
+// later generated-workspace steps; it is not reconstructed from cache paths.
+func WriteGoModWithVendorBridges(genDir, modRoot, modPath string, hasMod bool, withAssertReplace bool, assertCacheDir string, withSessionReplace bool, sessionCacheDir string) ([]VendorBridgeMapping, error) {
 	genModMu.Lock()
 	defer genModMu.Unlock()
 
 	genDir = absGenRoot(genDir)
 	if err := os.MkdirAll(genDir, 0755); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Prefer the source module's go directive so tidy under kool with-go1.19
@@ -525,9 +533,9 @@ func WriteGoMod(genDir, modRoot, modPath string, hasMod bool, withAssertReplace 
 	// genDir/vendor-bridge (placeholder + package symlinks; project vendor
 	// read-only). Always on when vendor/ exists — no user flag.
 	parentGoVer := strings.TrimPrefix(goLine, "go ")
-	vendorExtra, suppressParentModule, err := vendorBridgeForModRoot(modRoot, genDir, parentGoVer, parentPathReplaced, parentModuleReplaced)
+	vendorExtra, suppressParentModule, bridges, err := vendorBridgeForModRootWithMappings(modRoot, genDir, parentGoVer, parentPathReplaced, parentModuleReplaced)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// Parent replaces first (minus any suppressed by private-fork vendor FS win),
 	// then vendor require/replace so offline vendor targets are last writer for
@@ -541,12 +549,12 @@ func WriteGoMod(genDir, modRoot, modPath string, hasMod bool, withAssertReplace 
 
 	man, err := cachedGenManifestLocked(genDir)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	modWrote, err := man.writeRelIfChanged(genDir, "go.mod", []byte(content))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	sumWrote := false
@@ -555,30 +563,30 @@ func WriteGoMod(genDir, modRoot, modPath string, hasMod bool, withAssertReplace 
 		if data, err := os.ReadFile(srcGoSum); err == nil {
 			w, werr := man.writeRelIfChanged(genDir, "go.sum", data)
 			if werr != nil {
-				return werr
+				return nil, werr
 			}
 			sumWrote = w
 		} else if os.IsNotExist(err) {
 			sumPath := filepath.Join(genDir, "go.sum")
 			if _, serr := os.Stat(sumPath); serr == nil {
 				if rerr := os.Remove(sumPath); rerr != nil && !os.IsNotExist(rerr) {
-					return rerr
+					return nil, rerr
 				}
 				sumWrote = true
 			}
 			man.deleteHash("go.sum")
 		} else {
-			return err
+			return nil, err
 		}
 	}
 
 	if err := man.flush(genDir); err != nil {
-		return err
+		return nil, err
 	}
 	if modWrote || sumWrote {
 		os.Remove(filepath.Join(genDir, "doctest.tidy-done"))
 	}
-	return nil
+	return bridges, nil
 }
 
 // readExtraReplaces copies parent go.mod replace directives into gen form
@@ -586,6 +594,7 @@ func WriteGoMod(genDir, modRoot, modPath string, hasMod bool, withAssertReplace 
 //   - extra replace text for gen go.mod
 //   - parentPathReplaced: left-hand paths with filesystem path RHS
 //   - parentModuleReplaced: left-hand paths with module→module RHS
+//
 // Vendor inject uses these so parent path replace always wins, parent
 // module→module wins unless private-fork offline safety prefers vendor FS.
 func readExtraReplaces(modRoot, mainModPath string) (string, map[string]bool, map[string]bool) {

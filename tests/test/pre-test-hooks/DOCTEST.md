@@ -60,6 +60,13 @@ pre-test-hooks/
 ├── shared-overlay/
 │   ├── populated/                 hook writes file → one -overlay flag
 │   └── two-hooks-in-order/        same paths, declaration-order execution
+├── overlay-source-translation/    active current-run bridge metadata
+│   ├── active-bridge/              matching vendor source key rewrites
+│   ├── source-and-value-unchanged/ project key and replacement stay put
+│   ├── stale-bridge-inactive/      on-disk bridge alone cannot activate rewrite
+│   ├── inactive-or-missing/        wrong module or absent bridge file stays put
+│   ├── no-active-mappings/         forced no-vendor leaves vendor keys unchanged
+│   └── after-all-hooks/            merged hook output is normalized last
 └── hook-failure/
     └── stops-before-build/        surfaced failure, no Go flag
 ```
@@ -82,6 +89,12 @@ activation, ordering, and failure.
 | `flexible/project-root` | Mid-string `$PROJECT_ROOT` expands to the absolute project root; unrelated `$OTHER` is not expanded. |
 | `shared-overlay/populated` | A populated file contributes one absolute `-overlay` argument. |
 | `shared-overlay/two-hooks-in-order` | Hooks share paths and execute in declaration order. |
+| `overlay-source-translation/active-bridge` | Active current-run bridge metadata rewrites exactly its matching original vendor source key. |
+| `overlay-source-translation/source-and-value-unchanged` | Project source keys and replacement values are never rewritten. |
+| `overlay-source-translation/stale-bridge-inactive` | An on-disk bridge without this run's metadata has no effect. |
+| `overlay-source-translation/inactive-or-missing` | An inactive module and missing bridged source retain original keys. |
+| `overlay-source-translation/no-active-mappings` | No bridge metadata, including `-mod=mod`, leaves vendor keys unchanged. |
+| `overlay-source-translation/after-all-hooks` | Ordered hooks merge before active-key-only normalization. |
 | `hook-failure/stops-before-build` | Non-zero hook failure is returned before test build invocation. |
 
 ## Implementer surface (generic L2 seam)
@@ -111,6 +124,26 @@ func ApplyPreTestHooks(
 ) (PreTestHookApply, error)
 ```
 
+Generated-workspace callers use a bridge-aware variant. Its mapping slice is
+produced while the current run materializes bridge modules; scanning a retained
+`vendor-bridge` directory later is not a valid substitute.
+
+```go
+type VendorBridgeMapping struct {
+	ModulePath         string
+	OriginalVendorRoot string
+	BridgeRoot         string
+}
+
+func ApplyPreTestHooksWithVendorBridges(
+	config *XgoTestConfig,
+	projectRoot string,
+	overlayRoot string,
+	bridges []VendorBridgeMapping,
+	exec PreTestHookExecutor,
+) (PreTestHookApply, error)
+```
+
 `XgoTestConfig` carries `PreTest []PreTestHook`. The surrounding build runner
 calls this helper before package arguments are finalized, appending `GoFlags`
 before packages. This tree exercises the core contract using an injected
@@ -124,12 +157,13 @@ apply to xgo `args` expansion in production — pure `args` edges may stay L1).
 cd external/doctest-master-2026-08-02
 doctest vet ./tests/test/pre-test-hooks
 doctest test ./tests/test/pre-test-hooks --label-all
-# Classic TDD: exact-placeholder leaves stay GREEN; flexible/* RED until
-# substring expansion lands in ApplyPreTestHooks.
+# Classic TDD: overlay-source-translation/* stays RED until active bridge
+# metadata is carried into post-hook overlay normalization.
 ```
 
 ```go
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -140,9 +174,17 @@ import (
 )
 
 type Request struct {
-	PreTest      []core.PreTestHook
-	WriteOverlay bool
-	FailAtCall   int
+	PreTest                []core.PreTestHook
+	WriteOverlay           bool
+	FailAtCall             int
+	ActiveBridge           bool
+	CreateActiveBridgeFile bool
+	HookOverlays           [][]OverlayEntry
+}
+
+type OverlayEntry struct {
+	Source  string
+	Replace string
 }
 
 type Response struct {
@@ -155,17 +197,44 @@ type Response struct {
 	Calls             [][]string
 	WorkDirs          []string
 	ErrMsg            string
+	OverlayReplace    map[string]string
+	ProjectRoot       string
+	ActiveVendorSource string
+	ActiveBridgeSource string
+	ProjectSource      string
+	InactiveVendorSource string
 }
 
 func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	t.Helper()
-	projectRoot := filepath.Join(d.DOCTEST_ROOT, "project")
-	generatedRoot := filepath.Join(d.DOCTEST_ROOT, "generated", d.DOCTEST_SESSION_ID, filepath.Base(d.DOCTEST_CASE))
+	fixtureRoot := t.TempDir()
+	projectRoot := filepath.Join(fixtureRoot, "project")
+	generatedRoot := filepath.Join(fixtureRoot, "generated")
 	if err := os.MkdirAll(projectRoot, 0o755); err != nil {
 		return nil, err
 	}
+	activeModule := "example.com/active"
+	inactiveModule := "example.com/inactive"
+	activeVendorRoot := filepath.Join(projectRoot, "vendor", filepath.FromSlash(activeModule))
+	activeBridgeRoot := filepath.Join(generatedRoot, "vendor-bridge", filepath.FromSlash(activeModule))
+	activeVendorSource := filepath.Join(activeVendorRoot, "pkg", "active.go")
+	activeBridgeSource := filepath.Join(activeBridgeRoot, "pkg", "active.go")
+	projectSource := filepath.Join(projectRoot, "pkg", "project.go")
+	inactiveVendorSource := filepath.Join(projectRoot, "vendor", filepath.FromSlash(inactiveModule), "pkg", "inactive.go")
+	for _, source := range []string{activeVendorSource, projectSource, inactiveVendorSource} {
+		if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil { return nil, err }
+		if err := os.WriteFile(source, []byte("package fixture\\n"), 0o644); err != nil { return nil, err }
+	}
+	if req.CreateActiveBridgeFile {
+		if err := os.MkdirAll(filepath.Dir(activeBridgeSource), 0o755); err != nil { return nil, err }
+		if err := os.WriteFile(activeBridgeSource, []byte("package fixture\\n"), 0o644); err != nil { return nil, err }
+	}
+	var bridges []core.VendorBridgeMapping
+	if req.ActiveBridge {
+		bridges = append(bridges, core.VendorBridgeMapping{ModulePath: activeModule, OriginalVendorRoot: activeVendorRoot, BridgeRoot: activeBridgeRoot})
+	}
 
-	resp := &Response{}
+	resp := &Response{ProjectRoot: projectRoot, ActiveVendorSource: activeVendorSource, ActiveBridgeSource: activeBridgeSource, ProjectSource: projectSource, InactiveVendorSource: inactiveVendorSource}
 	cfg := &core.XgoTestConfig{PreTest: req.PreTest}
 	call := 0
 	exec := func(workDir string, command []string) error {
@@ -175,10 +244,24 @@ func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 		if req.FailAtCall == call {
 			return errors.New("hook failed")
 		}
-		if req.WriteOverlay {
+		if req.WriteOverlay || call <= len(req.HookOverlays) {
 			for i := 0; i+1 < len(command); i++ {
 				if command[i] == "--overlay-file" {
-					if err := os.WriteFile(command[i+1], []byte(`{"Replace":{}}`), 0o644); err != nil {
+					overlay := struct { Replace map[string]string `json:"Replace"` }{Replace: map[string]string{}}
+					if data, err := os.ReadFile(command[i+1]); err == nil && len(data) > 0 {
+						if err := json.Unmarshal(data, &overlay); err != nil { return err }
+						if overlay.Replace == nil { overlay.Replace = map[string]string{} }
+					}
+					if call <= len(req.HookOverlays) {
+						for _, entry := range req.HookOverlays[call-1] {
+							source := map[string]string{"active-vendor": activeVendorSource, "project-source": projectSource, "inactive-vendor": inactiveVendorSource}[entry.Source]
+							if source == "" { return errors.New("unknown overlay source") }
+							overlay.Replace[source] = entry.Replace
+						}
+					}
+					data, err := json.Marshal(overlay)
+					if err != nil { return err }
+					if err := os.WriteFile(command[i+1], data, 0o644); err != nil {
 						return err
 					}
 				}
@@ -187,7 +270,7 @@ func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 		return nil
 	}
 
-	apply, err := core.ApplyPreTestHooks(cfg, projectRoot, generatedRoot, exec)
+	apply, err := core.ApplyPreTestHooksWithVendorBridges(cfg, projectRoot, generatedRoot, bridges, exec)
 	resp.OverlayDir = apply.OverlayDir
 	resp.OverlayFile = apply.OverlayFile
 	resp.GoFlags = append([]string(nil), apply.GoFlags...)
@@ -204,6 +287,15 @@ func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	}
 	if err != nil {
 		resp.ErrMsg = err.Error()
+	}
+	if resp.OverlayFile != "" {
+		data, readErr := os.ReadFile(resp.OverlayFile)
+		if readErr != nil { return nil, readErr }
+		var overlay struct { Replace map[string]string `json:"Replace"` }
+		if len(data) > 0 {
+			if unmarshalErr := json.Unmarshal(data, &overlay); unmarshalErr != nil { return nil, unmarshalErr }
+		}
+		resp.OverlayReplace = overlay.Replace
 	}
 	return resp, nil
 }

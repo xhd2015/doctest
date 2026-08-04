@@ -146,6 +146,9 @@ type TestRunStats struct {
 	// Unified is true when hierarchical suite gen was used (not internal-compile).
 	Unified bool
 	AbsRoot string
+	// VendorBridges are the explicit bridge mappings created while preparing
+	// this generated root. They are per-run metadata, not cache discovery.
+	VendorBridges []core.VendorBridgeMapping
 
 	// GoTestBypassed is true when DOCTEST_DEBUG bypass-go-test skipped go test
 	// exec after successful prepare (and workspace write when applicable).

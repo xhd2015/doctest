@@ -157,6 +157,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		stats.PathScoped = ctx.isPathScoped()
 		stats.Unified = ctx.unifiedMode
 		stats.AbsRoot = absRoot
+		stats.VendorBridges = append([]core.VendorBridgeMapping(nil), ctx.vendorBridges...)
 		return stats, nil
 	}
 
@@ -272,7 +273,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	// (mapping-gen module is typically "testcase"). pre_test hooks share the same
 	// single config load.
 	suiteModPath := suiteModulePath(runDir)
-	xgoApply, preTestApply, err := applyProjectTestConfig(goTestBin, ctx.modRoot, ctx.modPath, suiteModPath)
+	xgoApply, preTestApply, err := applyProjectTestConfig(goTestBin, ctx.modRoot, ctx.modPath, suiteModPath, ctx.vendorBridges)
 	if err != nil {
 		stats.Phases = phases
 		return stats, err
@@ -425,7 +426,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 // applies both xgo config (when goTestBin is xgo) and generic pre_test hooks.
 // Hook artifacts belong to the source project's durable mapping-gen root, not
 // the generated suite directory that happens to invoke the hook.
-func applyProjectTestConfig(goTestBin, projectRoot, projectModPath, suiteModPath string) (core.XgoTestConfigApply, core.PreTestHookApply, error) {
+func applyProjectTestConfig(goTestBin, projectRoot, projectModPath, suiteModPath string, bridges []core.VendorBridgeMapping) (core.XgoTestConfigApply, core.PreTestHookApply, error) {
 	cfgPath := core.FindXgoTestConfigPath(projectRoot)
 	var cfg *core.XgoTestConfig
 	if cfgPath != "" {
@@ -439,7 +440,7 @@ func applyProjectTestConfig(goTestBin, projectRoot, projectModPath, suiteModPath
 	if err != nil {
 		return core.XgoTestConfigApply{}, core.PreTestHookApply{}, err
 	}
-	preTestApply, err := applyLoadedPreTestHooks(projectRoot, cfg)
+	preTestApply, err := applyLoadedPreTestHooks(projectRoot, cfg, bridges)
 	if err != nil {
 		return core.XgoTestConfigApply{}, core.PreTestHookApply{}, err
 	}
@@ -449,7 +450,7 @@ func applyProjectTestConfig(goTestBin, projectRoot, projectModPath, suiteModPath
 // applyProjectPreTestHooks loads the generic pre_test section independently of
 // xgo-specific config application, so the same hooks work with go test and
 // xgo test. Prefer applyProjectTestConfig when both are needed.
-func applyProjectPreTestHooks(projectRoot string) (core.PreTestHookApply, error) {
+func applyProjectPreTestHooks(projectRoot string, bridges ...[]core.VendorBridgeMapping) (core.PreTestHookApply, error) {
 	configPath := core.FindXgoTestConfigPath(projectRoot)
 	if configPath == "" {
 		return core.PreTestHookApply{}, nil
@@ -458,10 +459,14 @@ func applyProjectPreTestHooks(projectRoot string) (core.PreTestHookApply, error)
 	if err != nil {
 		return core.PreTestHookApply{}, err
 	}
-	return applyLoadedPreTestHooks(projectRoot, config)
+	var active []core.VendorBridgeMapping
+	if len(bridges) > 0 {
+		active = bridges[0]
+	}
+	return applyLoadedPreTestHooks(projectRoot, config, active)
 }
 
-func applyLoadedPreTestHooks(projectRoot string, config *core.XgoTestConfig) (core.PreTestHookApply, error) {
+func applyLoadedPreTestHooks(projectRoot string, config *core.XgoTestConfig, bridges []core.VendorBridgeMapping) (core.PreTestHookApply, error) {
 	if config == nil || len(config.PreTest) == 0 {
 		return core.PreTestHookApply{}, nil
 	}
@@ -469,7 +474,7 @@ func applyLoadedPreTestHooks(projectRoot string, config *core.XgoTestConfig) (co
 	if err != nil {
 		return core.PreTestHookApply{}, err
 	}
-	return core.ApplyPreTestHooks(config, projectRoot, mappingGenRoot, runPreTestHook)
+	return core.ApplyPreTestHooksWithVendorBridges(config, projectRoot, mappingGenRoot, bridges, runPreTestHook)
 }
 
 // printPreTestHookStatus emits always-on one-line status when pre_test hooks
