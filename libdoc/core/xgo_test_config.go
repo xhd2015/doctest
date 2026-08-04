@@ -180,9 +180,11 @@ func ApplyPreTestHooks(config *XgoTestConfig, projectRoot string, overlayRoot st
 }
 
 // ApplyPreTestHooksWithVendorBridges is ApplyPreTestHooks with explicit
-// current-run vendor bridge metadata. After all hooks have succeeded, it
-// updates only matching overlay Replace source keys to their compiled bridge
-// paths. Replacement values are never changed.
+// current-run vendor bridge metadata (xgo-style). After all hooks succeed, it
+// merges phantom vendor go.mod mappings into the shared overlay Replace map:
+// project vendor/<mod>/go.mod → placeholder under vendor-gomod-overlay.
+// Package overlay keys stay on project vendor/; replacement values are never
+// rewritten.
 func ApplyPreTestHooksWithVendorBridges(config *XgoTestConfig, projectRoot string, overlayRoot string, bridges []VendorBridgeMapping, execute PreTestHookExecutor) (PreTestHookApply, error) {
 	var out PreTestHookApply
 	if config == nil || len(config.PreTest) == 0 {

@@ -60,13 +60,13 @@ pre-test-hooks/
 ├── shared-overlay/
 │   ├── populated/                 hook writes file → one -overlay flag
 │   └── two-hooks-in-order/        same paths, declaration-order execution
-├── overlay-source-translation/    active current-run bridge metadata
-│   ├── active-bridge/              matching vendor source key rewrites
-│   ├── source-and-value-unchanged/ project key and replacement stay put
-│   ├── stale-bridge-inactive/      on-disk bridge alone cannot activate rewrite
-│   ├── inactive-or-missing/        wrong module or absent bridge file stays put
-│   ├── no-active-mappings/         forced no-vendor leaves vendor keys unchanged
-│   └── after-all-hooks/            merged hook output is normalized last
+├── overlay-source-translation/    xgo-style phantom go.mod merge after hooks
+│   ├── active-bridge/              package key stays; go.mod→placeholder merged
+│   ├── source-and-value-unchanged/ project + package keys/values stay; go.mod pair added
+│   ├── stale-bridge-inactive/      on-disk placeholder alone cannot merge
+│   ├── inactive-or-missing/        package keys stay put with active metadata
+│   ├── no-active-mappings/         no bridges → vendor package keys unchanged
+│   └── after-all-hooks/            hooks merge first; then go.mod pair merge
 └── hook-failure/
     └── stops-before-build/        surfaced failure, no Go flag
 ```
@@ -89,12 +89,12 @@ activation, ordering, and failure.
 | `flexible/project-root` | Mid-string `$PROJECT_ROOT` expands to the absolute project root; unrelated `$OTHER` is not expanded. |
 | `shared-overlay/populated` | A populated file contributes one absolute `-overlay` argument. |
 | `shared-overlay/two-hooks-in-order` | Hooks share paths and execute in declaration order. |
-| `overlay-source-translation/active-bridge` | Active current-run bridge metadata rewrites exactly its matching original vendor source key. |
-| `overlay-source-translation/source-and-value-unchanged` | Project source keys and replacement values are never rewritten. |
-| `overlay-source-translation/stale-bridge-inactive` | An on-disk bridge without this run's metadata has no effect. |
-| `overlay-source-translation/inactive-or-missing` | An inactive module and missing bridged source retain original keys. |
-| `overlay-source-translation/no-active-mappings` | No bridge metadata, including `-mod=mod`, leaves vendor keys unchanged. |
-| `overlay-source-translation/after-all-hooks` | Ordered hooks merge before active-key-only normalization. |
+| `overlay-source-translation/active-bridge` | Active bridges keep package overlay keys on project vendor and merge phantom go.mod→placeholder. |
+| `overlay-source-translation/source-and-value-unchanged` | Project/package source keys and replacement values stay; only go.mod pair is merged. |
+| `overlay-source-translation/stale-bridge-inactive` | An on-disk placeholder without this run's metadata has no effect. |
+| `overlay-source-translation/inactive-or-missing` | Package overlay keys for active/inactive vendors stay put (no package rewrite). |
+| `overlay-source-translation/no-active-mappings` | No bridge metadata leaves vendor package keys unchanged. |
+| `overlay-source-translation/after-all-hooks` | Ordered hooks merge first; then go.mod placeholder pair is appended. |
 | `hook-failure/stops-before-build` | Non-zero hook failure is returned before test build invocation. |
 
 ## Implementer surface (generic L2 seam)
@@ -124,15 +124,17 @@ func ApplyPreTestHooks(
 ) (PreTestHookApply, error)
 ```
 
-Generated-workspace callers use a bridge-aware variant. Its mapping slice is
-produced while the current run materializes bridge modules; scanning a retained
-`vendor-bridge` directory later is not a valid substitute.
+Generated-workspace callers use a bridge-aware variant. Mappings are produced
+while the current run builds vendor inject (xgo-style): packages stay under
+project `vendor/`; `BridgeRoot` is the absolute placeholder **go.mod** path under
+`vendor-gomod-overlay/`. Scanning a retained hardlink `vendor-bridge` tree is not
+valid.
 
 ```go
 type VendorBridgeMapping struct {
 	ModulePath         string
-	OriginalVendorRoot string
-	BridgeRoot         string
+	OriginalVendorRoot string // project vendor/<mod>
+	BridgeRoot         string // absolute placeholder go.mod path
 }
 
 func ApplyPreTestHooksWithVendorBridges(
@@ -154,11 +156,8 @@ apply to xgo `args` expansion in production — pure `args` edges may stay L1).
 ## How to Run
 
 ```sh
-cd external/doctest-master-2026-08-02
 doctest vet ./tests/test/pre-test-hooks
 doctest test ./tests/test/pre-test-hooks --label-all
-# Classic TDD: overlay-source-translation/* stays RED until active bridge
-# metadata is carried into post-hook overlay normalization.
 ```
 
 ```go
@@ -178,7 +177,7 @@ type Request struct {
 	WriteOverlay           bool
 	FailAtCall             int
 	ActiveBridge           bool
-	CreateActiveBridgeFile bool
+	CreateActiveBridgeFile bool // write placeholder go.mod under vendor-gomod-overlay
 	HookOverlays           [][]OverlayEntry
 }
 
@@ -188,20 +187,21 @@ type OverlayEntry struct {
 }
 
 type Response struct {
-	OverlayDirExists  bool
-	OverlayFileExists bool
-	OverlayFileSize   int64
-	OverlayDir        string
-	OverlayFile       string
-	GoFlags           []string
-	Calls             [][]string
-	WorkDirs          []string
-	ErrMsg            string
-	OverlayReplace    map[string]string
-	ProjectRoot       string
-	ActiveVendorSource string
-	ActiveBridgeSource string
-	ProjectSource      string
+	OverlayDirExists     bool
+	OverlayFileExists    bool
+	OverlayFileSize      int64
+	OverlayDir           string
+	OverlayFile          string
+	GoFlags              []string
+	Calls                [][]string
+	WorkDirs             []string
+	ErrMsg               string
+	OverlayReplace       map[string]string
+	ProjectRoot          string
+	ActiveVendorSource   string // project vendor/.../pkg/active.go (package overlay key)
+	ActiveVendorGoMod    string // project vendor/.../go.mod (phantom overlay source)
+	ActiveBridgeSource   string // absolute placeholder go.mod (BridgeRoot / overlay value)
+	ProjectSource        string
 	InactiveVendorSource string
 }
 
@@ -216,25 +216,45 @@ func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	activeModule := "example.com/active"
 	inactiveModule := "example.com/inactive"
 	activeVendorRoot := filepath.Join(projectRoot, "vendor", filepath.FromSlash(activeModule))
-	activeBridgeRoot := filepath.Join(generatedRoot, "vendor-bridge", filepath.FromSlash(activeModule))
+	// xgo-style: BridgeRoot is placeholder go.mod under vendor-gomod-overlay (not a package tree).
+	activePlaceholderGoMod := filepath.Join(generatedRoot, "vendor-gomod-overlay", filepath.FromSlash(activeModule), "go.mod")
 	activeVendorSource := filepath.Join(activeVendorRoot, "pkg", "active.go")
-	activeBridgeSource := filepath.Join(activeBridgeRoot, "pkg", "active.go")
+	activeVendorGoMod := filepath.Join(activeVendorRoot, "go.mod")
 	projectSource := filepath.Join(projectRoot, "pkg", "project.go")
 	inactiveVendorSource := filepath.Join(projectRoot, "vendor", filepath.FromSlash(inactiveModule), "pkg", "inactive.go")
 	for _, source := range []string{activeVendorSource, projectSource, inactiveVendorSource} {
-		if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil { return nil, err }
-		if err := os.WriteFile(source, []byte("package fixture\\n"), 0o644); err != nil { return nil, err }
+		if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(source, []byte("package fixture\n"), 0o644); err != nil {
+			return nil, err
+		}
 	}
 	if req.CreateActiveBridgeFile {
-		if err := os.MkdirAll(filepath.Dir(activeBridgeSource), 0o755); err != nil { return nil, err }
-		if err := os.WriteFile(activeBridgeSource, []byte("package fixture\\n"), 0o644); err != nil { return nil, err }
+		if err := os.MkdirAll(filepath.Dir(activePlaceholderGoMod), 0o755); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(activePlaceholderGoMod, []byte("module example.com/active\n\ngo 1.19\n"), 0o644); err != nil {
+			return nil, err
+		}
 	}
 	var bridges []core.VendorBridgeMapping
 	if req.ActiveBridge {
-		bridges = append(bridges, core.VendorBridgeMapping{ModulePath: activeModule, OriginalVendorRoot: activeVendorRoot, BridgeRoot: activeBridgeRoot})
+		bridges = append(bridges, core.VendorBridgeMapping{
+			ModulePath:         activeModule,
+			OriginalVendorRoot: activeVendorRoot,
+			BridgeRoot:         activePlaceholderGoMod,
+		})
 	}
 
-	resp := &Response{ProjectRoot: projectRoot, ActiveVendorSource: activeVendorSource, ActiveBridgeSource: activeBridgeSource, ProjectSource: projectSource, InactiveVendorSource: inactiveVendorSource}
+	resp := &Response{
+		ProjectRoot:          projectRoot,
+		ActiveVendorSource:   activeVendorSource,
+		ActiveVendorGoMod:    activeVendorGoMod,
+		ActiveBridgeSource:   activePlaceholderGoMod,
+		ProjectSource:        projectSource,
+		InactiveVendorSource: inactiveVendorSource,
+	}
 	cfg := &core.XgoTestConfig{PreTest: req.PreTest}
 	call := 0
 	exec := func(workDir string, command []string) error {
@@ -247,20 +267,34 @@ func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 		if req.WriteOverlay || call <= len(req.HookOverlays) {
 			for i := 0; i+1 < len(command); i++ {
 				if command[i] == "--overlay-file" {
-					overlay := struct { Replace map[string]string `json:"Replace"` }{Replace: map[string]string{}}
+					overlay := struct {
+						Replace map[string]string `json:"Replace"`
+					}{Replace: map[string]string{}}
 					if data, err := os.ReadFile(command[i+1]); err == nil && len(data) > 0 {
-						if err := json.Unmarshal(data, &overlay); err != nil { return err }
-						if overlay.Replace == nil { overlay.Replace = map[string]string{} }
+						if err := json.Unmarshal(data, &overlay); err != nil {
+							return err
+						}
+						if overlay.Replace == nil {
+							overlay.Replace = map[string]string{}
+						}
 					}
 					if call <= len(req.HookOverlays) {
 						for _, entry := range req.HookOverlays[call-1] {
-							source := map[string]string{"active-vendor": activeVendorSource, "project-source": projectSource, "inactive-vendor": inactiveVendorSource}[entry.Source]
-							if source == "" { return errors.New("unknown overlay source") }
+							source := map[string]string{
+								"active-vendor":   activeVendorSource,
+								"project-source":  projectSource,
+								"inactive-vendor": inactiveVendorSource,
+							}[entry.Source]
+							if source == "" {
+								return errors.New("unknown overlay source")
+							}
 							overlay.Replace[source] = entry.Replace
 						}
 					}
 					data, err := json.Marshal(overlay)
-					if err != nil { return err }
+					if err != nil {
+						return err
+					}
 					if err := os.WriteFile(command[i+1], data, 0o644); err != nil {
 						return err
 					}
@@ -290,10 +324,16 @@ func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	}
 	if resp.OverlayFile != "" {
 		data, readErr := os.ReadFile(resp.OverlayFile)
-		if readErr != nil { return nil, readErr }
-		var overlay struct { Replace map[string]string `json:"Replace"` }
+		if readErr != nil {
+			return nil, readErr
+		}
+		var overlay struct {
+			Replace map[string]string `json:"Replace"`
+		}
 		if len(data) > 0 {
-			if unmarshalErr := json.Unmarshal(data, &overlay); unmarshalErr != nil { return nil, unmarshalErr }
+			if unmarshalErr := json.Unmarshal(data, &overlay); unmarshalErr != nil {
+				return nil, unmarshalErr
+			}
 		}
 		resp.OverlayReplace = overlay.Replace
 	}

@@ -1,9 +1,11 @@
 # Scenario
 
-**Bug**: caller-owned overlay source keys must follow only bridges active in this generated run
+**Feature**: post-hook overlay normalization merges only xgo-style phantom go.mod pairs from current-run bridge metadata
 
 ```
-pre_test hooks -> shared original-path overlay -> active bridge metadata -> generated Go overlay
+pre_test hooks -> shared package overlay keys (project vendor)
+  + active BridgeRoot placeholders
+  -> package keys unchanged; vendor/.../go.mod → placeholder go.mod
 ```
 
 ```go

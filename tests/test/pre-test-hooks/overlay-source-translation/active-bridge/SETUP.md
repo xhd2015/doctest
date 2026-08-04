@@ -1,14 +1,17 @@
 # Scenario
 
-**Bug**: an active bridge redirects its matching original vendor source
+**Feature**: active xgo-style bridge merges phantom go.mod; package key stays on project vendor
 
 ```
-hook -> original vendor key -> active bridge mapping -> bridge source key
+hook -> package overlay on vendor/.../active.go
+  + active BridgeRoot = vendor-gomod-overlay/.../go.mod
+  -> package key unchanged; go.mod → placeholder merged
 ```
 
 ```go
 import (
 	"testing"
+
 	"github.com/xhd2015/doctest/libdoc/core"
 	"github.com/xhd2015/doctest/session"
 )
