@@ -17,10 +17,6 @@ const vendorGomodOverlayDir = "vendor-gomod-overlay"
 // project vendor/<mod>/go.mod → placeholder under vendorGomodOverlayDir.
 const VendorGomodOverlayJSON = "vendor-gomod-overlay.json"
 
-// vendorBridgeDir is retained as a name for legacy tests/docs; new prepares use
-// vendor-gomod-overlay only (no package hardlink trees).
-const vendorBridgeDir = "vendor-bridge"
-
 // zeroPseudoVersion is used when modules.txt records a module with no version
 // (matches xgo / go mod replace-without-require default).
 const zeroPseudoVersion = "v0.0.0-00010101000000-000000000000"

@@ -126,8 +126,13 @@ func tryGomodSrcHit(genDir, fp string, hasMod bool, modRoot string) (bridges []V
 	return bridges, true
 }
 
-func noteGomodSrcHit(genDir string, bridges []VendorBridgeMapping) {
-	noteGenBookkeeping(genDir)
+// noteGomodSrcArtifacts marks gomod-src cache + overlay placeholders as desired
+// for gen-plan accounting. Shared by warm hit and cold miss so prune/emit stay
+// symmetric (placeholders are written with raw WriteFile, not writeRelIfChanged).
+func noteGomodSrcArtifacts(genDir string, bridges []VendorBridgeMapping) {
+	if genDir == "" {
+		return
+	}
 	NoteDesired(genDir, gomodSrcFile)
 	NoteWrite(genDir, gomodSrcFile, false)
 	NoteDesired(genDir, vendorBridgesCacheFile)
@@ -147,6 +152,11 @@ func noteGomodSrcHit(genDir string, bridges []VendorBridgeMapping) {
 			NoteWrite(genDir, rel, false)
 		}
 	}
+}
+
+func noteGomodSrcHit(genDir string, bridges []VendorBridgeMapping) {
+	noteGenBookkeeping(genDir)
+	noteGomodSrcArtifacts(genDir, bridges)
 }
 
 type vendorBridgesCachePayload struct {
@@ -197,8 +207,6 @@ func saveGomodSrcCache(genDir, fp string, bridges []VendorBridgeMapping) error {
 	if _, err := writeFileIfChanged(srcPath, []byte(fp), 0644); err != nil {
 		return err
 	}
-	NoteDesired(genDir, gomodSrcFile)
-	NoteWrite(genDir, gomodSrcFile, false)
 
 	entries := make([]vendorBridgeCacheEntry, 0, len(bridges))
 	for _, b := range bridges {
@@ -216,7 +224,7 @@ func saveGomodSrcCache(genDir, fp string, bridges []VendorBridgeMapping) error {
 	if _, err := writeFileIfChanged(brPath, payload, 0644); err != nil {
 		return err
 	}
-	NoteDesired(genDir, vendorBridgesCacheFile)
-	NoteWrite(genDir, vendorBridgesCacheFile, false)
+	// Same desired-set notes as warm hit (overlay JSON + placeholders included).
+	noteGomodSrcArtifacts(genDir, bridges)
 	return nil
 }
