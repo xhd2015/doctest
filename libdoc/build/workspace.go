@@ -556,14 +556,18 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 		return stats, err
 	}
 
-	// Apply project test.config.json for xgo (first prep with a readable config;
-	// multi-module workspaces typically share one consumer project).
-	xgoApply, err := workspaceXgoTestConfigApply(goTestBin, preps)
+	// Apply project test.config.json once (first prep with a readable config;
+	// multi-module workspaces typically share one consumer project). pre_test
+	// and xgo apply share that single load.
+	xgoApply, preTestApply, err := workspaceProjectTestConfigApply(goTestBin, preps)
 	if err != nil {
 		return stats, err
 	}
 	if len(xgoApply.Flags) > 0 {
 		flagArgs = append(flagArgs, xgoApply.Flags...)
+	}
+	if len(preTestApply.GoFlags) > 0 {
+		flagArgs = append(flagArgs, preTestApply.GoFlags...)
 	}
 
 	displayArgs := displayGoArgs(append(append([]string(nil), flagArgs...), packageArgs...))
@@ -581,6 +585,10 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 		if xgoApply.ConfigPath != "" {
 			fmt.Fprintf(w, "doctest: xgo config %s\n", pathfmt.Short(xgoApply.ConfigPath))
 		}
+	}
+	// Always-on (even non-verbose) when pre_test hooks and/or -overlay= active.
+	printPreTestHookStatus(w, preTestApply)
+	if opts.Verbose {
 		fmt.Fprintf(w, "cd %s && %s %s\n\n", pathfmt.Short(runDir), goTestBin, strings.Join(displayArgs, " "))
 	} else {
 		fmt.Fprintf(w, "cd %s && %s %s\n", pathfmt.Short(runDir), goTestBin, strings.Join(displayArgs, " "))
@@ -665,13 +673,11 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	return stats, nil
 }
 
-// workspaceXgoTestConfigApply picks project test.config.json from the first
-// prep that has one under its module root. Suite module is empty so include-as
-// always applies when a project module path is known (workspace runs from gen/hub).
-func workspaceXgoTestConfigApply(goTestBin string, preps []TreePrep) (core.XgoTestConfigApply, error) {
-	if strings.TrimSpace(goTestBin) != "xgo" {
-		return core.XgoTestConfigApply{}, nil
-	}
+// workspaceProjectTestConfigApply picks project test.config.json from the first
+// prep that has one under its module root and applies both xgo config and
+// pre_test from that single load. Suite module is empty so include-as always
+// applies when a project module path is known (workspace runs from gen/hub).
+func workspaceProjectTestConfigApply(goTestBin string, preps []TreePrep) (core.XgoTestConfigApply, core.PreTestHookApply, error) {
 	for _, p := range preps {
 		modRoot, modPath, ok := core.FindModuleRoot(p.AbsRoot)
 		if !ok || modRoot == "" {
@@ -681,17 +687,42 @@ func workspaceXgoTestConfigApply(goTestBin string, preps []TreePrep) (core.XgoTe
 			continue
 		}
 		// Empty suite path → always request include-as (gen/hub ≠ project).
-		return core.BuildXgoTestConfigApply(goTestBin, modRoot, modPath, "")
+		return applyProjectTestConfig(goTestBin, modRoot, modPath, "")
 	}
-	// No config file: still try include-as from first prep module.
+	// No config file: still try include-as from first prep module (xgo only).
+	if strings.TrimSpace(goTestBin) == "xgo" {
+		for _, p := range preps {
+			modRoot, modPath, ok := core.FindModuleRoot(p.AbsRoot)
+			if !ok || modPath == "" {
+				continue
+			}
+			xgoApply, err := core.ApplyLoadedXgoTestConfig(goTestBin, "", nil, modRoot, modPath, "")
+			return xgoApply, core.PreTestHookApply{}, err
+		}
+	}
+	return core.XgoTestConfigApply{}, core.PreTestHookApply{}, nil
+}
+
+// workspacePreTestHooksApply uses the same first-readable-config selection as
+// the workspace xgo configuration path, but remains available to ordinary go
+// test runs too.
+func workspacePreTestHooksApply(preps []TreePrep) (core.PreTestHookApply, error) {
 	for _, p := range preps {
-		modRoot, modPath, ok := core.FindModuleRoot(p.AbsRoot)
-		if !ok || modPath == "" {
+		modRoot, _, ok := core.FindModuleRoot(p.AbsRoot)
+		if !ok || core.FindXgoTestConfigPath(modRoot) == "" {
 			continue
 		}
-		return core.BuildXgoTestConfigApply(goTestBin, modRoot, modPath, "")
+		return applyProjectPreTestHooks(modRoot)
 	}
-	return core.XgoTestConfigApply{}, nil
+	return core.PreTestHookApply{}, nil
+}
+
+// workspaceXgoTestConfigApply picks project test.config.json from the first
+// prep that has one under its module root. Suite module is empty so include-as
+// always applies when a project module path is known (workspace runs from gen/hub).
+func workspaceXgoTestConfigApply(goTestBin string, preps []TreePrep) (core.XgoTestConfigApply, error) {
+	xgoApply, _, err := workspaceProjectTestConfigApply(goTestBin, preps)
+	return xgoApply, err
 }
 
 // prepareWorkspaceLeafCache builds multi-tree PassPlan keys (FormatLeafIdentity)

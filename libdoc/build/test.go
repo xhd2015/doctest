@@ -269,9 +269,10 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 
 	// When using xgo, apply project test.config.json (abs path under modRoot):
 	// mock_rules → --mock-rule, flags/env, and include-as-main when suite ≠ project
-	// (mapping-gen module is typically "testcase").
+	// (mapping-gen module is typically "testcase"). pre_test hooks share the same
+	// single config load.
 	suiteModPath := suiteModulePath(runDir)
-	xgoApply, err := core.BuildXgoTestConfigApply(goTestBin, ctx.modRoot, ctx.modPath, suiteModPath)
+	xgoApply, preTestApply, err := applyProjectTestConfig(goTestBin, ctx.modRoot, ctx.modPath, suiteModPath)
 	if err != nil {
 		stats.Phases = phases
 		return stats, err
@@ -279,12 +280,17 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	if len(xgoApply.Flags) > 0 {
 		flagArgs = append(flagArgs, xgoApply.Flags...)
 	}
+	if len(preTestApply.GoFlags) > 0 {
+		flagArgs = append(flagArgs, preTestApply.GoFlags...)
+	}
 	if opts.Verbose && xgoApply.ConfigPath != "" {
 		fmt.Fprintf(w, "doctest: xgo config %s\n", pathfmt.Short(xgoApply.ConfigPath))
 		if xgoApply.IncludeAsMainModule != "" {
 			fmt.Fprintf(w, "doctest: mock-rule-include-as-main-module=%s\n", xgoApply.IncludeAsMainModule)
 		}
 	}
+	// Always-on (even non-verbose) when pre_test hooks and/or -overlay= active.
+	printPreTestHookStatus(w, preTestApply)
 
 	displayArgs := displayGoArgs(append(append([]string(nil), flagArgs...), packageArgs...))
 	if len(xgoApply.ProgArgs) > 0 {
@@ -413,6 +419,89 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	}
 	stats.Phases = phases
 	return stats, nil
+}
+
+// applyProjectTestConfig loads test.config.json once per project root and
+// applies both xgo config (when goTestBin is xgo) and generic pre_test hooks.
+// Hook artifacts belong to the source project's durable mapping-gen root, not
+// the generated suite directory that happens to invoke the hook.
+func applyProjectTestConfig(goTestBin, projectRoot, projectModPath, suiteModPath string) (core.XgoTestConfigApply, core.PreTestHookApply, error) {
+	cfgPath := core.FindXgoTestConfigPath(projectRoot)
+	var cfg *core.XgoTestConfig
+	if cfgPath != "" {
+		var err error
+		cfg, err = core.LoadXgoTestConfig(cfgPath)
+		if err != nil {
+			return core.XgoTestConfigApply{}, core.PreTestHookApply{}, err
+		}
+	}
+	xgoApply, err := core.ApplyLoadedXgoTestConfig(goTestBin, cfgPath, cfg, projectRoot, projectModPath, suiteModPath)
+	if err != nil {
+		return core.XgoTestConfigApply{}, core.PreTestHookApply{}, err
+	}
+	preTestApply, err := applyLoadedPreTestHooks(projectRoot, cfg)
+	if err != nil {
+		return core.XgoTestConfigApply{}, core.PreTestHookApply{}, err
+	}
+	return xgoApply, preTestApply, nil
+}
+
+// applyProjectPreTestHooks loads the generic pre_test section independently of
+// xgo-specific config application, so the same hooks work with go test and
+// xgo test. Prefer applyProjectTestConfig when both are needed.
+func applyProjectPreTestHooks(projectRoot string) (core.PreTestHookApply, error) {
+	configPath := core.FindXgoTestConfigPath(projectRoot)
+	if configPath == "" {
+		return core.PreTestHookApply{}, nil
+	}
+	config, err := core.LoadXgoTestConfig(configPath)
+	if err != nil {
+		return core.PreTestHookApply{}, err
+	}
+	return applyLoadedPreTestHooks(projectRoot, config)
+}
+
+func applyLoadedPreTestHooks(projectRoot string, config *core.XgoTestConfig) (core.PreTestHookApply, error) {
+	if config == nil || len(config.PreTest) == 0 {
+		return core.PreTestHookApply{}, nil
+	}
+	mappingGenRoot, _, err := core.CacheMappingGenRoot(projectRoot)
+	if err != nil {
+		return core.PreTestHookApply{}, err
+	}
+	return core.ApplyPreTestHooks(config, projectRoot, mappingGenRoot, runPreTestHook)
+}
+
+// printPreTestHookStatus emits always-on one-line status when pre_test hooks
+// ran and/or a -overlay= Go flag was contributed. Quiet when neither applies.
+func printPreTestHookStatus(w io.Writer, apply core.PreTestHookApply) {
+	if w == nil {
+		return
+	}
+	if apply.HookCount > 0 {
+		fmt.Fprintf(w, "doctest: pre_test %d hook(s)\n", apply.HookCount)
+	}
+	for _, f := range apply.GoFlags {
+		if strings.HasPrefix(f, "-overlay=") {
+			fmt.Fprintf(w, "doctest: %s\n", f)
+		}
+	}
+}
+
+func runPreTestHook(workDir string, command []string) error {
+	if len(command) == 0 || strings.TrimSpace(command[0]) == "" {
+		return fmt.Errorf("empty command")
+	}
+	cmd := exec.Command(command[0], command[1:]...)
+	cmd.Dir = workDir
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	if len(output) == 0 {
+		return err
+	}
+	return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(output)))
 }
 
 // UnifiedSuiteTestName is the go test function that iterates registered leaves.
