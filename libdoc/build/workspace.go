@@ -608,7 +608,7 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	// Always use go test -json for Pass/Fail/Run suite accounting. Verbose is
 	// presentation only (stream more Output events); same counts as quiet.
 	tGo := time.Now()
-	result, runErr := runGoTestJSONOnce(goTestBin, runDir, append(append([]string(nil), flagArgs...), packageArgs...), sessionID, goCache, opts.MetricsNestSink, "", leafSkipEnv, xgoApply.Env, xgoApply.ProgArgs, leafKeys, stdout, style, opts.Verbose)
+	result, runErr := runGoTestJSONOnce(goTestBin, runDir, flagArgs, packageArgs, sessionID, goCache, opts.MetricsNestSink, "", leafSkipEnv, xgoApply.Env, xgoApply.ProgArgs, leafKeys, stdout, style, opts.Verbose)
 	goTestElapsed := time.Since(tGo)
 	stats.Phases = append(stats.Phases, PhaseTiming{Name: "go_test", ElapsedNs: goTestElapsed.Nanoseconds()})
 	// Discovery planned count before Total is rewritten to actual_run.

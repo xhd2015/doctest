@@ -837,8 +837,7 @@ func runGoTestJSONPerPackage(goTestBin, runDir string, flagArgs, packageArgs []s
 	var merged goTestJSONResult
 	var firstErr error
 	for _, pkg := range packageArgs {
-		args := append(append([]string(nil), flagArgs...), pkg)
-		res, err := runGoTestJSONOnce(goTestBin, runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, extraEnv, progArgs, leafKeys, stdout, style, verbose)
+		res, err := runGoTestJSONOnce(goTestBin, runDir, flagArgs, []string{pkg}, sessionID, goCache, nestSink, "", leafSkipPaths, extraEnv, progArgs, leafKeys, stdout, style, verbose)
 		mergeGoTestJSONResult(&merged, res)
 		if err != nil && firstErr == nil {
 			firstErr = err
@@ -885,8 +884,7 @@ func runGoTestJSONShards(goTestBin, runDir string, flagArgs, packageArgs []strin
 	workers := 1
 	shards := packageTestShards(packageArgs, workers)
 	if len(shards) <= 1 {
-		args := append(append([]string(nil), flagArgs...), packageArgs...)
-		return runGoTestJSONOnce(goTestBin, runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, extraEnv, progArgs, leafKeys, stdout, style, verbose)
+		return runGoTestJSONOnce(goTestBin, runDir, flagArgs, packageArgs, sessionID, goCache, nestSink, "", leafSkipPaths, extraEnv, progArgs, leafKeys, stdout, style, verbose)
 	}
 
 	// Multi-shard: readonly module mode so concurrent go tests share genDir safely.
@@ -910,9 +908,8 @@ func runGoTestJSONShards(goTestBin, runDir string, flagArgs, packageArgs []strin
 		shard := shard
 		go func() {
 			defer wg.Done()
-			args := append(append([]string(nil), shardFlags...), shard...)
 			// Locked stdout keeps progress dots incremental and non-interleaved by byte.
-			res, err := runGoTestJSONOnce(goTestBin, runDir, args, sessionID, goCache, nestSink, "", leafSkipPaths, extraEnv, progArgs, leafKeys, &lockedWriter{w: stdout, mu: &mu}, style, verbose)
+			res, err := runGoTestJSONOnce(goTestBin, runDir, shardFlags, shard, sessionID, goCache, nestSink, "", leafSkipPaths, extraEnv, progArgs, leafKeys, &lockedWriter{w: stdout, mu: &mu}, style, verbose)
 			mu.Lock()
 			defer mu.Unlock()
 			mergeGoTestJSONResult(&merged, res)
@@ -936,7 +933,7 @@ func (l *lockedWriter) Write(p []byte) (int, error) {
 	return l.w.Write(p)
 }
 
-func runGoTestJSONOnce(goTestBin, runDir string, testArgs []string, sessionID, goCache, nestSink, goWork, leafSkipPaths string, extraEnv, progArgs []string, leafKeys map[string]string, stdout io.Writer, style colorStyle, verbose bool) (goTestJSONResult, error) {
+func runGoTestJSONOnce(goTestBin, runDir string, flagArgs, packageArgs []string, sessionID, goCache, nestSink, goWork, leafSkipPaths string, extraEnv, progArgs []string, leafKeys map[string]string, stdout io.Writer, style colorStyle, verbose bool) (goTestJSONResult, error) {
 	goTestSlots <- struct{}{}
 	defer func() { <-goTestSlots }()
 
@@ -954,18 +951,7 @@ func runGoTestJSONOnce(goTestBin, runDir string, testArgs []string, sessionID, g
 	// Display still shows -v (flagArgs) so verbose-go-flag / user-facing cd
 	// lines keep advertising presentation mode.
 	// -json must stay before -args so it is not forwarded to the test binary.
-	execArgs := make([]string, 0, len(testArgs)+2+len(progArgs))
-	for _, a := range testArgs {
-		if a == "-v" {
-			continue
-		}
-		execArgs = append(execArgs, a)
-	}
-	execArgs = append(execArgs, "-json")
-	if len(progArgs) > 0 {
-		execArgs = append(execArgs, "-args")
-		execArgs = append(execArgs, progArgs...)
-	}
+	execArgs := goTestJSONArgs(flagArgs, packageArgs, progArgs)
 	goTestCmd := exec.Command(goTestBin, execArgs...)
 	goTestCmd.Dir = runDir
 	goTestCmd.Env = goTestEnvFull(sessionID, goCache, nestSink, goWork, leafSkipPaths, extraEnv)
@@ -1362,6 +1348,24 @@ func runGoTestJSONOnce(goTestBin, runDir string, testArgs []string, sessionID, g
 		return res, err
 	}
 	return res, nil
+}
+
+// goTestJSONArgs builds a go/xgo test invocation with all Go-command flags
+// before package patterns and all test-binary arguments after -args.
+func goTestJSONArgs(flagArgs, packageArgs, progArgs []string) []string {
+	execArgs := make([]string, 0, len(flagArgs)+1+len(packageArgs)+1+len(progArgs))
+	for _, arg := range flagArgs {
+		if arg != "-v" {
+			execArgs = append(execArgs, arg)
+		}
+	}
+	execArgs = append(execArgs, "-json")
+	execArgs = append(execArgs, packageArgs...)
+	if len(progArgs) > 0 {
+		execArgs = append(execArgs, "-args")
+		execArgs = append(execArgs, progArgs...)
+	}
+	return execArgs
 }
 
 // goTestTimeoutErrorLine returns a clear user-facing timeout message when s
