@@ -570,9 +570,25 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	}
 	if len(preTestApply.GoFlags) > 0 {
 		flagArgs = append(flagArgs, preTestApply.GoFlags...)
-	} else if genRootLabel != "" {
-		if ov := core.VendorGomodOverlayGoFlag(genRootLabel); len(ov) > 0 {
-			flagArgs = append(flagArgs, ov...)
+	} else {
+		// Member gen roots hold vendor-gomod-overlay.json; hubDir does not.
+		// Merge into runDir (hub or single gen root) for one -overlay= flag.
+		genRoots := uniquePrepGenRoots(preps)
+		if len(genRoots) == 0 && genRootLabel != "" {
+			genRoots = []string{genRootLabel}
+		}
+		dest := runDir
+		if dest == "" {
+			dest = genRootLabel
+		}
+		if dest != "" {
+			ov, oerr := core.VendorGomodOverlayGoFlagMerged(dest, genRoots)
+			if oerr != nil {
+				return stats, fmt.Errorf("workspace vendor-gomod overlay: %w", oerr)
+			}
+			if len(ov) > 0 {
+				flagArgs = append(flagArgs, ov...)
+			}
 		}
 	}
 
@@ -679,11 +695,46 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	return stats, nil
 }
 
+// uniquePrepGenRoots returns cleaned unique GenRoot paths from preps (stable order).
+func uniquePrepGenRoots(preps []TreePrep) []string {
+	seen := make(map[string]bool)
+	var out []string
+	for _, p := range preps {
+		g := filepath.Clean(p.GenRoot)
+		if g == "" || g == "." || seen[g] {
+			continue
+		}
+		seen[g] = true
+		out = append(out, g)
+	}
+	return out
+}
+
+// collectPrepVendorBridges unions VendorBridgeMapping from all preps (deduped).
+// Multi-mod hub pre_test normalize must see every member's phantom go.mod pairs.
+func collectPrepVendorBridges(preps []TreePrep) []core.VendorBridgeMapping {
+	seen := make(map[string]bool)
+	var out []core.VendorBridgeMapping
+	for _, p := range preps {
+		for _, b := range p.VendorBridges {
+			key := b.ModulePath + "\x00" + b.OriginalVendorRoot + "\x00" + b.BridgeRoot
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
 // workspaceProjectTestConfigApply picks project test.config.json from the first
 // prep that has one under its module root and applies both xgo config and
 // pre_test from that single load. Suite module is empty so include-as always
 // applies when a project module path is known (workspace runs from gen/hub).
+// Vendor bridges are the union of all preps (multi-mod hub).
 func workspaceProjectTestConfigApply(goTestBin string, preps []TreePrep) (core.XgoTestConfigApply, core.PreTestHookApply, error) {
+	allBridges := collectPrepVendorBridges(preps)
 	for _, p := range preps {
 		modRoot, modPath, ok := core.FindModuleRoot(p.AbsRoot)
 		if !ok || modRoot == "" {
@@ -693,7 +744,7 @@ func workspaceProjectTestConfigApply(goTestBin string, preps []TreePrep) (core.X
 			continue
 		}
 		// Empty suite path → always request include-as (gen/hub ≠ project).
-		return applyProjectTestConfig(goTestBin, modRoot, modPath, "", p.VendorBridges)
+		return applyProjectTestConfig(goTestBin, modRoot, modPath, "", allBridges)
 	}
 	// No config file: still try include-as from first prep module (xgo only).
 	if strings.TrimSpace(goTestBin) == "xgo" {
@@ -713,12 +764,13 @@ func workspaceProjectTestConfigApply(goTestBin string, preps []TreePrep) (core.X
 // the workspace xgo configuration path, but remains available to ordinary go
 // test runs too.
 func workspacePreTestHooksApply(preps []TreePrep) (core.PreTestHookApply, error) {
+	allBridges := collectPrepVendorBridges(preps)
 	for _, p := range preps {
 		modRoot, _, ok := core.FindModuleRoot(p.AbsRoot)
 		if !ok || core.FindXgoTestConfigPath(modRoot) == "" {
 			continue
 		}
-		return applyProjectPreTestHooks(modRoot, p.VendorBridges)
+		return applyProjectPreTestHooks(modRoot, allBridges)
 	}
 	return core.PreTestHookApply{}, nil
 }

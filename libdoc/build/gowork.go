@@ -281,8 +281,15 @@ func writeMultiModHub(toplevel string, members []memberSuite, replaceByMod map[s
 	if err := writeFileIfChangedPlain(filepath.Join(hubDir, "go.mod"), []byte(mod.String())); err != nil {
 		return "", err
 	}
+	// Member gen roots (for merged xgo-style vendor go.mod overlay on hub tidy).
+	memberGenRoots := make([]string, 0, len(replaceByMod))
+	for _, g := range replaceByMod {
+		if g != "" {
+			memberGenRoots = append(memberGenRoots, g)
+		}
+	}
 	// Populate go.sum / resolve graph for the hub module.
-	if err := tidyHubGoMod(hubDir, goCache); err != nil {
+	if err := tidyHubGoMod(hubDir, goCache, memberGenRoots); err != nil {
 		return "", fmt.Errorf("hub go mod tidy: %w", err)
 	}
 
@@ -352,11 +359,25 @@ func collectGoModReplaces(genRoot string) ([]string, error) {
 	return out, nil
 }
 
-func tidyHubGoMod(hubDir, goCache string) error {
+// tidyHubGoMod runs go mod tidy in hubDir. memberGenRoots supply per-member
+// vendor-gomod-overlay.json maps, merged under hubDir so phantom vendor go.mod
+// files are visible (replace targets project vendor without on-disk go.mod).
+func tidyHubGoMod(hubDir, goCache string, memberGenRoots []string) error {
 	cmd := exec.Command("go", "mod", "tidy")
 	cmd.Dir = hubDir
+	var envExtras []string
 	if goCache != "" {
-		cmd.Env = core.ChildEnv(nil, "GOCACHE="+goCache)
+		envExtras = append(envExtras, "GOCACHE="+goCache)
+	}
+	overlayPath, err := core.MergeVendorGomodOverlays(hubDir, memberGenRoots)
+	if err != nil {
+		return fmt.Errorf("merge vendor-gomod overlays: %w", err)
+	}
+	if overlayPath != "" {
+		envExtras = append(envExtras, core.AppendGOFLAGSOverlay(overlayPath)...)
+	}
+	if len(envExtras) > 0 {
+		cmd.Env = core.ChildEnv(nil, envExtras...)
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -61,6 +62,50 @@ func TestVendorBridgeShadowNotProjectVendor(t *testing.T) {
 	}
 	if VendorGomodOverlayPath(genDir) == "" {
 		t.Fatal("expected vendor-gomod-overlay.json")
+	}
+}
+
+func TestMergeVendorGomodOverlaysFromMemberRoots(t *testing.T) {
+	genA := t.TempDir()
+	genB := t.TempDir()
+	hub := t.TempDir()
+	// Two member overlays with distinct Replace entries.
+	if err := os.WriteFile(filepath.Join(genA, VendorGomodOverlayJSON), []byte(`{"Replace":{"/v/a/go.mod":"/ph/a/go.mod"}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(genB, VendorGomodOverlayJSON), []byte(`{"Replace":{"/v/b/go.mod":"/ph/b/go.mod"}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	path, err := MergeVendorGomodOverlays(hub, []string{genA, genB})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if path == "" {
+		t.Fatal("expected merged overlay path")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload struct {
+		Replace map[string]string `json:"Replace"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Replace["/v/a/go.mod"] != "/ph/a/go.mod" || payload.Replace["/v/b/go.mod"] != "/ph/b/go.mod" {
+		t.Fatalf("merged Replace: %#v", payload.Replace)
+	}
+	// Hub-only lookup must not be empty after merge.
+	if VendorGomodOverlayPath(hub) == "" {
+		t.Fatal("hub should expose merged overlay via VendorGomodOverlayPath")
+	}
+	// Empty members → clear dest.
+	if p, err := MergeVendorGomodOverlays(hub, nil); err != nil || p != "" {
+		t.Fatalf("empty merge: path=%q err=%v", p, err)
+	}
+	if VendorGomodOverlayPath(hub) != "" {
+		t.Fatal("expected hub overlay removed when merge empty")
 	}
 }
 

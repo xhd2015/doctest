@@ -328,6 +328,99 @@ func VendorGomodOverlayGoFlag(genDir string) []string {
 	return []string{"-overlay=" + p}
 }
 
+// MergeVendorGomodOverlays unions Replace maps from each genRoot's
+// vendor-gomod-overlay.json into destDir/vendor-gomod-overlay.json
+// (content-stable write). Used by multi-mod hub tidy/test: overlay JSON lives
+// under member gen roots, not under __hub.
+//
+// Returns the absolute path of the merged file when non-empty, or "" when no
+// mappings exist (and removes any prior dest overlay file).
+func MergeVendorGomodOverlays(destDir string, genRoots []string) (string, error) {
+	if destDir == "" {
+		return "", nil
+	}
+	merged := make(map[string]string)
+	for _, root := range genRoots {
+		if root == "" {
+			continue
+		}
+		p := filepath.Join(root, VendorGomodOverlayJSON)
+		data, err := os.ReadFile(p)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return "", err
+		}
+		if len(strings.TrimSpace(string(data))) == 0 {
+			continue
+		}
+		var payload struct {
+			Replace map[string]string `json:"Replace"`
+		}
+		if err := json.Unmarshal(data, &payload); err != nil {
+			return "", fmt.Errorf("parse %s: %w", p, err)
+		}
+		for k, v := range payload.Replace {
+			if k == "" || v == "" {
+				continue
+			}
+			merged[k] = v
+		}
+	}
+	outPath := filepath.Join(destDir, VendorGomodOverlayJSON)
+	if len(merged) == 0 {
+		_ = os.Remove(outPath)
+		return "", nil
+	}
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		return "", err
+	}
+	payload, err := json.Marshal(struct {
+		Replace map[string]string `json:"Replace"`
+	}{Replace: merged})
+	if err != nil {
+		return "", err
+	}
+	if prev, err := os.ReadFile(outPath); err == nil && string(prev) == string(payload) {
+		abs, aerr := filepath.Abs(outPath)
+		if aerr != nil {
+			return outPath, nil
+		}
+		return abs, nil
+	}
+	if err := os.WriteFile(outPath, payload, 0644); err != nil {
+		return "", err
+	}
+	abs, err := filepath.Abs(outPath)
+	if err != nil {
+		return outPath, nil
+	}
+	return abs, nil
+}
+
+// VendorGomodOverlayGoFlagMerged merges member gen-root overlays into destDir
+// and returns []string{"-overlay=PATH"} or nil.
+func VendorGomodOverlayGoFlagMerged(destDir string, genRoots []string) ([]string, error) {
+	p, err := MergeVendorGomodOverlays(destDir, genRoots)
+	if err != nil {
+		return nil, err
+	}
+	if p == "" {
+		return nil, nil
+	}
+	return []string{"-overlay=" + p}, nil
+}
+
+// AppendGOFLAGSOverlay returns env assignments that set GOFLAGS to include
+// -overlay=path (preserves other GOFLAGS tokens from the process environment).
+func AppendGOFLAGSOverlay(overlayPath string) []string {
+	if overlayPath == "" {
+		return nil
+	}
+	return mergeGOFLAGSOverlay(nil, overlayPath)
+}
+
 func isLocalFilesystemPath(p string) bool {
 	if p == "" {
 		return false
