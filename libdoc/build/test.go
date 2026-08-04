@@ -283,6 +283,9 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	}
 	if len(preTestApply.GoFlags) > 0 {
 		flagArgs = append(flagArgs, preTestApply.GoFlags...)
+	} else if ov := core.VendorGomodOverlayGoFlag(ctx.genRoot); len(ov) > 0 {
+		// xgo-style phantom vendor go.mod when no pre_test overlay was emitted.
+		flagArgs = append(flagArgs, ov...)
 	}
 	if opts.Verbose && xgoApply.ConfigPath != "" {
 		fmt.Fprintf(w, "doctest: xgo config %s\n", pathfmt.Short(xgoApply.ConfigPath))

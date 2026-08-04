@@ -570,6 +570,10 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	}
 	if len(preTestApply.GoFlags) > 0 {
 		flagArgs = append(flagArgs, preTestApply.GoFlags...)
+	} else if genRootLabel != "" {
+		if ov := core.VendorGomodOverlayGoFlag(genRootLabel); len(ov) > 0 {
+			flagArgs = append(flagArgs, ov...)
+		}
 	}
 
 	displayArgs := displayGoArgs(append(append([]string(nil), flagArgs...), packageArgs...))

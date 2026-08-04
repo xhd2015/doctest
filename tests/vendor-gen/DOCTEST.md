@@ -16,10 +16,12 @@
 - **Parent go.mod directives** — the project's `go` version line and any
   filesystem path `replace` directives that `WriteGoMod` already copies into the
   gen module (absolute-ized).
-- **Shadow vendor module** — when a vendored module lacks `go.mod`, genDir gets
-  `vendor-bridge/<module>/` with a placeholder `go.mod` and **hardlinks/copies**
-  of package files from project `vendor/` (project tree is never written; Go
-  ignores symlinks under module roots).
+- **Vendor gomod overlay** — when a vendored module lacks `go.mod`, genDir gets
+  only a synthetic `vendor-gomod-overlay/<module>/go.mod` plus
+  `vendor-gomod-overlay.json` mapping
+  `abs(project vendor/<mod>/go.mod) → abs(placeholder go.mod)` for `go -overlay`
+  (xgo `createGoModPlaceholder` model). Package sources stay under project
+  `vendor/`; project tree is never written; no package hardlink/copy into gen.
 
 **Behaviors**
 
@@ -30,14 +32,15 @@
    in that file gen `go.mod` includes:
    - `require <module> <version>` (version from modules.txt; zero pseudo-version
      only if version empty)
-   - `replace <module> => <modRoot>/vendor/<module-path>` (or replacement path
-     rules aligned with xgo when modules.txt records a non-local `=>` replace)
-3. For each such replace target, if `go.mod` is missing under the vendored path,
-   WriteGoMod builds a **shadow** under `genDir/vendor-bridge/…` (placeholder +
-   package symlinks) and `replace` points at that shadow — project `vendor/` is
-   not modified.
+   - `replace <module> => <modRoot>/vendor/<module-path>` **always** for package
+     sources (including modules that lack `go.mod`)
+3. For each module whose project `vendor/<mod>/go.mod` is missing, WriteGoMod
+   writes a **placeholder only** under `genDir/vendor-gomod-overlay/<mod>/go.mod`
+   and records the mapping in `genDir/vendor-gomod-overlay.json`. It does **not**
+   hardlink/copy package trees into gen, and does **not** point replace at a
+   `vendor-bridge` shadow.
 4. When `go.mod` already exists under vendor, replace still points at the project
-   vendor path (unchanged).
+   vendor path; **no** placeholder/overlay entry for that module.
 5. Parent `go` directive and parent path replaces remain present **alongside**
    vendor requires/replaces for **other** modules (not dropped or overwritten).
 6. When parent `go.mod` already has a **filesystem path** `replace` for module M
@@ -69,8 +72,9 @@ vendor-gen/                                    [WriteGoMod + project vendor]
 ├── absent/                                    no vendor/ next to go.mod
 │   └── no-vendor-replaces/                    no mass replace …/vendor/…
 └── present/                                   vendor/ + modules.txt fixture
-    ├── require-replace/                       require + replace per modules.txt
-    ├── placeholder-gomod/                     placeholder go.mod when missing
+    ├── require-replace/                       require + replace → project vendor
+    ├── placeholder-gomod/                     overlay placeholder + JSON (no package mirror)
+    ├── has-gomod-no-overlay/                   existing vendor go.mod → no overlay artifacts
     ├── prefers-vendor-source/                 replace target = vendor path (+ marker)
     ├── coexists-parent/                       parent go + path replace (other mod) + vendor
     ├── parent-path-replace-wins/              parent path replace for M skips vendor/M
@@ -80,9 +84,10 @@ vendor-gen/                                    [WriteGoMod + project vendor]
 
 Split factor at root children: **vendor presence** (absent | present) — the
 dominant product switch for this feature. Under `present/`, siblings partition
-observable outcomes of the vendor bridge (wiring, placeholders, path preference,
-coexistence with existing parent directives, parent-replace-wins when the
-same module appears in both parent replace and modules.txt — path vs
+observable outcomes of vendor inject (wiring to project vendor, xgo-style
+overlay placeholders for missing go.mod, no-overlay when go.mod already exists,
+path preference, coexistence with parent directives, parent-replace-wins when
+the same module appears in both parent replace and modules.txt — path vs
 module→module as sibling leaves — and private-fork modules.txt `A => B` where
 gen must not bare-require private B).
 
@@ -91,25 +96,22 @@ gen must not bare-require private B).
 | Leaf | Scenario (parent design) | Expect today |
 |------|--------------------------|--------------|
 | `absent/no-vendor-replaces` | no mass vendor replaces | GREEN (baseline lock) |
-| `present/require-replace` | require + replace from modules.txt | GREEN (vendor inject landed) |
-| `present/placeholder-gomod` | placeholder go.mod for module without one | GREEN |
+| `present/require-replace` | require + replace → project vendor for all modules.txt entries | GREEN |
+| `present/placeholder-gomod` | missing go.mod → overlay placeholder + JSON; no package mirror | GREEN |
+| `present/has-gomod-no-overlay` | modules with existing go.mod get no overlay entry/JSON | GREEN |
 | `present/prefers-vendor-source` | replace points at vendor; source marker visible | GREEN |
 | `present/coexists-parent` | parent go + path replace (other mod) + vendor | GREEN |
-| `present/parent-path-replace-wins` | 1.1 — parent path replace for M wins over vendor/M | GREEN (path skip landed) |
-| `present/parent-module-replace-wins` | 1.1b — parent module→module replace for M wins | GREEN (module skip landed) |
-| `present/private-fork-offline` | modules.txt `# A ver => B ver` private fork offline-safe | **RED** until require stays on A + FS vendor replace |
+| `present/parent-path-replace-wins` | parent path replace for M wins over vendor/M | GREEN |
+| `present/parent-module-replace-wins` | parent module→module replace for M wins | GREEN |
+| `present/private-fork-offline` | modules.txt `# A ver => B ver` private fork offline-safe | GREEN |
 
 ## How to Run
 
 ```sh
-cd external/doctest-master-2026-07-28-1
-# product binary from this tree
-go build -o /tmp/doctest-pfork ./cmd/doctest
-/tmp/doctest-pfork vet ./tests/vendor-gen/
-/tmp/doctest-pfork test ./tests/vendor-gen/ --label-all
-# Classic TDD: present/private-fork-offline RED until implement offline-safe private-fork graph
+cd external/doctest-master-2026-08-04-1
+doctest vet ./tests/vendor-gen
+doctest test ./tests/vendor-gen --label-all
 ```
-
 
 Library surface under test: `github.com/xhd2015/doctest/libdoc/core.WriteGoMod`.
 

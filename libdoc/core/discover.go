@@ -485,8 +485,10 @@ func WriteGoMod(genDir, modRoot, modPath string, hasMod bool, withAssertReplace 
 }
 
 // WriteGoModWithVendorBridges writes the generated module and returns only the
-// vendor bridges materialized during this call. The metadata is consumed by
-// later generated-workspace steps; it is not reconstructed from cache paths.
+// vendor bridges materialized during this call. Warm path: when project go.mod,
+// go.sum, vendor/modules.txt, and effective assert/session policy match
+// doctest.gomod-src, skips rebuild and returns bridges from
+// doctest.vendor-bridges.json (see gomod_src_cache.go).
 func WriteGoModWithVendorBridges(genDir, modRoot, modPath string, hasMod bool, withAssertReplace bool, assertCacheDir string, withSessionReplace bool, sessionCacheDir string) ([]VendorBridgeMapping, error) {
 	genModMu.Lock()
 	defer genModMu.Unlock()
@@ -494,6 +496,18 @@ func WriteGoModWithVendorBridges(genDir, modRoot, modPath string, hasMod bool, w
 	genDir = absGenRoot(genDir)
 	if err := os.MkdirAll(genDir, 0755); err != nil {
 		return nil, err
+	}
+	if modRootAbs, err := filepath.Abs(modRoot); err == nil {
+		modRoot = modRootAbs
+	}
+
+	fp, err := gomodSrcFingerprint(modRoot, modPath, hasMod, withAssertReplace, assertCacheDir, withSessionReplace, sessionCacheDir)
+	if err != nil {
+		return nil, err
+	}
+	if bridges, hit := tryGomodSrcHit(genDir, fp, hasMod, modRoot); hit {
+		noteGomodSrcHit(genDir, bridges)
+		return bridges, nil
 	}
 
 	// Prefer the source module's go directive so tidy under kool with-go1.19
@@ -529,9 +543,9 @@ func WriteGoModWithVendorBridges(genDir, modRoot, modPath string, hasMod bool, w
 	}
 
 	// When modRoot has vendor/modules.txt, inject xgo-style require+replace for
-	// each vendored module. Missing go.mod files get shadow roots under
-	// genDir/vendor-bridge (placeholder + package symlinks; project vendor
-	// read-only). Always on when vendor/ exists — no user flag.
+	// each vendored module. Missing go.mod files get synthetic placeholders
+	// under genDir/vendor-gomod-overlay + vendor-gomod-overlay.json (packages
+	// stay in project vendor; no hardlink trees). Always on when vendor/ exists.
 	parentGoVer := strings.TrimPrefix(goLine, "go ")
 	vendorExtra, suppressParentModule, bridges, err := vendorBridgeForModRootWithMappings(modRoot, genDir, parentGoVer, parentPathReplaced, parentModuleReplaced)
 	if err != nil {
@@ -583,8 +597,15 @@ func WriteGoModWithVendorBridges(genDir, modRoot, modPath string, hasMod bool, w
 	if err := man.flush(genDir); err != nil {
 		return nil, err
 	}
+	// Overlay JSON for go -overlay= (tidy + test). Content-stable writes.
+	if err := WriteVendorGomodOverlayJSON(genDir, bridges); err != nil {
+		return nil, err
+	}
 	if modWrote || sumWrote {
 		os.Remove(filepath.Join(genDir, "doctest.tidy-done"))
+	}
+	if err := saveGomodSrcCache(genDir, fp, bridges); err != nil {
+		return nil, err
 	}
 	return bridges, nil
 }
@@ -750,18 +771,57 @@ func isFilesystemReplaceTarget(right string) bool {
 
 // TidyGoMod runs `go mod tidy` in genDir. When goCache is non-empty it is
 // applied as GOCACHE via ChildEnv (key-replace) so cold-cache isolation does
-// not require process os.Setenv.
+// not require process os.Setenv. When vendor-gomod-overlay.json exists (xgo-style
+// phantom vendor go.mod files), sets GOFLAGS=-overlay=… — go 1.x accepts
+// -overlay as a build flag via GOFLAGS, not as `go -overlay=… mod tidy`.
 func TidyGoMod(genDir string, goCache string) error {
 	// Caller must hold genModMu when concurrent trees share genDir.
 	tidy := exec.Command("go", "mod", "tidy")
 	tidy.Dir = genDir
+	var envExtras []string
 	if goCache != "" {
-		tidy.Env = ChildEnv(nil, "GOCACHE="+goCache)
+		envExtras = append(envExtras, "GOCACHE="+goCache)
+	}
+	if p := VendorGomodOverlayPath(genDir); p != "" {
+		// Append/replace GOFLAGS so overlay is visible to mod tidy.
+		envExtras = append(envExtras, mergeGOFLAGSOverlay(os.Environ(), p)...)
+	}
+	if len(envExtras) > 0 {
+		tidy.Env = ChildEnv(nil, envExtras...)
 	}
 	if out, err := tidy.CombinedOutput(); err != nil {
 		return fmt.Errorf("go mod tidy: %v\n%s", err, string(out))
 	}
 	return nil
+}
+
+// mergeGOFLAGSOverlay returns env assignments that set GOFLAGS to include
+// -overlay=path, preserving other GOFLAGS tokens from base (or process env
+// when base is nil via ChildEnv).
+func mergeGOFLAGSOverlay(base []string, overlayPath string) []string {
+	flag := "-overlay=" + overlayPath
+	// Prefer base env; ChildEnv will merge onto process env.
+	cur := ""
+	for _, e := range base {
+		if strings.HasPrefix(e, "GOFLAGS=") {
+			cur = strings.TrimPrefix(e, "GOFLAGS=")
+			break
+		}
+	}
+	if cur == "" {
+		// Also check process when base is empty (ChildEnv starts from os.Environ).
+		cur = os.Getenv("GOFLAGS")
+	}
+	parts := strings.Fields(cur)
+	filtered := make([]string, 0, len(parts)+1)
+	for _, p := range parts {
+		if strings.HasPrefix(p, "-overlay=") {
+			continue
+		}
+		filtered = append(filtered, p)
+	}
+	filtered = append(filtered, flag)
+	return []string{"GOFLAGS=" + strings.Join(filtered, " ")}
 }
 
 // CondTidyGoMod runs TidyGoMod once per genDir (marker file), serializing via

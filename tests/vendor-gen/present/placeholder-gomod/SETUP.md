@@ -1,25 +1,31 @@
 # Scenario
 
-**Feature**: placeholder go.mod is created for vendored modules that lack one
+**Feature**: missing vendor go.mod gets xgo-style overlay placeholder only
 
 ```
 vendor/example.com/nogo/   # package only, no go.mod
   -> WriteGoMod
-  -> vendor/example.com/nogo/go.mod exists
+  -> project vendor still has no go.mod (read-only)
+  -> genDir/vendor-gomod-overlay/example.com/nogo/go.mod
        module example.com/nogo
        go 1.17   # from modules.txt ## go metadata when present
+  -> genDir/vendor-gomod-overlay.json
+       Replace[abs(project vendor/.../nogo/go.mod)] = abs(placeholder)
+  -> replace example.com/nogo => <modRoot>/vendor/example.com/nogo
+  -> NO package files under vendor-gomod-overlay/<mod>/ (no hardlink/copy)
 ```
 
 ## Steps
 
 1. Inherit present fixture (nogo has package source, no go.mod).
 2. Confirm pre-Run that nogo lacks go.mod.
-3. After Run, assert placeholder go.mod content.
+3. After Run, assert overlay placeholder, overlay JSON mapping, project
+   immutability, and replace → project vendor.
 
 ## Context
 
-- Modules that already have go.mod (`example.com/dep`) must not be required to
-  lose their existing module file; this leaf only asserts the missing case.
+- Modules that already have go.mod (`example.com/dep`) are covered by sibling
+  `has-gomod-no-overlay`; this leaf only asserts the missing-go.mod case.
 - xgo-style: `module <path>` + `go <ver>`; go version from modules.txt `## … go X.Y`
   or parent go directive when metadata omits it.
 

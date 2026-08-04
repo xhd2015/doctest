@@ -53,13 +53,15 @@ type PreTestHookApply struct {
 	HookCount int
 }
 
-// VendorBridgeMapping identifies a vendor module shadow that was materialized
-// for the current generated workspace. It is explicit run metadata: callers
-// must not infer it by looking for retained vendor-bridge directories.
+// VendorBridgeMapping identifies a vendored module that needed a synthetic
+// go.mod for the current generated workspace (xgo-style). BridgeRoot is the
+// absolute path of the placeholder go.mod file under vendor-gomod-overlay;
+// OriginalVendorRoot is the project vendor/<mod> directory (replace target).
+// Callers must not infer mappings by scanning gen cache directories.
 type VendorBridgeMapping struct {
 	ModulePath         string
 	OriginalVendorRoot string
-	BridgeRoot         string
+	BridgeRoot         string // absolute placeholder go.mod path
 }
 
 const (
@@ -275,10 +277,10 @@ func ApplyPreTestHooksWithVendorBridges(config *XgoTestConfig, projectRoot strin
 	return out, nil
 }
 
-// normalizeOverlayVendorBridgeSources translates a standard Go overlay only
-// from explicit current-run bridge metadata. It deliberately does not inspect
-// the filesystem for bridge roots: a warm cache is not proof a bridge was used
-// by this run.
+// normalizeOverlayVendorBridgeSources merges xgo-style phantom vendor go.mod
+// mappings into a standard Go overlay Replace map. Packages stay under project
+// vendor/; only missing go.mod files are overlaid. Does not rewrite other
+// overlay source keys.
 func normalizeOverlayVendorBridgeSources(overlayFile string, bridges []VendorBridgeMapping) error {
 	if len(bridges) == 0 {
 		return nil
@@ -288,74 +290,69 @@ func normalizeOverlayVendorBridgeSources(overlayFile string, bridges []VendorBri
 		return fmt.Errorf("pre_test: read overlay file: %w", err)
 	}
 	var overlay map[string]json.RawMessage
-	if err := json.Unmarshal(data, &overlay); err != nil {
+	if len(strings.TrimSpace(string(data))) == 0 {
+		overlay = map[string]json.RawMessage{}
+	} else if err := json.Unmarshal(data, &overlay); err != nil {
 		return fmt.Errorf("pre_test: parse overlay file: %w", err)
 	}
-	replaceRaw, ok := overlay["Replace"]
-	if !ok {
-		return nil
-	}
-	var replace map[string]string
-	if err := json.Unmarshal(replaceRaw, &replace); err != nil {
-		return fmt.Errorf("pre_test: parse overlay Replace: %w", err)
+	replace := map[string]string{}
+	if replaceRaw, ok := overlay["Replace"]; ok {
+		if err := json.Unmarshal(replaceRaw, &replace); err != nil {
+			return fmt.Errorf("pre_test: parse overlay Replace: %w", err)
+		}
 	}
 	changed := false
-	normalized := make(map[string]string, len(replace))
-	for source, value := range replace {
-		candidate := source
-		for _, bridge := range bridges {
-			if mapped, ok := bridgeOverlaySource(source, bridge); ok {
-				candidate = mapped
-				break
-			}
+	for _, bridge := range bridges {
+		src, dst, ok := vendorGoModOverlayPair(bridge)
+		if !ok {
+			continue
 		}
-		normalized[candidate] = value
-		changed = changed || candidate != source
+		if replace[src] != dst {
+			replace[src] = dst
+			changed = true
+		}
 	}
-	if !changed {
+	if !changed && len(replace) == 0 {
 		return nil
 	}
-	replaceData, err := json.Marshal(normalized)
+	if !changed {
+		// Still rewrite if file was empty but replace already complete via other means.
+		if len(data) > 0 {
+			return nil
+		}
+	}
+	replaceData, err := json.Marshal(replace)
 	if err != nil {
 		return fmt.Errorf("pre_test: encode overlay Replace: %w", err)
 	}
+	if overlay == nil {
+		overlay = map[string]json.RawMessage{}
+	}
 	overlay["Replace"] = replaceData
-	data, err = json.Marshal(overlay)
+	out, err := json.Marshal(overlay)
 	if err != nil {
 		return fmt.Errorf("pre_test: encode overlay file: %w", err)
 	}
-	if err := os.WriteFile(overlayFile, data, 0o644); err != nil {
+	if err := os.WriteFile(overlayFile, out, 0o644); err != nil {
 		return fmt.Errorf("pre_test: write overlay file: %w", err)
 	}
 	return nil
 }
 
-func bridgeOverlaySource(source string, bridge VendorBridgeMapping) (string, bool) {
-	if strings.TrimSpace(bridge.ModulePath) == "" || strings.TrimSpace(bridge.OriginalVendorRoot) == "" || strings.TrimSpace(bridge.BridgeRoot) == "" {
-		return "", false
+func vendorGoModOverlayPair(bridge VendorBridgeMapping) (src, dst string, ok bool) {
+	if strings.TrimSpace(bridge.OriginalVendorRoot) == "" || strings.TrimSpace(bridge.BridgeRoot) == "" {
+		return "", "", false
 	}
-	originalRoot, err := filepath.Abs(bridge.OriginalVendorRoot)
+	srcPath := filepath.Join(bridge.OriginalVendorRoot, "go.mod")
+	srcAbs, err := filepath.Abs(srcPath)
 	if err != nil {
-		return "", false
+		srcAbs = srcPath
 	}
-	bridgeRoot, err := filepath.Abs(bridge.BridgeRoot)
+	dstAbs, err := filepath.Abs(bridge.BridgeRoot)
 	if err != nil {
-		return "", false
+		dstAbs = bridge.BridgeRoot
 	}
-	sourceAbs, err := filepath.Abs(source)
-	if err != nil {
-		return "", false
-	}
-	rel, err := filepath.Rel(originalRoot, sourceAbs)
-	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", false
-	}
-	candidate := filepath.Join(bridgeRoot, rel)
-	st, err := os.Stat(candidate)
-	if err != nil || st.IsDir() {
-		return "", false
-	}
-	return candidate, true
+	return srcAbs, dstAbs, true
 }
 
 // XgoTestConfigApply describes how project test.config.json is applied when

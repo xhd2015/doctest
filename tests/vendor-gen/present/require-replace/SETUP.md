@@ -8,12 +8,13 @@ modules.txt: example.com/dep v1.2.3, example.com/nogo v0.4.0
   -> replace example.com/dep => <modRoot>/vendor/example.com/dep
   -> require example.com/nogo v0.4.0
   -> replace example.com/nogo => <modRoot>/vendor/example.com/nogo
+  # both replaces target project vendor (packages stay there; no vendor-bridge)
 ```
 
 ## Steps
 
 1. Inherit present vendor fixture.
-2. Run WriteGoMod; assert requires and replaces for both sample modules.
+2. Run WriteGoMod; assert requires and project-vendor replaces for both sample modules.
 
 ```go
 import (

@@ -6,8 +6,9 @@
 # project has go.mod + vendor/modules.txt + vendored module trees
 modRoot/vendor/modules.txt
   -> WriteGoMod
-  -> gen go.mod: require + replace for each modules.txt module
-  -> placeholder go.mod under vendored modules missing go.mod
+  -> gen go.mod: require + replace => project vendor/<mod> for each modules.txt module
+  -> missing go.mod: genDir/vendor-gomod-overlay/<mod>/go.mod + vendor-gomod-overlay.json
+  -> project vendor/ never written; no package hardlink/copy into gen
 ```
 
 ## Preconditions
@@ -15,7 +16,7 @@ modRoot/vendor/modules.txt
 - `modRoot` has both `go.mod` and `vendor/` with a tiny `modules.txt`.
 - Default fixture modules: `example.com/dep` (has go.mod + marker source) and
   `example.com/nogo` (package only, no go.mod).
-- Classic TDD: leaves under this branch are **RED** until vendor-aware WriteGoMod.
+- Coverage backfill: product overlay inject already shipped; leaves expect GREEN.
 
 ## Steps
 

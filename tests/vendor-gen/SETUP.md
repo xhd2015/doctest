@@ -12,7 +12,9 @@ modRoot
        replace <project> => <modRoot>
        [parent path replaces]
        [require+replace each vendor modules.txt entry when vendor/ exists]
-       [shadow vendor-bridge under genDir when go.mod missing; project vendor read-only]
+       # replace always => project vendor/<mod> (packages stay there)
+       # missing go.mod: genDir/vendor-gomod-overlay/<mod>/go.mod + overlay JSON
+       # project vendor never written; no package hardlink/copy into gen
 ```
 
 ## Preconditions
@@ -20,8 +22,8 @@ modRoot
 - Package `github.com/xhd2015/doctest/libdoc/core` is importable.
 - Each leaf uses isolated temp `ModRoot` and `GenDir` (`t.TempDir`); never a
   shared mapping-gen cache or the real monorepo vendor tree.
-- Classic TDD: `present/*` leaves expect **RED** until WriteGoMod reads
-  `vendor/modules.txt` and injects require/replace + placeholders.
+- Coverage-backfill mode: product already implements xgo-style overlay inject;
+  asserts match current correct behavior (GREEN expected).
 - Do **not** read `DOCTEST_SESSION_ID` via `os.Getenv`.
 
 ## Steps
@@ -29,13 +31,14 @@ modRoot
 1. Root Setup sets default `ModPath` / `HasMod`.
 2. Branch Setup prepares either a bare project go.mod or a tiny vendor fixture.
 3. Leaf Setup narrows sample module paths / markers for Assert.
-4. `Run` calls `core.WriteGoMod` once; Assert inspects gen `go.mod` and vendor
-   side effects.
+4. `Run` calls `core.WriteGoMod` once; Assert inspects gen `go.mod`, optional
+   overlay artifacts, and project-vendor immutability.
 
 ## Context
 
 - Fixture helpers: `prepareFreshDirs`, `seedParentGoMod`, `seedTinyVendor`,
-  `writeFile`, `vendorPath`, `hasVendorReplaceLine`, `requireLinePresent`.
+  `writeFile`, `vendorModuleDir`, `hasReplaceToVendor`, `hasRequire`,
+  `overlayPlaceholderPath`, `overlayJSONPath`.
 - Tiny vendor modules use public-looking paths under `example.com/…` so they
   cannot collide with real network resolution in pure text asserts.
 - Placeholder zero version string matches xgo when modules.txt version empty:
@@ -43,6 +46,7 @@ modRoot
 
 ```go
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,6 +62,8 @@ const (
 	noGoModPath      = "example.com/nogo"
 	noGoModVersion   = "v0.4.0"
 	// modules.txt line with empty version is not used by default fixtures.
+	vendorGomodOverlayDir  = "vendor-gomod-overlay"
+	vendorGomodOverlayJSON = "vendor-gomod-overlay.json"
 )
 
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
@@ -151,17 +157,27 @@ func vendorModuleDir(req *Request, modPath string) string {
 	return filepath.Join(req.ModRoot, "vendor", filepath.FromSlash(modPath))
 }
 
-// hasReplaceToVendor reports whether go.mod has a filesystem replace of modPath
-// targeting project vendor/… or gen vendor-bridge/… (shadow for modules without
-// go.mod — project vendor stays read-only).
-func hasReplaceToVendor(goMod, modPath, modRoot string) bool {
-	vendorPrefix := filepath.Join(modRoot, "vendor")
+// overlayPlaceholderPath is genDir/vendor-gomod-overlay/<modPath>/go.mod.
+func overlayPlaceholderPath(req *Request, modPath string) string {
+	return filepath.Join(req.GenDir, vendorGomodOverlayDir, filepath.FromSlash(modPath), "go.mod")
+}
+
+// overlayJSONPath is genDir/vendor-gomod-overlay.json.
+func overlayJSONPath(req *Request) string {
+	return filepath.Join(req.GenDir, vendorGomodOverlayJSON)
+}
+
+// hasReplaceToProjectVendor reports whether go.mod has a filesystem replace of
+// modPath targeting project vendor/<modPath> (xgo-style packages stay there).
+// Does not accept obsolete vendor-bridge shadow RHS.
+func hasReplaceToProjectVendor(goMod, modPath, modRoot string) bool {
+	want := filepath.Join(modRoot, "vendor", filepath.FromSlash(modPath))
+	wantSlash := filepath.ToSlash(want)
 	for _, line := range strings.Split(goMod, "\n") {
 		line = strings.TrimSpace(line)
 		if !strings.HasPrefix(line, "replace ") {
 			continue
 		}
-		// replace <modPath> => <path>
 		rest := strings.TrimSpace(strings.TrimPrefix(line, "replace "))
 		parts := strings.Fields(rest)
 		arrow := -1
@@ -174,24 +190,53 @@ func hasReplaceToVendor(goMod, modPath, modRoot string) bool {
 		if arrow < 1 || arrow+1 >= len(parts) {
 			continue
 		}
-		left := strings.Join(parts[:arrow], " ")
-		// left may be "path" or "path version"
-		leftPath := strings.Fields(left)[0]
+		leftPath := strings.Fields(strings.Join(parts[:arrow], " "))[0]
 		if leftPath != modPath {
 			continue
 		}
 		right := parts[arrow+1]
-		if right == vendorPrefix || strings.HasPrefix(right, vendorPrefix+string(os.PathSeparator)) ||
-			right == filepath.Join(vendorPrefix, filepath.FromSlash(modPath)) ||
-			strings.Contains(right, filepath.Join("vendor", filepath.FromSlash(modPath))) {
-			return true
-		}
-		// Also accept slash-normalized contains of /vendor/<modPath>
 		slashRight := filepath.ToSlash(right)
-		if strings.Contains(slashRight, "/vendor/"+modPath) || strings.HasSuffix(slashRight, "/vendor/"+modPath) {
+		// Reject obsolete vendor-bridge shadows.
+		if strings.Contains(slashRight, "/vendor-bridge/") {
+			continue
+		}
+		if right == want || slashRight == wantSlash ||
+			strings.HasSuffix(slashRight, "/vendor/"+modPath) {
 			return true
 		}
-		// Shadow module under genDir/vendor-bridge/<modPath> (no project write).
+	}
+	return false
+}
+
+// hasReplaceToVendor reports whether go.mod has a filesystem replace of modPath
+// targeting project vendor/… (packages). Legacy vendor-bridge RHS is still
+// recognized for defensive counting but new leaves prefer hasReplaceToProjectVendor.
+func hasReplaceToVendor(goMod, modPath, modRoot string) bool {
+	if hasReplaceToProjectVendor(goMod, modPath, modRoot) {
+		return true
+	}
+	for _, line := range strings.Split(goMod, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "replace ") {
+			continue
+		}
+		rest := strings.TrimSpace(strings.TrimPrefix(line, "replace "))
+		parts := strings.Fields(rest)
+		arrow := -1
+		for i, p := range parts {
+			if p == "=>" {
+				arrow = i
+				break
+			}
+		}
+		if arrow < 1 || arrow+1 >= len(parts) {
+			continue
+		}
+		leftPath := strings.Fields(strings.Join(parts[:arrow], " "))[0]
+		if leftPath != modPath {
+			continue
+		}
+		slashRight := filepath.ToSlash(parts[arrow+1])
 		if strings.Contains(slashRight, "/vendor-bridge/"+modPath) ||
 			strings.HasSuffix(slashRight, "/vendor-bridge/"+modPath) {
 			return true
@@ -221,13 +266,57 @@ func countVendorReplaces(goMod, modRoot string) int {
 			continue
 		}
 		slash := filepath.ToSlash(line)
-		// Project vendor/… or gen vendor-bridge/… (shadow modules).
+		// Project vendor/… (primary). Legacy vendor-bridge still counted if present.
 		if strings.Contains(slash, "/vendor/") || strings.Contains(slash, needle) ||
 			strings.Contains(slash, "/vendor-bridge/") {
 			n++
 		}
 	}
 	return n
+}
+
+// parseOverlayReplace reads genDir/vendor-gomod-overlay.json Replace map.
+// Returns nil map if file missing or empty.
+func parseOverlayReplace(path string) (map[string]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var payload struct {
+		Replace map[string]string `json:"Replace"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return nil, err
+	}
+	return payload.Replace, nil
+}
+
+// listNonGoModFiles lists non-go.mod files under dir (non-recursive for leaf files;
+// walks for nested package paths). Used to assert no package mirror under overlay.
+func listNonGoModFiles(root string) ([]string, error) {
+	var out []string
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		if filepath.Base(path) == "go.mod" {
+			return nil
+		}
+		rel, rerr := filepath.Rel(root, path)
+		if rerr != nil {
+			out = append(out, path)
+		} else {
+			out = append(out, rel)
+		}
+		return nil
+	})
+	return out, err
 }
 
 func fileExists(path string) bool {

@@ -61,6 +61,7 @@ const (
 	genManifestName = "doctest.gen-manifest"
 	gomodFpName     = "doctest.gomod-fp"
 	tidyDoneName    = "doctest.tidy-done"
+	gomodSrcName    = "doctest.gomod-src"
 )
 
 // Snapshots live on req (Snap* fields) so Parallel leaves do not share package state.
@@ -193,6 +194,7 @@ func fillResponse(t *testing.T, req *Request, resp *Response) {
 	resp.ManifestExists = fileExists(manFile)
 	resp.GomodFpExists = fileExists(filepath.Join(req.GenDir, gomodFpName))
 	resp.TidyDoneExists = fileExists(filepath.Join(req.GenDir, tidyDoneName))
+	resp.GomodSrcExists = fileExists(filepath.Join(req.GenDir, gomodSrcName))
 	resp.GoModMtimeBefore = req.SnapGoModMtimeBefore
 	resp.ManifestMtimeBefore = req.SnapManifestMtimeBefore
 	resp.TargetMtimeBefore = req.SnapTargetMtimeBefore

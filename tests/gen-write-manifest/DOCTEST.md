@@ -58,10 +58,12 @@ gen-write-manifest/
 ├── warm-identical/                      second write, same desired content
 │   ├── go-mod-mtime-stable/             go.mod mtime unchanged
 │   ├── tidy-done-retained/              doctest.tidy-done kept
-│   └── manifest-stable/                 map unchanged → manifest not rewritten
+│   ├── manifest-stable/                 map unchanged → manifest not rewritten
+│   └── src-fp-present/                  doctest.gomod-src written (input fingerprint)
 ├── content-change/                      desired go.mod differs on second call
 │   ├── updates-gomod-and-manifest/      go.mod + manifest entry refresh
-│   └── drops-tidy-done/                 tidy-done removed when go.mod wrote
+│   ├── drops-tidy-done/                 tidy-done removed when go.mod wrote
+│   └── modules-txt-invalidates/         modules.txt-only change drops tidy-done + rewrites
 ├── write-if-changed/                    generic relative path under gen root
 │   ├── hash-hit-skips-rewrite/          same bytes → target mtime stable
 │   └── hash-miss-writes/                different bytes → write + manifest entry
@@ -78,8 +80,10 @@ gen-write-manifest/
 | `warm-identical/go-mod-mtime-stable` | Second identical WriteGoMod leaves `go.mod` mtime unchanged |
 | `warm-identical/tidy-done-retained` | Second identical WriteGoMod keeps seeded `doctest.tidy-done` |
 | `warm-identical/manifest-stable` | Second identical WriteGoMod does not rewrite the manifest file |
+| `warm-identical/src-fp-present` | After warm WriteGoMod, `doctest.gomod-src` exists |
 | `content-change/updates-gomod-and-manifest` | Source go.mod change updates gen go.mod content and manifest entry |
 | `content-change/drops-tidy-done` | When go.mod actually writes, `doctest.tidy-done` is removed |
+| `content-change/modules-txt-invalidates` | modules.txt-only change regenerates gen go.mod and drops tidy-done |
 | `write-if-changed/hash-hit-skips-rewrite` | Same formatted content: target mtime stable; manifest path retained |
 | `write-if-changed/hash-miss-writes` | Different content: target updates and manifest entry changes |
 | `regression/ineffective-assert-flags` | Doctest module: differing ineffective assert/session flags do not churn go.mod mtime or tidy-done |
@@ -124,6 +128,9 @@ type Request struct {
 
 	// If non-empty, rewrite ModRoot/go.mod to this before second WriteGoMod.
 	ChangeSourceGoMod string
+	// If non-empty, rewrite ModRoot/vendor/modules.txt before second WriteGoMod
+	// (go.mod/go.sum may stay unchanged — must invalidate gomod-src cache).
+	ChangeSourceModulesTxt string
 
 	// Generic WriteIfChanged / WriteFormattedGo path relative to GenDir.
 	RelPath         string
@@ -146,6 +153,7 @@ type Response struct {
 	ManifestExists    bool
 	GomodFpExists     bool
 	TidyDoneExists    bool
+	GomodSrcExists    bool // doctest.gomod-src input fingerprint
 	TargetContent     string // RelPath file after Run, when applicable
 	GoModMtimeBefore  time.Time
 	GoModMtimeAfter   time.Time
@@ -170,6 +178,15 @@ func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 		// Snapshots taken in Setup; this is the measured second WriteGoMod.
 		if req.ChangeSourceGoMod != "" {
 			if err := os.WriteFile(filepath.Join(req.ModRoot, "go.mod"), []byte(req.ChangeSourceGoMod), 0644); err != nil {
+				return resp, err
+			}
+		}
+		if req.ChangeSourceModulesTxt != "" {
+			vendorDir := filepath.Join(req.ModRoot, "vendor")
+			if err := os.MkdirAll(vendorDir, 0755); err != nil {
+				return resp, err
+			}
+			if err := os.WriteFile(filepath.Join(vendorDir, "modules.txt"), []byte(req.ChangeSourceModulesTxt), 0644); err != nil {
 				return resp, err
 			}
 		}
