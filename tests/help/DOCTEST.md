@@ -28,7 +28,7 @@ Out of scope: product feature changes; `tests/vet`, `tests/changed`, `tests/skil
 ### Behaviors
 
 - **Top-level help** — `doctest --help` lists major subcommands (`agent`, `vet`,
-  `design`, `build`, `test`, `skill`).
+  `design`, `build`, `test`, `skill`, `list`).
 - **Test options** — `doctest test --help` documents runner flags (verbose, count,
   timeout, color, cold-cache, Go-style profile/cover/race) and does not document
   removed experiment flags.
@@ -63,7 +63,7 @@ tests/help/
 
 | Leaf | Args | Expected markers |
 |------|------|------------------|
-| `top-level` | `--help` | `Usage: doctest`, `agent`, `vet`, `design`, `build`, `test`, `skill` |
+| `top-level` | `--help` | `Usage: doctest`, `agent`, `vet`, `design`, `build`, `test`, `skill`, `list` |
 | `test-options` | `test --help` | runner flags + profile/cover; no removed experiment flags |
 | `build-options` | `build --help` | `Usage: doctest build`, `-v`, `--verbose`, `--rm`, `--gen-dir`, `-count` |
 | `agent-generate` | `agent generate --help` | `Usage: doctest agent generate`, `<idea>`, `-d`, `--dir` |

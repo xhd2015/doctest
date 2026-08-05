@@ -27,6 +27,7 @@ Commands:
   vet [-v|--verbose] <dir...>
   build <dir>
   test <dir>
+  list [<pattern>...]
   edit <leaf-path> [--add-label NAME] [--add-explanation TEXT]
 
 Agents:
@@ -138,6 +139,36 @@ Examples:
   doctest build -v ./
   doctest build -v ./...
   doctest build -v ./sub-module/...
+`
+
+const listUsage = `Usage: doctest list [--color] [--no-color] [<pattern>...]
+
+List doctest tree roots (directories with DOCTEST.md) and leaf inventory.
+
+Patterns:
+  path          List a single root (directory with DOCTEST.md)
+  path/...      Discover all roots under path (like go list ./...)
+  ./...         Default when no patterns are given
+
+Body line (tab-separated fields):
+  <path>	<leaves>	L2:L3=<a>:<b> (<p2>%/<p3>%)	<labelDist>
+
+L2:L3 counts non-e2e leaves (L2) vs leaves labeled e2e (L3 identity).
+Percent group is omitted when leaves is 0. labelDist is space-separated
+name=count pairs (always includes unlabeled=N), sorted by count desc then name.
+
+After all roots: a blank line, ---, totals (roots/leaves/L2:L3), and labels.
+
+Options:
+  --color       Force ANSI color (gray meta: counts, L2:L3, percents, labels)
+  --no-color    Disable ANSI color
+  -h, --help    Show help
+
+Examples:
+  doctest list
+  doctest list ./...
+  doctest list ./tests/feature
+  doctest list --color ./tests/...
 `
 
 const editUsage = `Usage: doctest edit <leaf-path> [--add-label NAME] [--add-explanation TEXT]
@@ -366,6 +397,8 @@ func run(io stdio, args []string) error {
 		return runRunner(io, args[1:], testUsage, func(a []string) error {
 			return runner.TestWithWriters(a, io.Out(), io.Err())
 		})
+	case "list":
+		return runList(io, args[1:])
 	case "edit":
 		return runEdit(io, args[1:])
 	case "skill":
@@ -591,6 +624,19 @@ func runRunner(io stdio, args []string, usage string, fn func([]string) error) e
 	// Soft no-tests: exit 0 + "no tests" on stderr. Match the sentinel and the
 	// historical plain errors.New("no tests") text so discovery empty paths never
 	// hard-fail (CI vs local must agree).
+	if err != nil && (errors.Is(err, runner.ErrNoTestsFound) || err.Error() == runner.ErrNoTestsFound.Error()) {
+		fmt.Fprintln(io.Err(), "no tests")
+		return nil
+	}
+	return err
+}
+
+func runList(io stdio, args []string) error {
+	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
+		fmt.Fprint(io.Out(), listUsage)
+		return nil
+	}
+	err := runner.ListWithWriters(args, io.Out(), io.Err())
 	if err != nil && (errors.Is(err, runner.ErrNoTestsFound) || err.Error() == runner.ErrNoTestsFound.Error()) {
 		fmt.Fprintln(io.Err(), "no tests")
 		return nil
