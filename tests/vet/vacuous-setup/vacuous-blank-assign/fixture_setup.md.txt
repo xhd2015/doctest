@@ -1,0 +1,27 @@
+# Scenario
+
+**Feature**: fixture leaf with vacuous Setup (blank assigns then return nil)
+
+```
+# vacuous body disguised with blank assigns
+Setup -> _ = t; _ = d; _ = req; return nil
+```
+
+## Steps
+
+1. Discard params then return nil (should be rejected by vet as vacuous).
+
+```go
+import (
+	"testing"
+
+	"github.com/xhd2015/doctest/session"
+)
+
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	_ = t
+	_ = d
+	_ = req
+	return nil
+}
+```

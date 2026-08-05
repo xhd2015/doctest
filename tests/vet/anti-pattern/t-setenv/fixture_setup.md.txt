@@ -1,0 +1,19 @@
+# Scenario
+
+**Feature**: fixture setup for vet test
+
+```
+# minimal pipeline
+system -> run
+```
+
+## Steps
+
+```go
+import "testing"
+
+func Setup(t *testing.T, req *Request) error {
+	t.Setenv("DOCTEST_VET_PARALLEL_UNSAFE", "1")
+	return nil
+}
+```

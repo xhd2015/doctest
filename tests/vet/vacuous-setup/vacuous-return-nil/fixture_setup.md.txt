@@ -1,0 +1,24 @@
+# Scenario
+
+**Feature**: fixture leaf with vacuous Setup (return nil only)
+
+```
+# vacuous body
+Setup -> return nil
+```
+
+## Steps
+
+1. No-op setup (should be rejected by vet).
+
+```go
+import (
+	"testing"
+
+	"github.com/xhd2015/doctest/session"
+)
+
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	return nil
+}
+```

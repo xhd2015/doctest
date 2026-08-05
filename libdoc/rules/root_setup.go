@@ -2,6 +2,8 @@ package rules
 
 import "fmt"
 
+// CheckRootHasGoBlock requires a Go fence on DOCTEST.md (not SETUP.md).
+// SETUP.md may be prose-only; do not call this for intermediate SETUP paths.
 func CheckRootHasGoBlock(goBlockSet bool, path string) *Violation {
 	if !goBlockSet {
 		return &Violation{Path: path, Msg: "must have a Go code block"}

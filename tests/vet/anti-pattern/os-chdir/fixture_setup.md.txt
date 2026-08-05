@@ -1,0 +1,22 @@
+# Scenario
+
+**Feature**: fixture setup for vet test
+
+```
+# minimal pipeline
+system -> run
+```
+
+## Steps
+
+```go
+import (
+	"os"
+	"testing"
+)
+
+func Setup(t *testing.T, req *Request) error {
+	_ = os.Chdir(t.TempDir())
+	return nil
+}
+```

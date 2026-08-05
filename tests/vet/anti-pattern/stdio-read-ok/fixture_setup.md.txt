@@ -1,0 +1,24 @@
+# Scenario
+
+**Feature**: fixture setup for vet test
+
+```
+# minimal pipeline
+system -> run
+```
+
+## Steps
+
+```go
+import (
+	"fmt"
+	"os"
+	"testing"
+)
+
+func Setup(t *testing.T, req *Request) error {
+	// Read-only use of os.Stdout is OK (no reassignment).
+	fmt.Fprint(os.Stdout, "parallel-safe write via Fprint")
+	return nil
+}
+```

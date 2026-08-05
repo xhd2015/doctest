@@ -109,7 +109,10 @@ func discoverTreeCasesInternal(root string, w io.Writer) ([]TreeCase, error) {
 				}
 			}
 			// Intermediate dirs: missing SETUP.md is OK (pure nested-tree parents,
-			// empty grouping dirs). When SETUP.md exists, require Go Setup.
+			// empty grouping dirs). Prose-only SETUP (no Go block) and Go blocks
+			// without func Setup are OK — organization-only nodes need no Setup.
+			// When Setup is present, signature is checked at parse; vacuous body
+			// is enforced by doctest vet (rules.CheckVacuousSetup), not discover.
 			setupPath := filepath.Join(path, "SETUP.md")
 			if _, statErr := os.Stat(setupPath); os.IsNotExist(statErr) {
 				return nil
@@ -118,16 +121,9 @@ func discoverTreeCasesInternal(root string, w io.Writer) ([]TreeCase, error) {
 				verrs = append(verrs, ValidationError{Path: rel, Msg: statErr.Error()})
 				return nil
 			}
-			doc, readErr := readSetupCached(setupPath, setupCache)
-			if readErr != nil {
+			if _, readErr := readSetupCached(setupPath, setupCache); readErr != nil {
 				rel, _ := filepath.Rel(root, setupPath)
 				verrs = append(verrs, ValidationError{Path: rel, Msg: readErr.Error()})
-			} else if doc.GoBlock == nil {
-				rel, _ := filepath.Rel(root, setupPath)
-				verrs = append(verrs, ValidationError{Path: rel, Msg: "must have a Go code block"})
-			} else if doc.GoBlock.Setup == nil {
-				rel, _ := filepath.Rel(root, setupPath)
-				verrs = append(verrs, ValidationError{Path: rel, Msg: "must have func Setup"})
 			}
 			return nil
 		}

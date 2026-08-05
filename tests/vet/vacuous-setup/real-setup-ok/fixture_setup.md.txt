@@ -1,0 +1,27 @@
+# Scenario
+
+**Feature**: fixture leaf with real Setup work (sets a request field)
+
+```
+# real setup body
+Setup -> set InputDir field -> return nil
+```
+
+## Steps
+
+1. Record a fixture path on the request (real work, not vacuous).
+
+```go
+import (
+	"testing"
+
+	"github.com/xhd2015/doctest/session"
+)
+
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	_ = d
+	// Real work: stamp a fixture path onto the request (not blank-assign only).
+	req.InputDir = "testdata/fixture"
+	return nil
+}
+```
