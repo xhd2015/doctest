@@ -185,7 +185,7 @@ Examples:
   doctest edit ./tests/feature/ui-leaf/ASSERT.md --add-label manual
 `
 
-const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [-a] [-timeout DURATION] [--color] [--no-color] [--changed] [--label EXPR]... [--label-all] [--metrics-on] [--cold-cache] [-cpuprofile FILE] [-memprofile FILE] [-memprofilerate N] [-blockprofile FILE] [-blockprofilerate N] [-mutexprofile FILE] [-mutexprofilefraction N] [-trace FILE] [-outputdir DIR] [-coverprofile FILE] [-cover] [-race] <dir>
+const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [-a] [-timeout DURATION] [--color] [--no-color] [--changed] [--label EXPR]... [--label-all] [--metrics-on] [--cold-cache] [-cpuprofile FILE] [-memprofile FILE] [-memprofilerate N] [-blockprofile FILE] [-blockprofilerate N] [-mutexprofile FILE] [-mutexprofilefraction N] [-trace FILE] [-outputdir DIR] [-coverprofile FILE] [-cover] [-covermode MODE] [-coverpkg PKGS] [-race] [-short] [-failfast] [-parallel N] [-shuffle VAL] [-tags TAGS] [-gcflags FLAGS] [-ldflags FLAGS] <dir>
 
 Run executable Go snippets from a doc-style test directory, allow ./... patterns like go test.
 
@@ -234,12 +234,26 @@ Options:
   -trace FILE       Forward execution trace path to go test (relative paths abs-resolved)
   -outputdir DIR    Forward profile/output directory to go test (relative paths abs-resolved)
   -coverprofile FILE
-                    Forward cover profile path to go test (relative paths abs-resolved)
+                    Forward cover profile path to go test (relative paths abs-resolved).
+                    Not supported with multiple packages (no multi-pkg merge yet).
   -cover            Enable coverage analysis (forward -cover to go test)
+  -covermode MODE   Forward -covermode to go test (set|count|atomic); implies -cover
+  -coverpkg PKGS    Forward -coverpkg to go test (comma-separated patterns); implies -cover
   -race             Enable data race detection (forward -race to go test).
                     Opt-in; slower and often 0 Cached. Nested child doctest
                     processes do not inherit -race unless their Args pass it.
+                    Cover* and -race also disable programmatic leaf-cache skip.
+  -short            Forward -short to go test
+  -failfast         Forward -failfast to go test
+  -parallel N       Forward -parallel to go test
+  -shuffle VAL      Forward -shuffle to go test (on|off|seed)
+  -tags TAGS        Forward -tags to go test / go build
+  -gcflags FLAGS    Forward -gcflags to go test / go build
+  -ldflags FLAGS    Forward -ldflags to go test / go build
   -h, --help        Show help
+
+Not accepted (name-based go test selectors; use path or --label instead):
+  -run, -skip, -bench, -benchtime, -benchmem, -fuzz
 
 Env:
   DOCTEST_CACHE_HOME  Base cache home (default store: $CacheHome/doctest/leaf-cache/v1)

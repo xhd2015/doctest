@@ -25,8 +25,10 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
         "-blockprofile", "-blockprofilerate",
         "-mutexprofile", "-mutexprofilefraction",
         "-trace", "-outputdir",
-        "-coverprofile", "-cover",
+        "-coverprofile", "-cover", "-covermode", "-coverpkg",
         "-race",
+        "-short", "-failfast", "-parallel", "-shuffle",
+        "-tags", "-gcflags", "-ldflags",
     } {
         if !strings.Contains(resp.Stdout, want) {
             t.Fatalf("stdout missing %q:\n%s", want, resp.Stdout)

@@ -47,9 +47,10 @@ func cacheHome() (string, error) {
 }
 
 // SkipEnabled reports whether programmatic leaf-cache skip is active for this
-// Options configuration. Disable when -count is set or -a (force).
-func SkipEnabled(count int, force bool) bool {
-	if force {
+// Options configuration. Disable when -count is set, -a (force), or measurement
+// flags that require every leaf to run (cover* / race; measureNoSkip).
+func SkipEnabled(count int, force, measureNoSkip bool) bool {
+	if force || measureNoSkip {
 		return false
 	}
 	// Any explicit -count=N (including 1) disables skip.

@@ -259,6 +259,55 @@ func TestParseTestOptionsRace(t *testing.T) {
 	}
 }
 
+func TestParseTestOptionsGoTestAllowlist(t *testing.T) {
+	opts, remain, err := parseTestOptions([]string{
+		"-covermode", "atomic",
+		"-coverpkg", "example.com/mod/...",
+		"-short",
+		"-failfast",
+		"-parallel", "4",
+		"-shuffle", "on",
+		"-tags", "integration",
+		"-gcflags", "all=-N",
+		"-ldflags", "-X=main.v=1",
+		"somedir",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.CoverMode != "atomic" || opts.CoverPkg != "example.com/mod/..." {
+		t.Fatalf("cover fields: mode=%q pkg=%q", opts.CoverMode, opts.CoverPkg)
+	}
+	if !opts.Short || !opts.FailFast {
+		t.Fatalf("short=%v failfast=%v", opts.Short, opts.FailFast)
+	}
+	if opts.Parallel == nil || *opts.Parallel != 4 {
+		t.Fatalf("parallel=%v", opts.Parallel)
+	}
+	if opts.Shuffle != "on" || opts.Tags != "integration" {
+		t.Fatalf("shuffle=%q tags=%q", opts.Shuffle, opts.Tags)
+	}
+	if opts.Gcflags != "all=-N" || opts.Ldflags != "-X=main.v=1" {
+		t.Fatalf("gcflags=%q ldflags=%q", opts.Gcflags, opts.Ldflags)
+	}
+	if len(remain) != 1 || remain[0] != "somedir" {
+		t.Fatalf("remain=%v", remain)
+	}
+}
+
+func TestParseTestOptionsRejectNameFilters(t *testing.T) {
+	for _, flag := range []string{"-run", "-skip", "-bench", "-benchtime", "-benchmem", "-fuzz", "-run=TestFoo", "--run"} {
+		_, _, err := parseTestOptions([]string{flag, "somedir"})
+		if err == nil {
+			t.Fatalf("%s: expected reject", flag)
+		}
+		msg := err.Error()
+		if !strings.Contains(msg, "not supported") || !strings.Contains(msg, "--label") {
+			t.Fatalf("%s: unexpected err: %v", flag, err)
+		}
+	}
+}
+
 func TestParseTestOptionsLabelAll(t *testing.T) {
 	opts, remain, err := parseTestOptions([]string{"--label-all", "somedir"})
 	if err != nil {

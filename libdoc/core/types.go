@@ -175,16 +175,44 @@ type Options struct {
 	OutputDir            string
 	CoverProfile         string
 	Cover                bool
+	// CoverMode is go test -covermode (set|count|atomic). Empty = omit.
+	// When set, implies coverage analysis (forward -cover).
+	CoverMode string
+	// CoverPkg is go test -coverpkg patterns (comma-separated). Empty = omit.
+	// When set, implies coverage analysis (forward -cover).
+	CoverPkg string
 	// Race forwards -race to go test (data race detector). Opt-in; slower and
 	// often disables go testcache hits. Nested child doctest processes do not
 	// inherit this unless their Args pass -race.
 	Race bool
+
+	// Execution / build flags forwarded to go test (allowlist).
+	// Name-based selectors (-run, -skip, -bench, …) are rejected at parse time.
+	Short    bool   // -short
+	FailFast bool   // -failfast
+	// Parallel is go test -parallel N. nil = omit; non-nil including 0 = forward.
+	Parallel *int
+	// Shuffle is go test -shuffle value (on|off|seed). Empty = omit.
+	Shuffle string
+	Tags    string // -tags
+	Gcflags string // -gcflags
+	Ldflags string // -ldflags
 
 	// GoCmd is the --go-cmd policy: "", "auto", "xgo", or "go".
 	// Empty and "auto" mean: detect transitive xgo/runtime/mock usage and
 	// choose xgo vs go. Force "xgo"/"go" ignore detection. Invalid values
 	// are rejected at parse time.
 	GoCmd string
+}
+
+// LeafCacheMeasureNoSkip reports whether cover/race measurement flags require
+// every leaf to execute (disable programmatic leaf-cache skip).
+func (o Options) LeafCacheMeasureNoSkip() bool {
+	return o.Cover ||
+		o.CoverProfile != "" ||
+		o.CoverMode != "" ||
+		o.CoverPkg != "" ||
+		o.Race
 }
 
 type ValidationError struct {

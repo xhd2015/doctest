@@ -893,6 +893,9 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 			return core.Options{}, nil, err
 		}
 	}
+	if err := rejectNameFilterFlags(args); err != nil {
+		return core.Options{}, nil, err
+	}
 
 	var sawColor, sawNoColor bool
 	for _, arg := range args {
@@ -935,7 +938,16 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 		String("-outputdir", &opts.OutputDir).
 		String("-coverprofile", &opts.CoverProfile).
 		Bool("-cover", &opts.Cover).
+		String("-covermode", &opts.CoverMode).
+		String("-coverpkg", &opts.CoverPkg).
 		Bool("-race", &opts.Race).
+		Bool("-short", &opts.Short).
+		Bool("-failfast", &opts.FailFast).
+		Int("-parallel", &opts.Parallel).
+		String("-shuffle", &opts.Shuffle).
+		String("-tags", &opts.Tags).
+		String("-gcflags", &opts.Gcflags).
+		String("-ldflags", &opts.Ldflags).
 		String("--go-cmd", &opts.GoCmd).
 		Parse(args)
 	if err != nil {
@@ -1023,6 +1035,30 @@ func absProfilePath(p string) (string, error) {
 		return abs[len(priv):], nil
 	}
 	return abs, nil
+}
+
+// rejectNameFilterFlags rejects go test name-based selectors. Doctest selects
+// leaves by path / --label / --changed, not by test function names.
+func rejectNameFilterFlags(args []string) error {
+	for _, a := range args {
+		if a == "" || a[0] != '-' {
+			continue
+		}
+		name := a
+		if i := strings.IndexByte(a, '='); i >= 0 {
+			name = a[:i]
+		}
+		switch name {
+		case "-run", "--run",
+			"-skip", "--skip",
+			"-bench", "--bench",
+			"-benchtime", "--benchtime",
+			"-benchmem", "--benchmem",
+			"-fuzz", "--fuzz":
+			return fmt.Errorf("%s is not supported; use path or --label to select doctests (name-based go test filters are not accepted)", name)
+		}
+	}
+	return nil
 }
 
 // ParseTestOptions parses doctest test flags into core.Options.

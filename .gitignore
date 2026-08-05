@@ -21,3 +21,9 @@ handoff_*
 
 # pre_test / instrument overlay runtime dirs under sealed trees
 tests/**/generated/
+
+# Local/CI coverage dumps (profiles are CI artifacts, not committed)
+coverage.out
+coverage-*.out
+coverage-func.txt
+coverage.html

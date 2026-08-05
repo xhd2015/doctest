@@ -210,55 +210,11 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	// Flags only — packages are appended per go-test invocation (and per shard).
 	flagArgs := []string{"test", "-mod=mod"}
 	flagArgs = append(flagArgs, ctx.goCommandExtraArgs()...)
-	if opts.Verbose {
-		flagArgs = append(flagArgs, "-v")
-	}
-	if opts.Count > 0 {
-		flagArgs = append(flagArgs, fmt.Sprintf("-count=%d", opts.Count))
-	}
-	if opts.ForceWithFlagA {
-		// go build/test -a: force rebuilding packages that are already up-to-date.
-		flagArgs = append(flagArgs, "-a")
-	}
-	// nil = omit (go default 10m); non-nil including 0 = pass -timeout=…
-	if opts.Timeout != nil {
-		flagArgs = append(flagArgs, fmt.Sprintf("-timeout=%s", *opts.Timeout))
-	}
-	if opts.CPUProfile != "" {
-		flagArgs = append(flagArgs, fmt.Sprintf("-cpuprofile=%s", opts.CPUProfile))
-	}
-	if opts.MemProfile != "" {
-		flagArgs = append(flagArgs, fmt.Sprintf("-memprofile=%s", opts.MemProfile))
-	}
-	if opts.MemProfileRate != nil {
-		flagArgs = append(flagArgs, fmt.Sprintf("-memprofilerate=%d", *opts.MemProfileRate))
-	}
-	if opts.BlockProfile != "" {
-		flagArgs = append(flagArgs, fmt.Sprintf("-blockprofile=%s", opts.BlockProfile))
-	}
-	if opts.BlockProfileRate != nil {
-		flagArgs = append(flagArgs, fmt.Sprintf("-blockprofilerate=%d", *opts.BlockProfileRate))
-	}
-	if opts.MutexProfile != "" {
-		flagArgs = append(flagArgs, fmt.Sprintf("-mutexprofile=%s", opts.MutexProfile))
-	}
-	if opts.MutexProfileFraction != nil {
-		flagArgs = append(flagArgs, fmt.Sprintf("-mutexprofilefraction=%d", *opts.MutexProfileFraction))
-	}
-	if opts.Trace != "" {
-		flagArgs = append(flagArgs, fmt.Sprintf("-trace=%s", opts.Trace))
-	}
-	if opts.OutputDir != "" {
-		flagArgs = append(flagArgs, fmt.Sprintf("-outputdir=%s", opts.OutputDir))
-	}
-	if opts.CoverProfile != "" {
-		flagArgs = append(flagArgs, fmt.Sprintf("-coverprofile=%s", opts.CoverProfile))
-	}
-	if opts.Cover {
-		flagArgs = append(flagArgs, "-cover")
-	}
-	if opts.Race {
-		flagArgs = append(flagArgs, "-race")
+	flagArgs = appendOptsGoTestFlags(flagArgs, opts)
+
+	if err := checkCoverProfilePackages(opts, packageArgs); err != nil {
+		stats.Phases = phases
+		return stats, err
 	}
 
 	// Resolve go vs xgo for this suite (--go-cmd=auto|xgo|go).
@@ -1565,7 +1521,7 @@ func applyGoTestLeafStats(stats *TestRunStats, result *goTestJSONResult, nCases 
 		stats.Passed = passedCases(stats.Total, result.failCount)
 	}
 	result.cachedCount = leafCachedSummary(nCases, skipPaths, result.anyPackageCached(),
-		leafcache.SkipEnabled(opts.Count, opts.ForceWithFlagA))
+		leafcache.SkipEnabled(opts.Count, opts.ForceWithFlagA, opts.LeafCacheMeasureNoSkip()))
 }
 
 // prepareLeafCache computes leaf keys and warm skip paths for this tree run.
@@ -1587,7 +1543,7 @@ func prepareLeafCache(treeRoot string, cases []core.TreeCase, opts core.Options)
 		return keys, nil
 	}
 	goVer := runtime.Version()
-	enabled := leafcache.SkipEnabled(opts.Count, opts.ForceWithFlagA)
+	enabled := leafcache.SkipEnabled(opts.Count, opts.ForceWithFlagA, opts.LeafCacheMeasureNoSkip())
 	leaves := make([]leafcache.LeafRef, 0, len(cases))
 	idToPath := make(map[string]string, len(cases))
 	for _, tc := range cases {
