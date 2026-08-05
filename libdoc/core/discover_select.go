@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"github.com/xhd2015/doctest/libdoc/rules"
 )
@@ -156,27 +155,9 @@ func HydrateTreeCases(root string, cases []TreeCase) ([]TreeCase, error) {
 			verrs = append(verrs, ValidationError{Path: relAssert, Msg: chainErr.Error()})
 			continue
 		}
-		// Mirror full-discover WalkDir rules for SETUP on the leaf's ancestor
-		// path: root SETUP.md is optional and need not define Setup; missing
-		// intermediate SETUP.md is OK; when a non-root SETUP.md exists it must
-		// have a Go block with func Setup.
-		for _, doc := range setupDocs {
-			if doc.Path == "DOCTEST.md" || doc.Path == "SETUP.md" {
-				continue
-			}
-			if !strings.HasSuffix(doc.Path, "SETUP.md") {
-				continue
-			}
-			setupAbs := filepath.Join(root, filepath.FromSlash(doc.Path))
-			if _, statErr := os.Stat(setupAbs); os.IsNotExist(statErr) {
-				continue
-			}
-			if doc.GoBlock == nil {
-				verrs = append(verrs, ValidationError{Path: doc.Path, Msg: "must have a Go code block"})
-			} else if doc.GoBlock.Setup == nil {
-				verrs = append(verrs, ValidationError{Path: doc.Path, Msg: "must have func Setup"})
-			}
-		}
+		// Ancestor SETUP: missing / prose-only / Go without Setup are OK.
+		// setupChainCached already applied redefine/signature checks when a
+		// Go block is present. Vacuous Setup is enforced by doctest vet.
 		assertPath := filepath.Join(leafDir, "ASSERT.md")
 		assertContent, err := os.ReadFile(assertPath)
 		if err != nil {

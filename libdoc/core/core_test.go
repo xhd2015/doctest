@@ -50,18 +50,15 @@ func TestValidationReportsAllErrorsAtOnce(t *testing.T) {
 	if !strings.Contains(errStr, "must define type Request") && !strings.Contains(errStr, "type Response") {
 		t.Fatalf("expected missing types error, got %q", errStr)
 	}
-	if !strings.Contains(errStr, "must have a Go code block") {
-		t.Fatalf("expected missing Go block error, got %q", errStr)
+	// Prose-only SETUP.md (no Go block) is allowed for organization-only nodes.
+	if strings.Contains(errStr, "must have a Go code block") {
+		t.Fatalf("prose-only SETUP must not require a Go code block, got %q", errStr)
 	}
 	if !strings.Contains(errStr, "missing func Assert") {
 		t.Fatalf("expected missing Assert error, got %q", errStr)
 	}
 	if !strings.Contains(errStr, "validation errors:") {
 		t.Fatalf("expected validation errors header, got %q", errStr)
-	}
-	lines := strings.Split(strings.TrimSpace(errStr), "\n")
-	if len(lines) < 4 {
-		t.Fatalf("expected at least 3 errors, got %q", errStr)
 	}
 }
 
@@ -81,6 +78,51 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 
 	if _, err := DiscoverTreeCases(root); err != nil {
 		t.Fatalf("expected no error for valid tree, got %v", err)
+	}
+}
+
+// Intermediate grouping SETUP may be prose-only (no Go fence); discover and
+// hydrate must not emit "must have a Go code block" for that path.
+func TestDiscoverAllowsProseOnlyIntermediateSETUP(t *testing.T) {
+	root := t.TempDir()
+	writeTreeFile(t, root, "DOCTEST.md", doctestDoc(`
+type Request struct{ V int }
+type Response struct{}
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { return &Response{}, nil }
+`))
+	writeTreeFile(t, root, "group/SETUP.md", "# Scenario\n\n**Feature**: organization-only grouping\n\n## Steps\n1. Document only; no Go Setup.\n")
+	writeTreeFile(t, root, "group/leaf/SETUP.md", setupDoc(`
+func Setup(t *testing.T, d *session.Doctest, req *Request) error { req.V = 1; return nil }
+`))
+	writeTreeFile(t, root, "group/leaf/ASSERT.md", assertDoc(`
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
+`))
+
+	cases, err := DiscoverTreeCases(root)
+	if err != nil {
+		t.Fatalf("DiscoverTreeCases with prose-only intermediate SETUP: %v", err)
+	}
+	if len(cases) != 1 {
+		t.Fatalf("cases=%d want 1", len(cases))
+	}
+	light, err := DiscoverTreeCasesLight(root)
+	if err != nil {
+		t.Fatalf("DiscoverTreeCasesLight: %v", err)
+	}
+	hydrated, err := HydrateTreeCases(root, light)
+	if err != nil {
+		t.Fatalf("HydrateTreeCases with prose-only intermediate SETUP: %v", err)
+	}
+	if len(hydrated) != 1 {
+		t.Fatalf("hydrated=%d want 1", len(hydrated))
+	}
+	// Ensure no setup chain entry forced a Go block error for group/SETUP.md.
+	for _, doc := range hydrated[0].SetupFiles {
+		if strings.HasSuffix(doc.Path, "group/SETUP.md") || doc.Path == "group/SETUP.md" {
+			if doc.GoBlock != nil {
+				t.Fatalf("expected nil GoBlock for prose intermediate, got %+v", doc.GoBlock)
+			}
+		}
 	}
 }
 

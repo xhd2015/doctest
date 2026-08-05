@@ -10,6 +10,12 @@ import (
 	"github.com/xhd2015/doctest/libdoc/rules"
 )
 
+// L3 (label: e2e) share budget for full-tree vet. Skipped when ChangedOnly.
+const (
+	MaxL3Pct  = 10
+	MinLeaves = 10
+)
+
 func Run(dir string) error {
 	return RunWithOptions(dir, core.Options{})
 }
@@ -252,5 +258,39 @@ func runFull(dir string, opts core.Options) error {
 		return err
 	}
 
+	// Full tree only: enforce L3 (e2e) share budget after structure + anti-patterns.
+	// Skipped entirely when opts.ChangedOnly (runChangedOnly path never reaches here).
+	if shareErr := checkL3ShareBudget(dir); shareErr != nil {
+		antiViolations = append(antiViolations, shareErr)
+	}
+
 	return errors.Join(antiViolations...)
+}
+
+// checkL3ShareBudget fails when leaves >= MinLeaves and e2e share exceeds MaxL3Pct.
+// L3 identity matches doctest list: only label "e2e" (heavy alone is L2).
+func checkL3ShareBudget(root string) error {
+	cases, err := core.DiscoverTreeCasesLight(root)
+	if err != nil {
+		return err
+	}
+	leaves := len(cases)
+	if leaves < MinLeaves {
+		return nil
+	}
+	l3 := 0
+	for _, c := range cases {
+		for _, lab := range c.Labels {
+			if lab == "e2e" {
+				l3++
+				break
+			}
+		}
+	}
+	pct := 100.0 * float64(l3) / float64(leaves)
+	if pct <= float64(MaxL3Pct) {
+		return nil
+	}
+	return fmt.Errorf("%s: L3 share %.1f%% (%d/%d leaves labeled e2e) exceeds max %d%%",
+		root, pct, l3, leaves, MaxL3Pct)
 }

@@ -57,11 +57,83 @@ func checkFileAntiPatterns(path string, content string) []error {
 			if msg := doctestSessionIDEnvReadMessage(node); msg != "" {
 				violations = append(violations, fmt.Errorf("%s: %s", path, msg))
 			}
+			if msg := parallelUnsafeCallMessage(node); msg != "" {
+				violations = append(violations, fmt.Errorf("%s: %s", path, msg))
+			}
+		case *ast.AssignStmt:
+			if msg := parallelUnsafeStdioReassignMessage(node); msg != "" {
+				violations = append(violations, fmt.Errorf("%s: %s", path, msg))
+			}
 		}
 		return true
 	})
 
 	return violations
+}
+
+// parallelUnsafeCallMessage flags process-global env/cwd mutation APIs that
+// race under t.Parallel() in suite harnesses.
+func parallelUnsafeCallMessage(call *ast.CallExpr) string {
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return ""
+	}
+	recv, ok := sel.X.(*ast.Ident)
+	if !ok {
+		return ""
+	}
+	method := sel.Sel.Name
+	switch recv.Name {
+	case "os":
+		switch method {
+		case "Setenv", "Unsetenv", "Clearenv":
+			return fmt.Sprintf(
+				"anti-pattern: os.%s in harness under t.Parallel — set child cmd.Env only (or UseCLI subprocess); never mutate process env for leaf isolation",
+				method,
+			)
+		case "Chdir":
+			return "anti-pattern: os.Chdir in harness under t.Parallel — use absolute paths from d / t.TempDir() and child cmd.Dir; never change process cwd"
+		}
+	case "syscall":
+		switch method {
+		case "Setenv", "Unsetenv":
+			return fmt.Sprintf(
+				"anti-pattern: syscall.%s in harness under t.Parallel — set child cmd.Env only; never mutate process env for leaf isolation",
+				method,
+			)
+		}
+	case "t":
+		switch method {
+		case "Setenv":
+			return "anti-pattern: t.Setenv in harness under t.Parallel — set child cmd.Env only; t.Setenv mutates process env and races parallel leaves"
+		case "Chdir":
+			return "anti-pattern: t.Chdir in harness under t.Parallel — use absolute paths and child cmd.Dir; t.Chdir mutates process cwd and races parallel leaves"
+		}
+	}
+	return ""
+}
+
+// parallelUnsafeStdioReassignMessage flags assignment to os.Stdout / os.Stderr /
+// os.Stdin (reads and Fprint to them are OK).
+func parallelUnsafeStdioReassignMessage(assign *ast.AssignStmt) string {
+	for _, lhs := range assign.Lhs {
+		sel, ok := lhs.(*ast.SelectorExpr)
+		if !ok {
+			continue
+		}
+		pkg, ok := sel.X.(*ast.Ident)
+		if !ok || pkg.Name != "os" {
+			continue
+		}
+		switch sel.Sel.Name {
+		case "Stdout", "Stderr", "Stdin":
+			return fmt.Sprintf(
+				"anti-pattern: os.%s in harness under t.Parallel — do not reassign process stdio; inject writers (opts/req) or fmt.Fprint(os.Stdout, …) without reassignment",
+				sel.Sel.Name,
+			)
+		}
+	}
+	return ""
 }
 
 func collectContainsTemplateVars(file *ast.File) map[string]bool {

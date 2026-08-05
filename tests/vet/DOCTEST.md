@@ -1,4 +1,4 @@
-# `doctest vet` — structure validation (in-process + sparse e2e)
+# `doctest vet` — structure validation (in-process L2)
 
 ## Version
 0.0.2
@@ -7,12 +7,12 @@
 
 | Layer | Share | Where |
 |-------|-------|--------|
-| **L2 doctest in-process** | **mass (≥80%)** | structure, anti-patterns, path/argv patterns — harness `Run` calls `runner.VetArgs` / `validate.Run*` / optional `cli.Run` with fixture trees under `t.TempDir()` |
-| **L3 doctest e2e** | **sparse (≤3)** | `e2e/` — real `doctest` binary for help text and verbose process stdout; `label: heavy` |
+| **L2 doctest in-process** | **mass (≥80%)** | structure, anti-patterns, **vacuous Setup / prose-only SETUP**, path/argv, **L3 layer-share budget** — harness `Run` calls `runner.VetArgs` / `validate.Run*` / optional `cli.Run` with fixture trees under `t.TempDir()` |
+| **L3 doctest e2e** | **none in this tree** | help/verbose are L2 in-process CLI (no product binary) |
 
-Default discovery runs L2 only (unlabeled). Use `--label heavy` for binary smokes.
+Default discovery runs L2 only (unlabeled).
 
-Out of scope: product feature changes; `tests/changed`, `tests/help`, `tests/skill`.
+Out of scope: product feature changes; `tests/changed`, `tests/help`, `tests/skill`; CLI knobs for max L3 %.
 
 # DSN (Domain Specific Notion)
 
@@ -20,27 +20,49 @@ Out of scope: product feature changes; `tests/changed`, `tests/help`, `tests/ski
 
 - **Harness** — default path: invokes `runner.VetArgs` (and `validate.Run` /
   `RunWithOptions` underneath) or `cli.Run` in-process against fixture trees.
-- **e2e binary** — sparse L3 leaves spawn the product `doctest` binary for
-  CLI help wording and verbose stdout that uses process-level `fmt.Printf`.
 - **Fixture tree** — temporary directory with `DOCTEST.md` / `SETUP.md` /
-  `ASSERT.md` (and optional anti-pattern content) written under `t.TempDir()`.
+  `ASSERT.md` (and optional anti-pattern content or multi-leaf labels) under
+  `t.TempDir()`.
 - **Path resolver** — `./...` / `path/...` discovery via `libdoc/path_resolve`
   (multi-tree and multi-arg wiring through `VetArgs`).
 - **Anti-pattern checker** — flags embedded Go string literals, `go test`
-  shell-outs, missing SETUP for ASSERT, while skipping `testdata/`.
+  shell-outs, missing SETUP for ASSERT, Parallel-unsafe harness APIs
+  (`os.Setenv`/`Unsetenv`/`Clearenv`, `os.Chdir`, `t.Setenv`, `t.Chdir`,
+  `os.Stdout`/`Stderr`/`Stdin` reassignment, `syscall.Setenv`/`Unsetenv`),
+  while skipping `testdata/`. Read-only use of stdio (e.g. `Fprint(os.Stdout, …)`)
+  is allowed.
+- **Setup-policy checker** — non-root `func Setup` that is vacuous (`return nil`
+  only, or only `_ = …` blank assigns then `return nil`) hard-fails; message
+  tells authors to **remove** the Go **code block** (not "implement the
+  behavior"). SETUP.md with `# Scenario` prose and **no** Go block is allowed
+  (intermediate and leaf). Setup that does real work is allowed.
+- **Layer-share checker** — on **full** tree vet only (not `--changed`): after
+  structure + anti-patterns, inventory leaves like `doctest list` (`label: e2e`
+  ⇒ L3; else L2). If `leaves >= 10` and `100*L3/leaves > 10` → hard fail
+  (`MaxL3Pct=10`, `MinLeaves=10`). Implementer skips share when `opts.ChangedOnly`.
 
 ### Behaviors
 
 - **Valid tree** — minimal legal root → exit 0.
-- **Anti-patterns** — embedded Go / go-test shell-out → non-zero + message;
-  anti-pattern only under `testdata/` → exit 0 (skipped).
+- **Anti-patterns** — embedded Go / go-test shell-out / Parallel-unsafe APIs →
+  non-zero + `anti-pattern:` message naming the API; anti-pattern only under
+  `testdata/` → exit 0 (skipped); stdio read/write without reassignment → exit 0.
+- **Vacuous Setup** — non-root body only `return nil`, or only blank assigns then
+  `return nil` → non-zero; stderr has `remove` + `code block` and a marker
+  (`vacuous` / `anti-pattern` / `return nil` / `blank`); not "implement the behavior".
+- **Prose-only SETUP** — intermediate/leaf SETUP with Scenario prose and no Go
+  block → exit 0.
+- **Real Setup** — non-root Setup with real work (e.g. field assign) → exit 0.
 - **Structure** — ASSERT without SETUP → non-zero.
+- **Layer share (full vet)** — ≥10 leaves and L3 (e2e) share >10% → non-zero +
+  message with path, `L3`, share/pct, and `10%`/`max 10`; ≤10% or <10 leaves →
+  exit 0; `heavy` without `e2e` is L2.
 - **Args / paths** — bare `...` rejected; `./...` and `./sub/...` discover
   roots; `./` cwd tree; multi-dir ok; multi-dir with one invalid fails;
   missing dir arg → `vet requires <dir>`.
 - **Rename** — top-level `validate` is unknown (`cli.Run` in-process).
-- **Help / verbose** — L3 e2e only: usage documents `-v` / `<dir...>` / `./...`;
-  `-v` prints `[vet] validating` and file names on process stdout.
+- **Help / verbose** — L2 in-process: usage documents `-v` / `<dir...>` / `./...`;
+  `-v` prints `[vet] validating` and file names on injected stdout.
 
 ### Pipeline sketch
 
@@ -50,11 +72,9 @@ fixture tree under t.TempDir()
   -> rewrite relative Args against WorkDir when set
   -> runner.VetArgs(flags..., dirs...)   # or cli.Run for non-vet top-level
        -> validate.RunWithOptions(dir, opts)
+            -> structure + anti-patterns + vacuous Setup policy
+            -> (full only) L3 share budget if leaves >= 10
   -> Response{ExitCode, Stderr from error text}
-
-# L3 (e2e/, label: heavy)
-testbin.Ensure -> req.Bin
-  -> doctest vet --help | doctest vet -v <dir>
 ```
 
 ## Decision Tree
@@ -69,7 +89,28 @@ tests/vet/
 ├── anti-pattern/                       [L2 validate]
 │   ├── embedded-go/
 │   ├── go-test-shellout/
-│   └── skipped-in-testdata/
+│   ├── skipped-in-testdata/
+│   ├── os-setenv/                      Parallel-unsafe os.Setenv
+│   ├── os-unsetenv/                    Parallel-unsafe os.Unsetenv
+│   ├── os-clearenv/                    Parallel-unsafe os.Clearenv
+│   ├── os-chdir/                       Parallel-unsafe os.Chdir
+│   ├── t-setenv/                       Parallel-unsafe t.Setenv
+│   ├── t-chdir/                        Parallel-unsafe t.Chdir
+│   ├── stdio-reassign/                 Parallel-unsafe os.Stdout=…
+│   ├── stdio-read-ok/                  positive: Fprint(os.Stdout) OK
+│   ├── syscall-setenv/                 Parallel-unsafe syscall.Setenv
+│   └── syscall-unsetenv/               Parallel-unsafe syscall.Unsetenv
+├── vacuous-setup/                      [L2 validate — Setup body policy]
+│   ├── vacuous-return-nil/             non-root Setup = return nil → fail + remove/code block
+│   ├── vacuous-blank-assign/           non-root Setup = _=… then return nil → same fail class
+│   ├── prose-only-setup-ok/            intermediate SETUP prose, no go block → exit 0
+│   └── real-setup-ok/                  Setup does real work → exit 0
+├── layer-share/                        [L2 validate — L3 e2e budget]
+│   ├── within-budget/                  ≥10 leaves, ≤10% e2e → exit 0
+│   ├── over-budget/                    ≥10 leaves, >10% e2e → non-zero
+│   ├── tiny-tree-skip/                 <10 leaves, high e2e % → exit 0
+│   └── heavy-only-is-l2/               ≥10 all heavy (no e2e) → exit 0
+│   # note: --changed skips share (implementer: opts.ChangedOnly); no leaf
 ├── bare-dot-dot-dot/                   [L2 VetArgs]
 ├── dot-dot-dot/                        [L2 VetArgs + WorkDir]
 ├── sub-path-dot-dot-dot/               [L2 VetArgs + WorkDir]
@@ -78,9 +119,8 @@ tests/vet/
 ├── multiple-dirs-one-invalid/          [L2 VetArgs multi]
 ├── missing-dir/                        [L2 VetArgs]
 ├── validate-is-unknown/                [L2 cli.Run]
-└── e2e/                                [L3 binary, label: heavy]
-    ├── help-shows-flags/
-    └── verbose-flag/
+├── help-shows-flags/                   [L2 cli.Run help]
+└── verbose-flag/                       [L2 VetArgs -v]
 ```
 
 ## Test Index
@@ -93,6 +133,24 @@ tests/vet/
 | `anti-pattern/embedded-go` | L2 | non-zero; embedded Go anti-pattern |
 | `anti-pattern/go-test-shellout` | L2 | non-zero; go test shell-out anti-pattern |
 | `anti-pattern/skipped-in-testdata` | L2 | exit 0 (testdata skipped) |
+| `anti-pattern/os-setenv` | L2 | non-zero; `anti-pattern:` + `os.Setenv` |
+| `anti-pattern/os-unsetenv` | L2 | non-zero; `anti-pattern:` + `os.Unsetenv` |
+| `anti-pattern/os-clearenv` | L2 | non-zero; `anti-pattern:` + `os.Clearenv` |
+| `anti-pattern/os-chdir` | L2 | non-zero; `anti-pattern:` + `os.Chdir` |
+| `anti-pattern/t-setenv` | L2 | non-zero; `anti-pattern:` + `t.Setenv` |
+| `anti-pattern/t-chdir` | L2 | non-zero; `anti-pattern:` + `t.Chdir` |
+| `anti-pattern/stdio-reassign` | L2 | non-zero; `anti-pattern:` + `os.Stdout` |
+| `anti-pattern/stdio-read-ok` | L2 | exit 0 (Fprint without reassignment) |
+| `anti-pattern/syscall-setenv` | L2 | non-zero; `anti-pattern:` + `syscall.Setenv` |
+| `anti-pattern/syscall-unsetenv` | L2 | non-zero; `anti-pattern:` + `syscall.Unsetenv` |
+| `vacuous-setup/vacuous-return-nil` | L2 | non-zero; remove + code block; not "implement the behavior" |
+| `vacuous-setup/vacuous-blank-assign` | L2 | non-zero; same remove/code-block class as return-nil |
+| `vacuous-setup/prose-only-setup-ok` | L2 | exit 0; intermediate SETUP prose, no go block |
+| `vacuous-setup/real-setup-ok` | L2 | exit 0; Setup with real work |
+| `layer-share/within-budget` | L2 | exit 0; 10 leaves / 1 e2e (10% ≤ max) |
+| `layer-share/over-budget` | L2 | non-zero; L3 share message (10 leaves / 2 e2e) |
+| `layer-share/tiny-tree-skip` | L2 | exit 0; 3 leaves / 1 e2e (MinLeaves skip) |
+| `layer-share/heavy-only-is-l2` | L2 | exit 0; 10 heavy leaves, no e2e |
 | `bare-dot-dot-dot` | L2 | non-zero; bare `...` message |
 | `dot-dot-dot` | L2 | exit 0; discovers sub-a + sub-b |
 | `sub-path-dot-dot-dot` | L2 | exit 0; only subp validated |
@@ -101,17 +159,19 @@ tests/vet/
 | `multiple-dirs-one-invalid` | L2 | non-zero; missing DOCTEST.md |
 | `missing-dir` | L2 | non-zero; `vet requires <dir>` |
 | `validate-is-unknown` | L2 | non-zero; `unknown command: validate` |
-| `e2e/help-shows-flags` | L3 heavy | exit 0; `-v`, `--verbose`, `<dir...>`, `./...` |
-| `e2e/verbose-flag` | L3 heavy | exit 0; `[vet] validating` + `SETUP.md` on stdout |
+| `help-shows-flags` | L2 | exit 0; `-v`, `--verbose`, `<dir...>`, `./...` |
+| `verbose-flag` | L2 | exit 0; `[vet] validating` + `SETUP.md` on stdout |
 
 ## How to Run
 
 ```sh
 doctest vet ./tests/vet/
-# default discovery: L2 in-process mass (skips label: heavy)
+# default discovery: L2 in-process mass
 doctest test ./tests/vet/
-# sparse binary smokes
-doctest test --label heavy ./tests/vet/...
+# vacuous Setup / prose-only policy only
+doctest test ./tests/vet/vacuous-setup/
+# layer-share only
+doctest test ./tests/vet/layer-share/
 # full suite
 doctest test --label-all ./tests/vet/...
 ```

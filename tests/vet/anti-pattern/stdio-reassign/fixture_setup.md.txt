@@ -1,0 +1,23 @@
+# Scenario
+
+**Feature**: fixture setup for vet test
+
+```
+# minimal pipeline
+system -> run
+```
+
+## Steps
+
+```go
+import (
+	"os"
+	"testing"
+)
+
+func Setup(t *testing.T, req *Request) error {
+	// Parallel-unsafe: reassignment of process stdio (Stdout/Stderr/Stdin).
+	os.Stdout = nil
+	return nil
+}
+```

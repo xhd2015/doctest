@@ -1,0 +1,18 @@
+# Scenario
+
+**Feature**: intermediate grouping prose without a Go code block
+
+```
+# document-only SETUP
+author -> # Scenario prose -> no Go Setup
+```
+
+## Preconditions
+
+- Shared notes for descendant leaves; no harness code required.
+- Omitting the Go code block is intentional and allowed.
+
+## Steps
+
+1. Document preconditions and steps in markdown only.
+2. Do not define `func Setup`.

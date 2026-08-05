@@ -1,9 +1,14 @@
 package rules
 
+// CheckHasGoBlock formerly required every SETUP.md to contain a Go fence.
+// SETUP.md Go blocks are optional (prose-only / organization nodes). Callers
+// must not use this for SETUP.md; DOCTEST.md still requires a Go block via
+// CheckRootHasGoBlock / explicit discover+validate checks on DOCTEST only.
+//
+// Kept as a no-op so old call sites cannot reintroduce the SETUP requirement.
 func CheckHasGoBlock(goBlockSet bool, path string) *Violation {
-	if !goBlockSet {
-		return &Violation{Path: path, Msg: "must have a Go code block"}
-	}
+	_ = goBlockSet
+	_ = path
 	return nil
 }
 

@@ -176,19 +176,11 @@ All files are validated by `doctest build`. Rules are checked
 in order; the first violation for each file is reported. Multiple violations
 across different files are collected and reported together.
 
-### 1. SETUP.md must have a Go code block
+### 1. SETUP.md Go code block is optional
 
-Every `SETUP.md` must contain at least one fenced Go code block (`` ```go ``).
-
-**Violation** — a prose-only SETUP.md:
-````markdown
-## Preconditions
-- A git repo exists
-
-## Steps
-1. Run commit
-````
-**Error**: `SETUP.md: must have a Go code block`
+`SETUP.md` may be prose-only (Scenario / organization notes) with no fenced Go
+code block. Organization-only intermediate nodes need no Setup. When a Go block
+is present and defines `func Setup`, the body must not be vacuous (see §11).
 
 ---
 
@@ -251,12 +243,11 @@ func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) { ..
 
 ---
 
-### 4. Root DOCTEST.md must have `func Run`; every SETUP.md must have `func Setup`
+### 4. Root DOCTEST.md must have `func Run`; SETUP `func Setup` is optional
 
-The root `DOCTEST.md` Go block must define `func Run`. Every `SETUP.md` along
-the ancestor chain (including optional root `SETUP.md`) must contribute a
-`func Setup`. A Go block with only type declarations and no functions is
-incomplete.
+The root `DOCTEST.md` Go block must define `func Run`. A `SETUP.md` may omit
+`func Setup` (prose-only, helpers-only, or empty Go). When `func Setup` is
+present it must have the correct signature (§5) and a non-vacuous body (§11).
 
 **Violation** — DOCTEST.md has only types, no Run:
 ```go
@@ -264,12 +255,6 @@ type Request struct{ Value int }
 type Response struct{ Result int }
 ```
 **Error**: `DOCTEST.md: must have func Run`
-
-**Violation** — non-root SETUP.md has only types, no Setup:
-```go
-// (empty or only type/var declarations)
-```
-**Error**: `<dir>/SETUP.md: must have func Setup`
 
 ---
 
@@ -374,19 +359,22 @@ in `DOCTEST.md` (Rule 9), the root `DOCTEST.md` Go block must provide one.
 
 ---
 
-### 11. `func Setup` body must not be a stub
+### 11. `func Setup` body must not be vacuous
 
-A Setup function whose body is solely `return nil` contributes nothing. Each
-`func Setup` must contain real logic that implements the behavior described
-in the markdown sections above it.
+A Setup function whose body is only `return nil`, or only blank-identifier
+assignments (`_ = expr`) then `return nil`, is vacuous. Prefer removing the Go
+code block (or omitting Setup) for organization-only nodes.
 
-**Violation** — bare stub:
+**Violation** — bare or blank-assign stub:
 ```go
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+    _ = t
+    _ = d
+    _ = req
     return nil
 }
 ```
-**Error**: `leaf/SETUP.md: func Setup body must not be a stub (return nil) — implement the behavior described in this document`
+**Error**: `leaf/SETUP.md: vacuous func Setup (only return nil / blank assigns) — remove the Go code block (or omit Setup); organization-only nodes need no Setup`
 
 ## Fixture Directory: `testdata/`
 

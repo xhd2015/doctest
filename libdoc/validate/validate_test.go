@@ -209,7 +209,7 @@ func TestRunValidationCases(t *testing.T) {
 				dir := t.TempDir()
 				writeFile(t, dir, "DOCTEST.md", minimalDOCTEST)
 				writeFile(t, dir, "SETUP.md", minimalSETUP("## Setup\nsetup\n"))
-				writeFile(t, dir, "leaf/SETUP.md", minimalSETUP("# Setup\n\n```go\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }\n```\n"))
+				writeFile(t, dir, "leaf/SETUP.md", minimalSETUP("# Setup\n\n```go\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error {\n\treq.Msg = \"fixture\"\n\treturn nil\n}\n```\n"))
 				writeFile(t, dir, "leaf/ASSERT.md", "# Assert\n\n```go\nimport (\n\t\"testing\"\n\n\tdtassert \"github.com/xhd2015/doctest/assert\"\n)\n\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n\tp := dtassert.MustParse(`<contains>\nok\n</contains>`)\n\tif matchErr := dtassert.Match(p, \"ok\", dtassert.Contains()); matchErr != nil {\n\t\tt.Fatal(matchErr)\n\t}\n}\n```\n")
 				return dir
 			},
@@ -221,7 +221,7 @@ func TestRunValidationCases(t *testing.T) {
 				dir := t.TempDir()
 				writeFile(t, dir, "DOCTEST.md", minimalDOCTEST)
 				writeFile(t, dir, "SETUP.md", minimalSETUP("## Setup\nsetup\n"))
-				writeFile(t, dir, "leaf/SETUP.md", minimalSETUP("# Setup\n\n```go\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }\n```\n"))
+				writeFile(t, dir, "leaf/SETUP.md", minimalSETUP("# Setup\n\n```go\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error {\n\treq.Msg = \"fixture\"\n\treturn nil\n}\n```\n"))
 				writeFile(t, dir, "leaf/ASSERT.md", "# Assert\n\n```go\nimport (\n\t\"testing\"\n\n\tdtassert \"github.com/xhd2015/doctest/assert\"\n)\n\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n\tdtassert.Output(t, \"ok\", `` + `<contains>\nok\n</contains>`)\n}\n```\n")
 				return dir
 			},

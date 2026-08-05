@@ -14,8 +14,10 @@ fixture tree under t.TempDir()
 - Nested root: does not inherit workspace binary Run from `tests/DOCTEST.md`.
 - All leaves inject fixture dirs / Args on `Request` — no product binary required.
 - Leaves write fixture trees under `t.TempDir()`; never mutate the repo tree.
-- Completeness: every prior `tests/vet` scenario remains as L2 in-process.
+- Completeness: structure, anti-patterns, **vacuous Setup / prose-only SETUP**,
+  path/argv, **layer-share** as L2 in-process.
 - Help and verbose leaves are unlabeled (fast); no `testbin`.
+- Layer-share fixtures use multi-leaf labeled ASSERT frontmatter (`e2e` / `heavy`).
 
 ## Steps
 
@@ -29,6 +31,8 @@ fixture tree under t.TempDir()
 - `Request` / `Response` / `Run` are defined only in `DOCTEST.md`.
 - Parallel-safe: each leaf uses `t.TempDir()`; relative Args rewritten against WorkDir.
 - **Layer**: L2 in-process for all leaves.
+- **Implementer note (layer-share)**: skip L3 share when `opts.ChangedOnly`; constants
+  `MaxL3Pct=10`, `MinLeaves=10`; L3 = ASSERT frontmatter label `e2e` only.
 
 ```go
 import (
