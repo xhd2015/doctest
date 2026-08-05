@@ -29,6 +29,7 @@ Commands:
   test <dir>
   list [<pattern>...]
   edit <leaf-path> [--add-label NAME] [--add-explanation TEXT]
+  cache [--clean] [--dry-run]
 
 Agents:
   agent generate <idea> [-d|--dir <target-dir>] [--agent-runner RUNNER]
@@ -421,6 +422,8 @@ func run(io stdio, args []string) error {
 		return runSkills(io, args[1:])
 	case "metrics":
 		return runMetrics(io, args[1:])
+	case "cache":
+		return runCache(io, args[1:])
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
 	}
