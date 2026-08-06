@@ -30,6 +30,10 @@ jobs:
         # without -buildvcs=false.
         run: go install ./cmd/doctest
 
+      - name: Doctest vet (structure + anti-patterns)
+        # Gate suite structure / Parallel-safe harness / L3 share before any doctest test.
+        run: doctest vet ./...
+
       # Layer model (DOCTEST_DESIGN_PRINCIPLE): discovery = in-process mass;
       # label e2e = full integration only. Prefer discovery for PR signal; e2e on full push.
       # Each stage writes its own coverprofile — same path overwrites (no merge).
