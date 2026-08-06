@@ -20,18 +20,3 @@ cli.RunWithWriters -> doctest cache --help | doctest --help
 ## Context
 
 - Grouping only; leaves hold Assert.
-
-```go
-import (
-	"testing"
-
-	"github.com/xhd2015/doctest/session"
-)
-
-func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-	_ = d
-	_ = req
-	// Help leaves do not need a temp CacheHome.
-	return nil
-}
-```
