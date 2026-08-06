@@ -1,3 +1,11 @@
+# Scenario
+
+**Feature**: suite organization / shared setup
+
+```
+suite organization
+```
+
 ## Preconditions
 - Positional arg is present as the prompt.
 

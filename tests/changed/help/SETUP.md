@@ -21,18 +21,3 @@ cli.RunWithWriter -> doctest <subcmd> --help -> stdout lists --changed
 ## Context
 
 - No fixture tree required for help.
-
-```go
-import (
-	"testing"
-
-	"github.com/xhd2015/doctest/session"
-)
-
-func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-	// In-process CLI: no testbin, no UseCLI binary path.
-	_ = d
-	_ = req
-	return nil
-}
-```

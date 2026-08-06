@@ -3,6 +3,14 @@
 ## Version
 0.0.2
 
+## DSN (Domain Specific Notion)
+
+### Participants
+- **system under test** — behavior covered by this tree.
+
+### Behaviors
+- **run** — executes the scenarios in this suite.
+
 **Layer L2 in-process** — `runner.ParseTestOptions` rejects trailing `&&` in label EXPR.
 No product binary, no `label: heavy`.
 

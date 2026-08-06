@@ -1,3 +1,11 @@
+# Scenario
+
+**Feature**: suite organization / shared setup
+
+```
+suite organization
+```
+
 ## Preconditions
 - `sh` is available to inspect environment variables.
 

@@ -11,11 +11,3 @@ EvalLabelExpr("slow || heavy", {fast}) -> false
 ## Steps
 
 1. Assert OR semantics.
-
-```go
-func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-	_ = t
-	_ = req
-	return nil
-}
-```

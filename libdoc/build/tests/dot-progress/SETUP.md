@@ -1,3 +1,11 @@
+# Scenario
+
+**Feature**: suite organization / shared setup
+
+```
+suite organization
+```
+
 ## Preconditions
 - The `build` package is importable (`github.com/xhd2015/doctest/libdoc/build`).
 - This test creates a stable fixture sub-tree with 2 fast leaves and runs

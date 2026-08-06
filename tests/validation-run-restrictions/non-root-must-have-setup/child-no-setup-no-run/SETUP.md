@@ -17,7 +17,7 @@ non-root missing Setup -> build error
 1. Run `doctest test` on the child-no-setup fixture.
 
 ## Context
-- Non-root SETUP.md must have func Setup. Having neither Setup nor Run
+- Non-root SETUP.md may omit func Setup (prose-only allowed). Having neither Setup nor Run
   should trigger a validation error.
 
 ```go

@@ -1,3 +1,11 @@
+# Scenario
+
+**Feature**: suite organization / shared setup
+
+```
+suite organization
+```
+
 ## Preconditions
 - `--requirement` points to a nonexistent file, no prompt.
 

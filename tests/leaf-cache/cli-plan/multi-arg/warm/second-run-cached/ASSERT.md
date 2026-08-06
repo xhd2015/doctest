@@ -1,5 +1,5 @@
 ---
-label: e2e, heavy
+label: heavy
 explanation: nested multi-arg two-tree doctest test twice
 ---
 

@@ -3,6 +3,14 @@
 ## Version
 0.0.2
 
+## DSN (Domain Specific Notion)
+
+### Participants
+- **system under test** — behavior covered by this tree.
+
+### Behaviors
+- **run** — executes the scenarios in this suite.
+
 
 Tests that `build.Test` prints dot progress **incrementally** — one dot per
 test package as it completes — rather than batching them all after `go test`

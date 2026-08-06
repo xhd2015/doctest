@@ -3,6 +3,14 @@
 ## Version
 0.0.2
 
+## DSN (Domain Specific Notion)
+
+### Participants
+- **system under test** — behavior covered by this tree.
+
+### Behaviors
+- **run** — executes the scenarios in this suite.
+
 
 Verify that all event stream output from sub-agents (traceSession, showStatus)
 uses `Logf` for consistent timestamped logging `[2006-01-02T15:04:05]`, while

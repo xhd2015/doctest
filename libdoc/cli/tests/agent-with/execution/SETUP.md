@@ -1,3 +1,11 @@
+# Scenario
+
+**Feature**: suite organization / shared setup
+
+```
+suite organization
+```
+
 ## Preconditions
 - This group tests successful execution of `doctest agent with`.
 

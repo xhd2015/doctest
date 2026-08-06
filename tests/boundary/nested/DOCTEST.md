@@ -3,6 +3,14 @@
 ## Version
 0.0.2
 
+## DSN (Domain Specific Notion)
+
+### Participants
+- **system under test** — behavior covered by this tree.
+
+### Behaviors
+- **run** — executes the scenarios in this suite.
+
 
 This is a self-contained test root nested inside `tests/boundary/`.
 The parent root must skip this directory entirely due to the

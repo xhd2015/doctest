@@ -5,7 +5,7 @@
 ```
 createIntermediateSetupNoGoFixture  # intermediate/SETUP.md prose only
 core.DiscoverTreeCases(parent)
-  -> error containing intermediate + SETUP.md + must have a Go code block
+  -> DiscoverTreeCases succeeds (prose-only intermediate SETUP allowed)
 ```
 
 ## Preconditions

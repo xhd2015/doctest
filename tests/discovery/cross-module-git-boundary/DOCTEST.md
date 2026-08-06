@@ -3,6 +3,14 @@
 ## Version
 0.0.2
 
+## DSN (Domain Specific Notion)
+
+### Participants
+- **system under test** — behavior covered by this tree.
+
+### Behaviors
+- **run** — executes the scenarios in this suite.
+
 
 Integration tests for `doctest test ./...` when a nested `go.mod` boundary is
 crossed. At non-child module paths, discovery depends on whether ancestor and

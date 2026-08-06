@@ -77,7 +77,7 @@ func createOriginModule(t *testing.T) string {
 	if err := os.WriteFile(filepath.Join(origin, "go.mod"), []byte("module example.com/buildvcsapp\n\ngo 1.21\n"), 0644); err != nil {
 		t.Fatalf("write go.mod: %v", err)
 	}
-	main1 := "package main\n\nimport \"fmt\"\n\nfunc main() { fmt.Println(\"v1\") }\n"
+	main1 := "package main\n\nimport \"fmt\"\n\n" + "func main() { fmt.Println(\"v1\") }\n"
 	if err := os.WriteFile(filepath.Join(origin, "main.go"), []byte(main1), 0644); err != nil {
 		t.Fatalf("write main.go: %v", err)
 	}
@@ -94,7 +94,7 @@ func createOriginModule(t *testing.T) string {
 	mustGit(t, origin, "add", "go.mod", "main.go")
 	mustGit(t, origin, "commit", "-m", "init")
 
-	main2 := "package main\n\nimport \"fmt\"\n\nfunc main() { fmt.Println(\"v2\") }\n"
+	main2 := "package main\n\nimport \"fmt\"\n\n" + "func main() { fmt.Println(\"v2\") }\n"
 	if err := os.WriteFile(filepath.Join(origin, "main.go"), []byte(main2), 0644); err != nil {
 		t.Fatalf("write main.go v2: %v", err)
 	}
@@ -102,7 +102,7 @@ func createOriginModule(t *testing.T) string {
 	mustGit(t, origin, "commit", "-m", "v2")
 
 	// Third commit so shallow depth=1 is meaningfully shorter than full.
-	main3 := "package main\n\nimport \"fmt\"\n\nfunc main() { fmt.Println(\"v3\") }\n"
+	main3 := "package main\n\nimport \"fmt\"\n\n" + "func main() { fmt.Println(\"v3\") }\n"
 	if err := os.WriteFile(filepath.Join(origin, "main.go"), []byte(main3), 0644); err != nil {
 		t.Fatalf("write main.go v3: %v", err)
 	}

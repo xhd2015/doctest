@@ -22,17 +22,3 @@ cli.RunWithWriters -> doctest list --not-a-real-flag -> non-zero + stderr
 
 1. Grouping Setup is a no-op.
 2. Leaves set `req.Args` for the help or error variant.
-
-```go
-import (
-	"testing"
-
-	"github.com/xhd2015/doctest/session"
-)
-
-func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-	_ = d
-	_ = req
-	return nil
-}
-```

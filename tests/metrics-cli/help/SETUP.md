@@ -20,13 +20,3 @@ cli.RunWithWriter -> doctest metrics --help | unknown subcommand
 ## Context
 
 - No MetricsRoot fixtures required for help/unknown.
-
-```go
-import "testing"
-
-func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-	_ = t
-	_ = req
-	return nil
-}
-```

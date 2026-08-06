@@ -1,5 +1,5 @@
 ---
-label: e2e, heavy
+label: heavy
 explanation: nested multi-tree workspace doctest test twice
 ---
 

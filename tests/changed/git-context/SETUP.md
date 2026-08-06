@@ -18,12 +18,3 @@ doctest --changed outside .git -> hard error
 
 1. Choose whether the scenario is pure selection policy (L2) or process-boundary (L3).
 2. Configure fixture layout and request fields in descendant setups.
-
-```go
-import "testing"
-
-func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-	_ = req
-	return nil
-}
-```

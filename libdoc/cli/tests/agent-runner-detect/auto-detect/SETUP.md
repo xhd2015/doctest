@@ -1,3 +1,11 @@
+# Scenario
+
+**Feature**: suite organization / shared setup
+
+```
+suite organization
+```
+
 ## Preconditions
 - This group tests branch: no `--agent-runner` flag → auto-detection kicks in.
 - All children in this group set env vars that influence auto-detection.

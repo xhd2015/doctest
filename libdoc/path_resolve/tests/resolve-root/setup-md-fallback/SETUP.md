@@ -1,3 +1,11 @@
+# Scenario
+
+**Feature**: suite organization / shared setup
+
+```
+suite organization
+```
+
 ## Steps
 - Create a temp directory with only `SETUP.md` (no DOCTEST.md).
 - Set `req.Input` to a sub-path within that directory.

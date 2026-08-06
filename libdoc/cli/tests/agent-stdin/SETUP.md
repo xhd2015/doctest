@@ -1,3 +1,11 @@
+# Scenario
+
+**Feature**: suite organization / shared setup
+
+```
+suite organization
+```
+
 ## Preconditions
 - Integration harness runs the **doctest binary as a subprocess** (`testbin.Ensure`).
 - Stdin is provided via `cmd.Stdin` only. Parent `os.Stdin`/`Stdout`/`Stderr` are never replaced.
