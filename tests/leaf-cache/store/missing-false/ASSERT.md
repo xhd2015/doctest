@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - No error (missing is not failure).

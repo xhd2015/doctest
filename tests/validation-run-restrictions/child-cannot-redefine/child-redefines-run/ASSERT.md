@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - doctest test fails with non-zero exit.
 - stderr contains the error "cannot redefine Run".

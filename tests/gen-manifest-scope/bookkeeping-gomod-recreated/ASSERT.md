@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: missing go.mod recreated on next generate
 ---
 

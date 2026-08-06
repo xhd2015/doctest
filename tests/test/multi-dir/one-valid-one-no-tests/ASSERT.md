@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Exit code 0 (the `no_tests` dir is silently skipped, `test_a` passes).
 - Stderr contains test results for `test_a`.

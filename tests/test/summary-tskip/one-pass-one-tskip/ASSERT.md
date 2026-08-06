@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: nested doctest test on 2-leaf pass+t.Skip fixture; asserts new PASS (1/1, 1 t.Skip) form
 ---
 

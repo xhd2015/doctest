@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 `./tree/mid/...`: nested DOCTEST under prefix runs; sibling does not.

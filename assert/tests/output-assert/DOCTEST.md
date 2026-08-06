@@ -168,11 +168,11 @@ output-assert
 
 ## How to Run
 
-Leaves are labeled `heavy` (skipped by default module `./...` discovery). Opt in:
+Leaves use `e2e` when full integration (otherwise unlabeled) (skipped by default module `./...` discovery). Opt in:
 
 ```sh
 doctest vet ./assert/tests/output-assert
-doctest test ./assert/tests/output-assert --label heavy
+doctest test ./assert/tests/output-assert --label e2e
 doctest test ./assert/tests/output-assert-v3          # focused engine (not heavy)
 go test ./assert/...
 ```

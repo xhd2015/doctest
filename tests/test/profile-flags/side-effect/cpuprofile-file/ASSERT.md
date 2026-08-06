@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: nested go test writes cpuprofile file
 ---
 

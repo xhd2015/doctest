@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - The command succeeds.
 - Only 1 test case is built.

@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: nested go test forwards covermode/coverpkg/short/failfast/parallel/shuffle/tags/gcflags/ldflags/race
 ---
 

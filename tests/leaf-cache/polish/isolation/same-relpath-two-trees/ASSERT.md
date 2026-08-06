@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - No harness error.

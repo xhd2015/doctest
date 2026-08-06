@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - The command succeeds.
 - Both group-a test cases run (leaf-1, leaf-2), but group-b/leaf-3 does NOT run.

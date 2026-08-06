@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - The command succeeds.
 - Generated Go files are written to the requested directory in per-leaf structure.

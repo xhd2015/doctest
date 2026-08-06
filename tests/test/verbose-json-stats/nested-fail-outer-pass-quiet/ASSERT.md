@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: same nested-fail outer-pass fixture without -v; json path should already report PASS (2/2)
 ---
 

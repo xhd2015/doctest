@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - Suite recording creates at least one new `*.jsonl` under MetricsRoot.

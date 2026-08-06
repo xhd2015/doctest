@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - The test compiles and passes (import alias is preserved in generated code).
 - Run returns without error since default Run just returns a success response.

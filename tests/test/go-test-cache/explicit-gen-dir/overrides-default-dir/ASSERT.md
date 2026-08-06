@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - The command succeeds.
 - The gen dir path printed in stderr matches the user-provided --gen-dir.

@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Both runs exit 0.
 - First measured run (default flags) is leaf-cached (`Cached` > 0).

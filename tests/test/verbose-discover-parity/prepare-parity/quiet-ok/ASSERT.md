@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: nested doctest test quiet prepare on mega parent fixture
 ---
 

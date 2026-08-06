@@ -9,7 +9,7 @@ cli.RunWithWriter -> doctest <subcmd> --help -> stdout lists --changed
 ## Preconditions
 
 - Help is covered in-process via `cli.RunWithWriter` (same usage strings as the product binary).
-- Unlabeled (fast); no `testbin`, no `label: heavy`.
+- Unlabeled (fast); no `testbin`, no `label: e2e`.
 - Policy selection stays in-process under `git-context/in-git-repo/`.
 
 ## Steps

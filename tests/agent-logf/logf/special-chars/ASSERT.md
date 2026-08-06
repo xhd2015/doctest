@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Output has `[YYYY-MM-DDTHH:MM:SS] line1\nline2 -- special: !@#$%` followed by exactly one final newline.
 - No double newline appended (message already ends with `\n`).

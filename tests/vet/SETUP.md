@@ -17,7 +17,7 @@ fixture tree under t.TempDir()
 - Completeness: structure, anti-patterns, **vacuous Setup / prose-only SETUP**,
   path/argv, **layer-share** as L2 in-process.
 - Help and verbose leaves are unlabeled (fast); no `testbin`.
-- Layer-share fixtures use multi-leaf labeled ASSERT frontmatter (`e2e` / `heavy`).
+- Layer-share fixtures use multi-leaf labeled ASSERT frontmatter (`e2e` / other labels).
 
 ## Steps
 

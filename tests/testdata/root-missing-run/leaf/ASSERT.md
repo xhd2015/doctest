@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - This leaf would check that Run produces expected output if it existed.
 

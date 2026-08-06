@@ -16,7 +16,7 @@ all scenarios, without writing any implementation code.
   multi-factor public behavior and short CLI paths (help, fast-fail, skill show).
 - Use **L1 go test** tables for pure / flat edge matrices (no tree needed).
 - Use **L3 doctest e2e** only for sparse full-integration contracts (process
-  boundary load-bearing); always set `label: e2e` (and `heavy` when costly).
+  boundary load-bearing); always set `label: e2e` (public L3 identity only).
 - Do **not** default new leaves to product-binary / `testbin` e2e.
 
 Prefer doctest **in-process** trees over unit tables for scenario-worthy public

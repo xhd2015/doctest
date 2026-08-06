@@ -5,7 +5,7 @@
 
 **Layer L2 in-process** — nested library tree for extractable multi-prep
 leaf-cache helpers (identity, prepare skip list, record passes). **GREEN** —
-APIs sealed under `libdoc/leafcache`. No product binary; no `label: heavy`.
+APIs sealed under `libdoc/leafcache`. No product binary; no `label: e2e`.
 
 Does **not** end-to-end wire workspace `./...` leaf-cache (that **L3** product
 path is under parent `workspace/**`). Parent tree owns L2 key/store/partial and
@@ -77,10 +77,10 @@ runsuite/
 
 ```sh
 doctest vet ./tests/leaf-cache/runsuite/
-# L2 — always discovered (no heavy labels)
+# L2 — always discovered (no e2e labels)
 doctest test ./tests/leaf-cache/runsuite/ -count=1
 # Parent L2 mass:  doctest test ./tests/leaf-cache/...
-# Parent L3 e2e:   doctest test --label heavy ./tests/leaf-cache/...
+# Parent L3 e2e:   doctest test --label e2e ./tests/leaf-cache/...
 ```
 
 ## Expected public API (sealed)

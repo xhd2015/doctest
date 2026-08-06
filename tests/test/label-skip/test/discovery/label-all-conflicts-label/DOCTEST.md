@@ -12,7 +12,7 @@
 - **run** — executes the scenarios in this suite.
 
 **Layer L2 in-process** — `runner.ParseTestOptions` rejects `--label-all` with `--label`.
-No product binary, no `label: heavy`. Other `test/discovery/*` leaves stay L3 (skip summary format).
+No product binary, no `label: e2e`. Other `test/discovery/*` leaves stay L3 (skip summary format).
 
 ## How to Run
 

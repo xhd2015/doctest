@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - `build.Test` succeeds with two plain dots before the summary.
 - `2 Pass` is colored; `0 Fail` and `0 Cached` are gray; `2 Run` is plain.

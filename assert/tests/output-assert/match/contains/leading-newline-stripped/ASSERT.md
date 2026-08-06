@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Match succeeds. The template is written without a leading empty line, so
   strict parsing produces a contains-only pattern and the substring matches

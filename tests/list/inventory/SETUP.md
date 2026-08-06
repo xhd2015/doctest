@@ -11,7 +11,7 @@ Harness -> write root with labeled/unlabeled ASSERT leaves
 ## Preconditions
 
 - Each leaf builds a single-root fixture tailored to label/L2:L3 semantics.
-- L3 identity is label `e2e` only; cost labels like `heavy` without `e2e` stay L2.
+- L3 identity is label `e2e` only; only `e2e` is L3; other labels (e.g. `slow`) stay L2.
 
 ## Steps
 

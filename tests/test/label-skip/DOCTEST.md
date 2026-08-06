@@ -8,12 +8,12 @@
 
 Coverage-backfill layer split. **Default discovery** runs **L2 only** (unlabeled
 `select/**`). Product CLI leaves under `test/`, `vet/`, `edit/`, `build/` are
-**`label: heavy`** and opt-in via `--label heavy`.
+**`label: e2e`** and opt-in via `--label e2e`.
 
 | Layer | Subtrees | Run model | Labels |
 |-------|----------|-----------|--------|
 | **L2 in-process** | `select/` (nested) | `DiscoverTreeCasesLight` + `FilterCasesByLabel` / `ParseAssertFrontmatter` — **no** `testbin` | unlabeled |
-| **L3 e2e** | `test/**`, `vet/**`, `edit/**`, `build/**` | Product binary subprocess | **`label: heavy`** |
+| **L3 e2e** | `test/**`, `vet/**`, `edit/**`, `build/**` | Product binary subprocess | **`label: e2e`** |
 
 | L2 surface | API | Branch |
 |------------|-----|--------|
@@ -77,7 +77,7 @@ label-skip/
 │   └── frontmatter/
 │       ├── explanation-only/
 │       └── labeled/
-├── test/                                 [L3 heavy] doctest test
+├── test/                                 [L3 e2e] doctest test
 │   ├── discovery/
 │   │   ├── mixed-fast-labeled/           OUTCOME: 1 run + skip summary format
 │   │   ├── all-labeled/                  OUTCOME: 0 run, skip summary, no PASS
@@ -87,18 +87,18 @@ label-skip/
 │   └── explicit-leaf/
 │       ├── runs-labeled/
 │       └── assert-md-path/
-├── vet/                                  [L3 heavy] doctest vet
+├── vet/                                  [L3 e2e] doctest vet
 │   ├── valid-frontmatter/
 │   ├── explanation-only/
 │   └── malformed-frontmatter/
-├── edit/                                 [L3 heavy] doctest edit
+├── edit/                                 [L3 e2e] doctest edit
 │   ├── add-label/
 │   ├── set-label-on-existing-frontmatter/
 │   ├── append-explanation/
 │   ├── idempotent-label-warn/
 │   ├── assert-md-path/
 │   └── rejects-dotdotdot/
-└── build/                                [L3 heavy] doctest build
+└── build/                                [L3 e2e] doctest build
     ├── compiles-labeled/
     └── mixed-tree/
 ```
@@ -139,11 +139,11 @@ label-skip/
 
 ```sh
 doctest vet ./tests/test/label-skip
-# default discovery: L2 select only (skips label: heavy CLI)
+# default discovery: L2 select only (skips label: e2e CLI)
 doctest test ./tests/test/label-skip
 doctest test ./tests/test/label-skip/select/...
 # L3 CLI e2e
-doctest test --label heavy ./tests/test/label-skip/...
+doctest test --label e2e ./tests/test/label-skip/...
 # full suite
 doctest test --label-all ./tests/test/label-skip/...
 ```

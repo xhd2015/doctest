@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Soft "no tests" outcome (product exits 0 and prints `no tests` — not a hard error).
 - Stderr does NOT contain `parent_test` (parent is above CWD, `./...` only looks down).

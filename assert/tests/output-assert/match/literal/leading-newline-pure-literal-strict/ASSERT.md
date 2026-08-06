@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Match fails because the template's leading newline is part of the literal
   contract and the actual output starts directly with `foo`.

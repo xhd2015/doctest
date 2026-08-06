@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: nested doctest test compiles a 3-leaf sleep fixture and waits on go test -timeout=2s
 ---
 

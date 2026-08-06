@@ -6,7 +6,7 @@
 
 **Layer L2 in-process** — nested library tree for `core.EvalLabelExpr`.
 Leaves call the evaluator in-process via Assert helpers. **No product binary**,
-**no `label: heavy`**. Discovered and run by default (`doctest test` without
+**no `label: e2e`**. Discovered and run by default (`doctest test` without
 `--label`).
 
 # DSN (Domain Specific Notion)
@@ -28,7 +28,7 @@ matcher/                              [L2 in-process — EvalLabelExpr]
 ├── whitespace/                       trim around expression
 ├── invalid-syntax/                   trailing && → parse error
 ├── not-bang/                         !e2e (includes unlabeled)
-├── not-and/                          !e2e && heavy
+├── not-and/                          !e2e && flaky
 ├── not-parens/                       !(e2e || flaky)
 └── not-invalid/                      bare ! / trailing ! / "not e2e"
 ```

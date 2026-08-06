@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 After full `./tree/...` then mid `./tree/mid/...` (both bypass go test), every

@@ -71,7 +71,7 @@ is a secondary axis only for the nested-outer-pass scenario.
 
 ```sh
 doctest vet ./tests/test/verbose-json-stats
-doctest test --label heavy ./tests/test/verbose-json-stats/...
+doctest test --label e2e ./tests/test/verbose-json-stats/...
 ```
 
 Classic TDD: expect **RED** on `nested-fail-outer-pass-v` until implementer

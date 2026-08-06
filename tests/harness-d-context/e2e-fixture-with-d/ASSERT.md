@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: nested doctest CLI + compile of fixture that uses d *session.Doctest
 ---
 

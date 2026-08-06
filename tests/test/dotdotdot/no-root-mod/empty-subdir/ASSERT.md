@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Exit code 0 (no tests is not an error).
 - stderr contains "no tests".

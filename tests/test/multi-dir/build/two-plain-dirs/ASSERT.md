@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Exit code 0 (both `test_a` and `test_b` build successfully).
 

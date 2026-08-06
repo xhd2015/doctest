@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Exit code 0.
 - stderr does NOT contain "fatal: not a git repository".

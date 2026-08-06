@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - The command succeeds using mod-b's SETUP.md as root (not mod-a's).
 - Only leaf-b runs (1 test case).

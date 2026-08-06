@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: dual nested doctest test quiet vs -v case-count parity
 ---
 

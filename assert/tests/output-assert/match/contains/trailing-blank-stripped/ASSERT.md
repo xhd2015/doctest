@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Match succeeds. The template is written without a trailing empty line, so
   strict parsing produces a contains-only pattern and the fragment is found.

@@ -3,7 +3,7 @@
 **Feature**: in-process discover + label filter selection (library contract)
 
 ```
-# temp fixture mod (fast, slow, ui, both, heavy)
+# temp fixture mod (fast, slow, ui, both, flaky)
 DiscoverTreeCasesLight(root)
   -> FilterBySubDir? (optional)
   -> FilterCasesByLabel(opts)
@@ -101,8 +101,8 @@ func writeLabelFilterMod(t *testing.T) string {
 	writeLabeledAssert(t, root, "ui", "ui-automation", "browser ui")
 	writeMinimalLeafSetupAssert(t, root, "both")
 	writeLabeledAssert(t, root, "both", "slow, ui-automation", "slow ui combo")
-	writeMinimalLeafSetupAssert(t, root, "heavy")
-	writeLabeledAssert(t, root, "heavy", "heavy", "heavy profile")
+	writeMinimalLeafSetupAssert(t, root, "flaky")
+	writeLabeledAssert(t, root, "flaky", "flaky", "flaky profile")
 	return root
 }
 

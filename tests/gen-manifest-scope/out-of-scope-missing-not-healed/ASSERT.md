@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: subset does not heal out-of-scope missing; tree-b run does
 ---
 

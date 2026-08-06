@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: nested doctest test compiles and runs a fast 1-pass fixture
 ---
 

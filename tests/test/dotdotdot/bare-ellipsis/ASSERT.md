@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Non-zero exit code.
 - Stderr contains error message about bare `...` not being supported.

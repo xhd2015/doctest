@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: CLI build contract via doctest binary
 ---
 

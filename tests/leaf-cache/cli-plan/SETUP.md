@@ -1,6 +1,6 @@
 # Scenario
 
-**Feature**: multi-arg `treeA treeB` leaf-cache product path (**L3 e2e**, `label: heavy`)
+**Feature**: multi-arg `treeA treeB` leaf-cache product path (**L3 e2e**, `label: e2e`)
 
 ```
 # P3 product path (CLI one plan)
@@ -15,13 +15,13 @@ module with tree-a/ + tree-b/ (two DOCTEST.md roots)
 
 ## Preconditions
 
-- **Layer L3** — nested multi-arg product; every leaf has `label: heavy`.
+- **Layer L3** — nested multi-arg product; every leaf has `label: e2e`.
 - Reuses the same multi-tree module fixture as `workspace/` (`prepareWorkspaceAllPass`).
 - Nested CLI: `Op=runtime_multi`, isolated `DOCTEST_CACHE_HOME` / `DOCTEST_LEAF_CACHE`,
   fresh `GOCACHE` per invocation (parent helpers).
 - Args use **two explicit roots** (`test tree-a tree-b`), **not** `<mod>/...`
   (that path is sealed under `workspace/`).
-- Skipped by default discovery; run with `--label heavy`.
+- Skipped by default discovery; run with `--label e2e`.
 - **Shared-policy product (GREEN)**: multi-arg may fan to N× `TestWithStats` or
   a shared plan builder; asserts check **observable** Cached / `-count` policy
   parity with single-tree and workspace, not call-graph shape.

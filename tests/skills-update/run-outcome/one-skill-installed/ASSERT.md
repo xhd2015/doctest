@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - Exit code 0.

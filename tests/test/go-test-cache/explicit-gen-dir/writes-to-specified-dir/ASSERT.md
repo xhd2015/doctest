@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - The command succeeds.
 - Generated Go test files exist at the specified --gen-dir path.

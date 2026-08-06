@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Exit code 0.
 - `./...` from `alpha_test/` only finds doctest trees at or below the working directory.

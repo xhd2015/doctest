@@ -56,7 +56,7 @@ Out of scope: product feature changes; `tests/changed`, `tests/help`, `tests/ski
 - **Structure** — ASSERT without SETUP → non-zero.
 - **Layer share (full vet)** — ≥10 leaves and L3 (e2e) share >10% → non-zero +
   message with path, `L3`, share/pct, and `10%`/`max 10`; ≤10% or <10 leaves →
-  exit 0; `heavy` without `e2e` is L2.
+  exit 0; non-`e2e` labels are L2 for share budget.
 - **Args / paths** — bare `...` rejected; `./...` and `./sub/...` discover
   roots; `./` cwd tree; multi-dir ok; multi-dir with one invalid fails;
   missing dir arg → `vet requires <dir>`.
@@ -109,7 +109,7 @@ tests/vet/
 │   ├── within-budget/                  ≥10 leaves, ≤10% e2e → exit 0
 │   ├── over-budget/                    ≥10 leaves, >10% e2e → non-zero
 │   ├── tiny-tree-skip/                 <10 leaves, high e2e % → exit 0
-│   └── heavy-only-is-l2/               ≥10 all heavy (no e2e) → exit 0
+│   └── heavy-only-is-l2/               ≥10 all non-e2e labeled (e.g. slow) → exit 0
 │   # note: --changed skips share (implementer: opts.ChangedOnly); no leaf
 ├── bare-dot-dot-dot/                   [L2 VetArgs]
 ├── dot-dot-dot/                        [L2 VetArgs + WorkDir]
@@ -150,7 +150,7 @@ tests/vet/
 | `layer-share/within-budget` | L2 | exit 0; 10 leaves / 1 e2e (10% ≤ max) |
 | `layer-share/over-budget` | L2 | non-zero; L3 share message (10 leaves / 2 e2e) |
 | `layer-share/tiny-tree-skip` | L2 | exit 0; 3 leaves / 1 e2e (MinLeaves skip) |
-| `layer-share/heavy-only-is-l2` | L2 | exit 0; 10 heavy leaves, no e2e |
+| `layer-share/heavy-only-is-l2` | L2 | exit 0; 10 slow leaves, no e2e |
 | `bare-dot-dot-dot` | L2 | non-zero; bare `...` message |
 | `dot-dot-dot` | L2 | exit 0; discovers sub-a + sub-b |
 | `sub-path-dot-dot-dot` | L2 | exit 0; only subp validated |

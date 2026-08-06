@@ -68,7 +68,7 @@ func writeRootDOCTEST(t *testing.T, dir string) {
 }
 
 // writeLeafASSERT writes root/rel/ASSERT.md with optional frontmatter labels.
-// labels is a comma-separated label field (e.g. "e2e, heavy") or empty for unlabeled.
+// labels is a comma-separated label field (e.g. "e2e, slow") or empty for unlabeled.
 func writeLeafASSERT(t *testing.T, root, rel, labels string) {
 	t.Helper()
 	dir := filepath.Join(root, filepath.FromSlash(rel))
@@ -84,7 +84,7 @@ func writeLeafASSERT(t *testing.T, root, rel, labels string) {
 }
 
 // writeLabeledLeaves creates unlabeled and labeled leaves under root.
-// Each entry is "rel" or "rel|labelField" (labelField e.g. "e2e" or "e2e, heavy").
+// Each entry is "rel" or "rel|labelField" (labelField e.g. "e2e" or "e2e, slow").
 func writeLabeledLeaves(t *testing.T, root string, specs []string) {
 	t.Helper()
 	writeRootDOCTEST(t, root)

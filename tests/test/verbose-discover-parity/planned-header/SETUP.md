@@ -12,7 +12,7 @@ doctest test -v ./... -> doctest: workspace (N trees, M tests) -> cd … && go t
 
 ## Preconditions
 
-- Nested CLI; label `heavy`.
+- Nested CLI; use `e2e` when full integration.
 - Quiet mode already prints planned counts (unchanged success path).
 
 ## Steps

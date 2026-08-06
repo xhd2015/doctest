@@ -12,7 +12,7 @@
 - **run** — executes the scenarios in this suite.
 
 **Layer L2 in-process** — `runner.ParseTestOptions` rejects unrecognized flags.
-No product binary, no `testbin`, no `label: heavy`.
+No product binary, no `testbin`, no `label: e2e`.
 
 # DSN
 

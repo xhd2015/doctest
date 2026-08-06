@@ -4,9 +4,9 @@
 
 ```
 EvalLabelExpr("!e2e", {}) -> true
-EvalLabelExpr("!e2e", {heavy}) -> true
+EvalLabelExpr("!e2e", {flaky}) -> true
 EvalLabelExpr("!e2e", {e2e}) -> false
-EvalLabelExpr("!e2e", {e2e, heavy}) -> false
+EvalLabelExpr("!e2e", {e2e, flaky}) -> false
 ```
 
 ## Steps

@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: warm same-args; gen-plan deleted=0; tree stays managed
 ---
 

@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Exit code 0.
 - Stderr contains test results for both `test_a` and `test_b` (both via `./...` expansion).

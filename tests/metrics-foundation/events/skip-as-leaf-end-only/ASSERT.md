@@ -2,7 +2,7 @@
 
 - Three lines: run_start, leaf_end, run_end (no leaf_start).
 - leaf_end has `result=skip` and no `ts_start` key (or null/empty — prefer absent).
-- Labels include `heavy`.
+- Labels include `e2e` when full integration.
 
 ```go
 import "testing"

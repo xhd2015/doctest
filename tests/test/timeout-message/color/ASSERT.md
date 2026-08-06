@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: nested doctest test with --color on 3-leaf sleep fixture; timeout colors + orange cancelled
 ---
 

@@ -268,7 +268,7 @@ func runFull(dir string, opts core.Options) error {
 }
 
 // checkL3ShareBudget fails when leaves >= MinLeaves and e2e share exceeds MaxL3Pct.
-// L3 identity matches doctest list: only label "e2e" (heavy alone is L2).
+// L3 identity matches doctest list: only label "e2e" (non-e2e labels are L2).
 func checkL3ShareBudget(root string) error {
 	cases, err := core.DiscoverTreeCasesLight(root)
 	if err != nil {

@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: multi-arg nested product generate plan + merged
 ---
 

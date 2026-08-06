@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Exit code 0.
 - `child_test` IS discovered even though directory name differs from module path suffix.

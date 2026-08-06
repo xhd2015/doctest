@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: nested doctest CLI; fixture package helper takes d *session.Doctest
 ---
 

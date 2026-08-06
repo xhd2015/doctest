@@ -9,13 +9,13 @@ wiring into `doctest test` across **all product invocation shapes**.
 ## Layer model (L2 in-process vs L3 e2e)
 
 Coverage-backfill layer split. **Default discovery** runs **L2 only** (unlabeled,
-fast library mass). Nested product paths are **`label: heavy`** and opt-in via
-`--label heavy` (or `--label-all`).
+fast library mass). Nested product paths are **`label: e2e`** and opt-in via
+`--label e2e` (or `--label-all`).
 
 | Layer | Subtrees | Run model | Labels |
 |-------|----------|-----------|--------|
 | **L2 in-process** | `key/`, `store/`, `runsuite/` (nested root), `partial-package-deps/`, most of `polish/` (selective + isolation) | Call `libdoc/leafcache` APIs directly — **no** `testbin` / nested `doctest test` | unlabeled |
-| **L3 e2e** | `runtime/`, `workspace/`, `cli-plan/` | Nested product binary (`testbin.Ensure` + `runtime_multi` / `runtime_once`+Bin) | **`label: e2e, heavy`** |
+| **L3 e2e** | `runtime/`, `workspace/`, `cli-plan/` | Nested product binary (`testbin.Ensure` + `runtime_multi` / `runtime_once`+Bin) | **`label: e2e`** |
 | **L2 help** | `polish/docs/` | `runtime_once` without Bin → `cli.RunWithWriter` | unlabeled |
 
 | Invocation shape (L3) | Example | Branch |
@@ -36,13 +36,13 @@ product shape above. **Cached** is the **programmatic leaf-cache skip count**
 | **Partial package DAG** | multi-leaf key stability | **L2** `partial-package-deps/**` | **GREEN** |
 | **Polish (keys)** | selective + isolation via ComputeLeafKey | **L2** `polish/selective/**`, `polish/isolation/**` | **GREEN** |
 | **RunSuite extract** | FormatLeafIdentity / PreparePassPlan / RecordPasses | **L2** nested `runsuite/**` | **GREEN** |
-| **Runtime product** | suite skip, disable flags, stream PutPass, grey dots | **L3 heavy** `runtime/**` | **GREEN** |
-| **Workspace product** | multi-tree `__workspace` Cached | **L3 heavy** `workspace/**` | **GREEN** |
-| **CLI multi-arg** | multi-arg `a b` Cached policy | **L3 heavy** `cli-plan/**` | **GREEN** |
+| **Runtime product** | suite skip, disable flags, stream PutPass, grey dots | **L3 e2e** `runtime/**` | **GREEN** |
+| **Workspace product** | multi-tree `__workspace` Cached | **L3 e2e** `workspace/**` | **GREEN** |
+| **CLI multi-arg** | multi-arg `a b` Cached policy | **L3 e2e** `cli-plan/**` | **GREEN** |
 | **Help docs** | `test --help` flags | **L2 in-process** `polish/docs/**` | **GREEN** |
 
 Target share: **in-process (L2) ≥ ~60%** of leaf count; remaining e2e labeled
-`heavy` so CI default discovery stays cheap.
+`e2e` on true full-integration leaves so default discovery stays cheap.
 
 # DSN (Domain Specific Notion)
 
@@ -219,7 +219,7 @@ tests/leaf-cache/
 │   │   └── local-dep-invalidates/            imported pkg edit → leaf key changes
 │   ├── isolation/                            [L2]
 │   │   └── same-relpath-two-trees/           twin TreeRoots → distinct keys
-│   └── docs/                                 [L3 heavy]
+│   └── docs/                                 [L3 e2e]
 │       └── test-help-mentions-flags/         test --help lists -a hard force
 ├── runsuite/                                 [L2 nested DOCTEST.md — multi-prep extract]
 │   ├── identity/
@@ -230,7 +230,7 @@ tests/leaf-cache/
 │       ├── prepare-one-warm-only/            only A warm → skip = [idA]
 │       ├── prepare-skip-disabled/            skipEnabled=false → empty Skip
 │       └── record-partial-fail/              failed id not PutPass; other is
-├── runtime/                                  [L3 heavy — nested doctest test]
+├── runtime/                                  [L3 e2e — nested doctest test]
 │   ├── warm/second-run-cached/
 │   ├── disable/{count,force-a}-bypasses/
 │   ├── fail-path/fail-not-stored/
@@ -239,12 +239,12 @@ tests/leaf-cache/
 │       ├── warm-grey-dots/                   quiet+--color warm → grey progress dots
 │       ├── fail-still-red/                   --color pass+fail → red fail dot
 │       └── count-no-grey-cached/             warm grey then -count=1 → 0 grey dots
-├── workspace/                                [L3 heavy — ./... multi-tree product]
+├── workspace/                                [L3 e2e — ./... multi-tree product]
 │   ├── warm/second-run-cached/               two trees all pass; run2 Cached >= 2
 │   ├── partial-fail/fail-one-others-cached/  pass+fail trees; run2 Cached >= 1, still fail
 │   ├── disable/count-bypasses/               warm then -count=1 → 0 Cached
 │   └── isolation/same-relpath-no-cross-skip/ warm tree-a; workspace must not false-skip tree-b
-└── cli-plan/                                 [L3 heavy — multi-arg product]
+└── cli-plan/                                 [L3 e2e — multi-arg product]
     └── multi-arg/
         ├── warm/second-run-cached/           test treeA treeB twice; sum Cached >= 2
         └── disable/count-bypasses/           warm then multi-arg -count=1 → 0 Cached
@@ -252,7 +252,7 @@ tests/leaf-cache/
 
 > **Nested root:** `tests/leaf-cache/runsuite/DOCTEST.md` is a self-contained **L2**
 > tree (own Request/Response/Run). **L3** product leaves (`runtime/`, `workspace/`,
-> `cli-plan/`, `polish/docs/`) share the parent harness and are labeled `heavy`.
+> `cli-plan/`, `polish/docs/`) share the parent harness and are labeled `e2e` when full-integration.
 
 ## Test Index
 
@@ -273,7 +273,7 @@ tests/leaf-cache/
 | `store/missing-false` | Missing key → false |
 | `store/root-isolation` | Root A invisible under B |
 
-### Runtime (L3 e2e single-tree product — sealed GREEN, `label: heavy`)
+### Runtime (L3 e2e single-tree product — sealed GREEN, `label: e2e`)
 
 | Leaf | Scenario | Expect |
 |------|----------|--------|
@@ -297,7 +297,7 @@ tests/leaf-cache/
 | `polish/selective/sibling-stays-cached` | L2 | edit leaf_a ASSERT → sibling key stable | **GREEN** |
 | `polish/selective/local-dep-invalidates` | L2 | edit imported pkg → leaf key changes | **GREEN** |
 | `polish/isolation/same-relpath-two-trees` | L2 | twin TreeRoots → distinct keys | **GREEN** |
-| `polish/docs/test-help-mentions-flags` | **L3 heavy** | `doctest test --help` mentions `-a` and  | **GREEN** |
+| `polish/docs/test-help-mentions-flags` | **L3 e2e** | `doctest test --help` mentions `-a` and  | **GREEN** |
 
 ### RunSuite P1 (multi-prep extract — sealed GREEN)
 
@@ -310,7 +310,7 @@ tests/leaf-cache/
 | `runsuite/multi-prep/prepare-skip-disabled` | skipEnabled=false → empty Skip; keys still set | **GREEN** |
 | `runsuite/multi-prep/record-partial-fail` | failed A not stored; B PutPass'd | **GREEN** |
 
-### Workspace multi-tree product (L3 heavy — sealed GREEN)
+### Workspace multi-tree product (L3 e2e — sealed GREEN)
 
 | Leaf | Scenario | Expect |
 |------|----------|--------|
@@ -319,7 +319,7 @@ tests/leaf-cache/
 | `workspace/disable/count-bypasses` | warm then workspace `-count=1` → 0 Cached | **GREEN** |
 | `workspace/isolation/same-relpath-no-cross-skip` | warm tree-a; workspace Cached==1 and tree-b still fails | **GREEN** |
 
-### CLI multi-arg product (L3 heavy — sealed GREEN)
+### CLI multi-arg product (L3 e2e — sealed GREEN)
 
 | Leaf | Scenario | Expect |
 |------|----------|--------|
@@ -331,15 +331,15 @@ not go package cache. L2 key/store/partial/polish-keys never invoke the product 
 
 ## How to Run
 
-**Discovery (default)** runs unlabeled **L2** library mass only — skips `label: heavy`.
-**L3** nested product paths require `--label heavy` (or `--label-all`).
+**Discovery (default)** runs unlabeled **L2** library mass only — skips `label: e2e`.
+**L3** nested product paths require `--label e2e` (or `--label-all`).
 
 | Command | What runs |
 |---------|-----------|
 | `doctest test ./tests/leaf-cache/...` | L2: key, store, partial, polish keys, … |
-| `doctest test --label heavy ./tests/leaf-cache/...` | L3: runtime, workspace, cli-plan, polish/docs |
+| `doctest test --label e2e ./tests/leaf-cache/...` | L3: runtime, workspace, cli-plan, polish/docs |
 | `doctest test --label-all ./tests/leaf-cache/...` | All leaves (L2 + L3) |
-| Nested `runsuite/` | Always L2 (own root; no heavy labels) |
+| Nested `runsuite/` | Always L2 (own root; no `e2e` labels) |
 
 ```sh
 # Structure check (parent tree + nested runsuite root)
@@ -355,12 +355,12 @@ doctest test ./tests/leaf-cache/polish/selective/...
 doctest test ./tests/leaf-cache/polish/isolation/...
 doctest test ./tests/leaf-cache/runsuite/ -count=1
 
-# L3 e2e product paths (opt-in heavy)
-doctest test --label heavy ./tests/leaf-cache/...
-doctest test --label heavy ./tests/leaf-cache/runtime/...
-doctest test --label heavy ./tests/leaf-cache/workspace/...
-doctest test --label heavy ./tests/leaf-cache/cli-plan/...
-doctest test --label heavy ./tests/leaf-cache/polish/docs/...
+# L3 e2e product paths (opt-in `--label e2e`)
+doctest test --label e2e ./tests/leaf-cache/...
+doctest test --label e2e ./tests/leaf-cache/runtime/...
+doctest test --label e2e ./tests/leaf-cache/workspace/...
+doctest test --label e2e ./tests/leaf-cache/cli-plan/...
+doctest test --label e2e ./tests/leaf-cache/polish/docs/...
 
 # Full tree (library + product)
 doctest test --label-all ./tests/leaf-cache/... -count=1

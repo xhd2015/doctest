@@ -14,7 +14,7 @@ cli.RunWithWriter -> doctest skill <name> --show -> embedded .md -> stdout buffe
 
 - Nested root: does not inherit `tests/` binary `Run` or `testbin.Ensure`.
 - All leaves are in-process via `cli.RunWithWriter` + `cli.Run`.
-- No product binary build; no `label: heavy`.
+- No product binary build; no `label: e2e`.
 - Completeness: eight leaves — list, tdd-show, tdd-lite-show, designer-show,
   implementer-show, doc-spec-show, code-spec-show, review-perf-show.
 

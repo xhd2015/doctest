@@ -12,7 +12,7 @@ req.UseCLI = true
 ## Preconditions
 
 - A valid fixture test tree exists in a temp directory with **no** git repository.
-- Labeled `heavy` so default discovery skips them.
+- Labeled `e2e` so default discovery skips them (add when this path is full integration).
 - Process boundary (CLI git gate) is the SUT.
 
 ## Steps

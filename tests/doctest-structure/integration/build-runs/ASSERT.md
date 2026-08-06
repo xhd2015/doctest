@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - `doctest build` succeeds with exit code 0.

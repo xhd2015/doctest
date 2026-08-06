@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Run returns a non-nil Response with `Greeting == "Hello, World!"`.
 - `err` is nil.

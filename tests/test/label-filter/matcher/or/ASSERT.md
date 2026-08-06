@@ -9,13 +9,13 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, labels := range [][]string{{"slow"}, {"heavy"}} {
-		ok, err := evalLabelExpr(t, "slow || heavy", labels)
+	for _, labels := range [][]string{{"slow"}, {"flaky"}} {
+		ok, err := evalLabelExpr(t, "slow || flaky", labels)
 		if err != nil || !ok {
 			t.Fatalf("or match %v: ok=%v err=%v", labels, ok, err)
 		}
 	}
-	ok, err := evalLabelExpr(t, "slow || heavy", []string{"fast"})
+	ok, err := evalLabelExpr(t, "slow || flaky", []string{"fast"})
 	if err != nil || ok {
 		t.Fatalf("or miss: ok=%v err=%v", ok, err)
 	}

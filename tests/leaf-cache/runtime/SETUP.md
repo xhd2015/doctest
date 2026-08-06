@@ -12,11 +12,11 @@ DOCTEST_LEAF_CACHE + DOCTEST_CACHE_HOME; fresh GOCACHE per run
 
 ## Preconditions
 
-- **Layer L3** — nested CLI product path (`label: heavy` on every leaf).
+- **Layer L3** — nested CLI product path (`label: e2e` on every leaf).
 - Requires a freshly built doctest binary (`testbin.Ensure`).
 - Fixture trees are temp mini doctest projects (not this tree's key/store leaves).
 - Fresh `GOCACHE` per invocation so `N Cached` means programmatic leaf-cache skips only.
-- Skipped by default discovery; run with `--label heavy`.
+- Skipped by default discovery; run with `--label e2e`.
 
 ## Steps
 
@@ -28,7 +28,7 @@ DOCTEST_LEAF_CACHE + DOCTEST_CACHE_HOME; fresh GOCACHE per run
 
 - Significance: single-tree product surface; workspace `./...` is under
   `workspace/**`, multi-arg under `cli-plan/**` — same Cached/disable policy.
-- Labels: **all leaves `heavy`** (nested compile + multi-run product path).
+- Labels: **true L3 leaves use `e2e` when needed** (nested compile + multi-run product path).
 
 ```go
 import (

@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - `Run` returns no harness error (compile failure is in `resp.RunErr`).

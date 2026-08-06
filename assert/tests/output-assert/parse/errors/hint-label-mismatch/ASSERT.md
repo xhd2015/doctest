@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Parse fails due to label mismatch.
 

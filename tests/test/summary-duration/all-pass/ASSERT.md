@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - Command succeeds (exit 0).

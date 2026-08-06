@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 Cold mid path generate writes mid packages only — no `tree/sibling` under gen.

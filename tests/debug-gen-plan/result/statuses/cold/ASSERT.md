@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: cold generate result tree + summary
 ---
 

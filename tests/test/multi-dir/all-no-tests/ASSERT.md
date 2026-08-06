@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - The command exits 0 with `no tests` on stderr.
 

@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: nested doctest test on fail+t.Skip fixture; asserts FAIL (0/1, 1 t.Skip) and non-zero exit
 ---
 

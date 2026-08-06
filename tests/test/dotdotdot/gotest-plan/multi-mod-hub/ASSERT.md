@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - Exit 0, PASS.

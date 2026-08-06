@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - **Never** two `go test` lines with the same `cd` dir (must combine).

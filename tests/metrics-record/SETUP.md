@@ -40,8 +40,8 @@ runner.ParseTestOptions(args) -> MetricsOn / remain
 - Metrics default **off**; `--metrics-on` is opt-in only.
 - WARNING never fails the process by itself.
 - Leaf-level events preferred when the go-test JSON path is available.
-- Recording leaves labeled `heavy` exercise nested prepare/go test and are
-  skipped by default discovery unless `--label heavy` or `--label-all`.
+- Recording leaves that are full-integration may use `label: e2e`; nested prepare/go test paths are
+  skipped by default discovery unless `--label e2e` or `--label-all`.
 
 ```go
 import "testing"

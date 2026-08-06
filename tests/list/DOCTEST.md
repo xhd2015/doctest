@@ -77,8 +77,8 @@ tests/list/
 ├── inventory/                         L2:L3 + labelDist semantics
 │   ├── unlabeled-all-l2/
 │   ├── mix-e2e-unlabeled/
-│   ├── multi-label-e2e-heavy/         label: e2e, heavy → L3; both counted
-│   ├── heavy-only-is-l2/              heavy without e2e → L2
+│   ├── multi-label-e2e-heavy/         label: e2e, slow → L3; both counted
+│   ├── heavy-only-is-l2/              slow without e2e → L2
 │   └── zero-leaf-root/                leaves=0, no percent group
 ├── summary/                           selection-wide footer
 │   ├── multi-root-totals/             sums match body; blank+---+totals+labels
@@ -107,8 +107,8 @@ tests/list/
 | `discovery/missing-path` | `list <missing>` | non-zero; Error on stderr |
 | `inventory/unlabeled-all-l2` | `list <root>` | L2:L3=N:0 (100.0%/0.0%); unlabeled=N |
 | `inventory/mix-e2e-unlabeled` | `list <root>` | L3 = e2e count; percents |
-| `inventory/multi-label-e2e-heavy` | `list <root>` | L3; e2e=1 heavy=1 |
-| `inventory/heavy-only-is-l2` | `list <root>` | L2; heavy in dist |
+| `inventory/multi-label-e2e-heavy` | `list <root>` | L3; e2e=1 slow=1 |
+| `inventory/heavy-only-is-l2` | `list <root>` | L2; slow in dist |
 | `inventory/zero-leaf-root` | `list <root>` | leaves=0; L2:L3=0:0; no percent |
 | `summary/multi-root-totals` | `list a b` | totals/labels = sum of body |
 | `summary/single-root-has-summary` | `list <root>` | footer present; trailing newline |

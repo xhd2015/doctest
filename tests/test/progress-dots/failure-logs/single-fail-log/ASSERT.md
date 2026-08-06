@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - stdout contains `SINGLE_FAIL_LOG_MARKER` after the summary (detailed go test failure output forwarded).
 - Summary shows one failure: `(1 Run, 0 Pass, 1 Fail, 0 Cached)`.

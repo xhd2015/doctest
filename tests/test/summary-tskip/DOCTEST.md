@@ -71,7 +71,7 @@ denominator) or bare `PASS (1/1)` when a runtime skip occurred.
 
 ```sh
 doctest vet ./tests/test/summary-tskip
-doctest test --label heavy ./tests/test/summary-tskip/...
+doctest test --label e2e ./tests/test/summary-tskip/...
 ```
 
 Classic TDD: expect **RED** on leaves that require `, N t.Skip` until implementer

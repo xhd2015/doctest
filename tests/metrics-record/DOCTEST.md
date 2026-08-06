@@ -7,7 +7,7 @@
 Leaves call pure `libdoc/metrics` helpers, `runner.ParseTestOptions`, and
 `runner.RunTest` in the same process as the harness — **no product binary
 spawn**. Recording leaves may still take multi-second wall time (nested
-prepare / go test via `RunTest`) and carry `label: heavy` accordingly.
+prepare / go test via `RunTest`) and carry `label: e2e` accordingly.
 
 Coverage for metrics recording and the default-suite slow WARNING. Depends on
 package `github.com/xhd2015/doctest/libdoc/metrics` (writer, paths, project id)
@@ -81,8 +81,8 @@ tests/metrics-record/                          [L2 in-process]
 │   └── no-metrics-sets-opt-out/               --metrics-on → MetricsOn=true
 └── recording/                                 [runner.RunTest + MetricsRoot]
     ├── no-metrics-writes-nothing/             MetricsOn=false → no new *.jsonl
-    ├── enabled-writes-run-start-end/          MetricsOn=true → run_start + run_end  [heavy]
-    ├── enabled-writes-leaf-events/            MetricsOn=true + 1 leaf → leaf_*      [heavy]
+    ├── enabled-writes-run-start-end/          MetricsOn=true → run_start + run_end  [nested]
+    ├── enabled-writes-leaf-events/            MetricsOn=true + 1 leaf → leaf_*      [nested]
     └── phases/                                phase events via RunTest
         ├── emits-tree-phases/
         └── leaf-not-full-tree-wall/
@@ -101,8 +101,8 @@ tests/metrics-record/                          [L2 in-process]
 | `flags/default-metrics-on` | L2 parse | `MetricsOn == false` by default |
 | `flags/no-metrics-sets-opt-out` | L2 parse | `--metrics-on` → `MetricsOn == true` |
 | `recording/no-metrics-writes-nothing` | L2 RunTest | MetricsRoot has no new run JSONL |
-| `recording/enabled-writes-run-start-end` | L2 RunTest (heavy) | JSONL has run_start then run_end |
-| `recording/enabled-writes-leaf-events` | L2 RunTest (heavy) | leaf_start + leaf_end for executed leaf |
+| `recording/enabled-writes-run-start-end` | L2 RunTest (nested) | JSONL has run_start then run_end |
+| `recording/enabled-writes-leaf-events` | L2 RunTest (nested) | leaf_start + leaf_end for executed leaf |
 | `recording/phases/emits-tree-phases` | L2 RunTest | discover/generate/go_test phase events |
 | `recording/phases/leaf-not-full-tree-wall` | L2 RunTest | leaf elapsed not full-tree clone |
 
@@ -110,10 +110,8 @@ tests/metrics-record/                          [L2 in-process]
 
 ```sh
 doctest vet ./tests/metrics-record/
-# default discovery: pure + flags + unlabeled recording (skips label: heavy)
+# default discovery: pure + flags + recording (unlabeled nested RunTest leaves)
 doctest test ./tests/metrics-record/
-# heavy recording leaves (nested prepare/go test via runner.RunTest)
-doctest test --label heavy ./tests/metrics-record/...
 # full suite
 doctest test --label-all ./tests/metrics-record/...
 ```

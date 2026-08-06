@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: nested go test with cpuprofile; compile + profile overhead
 ---
 

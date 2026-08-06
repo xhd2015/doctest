@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: regression guard — real outer Assert fail still yields FAIL (0/1) and non-zero exit
 ---
 

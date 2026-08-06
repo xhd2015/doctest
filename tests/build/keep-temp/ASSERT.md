@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Exit 0.
 - The temp directory path (first line of stderr) still exists after the command exits.

@@ -32,7 +32,7 @@ to run this workflow.
 
 1. **Default suite budget**: unlabeled discovery runs complete within **3 minutes**
    on a typical developer machine / CI class used by the project.
-2. **Label expensive work**: slow, heavy, flaky, manual, and ui-automation
+2. **Label expensive/full-integration work**: `e2e` for L3; optional internal `slow`, `flaky`, `manual`, `ui-automation`
    leaves must not run in discovery unless the user opts in.
 3. **Evidence-first**: every recommendation cites `metrics top` / summary data
    or measured `doctest test` timings — not gut feel alone.
@@ -118,8 +118,8 @@ For each slow unlabeled leaf:
 1. Open `ASSERT.md` frontmatter (`label`, `explanation`) and `SETUP.md` cost
    signals (`time.Sleep`, subprocess, network, UI, long timeouts).
 2. Recommend canonical labels when appropriate:
-   - `slow` — multi-second intentional wait / heavy compile
-   - `heavy` — large I/O, full builds, broad subprocess graphs
+   - `e2e` — full integration / process boundary (public L3)
+   - `slow` — optional program-internal multi-second cost
    - `flaky` — timing / external (requires non-empty `explanation`)
    - `manual`, `ui-automation` — human or GUI (with `explanation` as required)
 3. Multiple labels: comma-separated scalar, e.g. `label: slow, ui-automation`.
@@ -132,7 +132,7 @@ For each slow unlabeled leaf:
 doctest test ./... --label-all
 
 # Targeted labeled expression
-doctest test ./... --label 'slow || heavy'
+doctest test ./... --label e2e
 ```
 
 Discovery stays fast; CI nightlies or release jobs use **`--label-all`**.

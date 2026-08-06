@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Match succeeds; trailing blank line in template body is preserved.
 

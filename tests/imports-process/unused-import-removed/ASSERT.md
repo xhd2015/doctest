@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Exit code is 0 (test compiled and passed).
 - The unused `"fmt"` import was removed by `imports.Process` during code generation.

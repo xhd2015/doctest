@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Output has `[YYYY-MM-DDTHH:MM:SS] item=alpha count=42` followed by exactly one newline.
 - No double newline appended (message already ends with `\n`).

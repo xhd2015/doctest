@@ -12,7 +12,7 @@
 - **run** — executes the scenarios in this suite.
 
 **Layer L2 in-process** — `runner.ParseTestOptions` rejects trailing `&&` in label EXPR.
-No product binary, no `label: heavy`.
+No product binary, no `label: e2e`.
 
 ## How to Run
 

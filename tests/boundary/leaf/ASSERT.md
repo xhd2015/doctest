@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Run returns a non-nil error because the stub returns `fmt.Errorf("stub: not implemented")`.
 

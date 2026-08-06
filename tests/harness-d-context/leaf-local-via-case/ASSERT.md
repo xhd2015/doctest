@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: nested doctest CLI; fixture reads leaf-local file via d.DOCTEST_CASE
 ---
 

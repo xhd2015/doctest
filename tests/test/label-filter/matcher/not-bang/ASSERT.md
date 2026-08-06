@@ -14,17 +14,17 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 	if err != nil || !ok {
 		t.Fatalf("!e2e on {}: ok=%v err=%v", ok, err)
 	}
-	ok, err = evalLabelExpr(t, "!e2e", []string{"heavy"})
+	ok, err = evalLabelExpr(t, "!e2e", []string{"flaky"})
 	if err != nil || !ok {
-		t.Fatalf("!e2e on {heavy}: ok=%v err=%v", ok, err)
+		t.Fatalf("!e2e on {flaky}: ok=%v err=%v", ok, err)
 	}
 	ok, err = evalLabelExpr(t, "!e2e", []string{"e2e"})
 	if err != nil || ok {
 		t.Fatalf("!e2e on {e2e}: ok=%v err=%v", ok, err)
 	}
-	ok, err = evalLabelExpr(t, "!e2e", []string{"e2e", "heavy"})
+	ok, err = evalLabelExpr(t, "!e2e", []string{"e2e", "flaky"})
 	if err != nil || ok {
-		t.Fatalf("!e2e on {e2e,heavy}: ok=%v err=%v", ok, err)
+		t.Fatalf("!e2e on {e2e,flaky}: ok=%v err=%v", ok, err)
 	}
 	// double negation
 	ok, err = evalLabelExpr(t, "!!e2e", []string{"e2e"})

@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - First captured run (env A) reports `1 Cached` (or Cached > 0).
 - Second captured run (different env B) still reports Cached > 0 because

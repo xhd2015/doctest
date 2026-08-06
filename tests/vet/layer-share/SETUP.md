@@ -13,7 +13,7 @@ DiscoverTreeCasesLight / inventory-aligned labels
 ## Preconditions
 
 - Fixtures are valid DOCTEST trees under `t.TempDir()` (DOCTEST + N leaf SETUP/ASSERT).
-- L3 identity matches `doctest list`: **`label: e2e` only** (`heavy` alone is L2).
+- L3 identity matches `doctest list`: **`label: e2e` only** (non-`e2e` labels (e.g. `slow`) are L2).
 - In-process via shared root `Run` → `runner.VetArgs` (no product binary).
 - Parallel-safe: no Setenv/Chdir/stdio reassignment; relative Args not required (abs dir).
 - **`--changed` skips share**: no leaf here — real `--changed` needs git context and is
@@ -52,7 +52,7 @@ const fixtureLeafASSERTBody = "## Expected\n- fixture leaf\n\n" +
 	"\t_ = d\n}\n\x60\x60\x60\n"
 
 // writeShareFixture writes a minimal valid DOCTEST tree with optional ASSERT labels.
-// Each entry is "rel" or "rel|labelField" (e.g. "e2e0|e2e", "slow0|heavy").
+// Each entry is "rel" or "rel|labelField" (e.g. "e2e0|e2e", "slow0|slow").
 // Leaf SETUP.md always starts with "# Scenario" so full vet structure checks pass.
 func writeShareFixture(t *testing.T, root string, specs []string) {
 	t.Helper()
@@ -92,11 +92,11 @@ func shareSpecs(total, e2eCount int) []string {
 	return out
 }
 
-// heavySpecs builds total leaves all labeled "heavy" (no e2e → all L2).
-func heavySpecs(total int) []string {
+// slowOnlySpecs builds total leaves all labeled "slow" (no e2e → all L2 for share budget).
+func slowOnlySpecs(total int) []string {
 	out := make([]string, 0, total)
 	for i := 0; i < total; i++ {
-		out = append(out, "leaf_"+itoaShare(i)+"|heavy")
+		out = append(out, "leaf_"+itoaShare(i)+"|slow")
 	}
 	return out
 }

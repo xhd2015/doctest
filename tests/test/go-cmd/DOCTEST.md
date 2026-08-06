@@ -37,7 +37,7 @@
 
 - trap-all / trap package flags
 - PATH wrappers that shadow `go` with xgo
-- Full e2e suite run with a real xgo binary (optional later; label heavy/e2e)
+- Full e2e suite run with a real xgo binary (optional later; label e2e)
 
 ## Decision Tree
 

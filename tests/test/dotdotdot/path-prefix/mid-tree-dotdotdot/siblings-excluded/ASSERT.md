@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 `./tree/mid/...`: mid + nested under prefix; **no** sibling.

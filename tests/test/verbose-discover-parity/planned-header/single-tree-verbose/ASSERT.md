@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: nested doctest test -v single-tree planned header lock
 ---
 

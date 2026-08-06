@@ -6,7 +6,7 @@
 # enforce SETUP.md rules at build time
 root missing Run -> build error
 child redefines Run -> build error
-non-root missing Setup -> build error
+non-root may omit Setup (prose-only OK)
 ```
 
 ## Preconditions

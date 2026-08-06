@@ -38,7 +38,7 @@ jobs:
       # label e2e = full integration only. Prefer discovery for PR signal; e2e on full push.
       # Each stage writes its own coverprofile — same path overwrites (no merge).
       - name: Doctest discovery (in-process mass)
-        # --label '!e2e' skips e2e; heavy may still run. Fast PR feedback vs --label-all.
+        # --label '!e2e' skips e2e; labeled e2e is skipped; other labels also skip default discovery. Fast PR feedback vs --label-all.
         run: |
           doctest test --label '!e2e' -count=1 \
             -cover -covermode="$COVERMODE" \

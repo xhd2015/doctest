@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Match fails because the template requires a trailing blank line that actual
   output does not contain.

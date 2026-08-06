@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Nested fixture with leaf SETUP that has no `func Setup` is allowed (prose-only / no Setup).
 - `doctest test` on the fixture exits 0.
