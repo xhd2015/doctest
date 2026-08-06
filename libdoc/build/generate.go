@@ -509,9 +509,19 @@ func (ctx *generateContext) writeUnifiedCases(cases []core.TreeCase, compileOnly
 		leafImports = append(leafImports, core.LeafImportForTree(leafRel))
 	}
 
+	// Kind A: blank-import shims for leaf paths containing /internal/.
+	// allleaves uses shim imports; real leaf packages stay at original paths.
+	realLeafImports := append([]string(nil), leafImports...)
+	leafImports = core.RewriteKindALeafImports(leafImports)
+
 	// Suite/registry/allleaves under suiteRel (path-local when path-scoped).
 	if err := core.WriteUnifiedTreeExtras(ctx.genRoot, suiteRel, ctx.absRoot, leafImports); err != nil {
 		return err
+	}
+	// Emit kind A/B shim bodies + merge into vendor-gomod-overlay.json; rewrite
+	// product-internal imports in gen sources to expose facades (kind B).
+	if err := core.ApplyInternalShimsAfterUnifiedGen(ctx.genRoot, suiteRel, realLeafImports, cases, ctx.absModRoot, ctx.modPath); err != nil {
+		return fmt.Errorf("internal shims: %w", err)
 	}
 	// Workspace __wreg is tree-wide fan-in; skip on path-scoped runs so we do
 	// not rewrite packages outside the user path. Full-tree runs still write it.

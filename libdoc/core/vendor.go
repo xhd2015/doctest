@@ -412,6 +412,54 @@ func VendorGomodOverlayGoFlagMerged(destDir string, genRoots []string) ([]string
 	return []string{"-overlay=" + p}, nil
 }
 
+// MergeReplaceIntoVendorGomodOverlay merges replace keys into
+// genDir/vendor-gomod-overlay.json (creates file if needed). Existing keys that
+// conflict with a different value return an error; same value is ignored.
+// Used for kind A/B internal shims so tidy/test keep using VendorGomodOverlayGoFlag.
+func MergeReplaceIntoVendorGomodOverlay(genDir string, replace map[string]string) error {
+	if genDir == "" || len(replace) == 0 {
+		return nil
+	}
+	outPath := filepath.Join(genDir, VendorGomodOverlayJSON)
+	merged := make(map[string]string)
+	if data, err := os.ReadFile(outPath); err == nil && len(strings.TrimSpace(string(data))) > 0 {
+		var payload struct {
+			Replace map[string]string `json:"Replace"`
+		}
+		if err := json.Unmarshal(data, &payload); err != nil {
+			return fmt.Errorf("parse %s: %w", outPath, err)
+		}
+		for k, v := range payload.Replace {
+			merged[k] = v
+		}
+	}
+	for k, v := range replace {
+		if k == "" || v == "" {
+			continue
+		}
+		if prev, ok := merged[k]; ok && prev != v {
+			return fmt.Errorf("overlay key conflict: %s\n  existing: %s\n  new: %s", k, prev, v)
+		}
+		merged[k] = v
+	}
+	if len(merged) == 0 {
+		return nil
+	}
+	if err := os.MkdirAll(genDir, 0755); err != nil {
+		return err
+	}
+	payload, err := json.Marshal(struct {
+		Replace map[string]string `json:"Replace"`
+	}{Replace: merged})
+	if err != nil {
+		return err
+	}
+	if prev, err := os.ReadFile(outPath); err == nil && string(prev) == string(payload) {
+		return nil
+	}
+	return os.WriteFile(outPath, payload, 0644)
+}
+
 // AppendGOFLAGSOverlay returns env assignments that set GOFLAGS to include
 // -overlay=path (preserves other GOFLAGS tokens from the process environment).
 func AppendGOFLAGSOverlay(overlayPath string) []string {

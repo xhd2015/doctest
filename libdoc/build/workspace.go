@@ -547,6 +547,12 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 			}
 		}
 	}
+	for _, root := range uniquePrepGenRoots(preps) {
+		if core.NeedVetOff(root) {
+			flagArgs = append(flagArgs, "-vet=off")
+			break
+		}
+	}
 
 	displayArgs := displayGoArgs(append(append([]string(nil), flagArgs...), packageArgs...))
 	if len(xgoApply.ProgArgs) > 0 {

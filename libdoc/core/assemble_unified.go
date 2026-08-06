@@ -501,7 +501,13 @@ func WriteUnifiedTree(genRoot string, cases []TreeCase, docTestRoot string, comp
 		leafImports = append(leafImports, LeafImportForTree(leafRel))
 	}
 
-	return WriteUnifiedTreeExtras(genRoot, ".", docTestRoot, leafImports)
+	realLeafImports := append([]string(nil), leafImports...)
+	leafImports = RewriteKindALeafImports(leafImports)
+	if err := WriteUnifiedTreeExtras(genRoot, ".", docTestRoot, leafImports); err != nil {
+		return err
+	}
+	// absModRoot unknown in this helper — kind B skipped; kind A only.
+	return ApplyInternalShimsAfterUnifiedGen(genRoot, ".", realLeafImports, cases, "", "")
 }
 
 // WriteUnifiedTreeExtras writes __registry, __allleaves, and suite for a tree.
