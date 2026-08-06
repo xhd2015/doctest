@@ -70,9 +70,9 @@ doctest vet ./tests/parallel-safe/env-no-setenv/
 doctest test ./tests/parallel-safe/env-no-setenv/
 # Static leaf alone (fast, default suite — unlabeled):
 doctest test ./tests/parallel-safe/env-no-setenv/static-source/...
-# Functional locks (heavy — nested generate + go test):
+# Functional locks (nested generate + go test):
 doctest test --label-all ./tests/parallel-safe/env-no-setenv/functional/...
-# Full tree including heavy:
+# Full tree:
 doctest test --label-all ./tests/parallel-safe/env-no-setenv/
 ```
 

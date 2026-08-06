@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: -v parity for pass+t.Skip fixture; same PASS (1/1, 1 t.Skip) as quiet path
 ---
 

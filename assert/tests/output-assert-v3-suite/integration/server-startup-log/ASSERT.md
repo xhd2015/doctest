@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Match succeeds for realistic server startup log template.
 

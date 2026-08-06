@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: removed source leaf → gen orphan # deleted
 ---
 

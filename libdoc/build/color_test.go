@@ -12,22 +12,22 @@ import (
 
 func TestFormatSkippedSummaryCompact(t *testing.T) {
 	skipped := []core.SkippedCase{
-		{DisplayPath: "a/heavy1", Labels: []string{"heavy"}},
-		{DisplayPath: "a/heavy2", Labels: []string{"heavy"}},
+		{DisplayPath: "a/slow1", Labels: []string{"slow"}},
+		{DisplayPath: "a/slow2", Labels: []string{"slow"}},
 		{DisplayPath: "b/slow", Labels: []string{"slow"}, Explanation: "takes time"},
-		{DisplayPath: "c/both", Labels: []string{"slow", "heavy"}},
+		{DisplayPath: "c/both", Labels: []string{"slow", "flaky"}},
 	}
 	got := FormatSkippedSummary(skipped, false)
 	if !strings.Contains(got, "skipped 4 labeled (discovery;") {
 		t.Fatalf("header:\n%s", got)
 	}
-	if !strings.Contains(got, "heavy") || !strings.Contains(got, "2") {
-		t.Fatalf("expected heavy bucket count 2:\n%s", got)
+	if !strings.Contains(got, "slow") || !strings.Contains(got, "3") {
+		t.Fatalf("expected slow bucket count 3:\n%s", got)
 	}
-	if !strings.Contains(got, "heavy,slow") {
-		t.Fatalf("expected sorted multi-label key heavy,slow:\n%s", got)
+	if !strings.Contains(got, "flaky,slow") {
+		t.Fatalf("expected sorted multi-label key flaky,slow:\n%s", got)
 	}
-	if strings.Contains(got, "a/heavy1") {
+	if strings.Contains(got, "a/slow1") {
 		t.Fatalf("compact mode must not list paths:\n%s", got)
 	}
 	if !strings.Contains(got, "(use -v to list paths)") {
@@ -35,7 +35,7 @@ func TestFormatSkippedSummaryCompact(t *testing.T) {
 	}
 	// Verbose lists paths + explanation.
 	v := FormatSkippedSummary(skipped, true)
-	if !strings.Contains(v, "a/heavy1") || !strings.Contains(v, "explanation: takes time") {
+	if !strings.Contains(v, "a/slow1") || !strings.Contains(v, "explanation: takes time") {
 		t.Fatalf("verbose:\n%s", v)
 	}
 	if strings.Contains(v, "(use -v to list paths)") {

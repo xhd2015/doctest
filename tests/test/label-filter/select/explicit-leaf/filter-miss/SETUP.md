@@ -3,12 +3,12 @@
 **Feature**: explicit leaf that fails label filter is skipped
 
 ```
-SubDir=slow + --label heavy → skip {slow} reason label filter
+SubDir=slow + --label e2e → skip {slow} reason label filter
 ```
 
 ## Steps
 
-1. Fixture mod; SubDir = slow; LabelExprs = ["heavy"].
+1. Fixture mod; SubDir = slow; LabelExprs = ["flaky"].
 
 ```go
 import (
@@ -19,7 +19,7 @@ import (
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.TreeRoot = writeLabelFilterMod(t)
 	req.SubDir = filepath.Join(req.TreeRoot, "slow")
-	req.LabelExprs = []string{"heavy"}
+	req.LabelExprs = []string{"flaky"}
 	req.ExplicitLeaf = true
 	return nil
 }

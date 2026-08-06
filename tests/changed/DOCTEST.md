@@ -9,9 +9,9 @@
 |-------|-------|--------|
 | **L2 doctest in-process** | **mass** | `git-context/in-git-repo/**` — fixture trees + synthetic `changedFiles`; harness calls `core.FilterByChangedFiles`, `ChangedRunInfoForTree`, `ChangedDoctestMarkdownFiles` (no product binary, no real git for pure filter policy) |
 | **L2 in-process CLI** | **help** | `help/*` — `cli.RunWithWriter` for `<subcmd> --help` documents `--changed`; unlabeled, no product binary |
-| **L3 doctest e2e** | **sparse** | `git-context/not-git-repo/*` — real `doctest` binary; `label: heavy` |
+| **L3 doctest e2e** | **sparse** | `git-context/not-git-repo/*` — real `doctest` binary; `label: e2e` |
 
-Default discovery runs L2 (policy + help). Use `--label heavy` for binary not-git smokes.
+Default discovery runs L2 (policy + help). Use `--label e2e` for binary not-git smokes.
 
 Out of scope: product feature changes; `tests/vet`, `tests/help`, `tests/skill`.
 
@@ -67,7 +67,7 @@ req.Args = [<subcmd>, "--help"]
   -> cli.RunWithWriter(&buf, args)
   -> Response{Stdout, ExitCode}
 
-# L3 (not-git-repo/, label: heavy)
+# L3 (not-git-repo/, label: e2e)
 testbin.Ensure -> req.Bin
   -> doctest <subcmd> --changed <dir>
 ```
@@ -83,7 +83,7 @@ tests/changed/
 │   ├── build-help/
 │   └── vet-help/
 └── git-context/
-    ├── not-git-repo/                          [L3 binary, label: heavy]
+    ├── not-git-repo/                          [L3 binary, label: e2e]
     │   ├── test/
     │   ├── build/
     │   └── vet/
@@ -115,9 +115,9 @@ tests/changed/
 | `help/test-help` | L2 | stdout includes `Usage: doctest test` and `--changed` |
 | `help/build-help` | L2 | stdout includes `Usage: doctest build` and `--changed` |
 | `help/vet-help` | L2 | stdout includes `Usage: doctest vet` and `--changed` |
-| `not-git-repo/test` | L3 heavy | non-zero; stderr mentions git |
-| `not-git-repo/build` | L3 heavy | non-zero; stderr mentions git |
-| `not-git-repo/vet` | L3 heavy | non-zero; stderr mentions git |
+| `not-git-repo/test` | L3 e2e | non-zero; stderr mentions git |
+| `not-git-repo/build` | L3 e2e | non-zero; stderr mentions git |
+| `not-git-repo/vet` | L3 e2e | non-zero; stderr mentions git |
 | `test/assert-only` | L2 | filtered `[leaf_a]`; detail `1 leaf` |
 | `test/assert-only-dotdotdot` | L2 | same selection as assert-only |
 | `test/assert-only-subpath-dotdotdot` | L2 | same selection as assert-only |
@@ -137,10 +137,10 @@ tests/changed/
 
 ```sh
 doctest vet ./tests/changed/
-# default discovery: L2 policy + help (skips label: heavy not-git)
+# default discovery: L2 policy + help (skips label: e2e not-git)
 doctest test ./tests/changed/
 # sparse binary smokes
-doctest test --label heavy ./tests/changed/...
+doctest test --label e2e ./tests/changed/...
 # full suite
 doctest test --label-all ./tests/changed/...
 ```

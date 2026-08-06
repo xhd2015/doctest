@@ -1,6 +1,6 @@
 ## Expected
 
-- `!e2e && heavy` matches only when heavy is present and e2e is absent.
+- `!e2e && flaky` matches only when flaky is present and e2e is absent.
 
 ```go
 import "testing"
@@ -9,21 +9,21 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 	if err != nil {
 		t.Fatal(err)
 	}
-	ok, err := evalLabelExpr(t, "!e2e && heavy", []string{"heavy"})
+	ok, err := evalLabelExpr(t, "!e2e && flaky", []string{"flaky"})
 	if err != nil || !ok {
-		t.Fatalf("!e2e && heavy on {heavy}: ok=%v err=%v", ok, err)
+		t.Fatalf("!e2e && flaky on {flaky}: ok=%v err=%v", ok, err)
 	}
-	ok, err = evalLabelExpr(t, "!e2e && heavy", []string{"e2e", "heavy"})
+	ok, err = evalLabelExpr(t, "!e2e && flaky", []string{"e2e", "flaky"})
 	if err != nil || ok {
-		t.Fatalf("!e2e && heavy on {e2e,heavy}: ok=%v err=%v", ok, err)
+		t.Fatalf("!e2e && flaky on {e2e,flaky}: ok=%v err=%v", ok, err)
 	}
-	ok, err = evalLabelExpr(t, "!e2e && heavy", nil)
+	ok, err = evalLabelExpr(t, "!e2e && flaky", nil)
 	if err != nil || ok {
-		t.Fatalf("!e2e && heavy on {}: ok=%v err=%v", ok, err)
+		t.Fatalf("!e2e && flaky on {}: ok=%v err=%v", ok, err)
 	}
-	ok, err = evalLabelExpr(t, "!e2e && heavy", []string{"e2e"})
+	ok, err = evalLabelExpr(t, "!e2e && flaky", []string{"e2e"})
 	if err != nil || ok {
-		t.Fatalf("!e2e && heavy on {e2e}: ok=%v err=%v", ok, err)
+		t.Fatalf("!e2e && flaky on {e2e}: ok=%v err=%v", ok, err)
 	}
 }
 ```

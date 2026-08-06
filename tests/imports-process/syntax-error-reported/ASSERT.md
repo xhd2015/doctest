@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Exit code is non-zero (doctest test fails).
 - The stderr contains an error message related to formatting (`imports.Process` failure).

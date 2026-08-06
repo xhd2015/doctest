@@ -75,7 +75,7 @@ doctest test ./... --metrics-on --cold-cache
 doctest test ./... --metrics-on --label-all
 
 # Expression filter
-doctest test ./... --metrics-on --label 'heavy || slow'
+doctest test ./... --metrics-on --label e2e
 ```
 
 ### Cost-related flags on `test` (use with `--metrics-on`)
@@ -318,7 +318,7 @@ placeholder from CLI output**.
 **Discovery leaf-heavy**
 
 > Slowest **unlabeled** leaves (default discovery): `path1` **T1**, `path2` **T2**.
-> These hit every unlabeled run. Consider `label: heavy` / `slow` and reserve
+> These hit every unlabeled run. Consider `label: e2e` for true full integration and reserve
 > full suite for `--label-all` CI. Cross-check with `review-perf` for the 3 min
 > budget.
 

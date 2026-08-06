@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - The command fails.
 - stderr reports the unknown runner option.

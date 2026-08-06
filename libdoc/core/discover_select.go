@@ -25,7 +25,7 @@ const (
 // intermediate SETUP directories. Root DOCTEST.md is still required and checked
 // for Request/Response/Run so selected leaves can hydrate later.
 //
-// Used by doctest test default discovery so labeled (e.g. heavy) leaves are not
+// Used by doctest test default discovery so labeled (e.g. e2e) leaves are not
 // fully parsed when they will be skipped.
 func DiscoverTreeCasesLight(root string) ([]TreeCase, error) {
 	info, err := os.Stat(root)

@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - `DiscoverTreeCases` succeeds when intermediate SETUP.md is prose-only (no Go block).

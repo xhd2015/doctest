@@ -87,7 +87,7 @@ func TestPartitionLabeledCasesExplicitLeafRunsAll(t *testing.T) {
 func TestFilterCasesByLabelLabelAllRunsAll(t *testing.T) {
 	cases := []TreeCase{
 		{Name: "fast", Path: "fast"},
-		{Name: "slow", Path: "slow", Labels: []string{"heavy"}},
+		{Name: "slow", Path: "slow", Labels: []string{"e2e"}},
 	}
 	run, skipped := FilterCasesByLabel(cases, Options{LabelAll: true})
 	if len(run) != 2 || len(skipped) != 0 {
@@ -98,7 +98,7 @@ func TestFilterCasesByLabelLabelAllRunsAll(t *testing.T) {
 func TestFilterCasesByLabelDiscoveryStillSkipsWithoutLabelAll(t *testing.T) {
 	cases := []TreeCase{
 		{Name: "fast", Path: "fast"},
-		{Name: "slow", Path: "slow", Labels: []string{"heavy"}},
+		{Name: "slow", Path: "slow", Labels: []string{"e2e"}},
 	}
 	run, skipped := FilterCasesByLabel(cases, Options{})
 	if len(run) != 1 || run[0].Path != "fast" || len(skipped) != 1 {

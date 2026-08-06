@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Match succeeds — escaped `\.` matches a literal dot only.
 

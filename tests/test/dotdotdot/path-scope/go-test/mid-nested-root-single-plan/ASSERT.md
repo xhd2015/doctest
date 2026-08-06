@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - Exactly **one** `cd … && go test` plan line.

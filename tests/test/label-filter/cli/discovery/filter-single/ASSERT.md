@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: CLI filter contract via doctest binary
 ---
 
@@ -19,7 +18,7 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 	}
 	assertLabelFilterSkipCompact(t, resp.Stdout, 3, map[string]int{
 		"(unlabeled)":   1,
-		"heavy":         1,
+		"flaky":         1,
 		"ui-automation": 1,
 	})
 	assertResultSummary(t, resp.Stdout, 2, 2)

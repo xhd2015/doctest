@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: nested doctest twice with --color on warm run; multi-leaf fixture
 ---
 

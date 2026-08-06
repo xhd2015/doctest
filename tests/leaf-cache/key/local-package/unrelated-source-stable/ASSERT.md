@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - Keys are lowercase hex.

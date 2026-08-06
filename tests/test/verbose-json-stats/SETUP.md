@@ -37,7 +37,7 @@ doctest test --no-color <1-fail> -> FAIL (0/1), exit ≠ 0
   nested non-zero and prints nested stdout so `-v` streams contain `FAIL (`.
 - Until always-json lands, text scanning of `FAIL (` / `FAIL\t` under `-v`
   wrongly deflates outer `Passed` (e.g. `FAIL (1/2)` or `FAIL (0/2)`).
-- Leaves are labeled `heavy`.
+- Leaves use `e2e` when full integration (otherwise unlabeled).
 
 ```go
 import (

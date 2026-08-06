@@ -6,7 +6,7 @@
 # enforce SETUP.md rules at build time
 root missing Run -> build error
 child redefines Run -> build error
-non-root missing Setup -> build error
+non-root may omit Setup (prose-only OK)
 ```
 
 ## Preconditions
@@ -18,7 +18,7 @@ non-root missing Setup -> build error
 
 ## Context
 - Non-root SETUP.md may omit func Setup (prose-only allowed). Having neither Setup nor Run
-  should trigger a validation error.
+  is valid; discover/test should succeed.
 
 ```go
 import (

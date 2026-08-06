@@ -115,8 +115,8 @@ func writeLabelFilterMod(t *testing.T) string {
 	writeLabeledAssert(t, root, "ui", "ui-automation", "browser ui")
 	writeMinimalLeafSetupAssert(t, root, "both")
 	writeLabeledAssert(t, root, "both", "slow, ui-automation", "slow ui combo")
-	writeMinimalLeafSetupAssert(t, root, "heavy")
-	writeLabeledAssert(t, root, "heavy", "heavy", "heavy profile")
+	writeMinimalLeafSetupAssert(t, root, "flaky")
+	writeLabeledAssert(t, root, "flaky", "flaky", "flaky profile")
 	return root
 }
 
@@ -281,8 +281,8 @@ func writeLabelFilterModInDir(t *testing.T, modDir string) {
 	writeMinimalLeafSetupAssert(t, modDir, "fast")
 	writeMinimalLeafSetupAssert(t, modDir, "slow")
 	writeLabeledAssert(t, modDir, "slow", "slow", "slow profile")
-	writeMinimalLeafSetupAssert(t, modDir, "heavy")
-	writeLabeledAssert(t, modDir, "heavy", "heavy", "heavy profile")
+	writeMinimalLeafSetupAssert(t, modDir, "flaky")
+	writeLabeledAssert(t, modDir, "flaky", "flaky", "flaky profile")
 	writeMinimalLeafSetupAssert(t, modDir, "both")
 	writeLabeledAssert(t, modDir, "both", "slow, ui-automation", "slow ui combo")
 }

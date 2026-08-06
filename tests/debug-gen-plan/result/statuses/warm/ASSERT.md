@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: two generates same gen-dir; warm unchanged summary
 ---
 

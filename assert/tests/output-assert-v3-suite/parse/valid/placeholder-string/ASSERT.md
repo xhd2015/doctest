@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Parse succeeds.
 - Summary mentions USER string placeholder.

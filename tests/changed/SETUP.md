@@ -11,7 +11,7 @@ fixture tree under t.TempDir()
 # L2 help (help/ only): in-process CLI
 cli.RunWithWriter -> doctest <subcmd> --help
 
-# L3 e2e (not-git-repo/, label: heavy)
+# L3 e2e (not-git-repo/, label: e2e)
 testbin.Ensure -> req.Bin
   -> doctest <subcmd> --changed <dir>
 ```
@@ -37,7 +37,7 @@ testbin.Ensure -> req.Bin
 
 - `Request` / `Response` / `Run` are defined only in `DOCTEST.md`.
 - Parallel-safe: each leaf uses `t.TempDir()`.
-- **Layer**: L2 in-process policy + help is the mass; L3 e2e is sparse and labeled `heavy`.
+- **Layer**: L2 in-process policy + help is the mass; L3 e2e is sparse and labeled `e2e` when full-integration.
 
 ```go
 import (

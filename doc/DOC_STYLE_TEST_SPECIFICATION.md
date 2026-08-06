@@ -232,7 +232,7 @@ explanation: needs display server; ~30s per run
   use a **comma-separated** list (`slow, ui-automation`). Any non-empty `label` skips the
   leaf in discovery mode (`doctest test` on tree root, grouping dir, or `./...`).
 - **`explanation`** is optional prose; it does **not** skip by itself.
-- Canonical run-profile labels: `slow`, `heavy`, `flaky`, `manual`, `ui-automation`.
+- Public L3 label: `e2e`. Optional program-internal: `slow`, `flaky`, `manual`, `ui-automation`. (`heavy` is retired.)
 
 To run labeled leaves selectively, use `doctest test --label EXPR` (`&&`, `||`,
 parentheses; repeatable `--label` flags are OR'd). Without `--label`, discovery runs
@@ -296,7 +296,7 @@ doctest test ./ --label slow
 
 # Boolean expressions and multiple flags
 doctest test ./ --label 'slow && ui-automation'
-doctest test ./ --label slow --label heavy
+doctest test ./ --label e2e
 ```
 
 ## Verification

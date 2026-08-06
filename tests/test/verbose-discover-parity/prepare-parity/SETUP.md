@@ -19,7 +19,7 @@ doctest test -v parent/ -> exit 0; planned 1
 ## Preconditions
 
 - Shared mega fixture writer from root SETUP.
-- Nested CLI runs are labeled `heavy`.
+- Nested CLI runs use `e2e` when full integration.
 
 ## Steps
 

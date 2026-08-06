@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: outer 2-leaf tree plus nested doctest test on intentional fail; -v stream must still report PASS (2/2)
 ---
 

@@ -32,7 +32,7 @@ doctest -> FAIL (0/3, N cancelled) in …   # N = planned − pass − fail − 
 
 ## Context
 
-- Nested CLI self-tests are labeled `heavy`.
+- Nested CLI self-tests use `label: e2e` when full-integration.
 - Default timeout policy is unchanged: only messaging when a timeout actually fires.
 - Locked Error/hint wording; FAIL uses planned denom when cancelled > 0.
 - Progress compact line must not gain a Cancelled segment.

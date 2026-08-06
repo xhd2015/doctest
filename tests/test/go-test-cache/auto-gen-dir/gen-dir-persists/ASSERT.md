@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - The gen directory exists and is not empty after the first run completes.
 - The gen directory path was captured on `req.MRGenDir`.

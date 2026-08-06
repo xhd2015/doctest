@@ -1,10 +1,10 @@
 # Scenario
 
-**Feature**: `label: heavy` without `e2e` counts as L2 — all-heavy large tree stays within budget
+**Feature**: non-`e2e` labels (e.g. `slow`) count as L2 — large tree with only `slow` stays within L3 budget
 
 ```
-# 10 leaves all label: heavy (no e2e) → L3=0 → exit 0
-writeShareFixture(10 leaves, all heavy)
+# 10 leaves all label: slow (no e2e) → L3=0 → exit 0
+writeShareFixture(10 leaves, all slow)
   -> runner.VetArgs(["vet", dir])
   -> exit 0
 ```
@@ -12,11 +12,11 @@ writeShareFixture(10 leaves, all heavy)
 ## Preconditions
 
 - Align with `doctest list` inventory: L3 is **`e2e` only**.
-- Cost label `heavy` alone must not inflate L3 share.
+- Other labels must not inflate L3 share.
 
 ## Steps
 
-1. Write fixture: 10 leaves each with `label: heavy`.
+1. Write fixture: 10 leaves each with `label: slow`.
 2. Run `vet <dir>` in-process.
 
 ```go
@@ -30,7 +30,7 @@ import (
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	_ = d
 	dir := filepath.Join(t.TempDir(), "tree")
-	writeShareFixture(t, dir, heavySpecs(10))
+	writeShareFixture(t, dir, slowOnlySpecs(10))
 	req.Args = []string{"vet", dir}
 	return nil
 }

@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 Mid path go test executes `MARKER:MID_LEAF` and never `MARKER:SIBLING_LEAF`.

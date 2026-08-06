@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - CLI still succeeds with **single** workspace suite plan (not multi-cmd path-shaped execution).

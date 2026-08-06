@@ -13,7 +13,7 @@ tiny fixture module
 
 - Root Setup provides `req.Bin` and `req.ModuleRoot`.
 - Leaves create isolated temp modules / cache homes (parallel-safe).
-- Labeled **heavy** on leaves (nested generate + go test).
+- Full-integration leaves may use **e2e** (nested generate + go test).
 
 ## Steps
 

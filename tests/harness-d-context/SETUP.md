@@ -23,7 +23,7 @@ doctest test <fixture> -> PASS
 - P2 generate already injects `d` and removed free package `DOCTEST_*` vars; fixtures
   that use `d` are expected GREEN without further product changes.
 - Subprocess runs with `GOWORK=off` so nested `testcase` modules resolve cleanly.
-- Leaves are labeled `heavy` (nested CLI build + `doctest test`).
+- Leaves use `e2e` when full integration (otherwise unlabeled) (nested CLI build + `doctest test`).
 
 ## Steps
 

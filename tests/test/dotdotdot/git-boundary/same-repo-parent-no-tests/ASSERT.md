@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Exit code 0.
 - Stderr contains `child_test` (walk down within same repo finds child).

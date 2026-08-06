@@ -12,9 +12,9 @@ explicit-leaf selection and frontmatter parse policy. Leaves use:
 - `core.FilterBySubDir`
 - `core.ParseAssertFrontmatter`
 
-**No product binary**, **no `label: heavy`**. CLI summary formatting, path
+**No product binary**, **no `label: e2e`**. CLI summary formatting, path
 patterns (`...`), multi-arg, vet/edit/build command surfaces stay under parent
-L3 heavy leaves.
+L3 e2e leaves.
 
 # DSN (Domain Specific Notion)
 

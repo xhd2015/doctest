@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Both runs exit 0.
 - First captured run is cache-hit.

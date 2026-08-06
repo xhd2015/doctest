@@ -14,7 +14,7 @@ partial multi-leaf / polish selective keys via ComputeLeafKey only
 FormatLeafIdentity / PreparePassPlan / RecordPasses
   -> tree-qualified skip/fail map identities
 
-# L3 e2e (label: heavy) — nested product binary
+# L3 e2e (label: e2e) — nested product binary
 doctest test fixture / <mod>/... / tree-a tree-b
   -> PutPass / warm Cached / -count|-a bypass
   -> stream PutPass + grey progress dots (runtime/**)
@@ -26,7 +26,7 @@ doctest test fixture / <mod>/... / tree-a tree-b
 - **L2** leaves (`key/`, `store/`, `partial-package-deps/`, `polish/selective|isolation/`):
   set `req.Op` to library ops; **no** `testbin`.
 - **L3** leaves (`runtime/`, `workspace/`, `cli-plan/`, `polish/docs/`):
-  `Op=runtime_multi|runtime_once`, `testbin.Ensure`, `label: heavy`.
+  `Op=runtime_multi|runtime_once`, `testbin.Ensure`, `label: e2e`.
 - Nested `runsuite/` is its own L2 root (own Request/Run).
 - All fixtures and store roots use `t.TempDir()` — never write into the user cache.
 - Product default store path: `$CacheHome/doctest/leaf-cache/v1`; L3 tests isolate via

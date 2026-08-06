@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: regression — zero runtime skips must keep PASS (2/2) with no t.Skip text
 ---
 

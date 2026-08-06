@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Exit code 0.
 - stderr contains both pkg1 and pkg2 (sibling modules both found).

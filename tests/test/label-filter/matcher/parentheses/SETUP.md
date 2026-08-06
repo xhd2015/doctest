@@ -3,7 +3,7 @@
 **Feature**: parentheses override default precedence
 
 ```
-(slow || heavy) && ui  matches only when ui plus (slow or heavy)
+(slow || flaky) && ui  matches only when ui plus (slow or flaky)
 ```
 
 ## Steps

@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: --no-color must strip ANSI from gen-plan result lines
 ---
 

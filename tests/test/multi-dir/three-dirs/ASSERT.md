@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Exit code 0.
 - Stderr contains test results for `test_a`, `test_b`, and `test_c`.

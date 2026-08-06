@@ -5,7 +5,7 @@
 
 **Layer model:** all leaves are **L2 in-process** via `runner.RunTest` /
 `core.WriteFormattedGo` (no product binary, no `testbin`). Leaves are
-**unlabeled** (not `e2e`/`heavy`). Completeness: same six scenarios as before.
+**unlabeled** (not `e2e`). Completeness: same six scenarios as before.
 
 # DSN (Domain Specific Notion)
 
@@ -86,7 +86,7 @@ gen-format-strict/
 ```sh
 doctest vet ./tests/gen-format-strict/
 doctest test ./tests/gen-format-strict/
-# L2 in-process (unlabeled); no --label heavy required
+# L2 in-process (unlabeled); no --label e2e required
 ```
 
 ```go

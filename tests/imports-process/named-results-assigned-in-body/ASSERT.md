@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - Exit code is 0: doctest generates valid Go from the named-result helper and the

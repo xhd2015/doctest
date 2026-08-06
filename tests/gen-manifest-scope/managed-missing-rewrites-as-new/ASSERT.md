@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: managed missing gen file recreated as # new
 ---
 

@@ -12,7 +12,7 @@
 - **run** — executes the scenarios in this suite.
 
 **Layer L2 in-process** — `runner.ParseTestOptions` rejects invalid `-timeout` values.
-No product binary, no `label: heavy`. Sibling `forward/` stays L3 e2e (go test command line).
+No product binary, no `label: e2e`. Sibling `forward/` stays L3 e2e (go test command line).
 
 ## How to Run
 

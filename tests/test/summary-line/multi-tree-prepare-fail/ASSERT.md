@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - Exit code is non-zero (prepare failed for the bad tree).

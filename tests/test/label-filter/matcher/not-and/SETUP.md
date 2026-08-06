@@ -3,9 +3,9 @@
 **Feature**: `!` binds tighter than `&&`
 
 ```
-EvalLabelExpr("!e2e && heavy", {heavy}) -> true
-EvalLabelExpr("!e2e && heavy", {e2e, heavy}) -> false
-EvalLabelExpr("!e2e && heavy", {}) -> false
+EvalLabelExpr("!e2e && flaky", {flaky}) -> true
+EvalLabelExpr("!e2e && flaky", {e2e, flaky}) -> false
+EvalLabelExpr("!e2e && flaky", {}) -> false
 ```
 
 ## Steps

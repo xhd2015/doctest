@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - Suite run succeeds (generation + go test of suite).

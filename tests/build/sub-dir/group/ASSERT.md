@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - The command succeeds.
 - Both leaf-1 and leaf-2 are built (2 test cases), leaf-3 is NOT built.

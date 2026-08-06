@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Soft "no tests" outcome (exit 0 + `no tests` on stderr — not a hard fail).
 - Stderr does NOT contain `child_test` as a run target (walk down stops at git boundary).

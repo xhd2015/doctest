@@ -10,7 +10,7 @@ DOCTEST_DEBUG=gen-plan=1,bypass-go-test=1
 
 ## Preconditions
 
-- Product CLI leaves (`label: heavy` on descendants).
+- Product CLI leaves (`label: e2e` on descendants).
 - Always combine `bypass-go-test=1` so go test is skipped (fast plan/result).
 - Isolated GenDir + cache home per leaf.
 

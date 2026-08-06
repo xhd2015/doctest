@@ -3,7 +3,7 @@
 **Feature**: single-label filter selects all leaves carrying that label
 
 ```
---label slow → run {slow, both}; skip {fast, ui, heavy}
+--label slow → run {slow, both}; skip {fast, ui, flaky}
 ```
 
 ## Steps

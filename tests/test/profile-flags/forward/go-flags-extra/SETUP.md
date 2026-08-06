@@ -14,7 +14,7 @@ doctest test -v \
 
 ## Preconditions
 - Single-package fixture so multi-package coverprofile rules do not apply.
-- Nested go test; heavy label.
+- Nested go test; use e2e when full-integration.
 
 ## Steps
 1. Run nested doctest test with the allowlist flags against basic-request-runner.

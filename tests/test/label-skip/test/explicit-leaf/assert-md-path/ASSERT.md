@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: CLI skip/summary contract via doctest binary
 ---
 

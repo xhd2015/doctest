@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 `./tree/mid/...`: mid leaf + nested-module DOCTEST; no sibling.

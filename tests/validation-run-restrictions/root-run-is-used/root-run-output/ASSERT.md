@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - doctest test exits 0.
 - The root Run is used, producing a greeting that the leaf Assert validates.

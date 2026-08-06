@@ -88,15 +88,15 @@ Align with `doctest skill design-principle --show`.
 
 | Layer | Execution | Labels |
 |-------|-----------|--------|
-| **L2 in-process** | Library API or `cli.RunWithWriter` (same process) | Usually unlabeled; `heavy` only if slow |
-| **L3 e2e** | Product **binary** subprocess and/or load-bearing nested product suite | **`label: e2e` required**; usually `e2e, heavy` |
+| **L2 in-process** | Library API or `cli.RunWithWriter` (same process) | Usually unlabeled |
+| **L3 e2e** | Product **binary** subprocess and/or load-bearing nested product suite | **`label: e2e` required** (public L3 identity) |
 
 ### Rules
 
 - **Short path** (help, usage, unknown flag, fast-fail) → L2, never binary by default.  
 - **`label: e2e` on pure L2** → mislabel (major).  
 - **True L3 without `label: e2e`** → major.  
-- **`heavy` alone** = cost, not layer. Legacy `heavy` on true L3 → migrate to `e2e, heavy` when touched.  
+- **`heavy` is retired.** Public L3 identity is **`e2e` only**.  
 - Share metrics use **execution model** (Run path), not labels alone.
 
 ---
@@ -175,7 +175,7 @@ Before rewriting a `func Run`:
 
 1. Short path → `cli.RunWithWriter`; assert markers unchanged.  
 2. Policy → package APIs in-process.  
-3. True integration → sparse leaves, `label: e2e, heavy`, `cmd.Env`/`cmd.Dir` only.  
+3. True integration → sparse leaves, `label: e2e`, `cmd.Env`/`cmd.Dir` only.  
 4. Product + harness: never process Setenv for session/GOCACHE isolation.  
 5. Helpers take `d` or path/session strings — not package `inject*` stashed from Setup.  
 6. One tree green before the next.

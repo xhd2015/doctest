@@ -11,8 +11,8 @@ policy. Leaves build temp fixture trees and call:
 - `core.FilterCasesByLabel` / `core.PartitionLabeledCases`
 - `core.FilterBySubDir` when scoping to a leaf path
 
-**No product binary**, **no `label: heavy`**. CLI stdout formatting and
-process-boundary contracts live under parent `cli/**` (L3 heavy).
+**No product binary**, **no `label: e2e`**. CLI stdout formatting and
+process-boundary contracts live under parent `cli/**` (L3 e2e).
 
 # DSN (Domain Specific Notion)
 
@@ -23,13 +23,13 @@ process-boundary contracts live under parent `cli/**` (L3 heavy).
 - **Label filter** — `FilterCasesByLabel` selects run vs skipped cases from
   `LabelExprs`, `LabelAll`, or discovery skip (`PartitionLabeledCases`).
 - **Fixture mod** — five-leaf tree: `fast` (unlabeled), `slow`, `ui`, `both`,
-  `heavy` (same shape as CLI fixtures).
+  `flaky` (same shape as CLI fixtures).
 
 ### Behaviors
 
 - **Single / AND / OR exprs** — only matching *labeled* leaves run; unlabeled
   never match a non-empty expression.
-- **Multi-flag OR** — `LabelExprs: ["slow","heavy"]` ≡ OR across flags.
+- **Multi-flag OR** — `LabelExprs: ["slow","flaky"]` ≡ OR across flags.
 - **No match** — all cases skipped; each skipped has `Reason: "label filter"`.
 - **Explicit leaf path** — light-discover whole tree then `FilterBySubDir` to
   one leaf; same label filter applies (match → run, miss → skip).
@@ -40,13 +40,13 @@ process-boundary contracts live under parent `cli/**` (L3 heavy).
 select/                               [L2 in-process]
 ├── filter-single/                    --label slow → slow + both
 ├── filter-and/                       slow && ui-automation → both
-├── filter-or/                        slow || heavy → slow, both, heavy
-├── multi-flag-or/                    LabelExprs [slow, heavy] ≡ OR
+├── filter-or/                        slow || flaky → slow, both, flaky
+├── multi-flag-or/                    LabelExprs [slow, flaky] ≡ OR
 ├── no-match/                         manual → all skipped
 ├── skip-reason/                      skipped Reason == "label filter"
 └── explicit-leaf/
     ├── filter-match/                 subdir slow + --label slow → run
-    └── filter-miss/                  subdir slow + --label heavy → skip
+    └── filter-miss/                  subdir slow + --label e2e → skip
 ```
 
 ## Test Index
@@ -55,8 +55,8 @@ select/                               [L2 in-process]
 |------|--------------------|---------|
 | `filter-single` | slow, both | 3 |
 | `filter-and` | both | 4 |
-| `filter-or` | slow, both, heavy | 2 |
-| `multi-flag-or` | slow, both, heavy | 2 |
+| `filter-or` | slow, both, flaky | 2 |
+| `multi-flag-or` | slow, both, flaky | 2 |
 | `no-match` | (none) | 5 |
 | `skip-reason` | (none) | 5 with Reason label filter |
 | `explicit-leaf/filter-match` | slow | 0 |
@@ -66,7 +66,7 @@ select/                               [L2 in-process]
 
 ```sh
 doctest vet ./tests/test/label-filter/select/
-# L2 — always discovered (no heavy labels)
+# L2 — always discovered (no e2e labels)
 doctest test ./tests/test/label-filter/select/...
 ```
 

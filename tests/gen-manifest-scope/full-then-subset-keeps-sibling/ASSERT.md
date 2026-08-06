@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: multi-tree then subset; sibling stays in doctest.gen-manifest
 ---
 

@@ -35,7 +35,7 @@ doctest test --no-color <fixture>
   never planned leaf count when skips exist.
 - Primary contract is the final PASS/FAIL line; quiet dots / compact
   `(N Run, …)` line is not asserted here.
-- Leaves are labeled `heavy`.
+- Leaves use `e2e` when full integration (otherwise unlabeled).
 
 ```go
 import (

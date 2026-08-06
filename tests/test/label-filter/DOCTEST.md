@@ -7,13 +7,13 @@
 ## Layer model (L2 in-process vs L3 e2e)
 
 Coverage-backfill layer split. **Default discovery** runs **L2 only** (unlabeled,
-fast library mass). Nested product CLI leaves are **`label: heavy`** and opt-in
-via `--label heavy` (or `--label-all`).
+fast library mass). Nested product CLI leaves are **`label: e2e`** and opt-in
+via `--label e2e` (or `--label-all`).
 
 | Layer | Subtrees | Run model | Labels |
 |-------|----------|-----------|--------|
 | **L2 in-process** | `matcher/` (nested), `select/` (nested) | Call `core.EvalLabelExpr`, `DiscoverTreeCasesLight`, `FilterCasesByLabel` — **no** `testbin` | unlabeled |
-| **L3 e2e** | `cli/**` | Nested product binary (`testbin.Ensure` + `doctest test`) | **`label: heavy`** + explanation “CLI filter contract via doctest binary” |
+| **L3 e2e** | `cli/**` | Nested product binary (`testbin.Ensure` + `doctest test`) | **`label: e2e`** + explanation “CLI filter contract via doctest binary” |
 
 | L2 surface | API | Branch |
 |------------|-----|--------|
@@ -38,7 +38,7 @@ process-boundary contracts (help text, full stdout format, --changed interaction
 - **`doctest test`** — discovers leaves, applies optional `--label EXPR` filter, runs
   matching labeled leaves, skips unlabeled and non-matching labeled leaves, prints skip summary.
 - **Label expression parser** — parses `!`, `&&`, `||`, parentheses (precedence `!` > `&&` > `||`); combines repeatable `--label` flags with OR.
-- **Fixture mod tree** — temp tree with `fast` (unlabeled), `slow`, `ui`, `both`, `heavy` leaves.
+- **Fixture mod tree** — temp tree with `fast` (unlabeled), `slow`, `ui`, `both`, `flaky` leaves.
 - **Git fixture** — ephemeral repo for `--changed` then `--label` ordering.
 - **core selection APIs** — in-process discover/filter used by L2 `select/`.
 
@@ -87,7 +87,7 @@ label-filter/
 │   └── explicit-leaf/
 │       ├── filter-match/
 │       └── filter-miss/
-└── cli/                                  [L3 heavy] doctest binary subprocess
+└── cli/                                  [L3 e2e] doctest binary subprocess
     ├── parse-error/
     │   └── trailing-and/
     ├── help/
@@ -106,18 +106,18 @@ label-filter/
 |---|------|-------|----------|
 | 1 | `matcher/single-label/` | L2 | `slow` matches `{slow}`; not `{}` or `{fast}` |
 | 2 | `matcher/and/` | L2 | `slow && ui` matches `{slow,ui}`; not `{slow}` |
-| 3 | `matcher/or/` | L2 | `slow \|\| heavy` matches `{slow}` and `{heavy}`; not `{fast}` |
+| 3 | `matcher/or/` | L2 | `slow || flaky` matches `{slow}` and `{flaky}`; not `{fast}` |
 | 4 | `matcher/precedence/` | L2 | `a \|\| b && c` ≡ `a \|\| (b && c)` |
-| 5 | `matcher/parentheses/` | L2 | `(slow \|\| heavy) && ui` only when both constraints hold |
+| 5 | `matcher/parentheses/` | L2 | `(slow || flaky) && ui` only when both constraints hold |
 | 6 | `matcher/whitespace/` | L2 | trimmed ` slow && ui ` parses and matches |
 | 7 | `matcher/invalid-syntax/` | L2 | `slow &&` parse error |
-| 7a | `matcher/not-bang/` | L2 | `!e2e` true on `{}`/`{heavy}`; false on `{e2e}` |
-| 7b | `matcher/not-and/` | L2 | `!e2e && heavy` only `{heavy}` |
+| 7a | `matcher/not-bang/` | L2 | `!e2e` true on `{}`/`{flaky}`; false on `{e2e}` |
+| 7b | `matcher/not-and/` | L2 | `!e2e && flaky` only `{flaky}` |
 | 7c | `matcher/not-parens/` | L2 | `!(e2e \|\| flaky)` |
 | 7d | `matcher/not-invalid/` | L2 | bare `!` / trailing `!` / `not e2e` error |
 | 8 | `select/filter-single/` | L2 | run slow+both |
 | 9 | `select/filter-and/` | L2 | run both only |
-| 10 | `select/filter-or/` | L2 | run slow, both, heavy |
+| 10 | `select/filter-or/` | L2 | run slow, both, flaky |
 | 11 | `select/multi-flag-or/` | L2 | LabelExprs OR ≡ single OR expr |
 | 12 | `select/no-match/` | L2 | empty run, 5 skips |
 | 13 | `select/skip-reason/` | L2 | Reason == "label filter" |
@@ -135,12 +135,12 @@ Regression for behavior **without** `--label` lives in `tests/test/label-skip/` 
 
 ```sh
 doctest vet ./tests/test/label-filter
-# default discovery: L2 matcher + select (skips label: heavy CLI)
+# default discovery: L2 matcher + select (skips label: e2e CLI)
 doctest test ./tests/test/label-filter
 doctest test ./tests/test/label-filter/matcher/...
 doctest test ./tests/test/label-filter/select/...
 # L3 CLI e2e
-doctest test --label heavy ./tests/test/label-filter/...
+doctest test --label e2e ./tests/test/label-filter/...
 # full suite
 doctest test --label-all ./tests/test/label-filter/...
 # regression without --label:

@@ -3,7 +3,7 @@
 **Feature**: changed-file filter applies before label filter
 
 ```
-change slow only; --changed --label 'slow || heavy' -> runs slow only
+change slow only; --changed --label 'slow || flaky' -> runs slow only
 ```
 
 ## Steps
@@ -30,7 +30,7 @@ func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 		t.Fatal(err)
 	}
 	req.WorkDir = repoDir
-	req.Args = []string{"test", modDir, "--changed", "--label", "slow || heavy"}
+	req.Args = []string{"test", modDir, "--changed", "--label", "slow || flaky"}
 	return nil
 }
 ```

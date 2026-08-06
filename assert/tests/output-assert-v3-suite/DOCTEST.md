@@ -163,12 +163,12 @@ output-assert-v3-suite          (was output-assert-v2; v3 templates)
 
 ## How to Run
 
-All leaves are labeled `heavy` so default module `./...` discovery **skips** this
+Leaves that need skip-from-default discovery should use `label: e2e` (public L3) so `./...` discovery **skips** this
 cookbook (keeps cold full-module self-tests under ~3 minutes). Opt in explicitly:
 
 ```sh
 doctest vet ./assert/tests/output-assert-v3-suite
-doctest test ./assert/tests/output-assert-v3-suite --label heavy
+doctest test ./assert/tests/output-assert-v3-suite --label e2e
 doctest test ./assert/tests/output-assert-v3          # focused engine suite (not heavy)
 doctest test ./assert/tests/output-assert            # v1 unchanged
 go test ./assert/...

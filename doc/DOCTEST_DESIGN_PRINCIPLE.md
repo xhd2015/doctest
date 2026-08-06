@@ -28,7 +28,7 @@ stay cheap**. Authors and agents should:
 - Put **multi-factor public behavior** in **doctest in-process** trees (the bulk).
 - Put **pure / flat edge matrices** in **go test** (a thin base).
 - Put **full integration / process-boundary verification** in **doctest e2e**
-  (sparse, labeled with **`e2e`** and usually **`heavy`**).
+  (sparse, labeled with **`e2e`** only — the public L3 identity).
 
 Without this split, new cases default to shell-out e2e, case count grows like
 unit tables, and CI wall time grows with every feature.
@@ -37,14 +37,14 @@ unit tables, and CI wall time grows with every feature.
 
 ## 2. Problem: e2e becomes the default
 
-Doctest’s strengths bias authors toward heavy paths:
+Doctest’s strengths bias authors toward expensive full-integration paths:
 
 | Affordance | Unintended default |
 |---|---|
 | Directory tree + MECE hierarchy | Scenarios feel “complete” only when end-to-end |
 | Shared SETUP + shell `Run` | One expensive fixture, then every leaf reuses it |
 | “Prefer doctests” in agent workflows | New leaf under an e2e root instead of in-process or `*_test.go` |
-| Labels (`heavy`, `slow`) opt-in | Unlabeled e2e still runs in discovery; cost compounds |
+| Labels opt-in (`e2e`, `slow`, …) | Unlabeled e2e still runs in discovery; cost compounds |
 | Self-hosting / nested tools | Leaves that spawn full suites multiply wall time |
 | “It’s the CLI” | Help / fast-fail treated as e2e though only shallow dispatch is covered |
 
@@ -68,7 +68,7 @@ Cost usually follows the model; labels handle exceptions.
 
 ```text
   L3 doctest e2e          ████ ~5–10% of cases
-    full integration, process boundary, labeled e2e (+ heavy), sparse
+    full integration, process boundary, labeled e2e, sparse
 
   L2 doctest in-process   ████████████████████████ ~70–85% of cases
     ★ design center of mass — library/API and in-process CLI in same process
@@ -119,7 +119,7 @@ Wall-time targets (order of magnitude, not gates):
 - L2: most of the *runnable discovery* time, but leaves stay sub-second to low
   seconds when healthy.
 - L3: large share of full/`--label-all` / `--label e2e` time; discovery should
-  skip labeled e2e/heavy leaves by default.
+  skip labeled leaves (including e2e) by default.
 
 ---
 
@@ -206,7 +206,7 @@ path is load-bearing**:
 | Entry | `cli.Run` / `RunWithWriter` | `testbin` + `exec`, or nested product |
 | Process | Same as suite | Separate process / nested suite |
 | Good for | Help, fast-fail, skill show | Packaging, isolation, deep product paths |
-| Labels | Usually none | **`e2e`** (+ `heavy` when costly) |
+| Labels | Usually none | **`e2e`** (required public L3 identity) |
 
 *Is help still a “real” CLI test if in-process?* Yes for dispatch and text. Add a
 rare L3 smoke only if install / `argv[0]` / binary packaging is the risk under test.
@@ -267,8 +267,8 @@ directories.
 **Shape:**
 
 - **Few** leaves per capability: critical paths + known regressions.
-- **Always** label with **`e2e`** (required). Add **`heavy`** and/or **`slow`**
-  when costly; group under `e2e/` when helpful.
+- **Always** label with **`e2e`** (required public L3 identity). Optional program-internal
+  labels (e.g. `slow`, `flaky`) may coexist; group under `e2e/` when helpful.
 - Discovery skips labeled leaves by default; full CI may use `--label-all`,
   `--label e2e`, or a dedicated job.
 - Prefer **one smoke per major workflow** plus targeted regressions.
@@ -292,41 +292,38 @@ them and outer e2e leaves fail with “no runnable test cases.”
 
 ```yaml
 ---
-label: e2e, heavy
+label: e2e
 explanation: nested doctest test exercises leaf-cache product path
 ---
 ```
 
 | Label | Role |
 |---|---|
-| **`e2e`** | **Layer identity** — this leaf is full integration / process-boundary. **Required on every L3 leaf.** |
-| **`heavy`** | **Cost** — multi-second or resource-heavy; skip in default discovery |
-| **`slow`** | **Cost** — wall-clock oriented; often with `heavy` |
-| **`flaky` / `manual`** | Run discipline — require non-empty `explanation` |
+| **`e2e`** | **Public L3 identity** — full integration / process-boundary. **Required on every L3 leaf.** The only publicly recognized layer label. |
+| **`slow` / `flaky` / `manual`** | **Program-internal** run discipline — optional; not a substitute for `e2e` |
 
-Multiple labels: comma-separated scalar, e.g. `label: e2e, heavy`.
+Multiple labels: comma-separated scalar, e.g. `label: e2e, slow`.
 
 **Do not** put `label: e2e` on in-process leaves (including in-process CLI).  
-**Do not** use `heavy` alone as a substitute for `e2e` when the leaf is true e2e —
-use **`e2e`** (and add `heavy` when costly). Legacy leaves with only `heavy` should
-be migrated to `e2e, heavy` when touched.
+**`heavy` is retired** as a public run-profile label; do not add it. Use **`e2e`** for
+true full-integration leaves (add later when necessary). Other labels remain free-form
+for program-internal filtering only.
 
 ### Discovery vs full profile
 
 | Concern | Practice |
 |---|---|
-| Default discovery | Unlabeled L2 mass runs; leaves with `e2e` / `heavy` / `slow` skipped |
+| Default discovery | Unlabeled L2 mass runs; any labeled leaf (including `e2e`) is skipped |
 | Run all e2e | `doctest test --label e2e` or `--label-all` |
-| Run costly only | `doctest test --label heavy` or `--label 'e2e && heavy'` |
 | How to Run | Root `DOCTEST.md` documents discovery skip and label expressions |
 
-Cost labels describe **run profile**. Layer identity for integration is **`e2e`**.
-An in-process leaf that sleeps still needs `heavy`/`slow` if slow — it is still
-not e2e unless a process boundary is under test.
+**`e2e` is the public layer signal.** Optional program-internal labels (e.g. `slow`)
+do not define L3. An in-process leaf that is slow should stay unlabeled for layer
+purposes (or use internal labels) — it is still not e2e unless a process boundary
+is under test.
 
 Nested selftest (`doctest test` / full `go test` inside a leaf) is **L3-shaped**.
-Label **`e2e`** (and usually **`heavy`**). Never use nested suite as the way to
-exhaust flag matrices.
+Label **`e2e`**. Never use nested suite as the way to exhaust flag matrices.
 
 ---
 
@@ -340,7 +337,7 @@ exhaust flag matrices.
 5. **Hierarchy for pure tables** — flat twenty-edge function as twenty directories.  
 6. **Unlabeled e2e** — true integration leaf without `label: e2e` (still runs in
    discovery; layer invisible to filters).  
-7. **Heavy without e2e on true L3** — cost labeled but layer not marked `e2e`.  
+7. **True L3 without `e2e`** — full-integration leaf missing public layer label.  
 8. **Internal-only via e2e** — every internal tweak forces full stack.  
 9. **Duplication without intent** — same edge at L1 and L3 with no integration-risk note.  
 10. **Go-test-first for multi-factor public APIs** — starves the in-process mass that
@@ -356,7 +353,7 @@ exhaust flag matrices.
 4. **One smoke L3 per workflow** after L1/L2 are green; always `label: e2e`.  
 5. **In-process first** in SETUP/`Run`; do not copy shell-out SETUP by habit.  
 6. **Extract pure cores** from CLI/handlers so L1 stays small and dense.  
-7. **When adding an L3 leaf, add `e2e` (+ `heavy` if needed) + How to Run in the same change.**  
+7. **When adding an L3 leaf, add `label: e2e` + How to Run in the same change.**  
 8. **Review question:** cheapest layer that fails if this is wrong?  
 9. **When touching an old e2e-heavy tree:** demote short paths and combinatorics to
    L2; keep full-integration smokes with `label: e2e` — incremental, not big-bang.
@@ -372,13 +369,13 @@ exhaust flag matrices.
 | “Add a help / usage test” | **In-process CLI** (`RunWithWriter`); unlabeled |
 | “Cover all flag combos” | L1 table or L2 MECE — **not** L3 |
 | “Prove the CLI works” | L2 for short paths + **one** labeled `e2e` smoke if packaging/process risk |
-| “Self-test the product” | Nested full suite only as rare L3 with **`e2e, heavy`** |
+| “Self-test the product” | Nested full suite only as rare L3 with **`label: e2e`** |
 
 Implementer / designer checklist (short):
 
 1. Identify SUT: pure / short-path / multi-factor API / **full integration**.  
 2. Add or extend the matching layer first.  
-3. If L3: **`label: e2e`** (required), `heavy`/`slow` if costly, grouping + How to Run.  
+3. If L3: **`label: e2e`** (required public identity); optional internal labels; grouping + How to Run.  
 4. Do not copy shell-out SETUP “because nearby tests do” without checking L2.  
 5. Never mark in-process leaves with `e2e`.
 
@@ -389,7 +386,7 @@ Implementer / designer checklist (short):
 | Artifact | Concern | This skill |
 |---|---|---|
 | MECE / significance / DSN (`doc-spec`, `review`) | **How** to structure L2/L3 trees | **Whether** the case should be L1, L2, or L3 |
-| Label / run-profile audit (`review`) | Skip and cost signaling | L3 must have **`e2e`**; costly leaves **`heavy`/`slow`** |
+| Label / run-profile audit (`review`) | Skip and layer signaling | L3 must have **`e2e`** (public); optional internal labels only |
 | Parallel-safe harness (`lint`, `code-spec`) | How not to break concurrent suites | Orthogonal; layers still apply |
 | Unified gen / inject (`migrate`, `code-spec`) | Harness mechanics | Orthogonal mechanics |
 | Agent “prefer doctests” (`tdd`) | Often misread as prefer e2e | Prefer **in-process** doctests as the mass |
@@ -411,8 +408,8 @@ When editing a tree that is already e2e-heavy:
 
 1. **Classify each leaf:** short-path → L2; full integration → L3.  
 2. Demote short paths to library or **in-process CLI** (e.g. `RunWithWriter`).  
-3. Keep **few** full-integration smokes; set **`label: e2e`** (and `heavy` if needed).  
-4. Migrate legacy `label: heavy` only → **`e2e, heavy`** when the leaf stays L3.  
+3. Keep **few** full-integration smokes; set **`label: e2e`**.  
+4. Drop retired `heavy` labels; add **`e2e` only when** the leaf is true full integration.  
 5. Delete redundant e2e leaves that only reassert L1/L2.  
 6. Aim over time toward **~70–85% in-process case share**, not overnight.
 
@@ -439,8 +436,9 @@ No. High-level, multi-factor, scenario-worthy surfaces belong in L2. Tiny pure
 exports stay L1.
 
 **Can in-process be slow?**  
-Yes (I/O, sleeps, large fixtures). Prefer fixing cost; if it must stay slow, use
-`heavy`/`slow`. Do not call it e2e unless a process boundary is under test.
+Yes (I/O, sleeps, large fixtures). Prefer fixing cost; if it must stay slow, optional
+program-internal labels (e.g. `slow`) may apply. Do not call it e2e unless a process
+boundary is under test.
 
 **Does “10–20% go test” mean we under-test pure code?**  
 No. Go test should still be **exhaustive** for pure edges; that slice is small in
@@ -453,14 +451,16 @@ That starves the product’s design point: hierarchical, reviewable scenario tes
 as the **default mass**. Classic pyramids optimize for micro-units; this model
 optimizes for **in-process scenario coverage** with thin pure and thin e2e rails.
 
-**Why require `label: e2e` if we already have `heavy`?**  
-`heavy` is cost; **`e2e` is layer**. Filters (`--label e2e`), reviews, and demotion
-audits need a stable layer signal independent of how long the leaf takes.
+**Why is `e2e` the only public L3 label?**  
+**`e2e` is layer identity** (full integration / process boundary). Filters
+(`--label e2e`), reviews, L3 share budgets, and demotion audits need one stable
+public signal. Cost-only labels (retired `heavy`, optional internal `slow`) must
+not redefine layer.
 
 ---
 
 ## 15. One-line summary
 
-**Most tests: doctest in-process (70–85%), including short CLI paths via in-process CLI. Thin pure edges: go test (10–20%). Thin full-integration contracts: doctest e2e (5–10%), always `label: e2e` (and `heavy` when costly). Prefer in-process; escalate to e2e only for real process-boundary integration.**
+**Most tests: doctest in-process (70–85%), including short CLI paths via in-process CLI. Thin pure edges: go test (10–20%). Thin full-integration contracts: doctest e2e (5–10%), always `label: e2e` only as the public L3 identity. Prefer in-process; escalate to e2e only for real process-boundary integration.**
 
 --end of skill doctest-design-principle--

@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: nested go test with -outputdir and -cpuprofile
 ---
 

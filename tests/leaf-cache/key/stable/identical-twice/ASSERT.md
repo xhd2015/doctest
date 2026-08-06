@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - `ComputeLeafKey` succeeds twice with no error.

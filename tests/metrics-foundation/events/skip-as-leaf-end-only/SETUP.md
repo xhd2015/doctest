@@ -41,7 +41,7 @@ func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 			"elapsed_ns": int64(0),
 			"result":     "skip",
 			"cached":     false,
-			"labels":     []any{"heavy"},
+			"labels":     []any{"e2e"},
 		},
 		{
 			"type":    "run_end",

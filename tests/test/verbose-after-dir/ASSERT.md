@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - The command succeeds.
 - The verbose flag is forwarded to the underlying test-case-tree runner.

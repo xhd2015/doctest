@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: source change → gen # modified
 ---
 

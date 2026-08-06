@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Parse succeeds with two `LiteralLine` items.
 

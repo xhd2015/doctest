@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Header/summary block (lines with `═══`, `Session:`, `Status:`, etc.) has NO timestamp prefix.
 - Event display lines (with `  [%d] ` pattern) HAVE a timestamp prefix.

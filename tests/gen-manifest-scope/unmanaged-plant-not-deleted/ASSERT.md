@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: unmanaged plant under gen package survives; not in manifest
 ---
 

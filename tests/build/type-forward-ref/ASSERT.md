@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - With topological sort of types, the build now succeeds (exit 0).
 - LocationEntry is emitted after GitInfo, resolving the forward reference.

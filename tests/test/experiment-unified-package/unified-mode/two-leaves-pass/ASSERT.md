@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - Suite run succeeds (`RunErr` empty) under default unified generation.

@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - `DiscoverTreeCases` returns **nil** error.

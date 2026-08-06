@@ -14,7 +14,7 @@ Agent-oriented cases configure fake Codex so no real LLM or network backend is r
 ### Default `./...` vs full self-test (labels)
 
 - **Default (discovery)**: `doctest test ./...` — unlabeled in-process mass;
-  skips `label: e2e` / `heavy` / other labels.
+  skips labeled leaves (`e2e` and any other labels).
 - **Full integration e2e**: `doctest test --label e2e ./...` — process-boundary
   smokes only (sparse).
 - **All leaves**: `doctest test --label-all ./...`.

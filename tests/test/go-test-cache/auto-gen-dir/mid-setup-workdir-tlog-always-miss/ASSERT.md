@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Both runs exit 0.
 - First run cache-hit; second run **0 Cached** after mid WorkDir change

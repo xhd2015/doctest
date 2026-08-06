@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: nested doctest test -v prepare on mega parent (RED until parity fix)
 ---
 

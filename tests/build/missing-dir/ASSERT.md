@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - The command fails.
 - stderr reports that build requires a directory.

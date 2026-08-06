@@ -277,7 +277,7 @@ Examples:
   doctest test -v ./sub-module/...
   doctest test ./mod --label slow
   doctest test ./mod --label 'slow && ui-automation'
-  doctest test ./mod --label slow --label heavy
+  doctest test ./mod --label slow --label e2e
   doctest test ./... --label '!e2e'
   DOCTEST_DEBUG=bypass-go-test=1 doctest test ./... --cold-cache
   DOCTEST_DEBUG=gen-plan=1,bypass-go-test=1 doctest test ./ --gen-dir /tmp/g

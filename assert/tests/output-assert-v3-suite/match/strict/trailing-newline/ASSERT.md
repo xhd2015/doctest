@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Match fails for trailing newline mismatch.
 

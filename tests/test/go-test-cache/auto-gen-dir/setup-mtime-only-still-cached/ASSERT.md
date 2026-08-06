@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Both runs exit 0.
 - First and second captured runs are cache-hits after mtime-only touch

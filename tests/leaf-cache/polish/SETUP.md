@@ -8,7 +8,7 @@
 # local dep: edit imported package → leaf key changes
 # isolation: twin trees same relpath → distinct keys
 
-# L3 e2e (label: heavy):
+# L3 e2e (label: e2e):
 # docs: test --help lists leaf-cache flags (product binary)
 ```
 

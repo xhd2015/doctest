@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - `build.Test` succeeds.

@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: -a wipe then regenerate → new>=1
 ---
 

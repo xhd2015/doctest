@@ -12,7 +12,7 @@
 - **run** — executes the scenarios in this suite.
 
 **Layer L2 in-process** — `cli.RunWithWriter` / `runner.Test` path requires `<dir>`.
-No product binary, no `testbin`, no `label: heavy`.
+No product binary, no `testbin`, no `label: e2e`.
 
 # DSN
 

@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - `build.Test` returns an error (one failing leaf).
 - Dots and summary contain no ANSI escape sequences.

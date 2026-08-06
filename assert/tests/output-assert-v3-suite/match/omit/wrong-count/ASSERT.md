@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Match fails due to omit count mismatch.
 

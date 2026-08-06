@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Parse succeeds as v3 despite leading blank lines before `---`.
 

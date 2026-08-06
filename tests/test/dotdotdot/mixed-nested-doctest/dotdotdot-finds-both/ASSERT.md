@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Exit code 0.
 - `./ancestor/leaf/...` finds both the leaf itself (via ancestor tree) and the nested sub2 DOCTEST root.

@@ -14,7 +14,7 @@ cli.RunWithWriter -> doctest <subcmd> --help -> flags, description -> stdout buf
 
 - Nested root: does not inherit `tests/` binary `Run` or `testbin.Ensure`.
 - All leaves are in-process via `cli.RunWithWriter` + `cli.Run`.
-- No product binary build; no `label: heavy`.
+- No product binary build; no `label: e2e`.
 - Completeness: four leaves — top-level, test-options, build-options, agent-generate.
 
 ## Steps

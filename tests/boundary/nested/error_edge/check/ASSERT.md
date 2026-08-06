@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Run returns a non-nil Response with `Status == "ok"` and `Message == "processed: test"`.
 - `err` is nil.

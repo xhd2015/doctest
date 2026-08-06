@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestDiscoverLightSkipsDeepParseOfHeavy(t *testing.T) {
+func TestDiscoverLightSkipsDeepParseOfLabeled(t *testing.T) {
 	root := t.TempDir()
 	writeTreeFile(t, root, "DOCTEST.md", doctestDoc(`
 type Request struct{}
@@ -23,11 +23,11 @@ func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; retu
 	writeTreeFile(t, root, "fast/ASSERT.md", assertDoc(`
 func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {}
 `))
-	// Heavy leaf with BROKEN setup body — would fail full discover hydrate of that leaf
+	// Labeled leaf with BROKEN setup body — would fail full discover hydrate of that leaf
 	writeTreeFile(t, root, "slow/SETUP.md", setupDoc(`
 func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }
 `))
-	writeTreeFile(t, root, "slow/ASSERT.md", "---\nlabel: heavy\n---\n\n## Expected\n\n```go\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n\tnot valid go (((\n}\n```\n")
+	writeTreeFile(t, root, "slow/ASSERT.md", "---\nlabel: e2e\n---\n\n## Expected\n\n```go\nfunc Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {\n\tnot valid go (((\n}\n```\n")
 
 	light, err := DiscoverTreeCasesLight(root)
 	if err != nil {
@@ -40,10 +40,10 @@ func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; retu
 	if len(run) != 1 || len(skipped) != 1 {
 		t.Fatalf("run=%d skipped=%d", len(run), len(skipped))
 	}
-	if skipped[0].Labels[0] != "heavy" {
+	if skipped[0].Labels[0] != "e2e" {
 		t.Fatalf("skipped labels=%v", skipped[0].Labels)
 	}
-	// Hydrate only run set — must succeed despite broken heavy ASSERT
+	// Hydrate only run set — must succeed despite broken labeled ASSERT
 	hydrated, err := HydrateTreeCases(root, run)
 	if err != nil {
 		t.Fatalf("hydrate run set: %v", err)
@@ -54,9 +54,9 @@ func Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; retu
 	if hydrated[0].AssertFile.GoBlock.Assert == nil {
 		t.Fatal("expected deep assert")
 	}
-	// Full discover still fails on heavy
+	// Full discover still fails on labeled
 	if _, err := DiscoverTreeCases(root); err == nil {
-		t.Fatal("full discover should fail on broken heavy assert")
+		t.Fatal("full discover should fail on broken labeled assert")
 	}
 }
 

@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: force --color on gen-plan result statuses
 ---
 

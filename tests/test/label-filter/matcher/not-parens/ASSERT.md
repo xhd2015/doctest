@@ -13,9 +13,9 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 	if err != nil || !ok {
 		t.Fatalf("!(e2e || flaky) on {}: ok=%v err=%v", ok, err)
 	}
-	ok, err = evalLabelExpr(t, "!(e2e || flaky)", []string{"heavy"})
+	ok, err = evalLabelExpr(t, "!(e2e || flaky)", []string{"flaky"})
 	if err != nil || !ok {
-		t.Fatalf("!(e2e || flaky) on {heavy}: ok=%v err=%v", ok, err)
+		t.Fatalf("!(e2e || flaky) on {flaky}: ok=%v err=%v", ok, err)
 	}
 	ok, err = evalLabelExpr(t, "!(e2e || flaky)", []string{"e2e"})
 	if err != nil || ok {

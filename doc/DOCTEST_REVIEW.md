@@ -3,7 +3,7 @@ name: doctest-review
 description: >-
   Reviews doctest trees for design quality — clear DSN, MECE hierarchy,
   significance-ordered decision factors, and run-profile labels (e2e, slow,
-  heavy, flaky) — against the doctest design spec and design-principle
+  flaky) — against the doctest design spec and design-principle
   (in-process mass; e2e = full integration only).
 ---
 
@@ -21,7 +21,7 @@ Your strengths:
 - Verifying significance ordering — most impactful factors high, minor variants low
 - Spotting structural anti-patterns (overlapping siblings, missing branches, wrong nesting)
 - Running `doctest vet` to catch mechanical spec violations before design critique
-- Auditing `ASSERT.md` YAML frontmatter — whether e2e, slow, heavy, and flaky leaves
+- Auditing `ASSERT.md` YAML frontmatter — whether e2e, slow, and flaky leaves
   are labeled, explained, and grouped for discovery-mode skip
 - Checking layer honesty (L1 go test / L2 in-process / L3 e2e) per design-principle
 - Spotting Parallel **common gotchas** (package mutable state, Setenv/Chdir, stdio reassignment)
@@ -134,7 +134,7 @@ Return absolute paths for every tree and node you discuss.
      design-principle:
      - **`e2e`** — **required** on every true full-integration leaf (product binary
        `testbin`/`exec`, nested `doctest test` / full suite). Layer identity, not cost.
-     - **`heavy` / `slow`** — cost; use with `e2e` when integration is multi-second
+     - **`slow`** — optional program-internal cost; never a substitute for `e2e`
      - `flaky`, `manual`, `ui-automation` (domain labels OK but do not replace `e2e`)
    - **Short-path rule:** help, usage, unknown flag, fast-fail, skill show/list should be
      **in-process** (library or `cli.RunWithWriter`), **not** binary e2e. Flag binary
@@ -148,8 +148,7 @@ Return absolute paths for every tree and node you discuss.
      - `label: flaky` or `label: manual` with empty `explanation` → **major**
      - `explanation` documents skip intent but no `label` → **major** (explanation alone
        does not skip)
-     - Legacy `heavy` only on true L3 (missing `e2e`) → **major** when reviewing; migrate
-       to `e2e, heavy`
+     - Retired `heavy` on ASSERT frontmatter → **suggestion**: drop it; add `e2e` only if true L3
      - Correct labels under an `e2e/` / `slow/` / `integration/` grouping → **ok**
      - Expensive unlabeled leaf beside fast siblings at same level → **major**
      - Every leaf labeled when only a few are expensive → **suggestion**
@@ -200,11 +199,11 @@ Return absolute paths for every tree and node you discuss.
 - [ ] Legacy `strings.Contains` / hand-rolled output parsing flagged as **suggestion** to migrate
 
 ### Run profile / labels
-- [ ] True full-integration leaves have **`label: e2e`** (required); costly ones use `e2e, heavy` / `e2e, slow`
+- [ ] True full-integration leaves have **`label: e2e`** (required public L3 identity)
 - [ ] Short paths (help, fast-fail) are **in-process**, not binary e2e
 - [ ] In-process leaves do **not** carry `label: e2e`
-- [ ] Slow, heavy, flaky, manual, or UI leaves have appropriate cost/discipline labels
-- [ ] Multiple labels on one leaf use comma-separated scalar (`label: e2e, heavy`), not YAML arrays
+- [ ] Flaky, manual, or UI leaves have appropriate discipline labels; `heavy` is retired
+- [ ] Multiple labels on one leaf use comma-separated scalar (`label: e2e, slow`), not YAML arrays
 - [ ] `flaky` and `manual` labels include a non-empty `explanation`
 - [ ] Skip-worthy leaves are not relying on `explanation` alone (that does not skip)
 - [ ] Expensive leaves grouped under `e2e/`, `slow/`, `integration/`, or similar — not mixed unlabeled among fast siblings

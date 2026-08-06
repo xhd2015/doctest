@@ -1,5 +1,4 @@
 ---
-label: heavy
 explanation: nested product binary + generate plan phase
 ---
 

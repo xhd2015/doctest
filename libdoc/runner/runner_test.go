@@ -322,7 +322,7 @@ func TestParseTestOptionsLabelAll(t *testing.T) {
 }
 
 func TestParseTestOptionsLabelAllConflictsWithLabel(t *testing.T) {
-	_, _, err := parseTestOptions([]string{"--label-all", "--label", "heavy", "somedir"})
+	_, _, err := parseTestOptions([]string{"--label-all", "--label", "e2e", "somedir"})
 	if err == nil {
 		t.Fatal("expected mutual exclusion error")
 	}

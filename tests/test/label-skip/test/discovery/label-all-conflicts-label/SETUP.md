@@ -3,7 +3,7 @@
 **Feature**: --label-all rejects combination with --label (L2 parse)
 
 ```
-runner.ParseTestOptions([--label-all, --label, heavy, .])
+runner.ParseTestOptions([--label-all, --label, e2e, .])
   -> mutually exclusive
 ```
 
@@ -15,7 +15,7 @@ runner.ParseTestOptions([--label-all, --label, heavy, .])
 import "testing"
 
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-	req.Args = []string{"--label-all", "--label", "heavy", "."}
+	req.Args = []string{"--label-all", "--label", "e2e", "."}
 	return nil
 }
 ```

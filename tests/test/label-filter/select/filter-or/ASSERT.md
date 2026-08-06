@@ -1,6 +1,6 @@
 ## Expected
 
-- Run paths: both, heavy, slow.
+- Run paths: both, flaky, slow.
 - Two skips (fast, ui).
 
 ```go
@@ -10,7 +10,7 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 	if err != nil {
 		t.Fatal(err)
 	}
-	requirePaths(t, resp.RunPaths, []string{"both", "heavy", "slow"}, "run")
+	requirePaths(t, resp.RunPaths, []string{"both", "flaky", "slow"}, "run")
 	requirePaths(t, resp.SkippedPaths, []string{"fast", "ui"}, "skipped")
 }
 ```

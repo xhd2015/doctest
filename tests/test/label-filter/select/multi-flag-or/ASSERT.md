@@ -1,6 +1,6 @@
 ## Expected
 
-- Same run set as OR expression: both, heavy, slow.
+- Same run set as OR expression: both, flaky, slow.
 
 ```go
 import "testing"
@@ -9,7 +9,7 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 	if err != nil {
 		t.Fatal(err)
 	}
-	requirePaths(t, resp.RunPaths, []string{"both", "heavy", "slow"}, "run")
+	requirePaths(t, resp.RunPaths, []string{"both", "flaky", "slow"}, "run")
 	requirePaths(t, resp.SkippedPaths, []string{"fast", "ui"}, "skipped")
 }
 ```

@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 
 - `doctest vet` fails with a non-zero exit code.

@@ -1,7 +1,3 @@
----
-label: heavy
----
-
 ## Expected
 - Soft "no tests" outcome (exit 0 + `no tests` on stderr).
 - `./...` from a directory with no DOCTEST.md at or below finds nothing.

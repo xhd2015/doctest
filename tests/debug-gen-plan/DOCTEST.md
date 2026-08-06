@@ -101,19 +101,19 @@ debug-gen-plan/
 | `parse/accepts-with-bypass` | L2 | Both gen-plan and bypass-go-test on |
 | `parse/unknown-key-fail-closed` | L2 | `bypass-go-test=1,not-a-key=1` still errors |
 | `parse/invalid-bool` | L2 | `gen-plan=maybe` errors with bool message |
-| `plan/single-arg/hierarchy-with-bookkeeping` | L3 heavy | stderr plan: arg[1/1], bookkeeping files in hierarchy |
-| `plan/multi-arg/per-arg-and-merged` | L3 heavy | arg[1/2]+arg[2/2] without go.mod each; merged has bookkeeping |
-| `result/statuses/cold` | L3 heavy | `gen-plan: result` + summary; modified≥1 on cold gen |
-| `result/statuses/warm` | L3 heavy | second identical run → more unchanged (summary) |
-| `result/color/forced-on` | L3 heavy | `--color`: ANSI green and/or gray on result lines |
-| `result/color/forced-off` | L3 heavy | `--no-color`: no ESC sequences on gen-plan lines |
+| `plan/single-arg/hierarchy-with-bookkeeping` | L3 e2e | stderr plan: arg[1/1], bookkeeping files in hierarchy |
+| `plan/multi-arg/per-arg-and-merged` | L3 e2e | arg[1/2]+arg[2/2] without go.mod each; merged has bookkeeping |
+| `result/statuses/cold` | L3 e2e | `gen-plan: result` + summary; modified≥1 on cold gen |
+| `result/statuses/warm` | L3 e2e | second identical run → more unchanged (summary) |
+| `result/color/forced-on` | L3 e2e | `--color`: ANSI green and/or gray on result lines |
+| `result/color/forced-off` | L3 e2e | `--no-color`: no ESC sequences on gen-plan lines |
 
 ## How to Run
 
 ```sh
 doctest vet ./tests/debug-gen-plan/
 doctest test ./tests/debug-gen-plan/                 # L2 parse only (default labels)
-doctest test --label heavy ./tests/debug-gen-plan/   # include plan/result product leaves
+doctest test --label e2e ./tests/debug-gen-plan/   # include plan/result product leaves
 # Classic TDD: expect RED on gen-plan acceptance + plan/result until implementer lands feature
 ```
 
