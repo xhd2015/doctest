@@ -10,7 +10,7 @@ require (
 	github.com/xhd2015/kool v0.0.129
 	github.com/xhd2015/less-flags v1.0.2
 	github.com/xhd2015/skills v0.0.26
-	github.com/xhd2015/xgo v1.2.5-0.20260806105146-146cd8c45c2f
+	github.com/xhd2015/xgo v1.2.5
 	golang.org/x/mod v0.36.0
 	golang.org/x/tools v0.45.0
 	gopkg.in/yaml.v3 v3.0.1
