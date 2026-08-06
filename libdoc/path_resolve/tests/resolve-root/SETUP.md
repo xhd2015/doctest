@@ -1,3 +1,11 @@
+# Scenario
+
+**Feature**: suite organization / shared setup
+
+```
+suite organization
+```
+
 ## Preconditions
 - The `ResolveRoot` function is defined in `path_resolve`.
 - It walks up the directory tree to find the root containing DOCTEST.md (or falls back to SETUP.md).

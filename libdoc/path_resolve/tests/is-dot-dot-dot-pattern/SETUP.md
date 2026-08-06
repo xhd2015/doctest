@@ -1,3 +1,11 @@
+# Scenario
+
+**Feature**: suite organization / shared setup
+
+```
+suite organization
+```
+
 ## Preconditions
 - The `IsDotDotDotPattern` function is defined in `path_resolve`.
 - Input is a string argument (e.g. `./foo/...`, `foo/bar`, `...`).

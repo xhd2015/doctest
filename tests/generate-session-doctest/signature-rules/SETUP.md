@@ -21,13 +21,3 @@ author without d
 ## Context
 
 - Today `rules.Check*` only accept without-d → `with-d-accepted` is RED until implementer.
-
-```go
-import "testing"
-
-func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-	// Grouping node: leaves set Op to parse-with-d or parse-without-d.
-	_ = req
-	return nil
-}
-```

@@ -9,11 +9,3 @@ Matcher consumes fixed N lines between anchors
 
 ## Steps
 1. Templates include omit markers between pattern lines.
-
-```go
-func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-	_ = t
-	_ = req
-	return nil
-}
-```

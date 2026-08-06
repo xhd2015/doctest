@@ -3,6 +3,14 @@
 ## Version
 0.0.2
 
+## DSN (Domain Specific Notion)
+
+### Participants
+- **system under test** — behavior covered by this tree.
+
+### Behaviors
+- **run** — executes the scenarios in this suite.
+
 
 Verify the new `doctest agent with --agent-runner=RUNNER [--model=MODEL] <prog> <args...>` subcommand.
 

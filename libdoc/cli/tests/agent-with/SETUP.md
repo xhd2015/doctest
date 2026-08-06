@@ -1,3 +1,11 @@
+# Scenario
+
+**Feature**: suite organization / shared setup
+
+```
+suite organization
+```
+
 ## Preconditions
 - Integration harness runs the **doctest binary as a subprocess** (`testbin.Ensure`).
 - Scenario env is applied only via `cmd.Env` (child process). Parent process env is never mutated.

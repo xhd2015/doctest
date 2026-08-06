@@ -1,3 +1,11 @@
+# Scenario
+
+**Feature**: suite organization / shared setup
+
+```
+suite organization
+```
+
 ## Steps
 - Create an empty temp directory with no doctest marker files.
 - Set `req.Input` to that directory.

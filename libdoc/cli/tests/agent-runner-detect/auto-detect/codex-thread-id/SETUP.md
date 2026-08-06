@@ -1,3 +1,11 @@
+# Scenario
+
+**Feature**: suite organization / shared setup
+
+```
+suite organization
+```
+
 ## Preconditions
 - `CODEX_THREAD_ID` env var is set but no `DOCTEST_SUBAGENT_AGENT_RUNNER`.
 - Auto-detection should match `CODEX_THREAD_ID` (priority 2) and select `"codex"`.

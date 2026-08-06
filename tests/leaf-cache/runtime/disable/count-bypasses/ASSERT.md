@@ -1,5 +1,5 @@
 ---
-label: e2e, heavy
+label: heavy
 explanation: nested doctest test thrice; third run uses -count=1
 ---
 

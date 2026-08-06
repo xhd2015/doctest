@@ -1,3 +1,11 @@
+# Scenario
+
+**Feature**: suite organization / shared setup
+
+```
+suite organization
+```
+
 ## Preconditions
 - The `FindDotDotDotDirs` function is defined in `path_resolve`.
 - It discovers directories containing DOCTEST.md from a given base path.

@@ -18,13 +18,3 @@ doctest -> .doctest_run_* -> -modfile (parent go.mod + assert replace)
 ## Steps
 
 1. Descendant Setup selects fixture and doctest args for its strategy.
-
-```go
-import "testing"
-
-func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-	// No process Env (Parallel-safe). Temp fixtures have no go.work.
-	_ = req
-	return nil
-}
-```

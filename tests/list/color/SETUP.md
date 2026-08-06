@@ -17,17 +17,3 @@ Harness -> list [--color|--no-color] <root>
 
 1. Grouping Setup is a no-op.
 2. Leaves share a one-leaf fixture pattern via their own Setup.
-
-```go
-import (
-	"testing"
-
-	"github.com/xhd2015/doctest/session"
-)
-
-func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-	_ = d
-	_ = req
-	return nil
-}
-```

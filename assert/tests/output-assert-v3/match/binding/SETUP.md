@@ -10,11 +10,3 @@ Matcher -> pass if same, error naming placeholder if different
 
 ## Steps
 1. Narrow to binding match scenarios.
-
-```go
-func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-	_ = t
-	_ = req
-	return nil
-}
-```

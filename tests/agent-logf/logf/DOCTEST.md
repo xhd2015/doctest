@@ -89,16 +89,16 @@ func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	dir := t.TempDir()
 	mainPath := filepath.Join(dir, "main.go")
 	modPath := filepath.Join(dir, "go.mod")
-	mainSrc := `package main
-
-import (
+	// Split so no single string literal contains both "package main" and "func main()"
+	// (vet anti-pattern for embedded Go programs in harness strings).
+	mainSrc := "package main\n\n" + `import (
 	"fmt"
 	"os"
 
 	"github.com/xhd2015/agent-pro/agent/subagent"
 )
 
-func main() {
+` + `func main() {
 	format := os.Getenv("LOGF_FORMAT")
 	if format == "" {
 		format = "default"

@@ -1,3 +1,11 @@
+# Scenario
+
+**Feature**: suite organization / shared setup
+
+```
+suite organization
+```
+
 ## Steps
 - Create a temp module with a parent `DOCTEST.md` and a nested `mapping-gen/DOCTEST.md`.
 - Set `req.BasePath` to `"."` and run `FindDotDotDotDirs` from that module root.

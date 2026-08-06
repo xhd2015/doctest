@@ -3,6 +3,14 @@
 ## Version
 0.0.2
 
+## DSN (Domain Specific Notion)
+
+### Participants
+- **system under test** — behavior covered by this tree.
+
+### Behaviors
+- **run** — executes the scenarios in this suite.
+
 **Layer L2 in-process** — `runner.ParseTestOptions` rejects `-cpuprofile` without a value.
 No product binary, no `label: heavy`. Forward/side-effect siblings stay L3 e2e.
 

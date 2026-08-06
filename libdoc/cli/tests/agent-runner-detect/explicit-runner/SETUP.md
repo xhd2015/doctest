@@ -1,3 +1,11 @@
+# Scenario
+
+**Feature**: suite organization / shared setup
+
+```
+suite organization
+```
+
 ## Preconditions
 - This group tests branch: user explicitly passes `--agent-runner` flag → no auto-detection, value passed through directly.
 

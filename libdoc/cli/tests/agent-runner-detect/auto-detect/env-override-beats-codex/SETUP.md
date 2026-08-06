@@ -1,3 +1,11 @@
+# Scenario
+
+**Feature**: suite organization / shared setup
+
+```
+suite organization
+```
+
 ## Preconditions
 - `DOCTEST_SUBAGENT_AGENT_RUNNER` env var overrides all other detection mechanisms.
 - `CODEX_THREAD_ID` is also set to verify priority order.

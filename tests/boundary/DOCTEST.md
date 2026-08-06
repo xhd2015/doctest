@@ -3,6 +3,14 @@
 ## Version
 0.0.2
 
+## DSN (Domain Specific Notion)
+
+### Participants
+- **system under test** — behavior covered by this tree.
+
+### Behaviors
+- **run** — executes the scenarios in this suite.
+
 
 These tests verify that `DOCTEST.md` creates an inheritance firewall:
 no types, helpers, or setup functions cross the boundary. Each tree

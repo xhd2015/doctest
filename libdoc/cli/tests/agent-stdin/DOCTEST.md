@@ -3,6 +3,14 @@
 ## Version
 0.0.2
 
+## DSN (Domain Specific Notion)
+
+### Participants
+- **system under test** — behavior covered by this tree.
+
+### Behaviors
+- **run** — executes the scenarios in this suite.
+
 
 Verify that `doctest agent implement` and `doctest agent design` accept
 prompts from stdin (pipe/heredoc) when no positional arguments are given.

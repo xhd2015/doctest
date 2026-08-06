@@ -4,8 +4,8 @@ label: heavy
 
 ## Expected
 
-- `DiscoverTreeCases` returns a non-empty error.
-- Error text includes `must have a Go code block` and identifies the intermediate SETUP path.
+- `DiscoverTreeCases` succeeds when intermediate SETUP.md is prose-only (no Go block).
+- DiscoverErr is empty.
 
 ## Exit Code
 
@@ -13,7 +13,6 @@ label: heavy
 
 ```go
 import (
-	"strings"
 	"testing"
 )
 
@@ -25,15 +24,8 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 	if resp == nil {
 		t.Fatal("nil response")
 	}
-	if resp.DiscoverErr == "" {
-		t.Fatal("expected DiscoverTreeCases error when intermediate SETUP.md exists without Go block")
-	}
-	low := strings.ToLower(resp.DiscoverErr)
-	if !strings.Contains(low, "must have a go code block") {
-		t.Fatalf("error must mention Go code block, got:\n%s", resp.DiscoverErr)
-	}
-	if !strings.Contains(low, "intermediate") || !strings.Contains(low, "setup.md") {
-		t.Fatalf("error must identify intermediate SETUP.md path, got:\n%s", resp.DiscoverErr)
+	if resp.DiscoverErr != "" {
+		t.Fatalf("expected no DiscoverTreeCases error for prose-only intermediate SETUP, got:\n%s", resp.DiscoverErr)
 	}
 }
 ```

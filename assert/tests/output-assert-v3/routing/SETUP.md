@@ -10,11 +10,3 @@ Facade -> legacy engines unchanged
 
 ## Steps
 1. Routing leaves set Operation and templates explicitly.
-
-```go
-func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-	_ = t
-	_ = req
-	return nil
-}
-```

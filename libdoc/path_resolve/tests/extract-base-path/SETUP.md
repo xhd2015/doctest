@@ -1,3 +1,11 @@
+# Scenario
+
+**Feature**: suite organization / shared setup
+
+```
+suite organization
+```
+
 ## Preconditions
 - The `ExtractBasePath` function is defined in `path_resolve`.
 - Input is a pattern string like `"./foo/..."`.

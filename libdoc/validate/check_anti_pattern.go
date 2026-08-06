@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/parser"
+	"go/scanner"
 	"go/token"
 	"strings"
 )
@@ -321,40 +322,49 @@ func doctestSessionIDEnvReadMessage(call *ast.CallExpr) string {
 	}
 }
 
-// checkBareDoctestRoots scans source code for bare DOCTEST_ROOT, DOCTEST_CASE,
-// or DOCTEST_SESSION_ID identifiers that aren't prefixed with d. (i.e. the old
-// classic free-var style). In unified/ref gen mode, these are struct fields on
-// d *session.Doctest and must be accessed as d.DOCTEST_ROOT, not bare.
+// checkBareDoctestRoots flags free-identifier use of DOCTEST_ROOT / DOCTEST_CASE /
+// DOCTEST_SESSION_ID (old inject style). Access via d.DOCTEST_* is correct.
+// Uses go/scanner so string literals and comments are never matched. Skips
+// composite-lit field keys (IDENT followed by COLON), which name session.Doctest fields.
 func checkBareDoctestRoots(path, src string) string {
-	// Check for bare identifiers by looking for the tokens NOT preceded by "d.".
-	// Use a simple token-based scan on the raw source before AST parsing.
-	for _, tok := range []string{"DOCTEST_ROOT", "DOCTEST_CASE", "DOCTEST_SESSION_ID"} {
-		idx := 0
-		for {
-			pos := strings.Index(src[idx:], tok)
-			if pos < 0 {
-				break
-			}
-			absPos := idx + pos
-			// Check if preceded by "d." — skip those (they're already correct).
-			if absPos >= 2 && src[absPos-2:absPos] == "d." {
-				idx = absPos + len(tok)
-				continue
-			}
-			// Also skip if it's part of a string literal or comment.
-			// Simple heuristic: if there's a // on this line before the token, it's a comment.
-			lineStart := strings.LastIndexByte(src[:absPos], '\n')
-			if lineStart < 0 {
-				lineStart = 0
-			}
-			line := src[lineStart:absPos]
-			if strings.Contains(line, "//") || strings.Contains(line, "`") {
-				idx = absPos + len(tok)
-				continue
-			}
-			return fmt.Sprintf("%s: %s used without d. prefix — add d *session.Doctest param and use d.%s instead of bare %s",
-				path, tok, tok, tok)
+	want := map[string]bool{
+		"DOCTEST_ROOT":       true,
+		"DOCTEST_CASE":       true,
+		"DOCTEST_SESSION_ID": true,
+	}
+
+	fset := token.NewFileSet()
+	file := fset.AddFile(path, fset.Base(), len(src))
+	var s scanner.Scanner
+	s.Init(file, []byte(src), nil, 0)
+
+	type scTok struct {
+		kind token.Token
+		lit  string
+	}
+	var toks []scTok
+	for {
+		_, kind, lit := s.Scan()
+		if kind == token.EOF {
+			break
 		}
+		toks = append(toks, scTok{kind: kind, lit: lit})
+	}
+
+	for i, t := range toks {
+		if t.kind != token.IDENT || !want[t.lit] {
+			continue
+		}
+		// d.DOCTEST_*
+		if i >= 2 && toks[i-1].kind == token.PERIOD && toks[i-2].kind == token.IDENT && toks[i-2].lit == "d" {
+			continue
+		}
+		// Field key: DOCTEST_ROOT:
+		if i+1 < len(toks) && toks[i+1].kind == token.COLON {
+			continue
+		}
+		return fmt.Sprintf("%s: %s used without d. prefix — add d *session.Doctest param and use d.%s instead of bare %s",
+			path, t.lit, t.lit, t.lit)
 	}
 	return ""
 }

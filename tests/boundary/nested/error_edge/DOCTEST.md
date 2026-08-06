@@ -3,6 +3,14 @@
 ## Version
 0.0.2
 
+## DSN (Domain Specific Notion)
+
+### Participants
+- **system under test** — behavior covered by this tree.
+
+### Behaviors
+- **run** — executes the scenarios in this suite.
+
 
 This is a deeply nested self-contained test root. It verifies that
 DOCTEST.md boundaries work at any depth — even inside another nested root.

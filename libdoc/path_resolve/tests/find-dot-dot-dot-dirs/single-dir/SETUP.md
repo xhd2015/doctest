@@ -1,3 +1,11 @@
+# Scenario
+
+**Feature**: suite organization / shared setup
+
+```
+suite organization
+```
+
 ## Steps
 - Create a temp directory with `go.mod` and a single `DOCTEST.md`.
 - Set `req.BasePath = "."`.

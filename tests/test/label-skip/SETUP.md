@@ -92,7 +92,7 @@ func writeMinimalLeaf(t *testing.T, root, leafRel string) {
 	setup.WriteString("# Scenario\n\n**Feature**: fixture leaf for label-skip tests\n\n")
 	setup.WriteString(bt(3) + "\nfixture leaf\n" + bt(3) + "\n\n## Steps\n1. leaf setup\n\n")
 	setup.WriteString(goFence())
-	setup.WriteString("import \"testing\"\n\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }\n")
+	setup.WriteString("import \"testing\"\n\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { t.Helper(); return nil }\n")
 	setup.WriteString(endFence())
 	setup.WriteString("\n")
 	var assert strings.Builder
@@ -273,7 +273,7 @@ func writeGroupingLabeledTree(t *testing.T) string {
 	groupSetup.WriteString("# Scenario\n\n**Feature**: e2e grouping fixture\n\n")
 	groupSetup.WriteString(bt(3) + "\ne2e grouping\n" + bt(3) + "\n\n## Steps\n1. e2e grouping node\n\n")
 	groupSetup.WriteString(goFence())
-	groupSetup.WriteString("import \"testing\"\n\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { _ = req; return nil }\n")
+	groupSetup.WriteString("import \"testing\"\n\nfunc Setup(t *testing.T, d *session.Doctest, req *Request) error { t.Helper(); return nil }\n")
 	groupSetup.WriteString(endFence())
 	groupSetup.WriteString("\n")
 	testtree.WriteFile(t, root, "e2e/SETUP.md", groupSetup.String())
