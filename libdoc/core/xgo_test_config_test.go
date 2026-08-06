@@ -18,6 +18,60 @@ func TestLoadXgoTestConfigMissing(t *testing.T) {
 	}
 }
 
+func TestLoadXgoTestConfigGoMinMax(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, DefaultXgoTestConfigName)
+	body := `{"go":{"min":"1.18","max":"1.20"},"flags":["--unified"]}`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadXgoTestConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Go == nil || cfg.Go.Min != "1.18" || cfg.Go.Max != "1.20" {
+		t.Fatalf("Go=%#v", cfg.Go)
+	}
+	if len(cfg.Flags) != 1 {
+		t.Fatalf("Flags=%v", cfg.Flags)
+	}
+}
+
+func TestValidateXgoTestConfigGoVersion(t *testing.T) {
+	if err := ValidateXgoTestConfigGoVersion(nil, "go"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateXgoTestConfigGoVersion(&XgoTestConfig{}, "go"); err != nil {
+		t.Fatal(err)
+	}
+	// Below min.
+	parsed, err := parseXgoTestConfig([]byte(`{"go":{"min":"99.0"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = ValidateXgoTestConfigGoVersion(parsed, "go")
+	if err == nil || !strings.Contains(err.Error(), "< 99.0") {
+		t.Fatalf("want min error, got %v", err)
+	}
+	// Above max.
+	parsed, err = parseXgoTestConfig([]byte(`{"go":{"max":"1.0"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = ValidateXgoTestConfigGoVersion(parsed, "go")
+	if err == nil || !strings.Contains(err.Error(), "> 1.0") {
+		t.Fatalf("want max error, got %v", err)
+	}
+	// Wide range OK.
+	parsed, err = parseXgoTestConfig([]byte(`{"go":{"min":"1.0","max":"99.0"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateXgoTestConfigGoVersion(parsed, "go"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestLoadXgoTestConfigMockRulesAndFlags(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, DefaultXgoTestConfigName)

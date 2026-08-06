@@ -7,18 +7,22 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/xhd2015/xgo/support/testconfig"
 )
 
 // DefaultXgoTestConfigName is the project-root config file used by xgo test-explorer
 // and by doctest when spawning xgo test for a generated suite.
-const DefaultXgoTestConfigName = "test.config.json"
+const DefaultXgoTestConfigName = testconfig.DefaultFileName
 
 // XgoTestConfig is the subset of xgo's test.config.json that doctest applies
 // when running `xgo test` against a generated suite module.
 //
-// Field shapes match github.com/xhd2015/xgo/cmd/xgo/test-explorer.TestConfig
-// so project configs stay shared between `xgo e` and doctest.
+// Shared schema fields (go min/max, env, flags, args, mock_rules, …) are parsed
+// via github.com/xhd2015/xgo/support/testconfig. PreTest is doctest-specific.
 type XgoTestConfig struct {
+	// Go is optional go.min / go.max from test.config.json (shared with xgo).
+	Go *testconfig.GoConfig `json:"go"`
 	// PreTest are generic commands run before the generated suite is compiled.
 	// They may use the exact overlay placeholders documented by PreTestHook.
 	PreTest []PreTestHook `json:"pre_test"`
@@ -118,17 +122,22 @@ func FindXgoTestConfigPath(modRoot string) string {
 }
 
 func parseXgoTestConfig(data []byte) (*XgoTestConfig, error) {
+	shared, err := testconfig.Parse(data)
+	if err != nil {
+		return nil, fmt.Errorf("parse %s: %w", DefaultXgoTestConfigName, err)
+	}
+	conf := &XgoTestConfig{
+		Go:            shared.Go,
+		Env:           shared.Env,
+		Flags:         shared.Flags,
+		Args:          shared.Args,
+		BypassGoFlags: shared.BypassGoFlags,
+		MockRules:     shared.MockRules,
+	}
+	// pre_test is doctest-only; parse from the raw map after shared schema.
 	var m map[string]interface{}
 	if err := json.Unmarshal(data, &m); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", DefaultXgoTestConfigName, err)
-	}
-	conf := &XgoTestConfig{}
-	if e, ok := m["env"]; ok && e != nil {
-		em, ok := e.(map[string]interface{})
-		if !ok {
-			return nil, fmt.Errorf("%s env: want object, got %T", DefaultXgoTestConfigName, e)
-		}
-		conf.Env = em
 	}
 	if e, ok := m["pre_test"]; ok && e != nil {
 		hooks, err := jsonPreTestHooks(e)
@@ -137,35 +146,17 @@ func parseXgoTestConfig(data []byte) (*XgoTestConfig, error) {
 		}
 		conf.PreTest = hooks
 	}
-	if e, ok := m["flags"]; ok && e != nil {
-		list, err := jsonStringList(e)
-		if err != nil {
-			return nil, fmt.Errorf("%s flags: %w", DefaultXgoTestConfigName, err)
-		}
-		conf.Flags = list
-	}
-	if e, ok := m["args"]; ok && e != nil {
-		list, err := jsonStringList(e)
-		if err != nil {
-			return nil, fmt.Errorf("%s args: %w", DefaultXgoTestConfigName, err)
-		}
-		conf.Args = list
-	}
-	if e, ok := m["bypass_go_flags"]; ok && e != nil {
-		b, err := jsonBool(e)
-		if err != nil {
-			return nil, fmt.Errorf("%s bypass_go_flags: %w", DefaultXgoTestConfigName, err)
-		}
-		conf.BypassGoFlags = b
-	}
-	if e, ok := m["mock_rules"]; ok && e != nil {
-		list, err := jsonMarshaledObjects(e)
-		if err != nil {
-			return nil, fmt.Errorf("%s mock_rules: %w", DefaultXgoTestConfigName, err)
-		}
-		conf.MockRules = list
-	}
 	return conf, nil
+}
+
+// ValidateXgoTestConfigGoVersion enforces test.config.json go.min/go.max against
+// the host go toolchain (PATH "go"), matching xgo test-explorer. No-op when
+// constraints are empty. goBinary defaults to "go".
+func ValidateXgoTestConfigGoVersion(cfg *XgoTestConfig, goBinary string) error {
+	if cfg == nil {
+		return nil
+	}
+	return testconfig.ValidateGoConstraint(cfg.Go, goBinary)
 }
 
 // ApplyPreTestHooks expands unified config placeholders (substring Contains /
@@ -696,28 +687,6 @@ func xgoConfigEnvPairs(env map[string]interface{}) []string {
 	return out
 }
 
-func jsonStringList(v interface{}) ([]string, error) {
-	switch t := v.(type) {
-	case []interface{}:
-		out := make([]string, 0, len(t))
-		for i, e := range t {
-			s, ok := e.(string)
-			if !ok {
-				return nil, fmt.Errorf("index %d: want string, got %T", i, e)
-			}
-			out = append(out, s)
-		}
-		return out, nil
-	case string:
-		if t == "" {
-			return nil, nil
-		}
-		return []string{t}, nil
-	default:
-		return nil, fmt.Errorf("want string or list, got %T", v)
-	}
-}
-
 func jsonPreTestHooks(v interface{}) ([]PreTestHook, error) {
 	data, err := json.Marshal(v)
 	if err != nil {
@@ -733,31 +702,4 @@ func jsonPreTestHooks(v interface{}) ([]PreTestHook, error) {
 		}
 	}
 	return hooks, nil
-}
-
-func jsonBool(v interface{}) (bool, error) {
-	switch t := v.(type) {
-	case bool:
-		return t, nil
-	default:
-		return false, fmt.Errorf("want bool, got %T", v)
-	}
-}
-
-// jsonMarshaledObjects re-encodes each element as a compact JSON string so
-// xgo --mock-rule receives the same payload as test-explorer.
-func jsonMarshaledObjects(v interface{}) ([]string, error) {
-	arr, ok := v.([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("want list, got %T", v)
-	}
-	out := make([]string, 0, len(arr))
-	for i, e := range arr {
-		b, err := json.Marshal(e)
-		if err != nil {
-			return nil, fmt.Errorf("index %d: %w", i, err)
-		}
-		out = append(out, string(b))
-	}
-	return out, nil
 }

@@ -406,6 +406,11 @@ func applyProjectTestConfig(goTestBin, projectRoot, projectModPath, suiteModPath
 			return core.XgoTestConfigApply{}, core.PreTestHookApply{}, err
 		}
 	}
+	// Enforce go.min/go.max before xgo flags and pre_test (xgo explorer parity).
+	// Applies for both go and xgo drivers when the project declares constraints.
+	if err := core.ValidateXgoTestConfigGoVersion(cfg, "go"); err != nil {
+		return core.XgoTestConfigApply{}, core.PreTestHookApply{}, err
+	}
 	xgoApply, err := core.ApplyLoadedXgoTestConfig(goTestBin, cfgPath, cfg, projectRoot, projectModPath, suiteModPath)
 	if err != nil {
 		return core.XgoTestConfigApply{}, core.PreTestHookApply{}, err
