@@ -186,7 +186,7 @@ Examples:
   doctest edit ./tests/feature/ui-leaf/ASSERT.md --add-label manual
 `
 
-const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [-a] [-timeout DURATION] [--color] [--no-color] [--changed] [--label EXPR]... [--label-all] [--metrics-on] [--cold-cache] [-cpuprofile FILE] [-memprofile FILE] [-memprofilerate N] [-blockprofile FILE] [-blockprofilerate N] [-mutexprofile FILE] [-mutexprofilefraction N] [-trace FILE] [-outputdir DIR] [-coverprofile FILE] [-cover] [-covermode MODE] [-coverpkg PKGS] [-race] [-short] [-failfast] [-parallel N] [-shuffle VAL] [-tags TAGS] [-gcflags FLAGS] [-ldflags FLAGS] <dir>
+const testUsage = `Usage: doctest test [-v|--verbose] [--rm] [--gen-dir DIR] [-count=N] [-a] [-timeout DURATION] [--color] [--no-color] [--changed] [--label EXPR]... [--label-all] [--metrics-on] [--cold-cache] [-cpuprofile FILE] [-memprofile FILE] [-memprofilerate N] [-blockprofile FILE] [-blockprofilerate N] [-mutexprofile FILE] [-mutexprofilefraction N] [-trace FILE] [-outputdir DIR] [-coverprofile FILE] [-cover] [-covermode MODE] [-coverpkg PKGS] [-race] [-short] [-failfast] [-parallel N] [-shuffle VAL] [-tags TAGS] [-gcflags FLAGS] [-ldflags FLAGS] [-overlay FILE] [--overlay FILE] <dir>
 
 Run executable Go snippets from a doc-style test directory, allow ./... patterns like go test.
 
@@ -251,6 +251,11 @@ Options:
   -tags TAGS        Forward -tags to go test / go build
   -gcflags FLAGS    Forward -gcflags to go test / go build
   -ldflags FLAGS    Forward -ldflags to go test / go build
+  -overlay, --overlay FILE
+                    User Go overlay JSON (Replace map). Seeded into the driver
+                    overlay before pre_test hooks; vendor-gomod bridge wins the
+                    same keys after hooks. Relative paths abs-resolved. Merged
+                    result is a single -overlay= on go test (not accepted on build).
   -h, --help        Show help
 
 Not accepted (name-based go test selectors; use path or --label instead):

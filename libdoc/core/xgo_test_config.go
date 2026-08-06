@@ -186,7 +186,19 @@ func ApplyPreTestHooks(config *XgoTestConfig, projectRoot string, overlayRoot st
 // Package overlay keys stay on project vendor/; replacement values are never
 // rewritten.
 func ApplyPreTestHooksWithVendorBridges(config *XgoTestConfig, projectRoot string, overlayRoot string, bridges []VendorBridgeMapping, execute PreTestHookExecutor) (PreTestHookApply, error) {
+	return ApplyPreTestHooksWithUserOverlay(config, projectRoot, overlayRoot, "", bridges, execute)
+}
+
+// ApplyPreTestHooksWithUserOverlay is ApplyPreTestHooksWithVendorBridges with
+// an optional user overlay seed. When userOverlay is non-empty, the driver
+// __overlay/overlay.json is opened and seeded with the user's Replace map
+// before hooks run (even if hooks omit $GO_INSTRUMENT_OVERLAY_* placeholders),
+// so seed alone can still emit a -overlay= flag after vendor-bridge merge.
+// Later layers win the same Replace disk-path key: hook writes, then vendor
+// bridges. Empty userOverlay matches ApplyPreTestHooksWithVendorBridges.
+func ApplyPreTestHooksWithUserOverlay(config *XgoTestConfig, projectRoot string, overlayRoot string, userOverlay string, bridges []VendorBridgeMapping, execute PreTestHookExecutor) (PreTestHookApply, error) {
 	var out PreTestHookApply
+	userOverlay = strings.TrimSpace(userOverlay)
 	if config == nil || len(config.PreTest) == 0 {
 		return out, nil
 	}
@@ -217,6 +229,10 @@ func ApplyPreTestHooksWithVendorBridges(config *XgoTestConfig, projectRoot strin
 			}
 		}
 	}
+	// User seed requires a driver overlay file even when hooks omit placeholders.
+	if userOverlay != "" {
+		needFile = true
+	}
 
 	if needDir || needFile {
 		dir, err := filepath.Abs(filepath.Join(overlayRoot, "__overlay"))
@@ -231,12 +247,18 @@ func ApplyPreTestHooksWithVendorBridges(config *XgoTestConfig, projectRoot strin
 		}
 		if needFile {
 			out.OverlayFile = filepath.Join(dir, "overlay.json")
-			file, err := os.OpenFile(out.OverlayFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
-			if err != nil {
-				return out, fmt.Errorf("pre_test: create overlay file: %w", err)
-			}
-			if err := file.Close(); err != nil {
-				return out, fmt.Errorf("pre_test: close overlay file: %w", err)
+			if userOverlay != "" {
+				if err := writeSeededOverlayFile(out.OverlayFile, userOverlay); err != nil {
+					return out, err
+				}
+			} else {
+				file, err := os.OpenFile(out.OverlayFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+				if err != nil {
+					return out, fmt.Errorf("pre_test: create overlay file: %w", err)
+				}
+				if err := file.Close(); err != nil {
+					return out, fmt.Errorf("pre_test: close overlay file: %w", err)
+				}
 			}
 		}
 	}
@@ -277,6 +299,127 @@ func ApplyPreTestHooksWithVendorBridges(config *XgoTestConfig, projectRoot strin
 	}
 	out.HookCount = len(config.PreTest)
 	return out, nil
+}
+
+// MaterializeUserVendorOverlay merges a user overlay seed with a vendor-gomod
+// overlay JSON when there is no pre_test driver file path. Vendor Replace keys
+// overwrite the same disk-path keys from the user seed. Writes the merged
+// result under destRoot/__overlay/overlay.json and returns at most one
+// -overlay= GoFlags entry when the merged Replace map is non-empty.
+// Empty user and vendor paths (or empty Replace) yield a zero apply with no error.
+func MaterializeUserVendorOverlay(userOverlay, vendorGomodOverlay, destRoot string) (PreTestHookApply, error) {
+	var out PreTestHookApply
+	userOverlay = strings.TrimSpace(userOverlay)
+	vendorGomodOverlay = strings.TrimSpace(vendorGomodOverlay)
+	if userOverlay == "" && vendorGomodOverlay == "" {
+		return out, nil
+	}
+	if strings.TrimSpace(destRoot) == "" {
+		return out, fmt.Errorf("materialize overlay: dest root is required")
+	}
+
+	merged := make(map[string]string)
+	if userOverlay != "" {
+		userReplace, err := readOverlayReplaceMap(userOverlay)
+		if err != nil {
+			return out, fmt.Errorf("materialize overlay: read user overlay: %w", err)
+		}
+		for k, v := range userReplace {
+			if k == "" {
+				continue
+			}
+			merged[k] = v
+		}
+	}
+	if vendorGomodOverlay != "" {
+		vendorReplace, err := readOverlayReplaceMap(vendorGomodOverlay)
+		if err != nil {
+			return out, fmt.Errorf("materialize overlay: read vendor overlay: %w", err)
+		}
+		for k, v := range vendorReplace {
+			if k == "" {
+				continue
+			}
+			// Vendor later-wins on the same Replace key.
+			merged[k] = v
+		}
+	}
+	if len(merged) == 0 {
+		return out, nil
+	}
+
+	dir, err := filepath.Abs(filepath.Join(destRoot, "__overlay"))
+	if err != nil {
+		return out, fmt.Errorf("materialize overlay: resolve dest: %w", err)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return out, fmt.Errorf("materialize overlay: create dest: %w", err)
+	}
+	outPath := filepath.Join(dir, "overlay.json")
+	payload, err := json.Marshal(struct {
+		Replace map[string]string `json:"Replace"`
+	}{Replace: merged})
+	if err != nil {
+		return out, fmt.Errorf("materialize overlay: encode: %w", err)
+	}
+	if err := os.WriteFile(outPath, payload, 0o644); err != nil {
+		return out, fmt.Errorf("materialize overlay: write: %w", err)
+	}
+	abs, err := filepath.Abs(outPath)
+	if err != nil {
+		abs = outPath
+	}
+	out.OverlayDir = dir
+	out.OverlayFile = abs
+	out.GoFlags = []string{"-overlay=" + abs}
+	return out, nil
+}
+
+// writeSeededOverlayFile writes driver overlay JSON seeded from userOverlay's
+// Replace map (empty map when the user file has no Replace entries).
+func writeSeededOverlayFile(destPath, userOverlay string) error {
+	replace, err := readOverlayReplaceMap(userOverlay)
+	if err != nil {
+		return fmt.Errorf("pre_test: read user overlay seed: %w", err)
+	}
+	if replace == nil {
+		replace = map[string]string{}
+	}
+	payload, err := json.Marshal(struct {
+		Replace map[string]string `json:"Replace"`
+	}{Replace: replace})
+	if err != nil {
+		return fmt.Errorf("pre_test: encode user overlay seed: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
+		return fmt.Errorf("pre_test: create overlay directory: %w", err)
+	}
+	if err := os.WriteFile(destPath, payload, 0o644); err != nil {
+		return fmt.Errorf("pre_test: write user overlay seed: %w", err)
+	}
+	return nil
+}
+
+// readOverlayReplaceMap loads the Replace map from a standard Go overlay JSON.
+// Missing file is an error; empty/whitespace file yields an empty map.
+func readOverlayReplaceMap(path string) (map[string]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if len(strings.TrimSpace(string(data))) == 0 {
+		return map[string]string{}, nil
+	}
+	var payload struct {
+		Replace map[string]string `json:"Replace"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return nil, err
+	}
+	if payload.Replace == nil {
+		return map[string]string{}, nil
+	}
+	return payload.Replace, nil
 }
 
 // normalizeOverlayVendorBridgeSources merges xgo-style phantom vendor go.mod

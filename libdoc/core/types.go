@@ -203,6 +203,13 @@ type Options struct {
 	// choose xgo vs go. Force "xgo"/"go" ignore detection. Invalid values
 	// are rejected at parse time.
 	GoCmd string
+
+	// Overlay is the absolute path to a user-supplied Go overlay JSON
+	// (doctest test -overlay/--overlay). Empty means no user overlay.
+	// Relative paths are abs-resolved at CLI parse time (same class as
+	// profile path fields). Merged as a seed with internal pre_test /
+	// vendor-gomod overlay layers into a single -overlay= go test flag.
+	Overlay string
 }
 
 // LeafCacheMeasureNoSkip reports whether cover/race measurement flags require

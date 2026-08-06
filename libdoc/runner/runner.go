@@ -948,6 +948,7 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 		String("-tags", &opts.Tags).
 		String("-gcflags", &opts.Gcflags).
 		String("-ldflags", &opts.Ldflags).
+		String("-overlay,--overlay", &opts.Overlay).
 		String("--go-cmd", &opts.GoCmd).
 		Parse(args)
 	if err != nil {
@@ -968,7 +969,7 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 	}
 	opts.LabelExprs = labelExprs
 
-	// Abs-resolve relative profile/cover paths against process cwd at parse time.
+	// Abs-resolve relative profile/cover/overlay paths against process cwd at parse time.
 	pathFields := []*string{
 		&opts.CPUProfile,
 		&opts.MemProfile,
@@ -977,6 +978,7 @@ func parseTestOptions(args []string) (core.Options, []string, error) {
 		&opts.Trace,
 		&opts.OutputDir,
 		&opts.CoverProfile,
+		&opts.Overlay,
 	}
 	for _, p := range pathFields {
 		if *p == "" {

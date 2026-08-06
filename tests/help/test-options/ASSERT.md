@@ -29,6 +29,8 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
         "-race",
         "-short", "-failfast", "-parallel", "-shuffle",
         "-tags", "-gcflags", "-ldflags",
+        // User overlay (merged with internal pre_test/vendor overlay → one -overlay=)
+        "-overlay", "--overlay",
     } {
         if !strings.Contains(resp.Stdout, want) {
             t.Fatalf("stdout missing %q:\n%s", want, resp.Stdout)

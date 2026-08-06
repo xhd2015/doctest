@@ -227,9 +227,9 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	// When using xgo, apply project test.config.json (abs path under modRoot):
 	// mock_rules → --mock-rule, flags/env, and include-as-main when suite ≠ project
 	// (mapping-gen module is typically "testcase"). pre_test hooks share the same
-	// single config load.
+	// single config load. User -overlay seeds the driver file before hooks.
 	suiteModPath := suiteModulePath(runDir)
-	xgoApply, preTestApply, err := applyProjectTestConfig(goTestBin, ctx.modRoot, ctx.modPath, suiteModPath, ctx.vendorBridges)
+	xgoApply, preTestApply, err := applyProjectTestConfig(goTestBin, ctx.modRoot, ctx.modPath, suiteModPath, ctx.vendorBridges, opts.Overlay)
 	if err != nil {
 		stats.Phases = phases
 		return stats, err
@@ -239,9 +239,19 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	}
 	if len(preTestApply.GoFlags) > 0 {
 		flagArgs = append(flagArgs, preTestApply.GoFlags...)
-	} else if ov := core.VendorGomodOverlayGoFlag(ctx.genRoot); len(ov) > 0 {
-		// xgo-style phantom vendor go.mod when no pre_test overlay was emitted.
-		flagArgs = append(flagArgs, ov...)
+	} else {
+		// No pre_test overlay flag: materialize user seed ∪ vendor-gomod into one
+		// -overlay= (user-only, vendor-only, or both). Empty both → no flag.
+		vendorPath := core.VendorGomodOverlayPath(ctx.genRoot)
+		mat, merr := core.MaterializeUserVendorOverlay(opts.Overlay, vendorPath, ctx.genRoot)
+		if merr != nil {
+			stats.Phases = phases
+			return stats, merr
+		}
+		if len(mat.GoFlags) > 0 {
+			flagArgs = append(flagArgs, mat.GoFlags...)
+			preTestApply = mat
+		}
 	}
 	if opts.Verbose && xgoApply.ConfigPath != "" {
 		fmt.Fprintf(w, "doctest: xgo config %s\n", pathfmt.Short(xgoApply.ConfigPath))
@@ -385,7 +395,8 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 // applies both xgo config (when goTestBin is xgo) and generic pre_test hooks.
 // Hook artifacts belong to the source project's durable mapping-gen root, not
 // the generated suite directory that happens to invoke the hook.
-func applyProjectTestConfig(goTestBin, projectRoot, projectModPath, suiteModPath string, bridges []core.VendorBridgeMapping) (core.XgoTestConfigApply, core.PreTestHookApply, error) {
+// userOverlay is the optional abs path from doctest test -overlay/--overlay.
+func applyProjectTestConfig(goTestBin, projectRoot, projectModPath, suiteModPath string, bridges []core.VendorBridgeMapping, userOverlay string) (core.XgoTestConfigApply, core.PreTestHookApply, error) {
 	cfgPath := core.FindXgoTestConfigPath(projectRoot)
 	var cfg *core.XgoTestConfig
 	if cfgPath != "" {
@@ -399,7 +410,7 @@ func applyProjectTestConfig(goTestBin, projectRoot, projectModPath, suiteModPath
 	if err != nil {
 		return core.XgoTestConfigApply{}, core.PreTestHookApply{}, err
 	}
-	preTestApply, err := applyLoadedPreTestHooks(projectRoot, cfg, bridges)
+	preTestApply, err := applyLoadedPreTestHooks(projectRoot, cfg, bridges, userOverlay)
 	if err != nil {
 		return core.XgoTestConfigApply{}, core.PreTestHookApply{}, err
 	}
@@ -422,10 +433,10 @@ func applyProjectPreTestHooks(projectRoot string, bridges ...[]core.VendorBridge
 	if len(bridges) > 0 {
 		active = bridges[0]
 	}
-	return applyLoadedPreTestHooks(projectRoot, config, active)
+	return applyLoadedPreTestHooks(projectRoot, config, active, "")
 }
 
-func applyLoadedPreTestHooks(projectRoot string, config *core.XgoTestConfig, bridges []core.VendorBridgeMapping) (core.PreTestHookApply, error) {
+func applyLoadedPreTestHooks(projectRoot string, config *core.XgoTestConfig, bridges []core.VendorBridgeMapping, userOverlay string) (core.PreTestHookApply, error) {
 	if config == nil || len(config.PreTest) == 0 {
 		return core.PreTestHookApply{}, nil
 	}
@@ -433,7 +444,7 @@ func applyLoadedPreTestHooks(projectRoot string, config *core.XgoTestConfig, bri
 	if err != nil {
 		return core.PreTestHookApply{}, err
 	}
-	return core.ApplyPreTestHooksWithVendorBridges(config, projectRoot, mappingGenRoot, bridges, runPreTestHook)
+	return core.ApplyPreTestHooksWithUserOverlay(config, projectRoot, mappingGenRoot, userOverlay, bridges, runPreTestHook)
 }
 
 // printPreTestHookStatus emits always-on one-line status when pre_test hooks

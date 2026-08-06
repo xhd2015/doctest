@@ -516,8 +516,8 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 
 	// Apply project test.config.json once (first prep with a readable config;
 	// multi-module workspaces typically share one consumer project). pre_test
-	// and xgo apply share that single load.
-	xgoApply, preTestApply, err := workspaceProjectTestConfigApply(goTestBin, preps)
+	// and xgo apply share that single load. User -overlay seeds before hooks.
+	xgoApply, preTestApply, err := workspaceProjectTestConfigApply(goTestBin, preps, opts.Overlay)
 	if err != nil {
 		return stats, err
 	}
@@ -527,8 +527,8 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	if len(preTestApply.GoFlags) > 0 {
 		flagArgs = append(flagArgs, preTestApply.GoFlags...)
 	} else {
-		// Member gen roots hold vendor-gomod-overlay.json; hubDir does not.
-		// Merge into runDir (hub or single gen root) for one -overlay= flag.
+		// No pre_test overlay: merge member vendor-gomod overlays, then materialize
+		// user seed ∪ vendor into one -overlay= under runDir/gen root.
 		genRoots := uniquePrepGenRoots(preps)
 		if len(genRoots) == 0 && genRootLabel != "" {
 			genRoots = []string{genRootLabel}
@@ -538,12 +538,17 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 			dest = genRootLabel
 		}
 		if dest != "" {
-			ov, oerr := core.VendorGomodOverlayGoFlagMerged(dest, genRoots)
+			vendorPath, oerr := core.MergeVendorGomodOverlays(dest, genRoots)
 			if oerr != nil {
 				return stats, fmt.Errorf("workspace vendor-gomod overlay: %w", oerr)
 			}
-			if len(ov) > 0 {
-				flagArgs = append(flagArgs, ov...)
+			mat, merr := core.MaterializeUserVendorOverlay(opts.Overlay, vendorPath, dest)
+			if merr != nil {
+				return stats, merr
+			}
+			if len(mat.GoFlags) > 0 {
+				flagArgs = append(flagArgs, mat.GoFlags...)
+				preTestApply = mat
 			}
 		}
 	}
@@ -689,7 +694,8 @@ func collectPrepVendorBridges(preps []TreePrep) []core.VendorBridgeMapping {
 // pre_test from that single load. Suite module is empty so include-as always
 // applies when a project module path is known (workspace runs from gen/hub).
 // Vendor bridges are the union of all preps (multi-mod hub).
-func workspaceProjectTestConfigApply(goTestBin string, preps []TreePrep) (core.XgoTestConfigApply, core.PreTestHookApply, error) {
+// userOverlay is the optional abs path from doctest test -overlay/--overlay.
+func workspaceProjectTestConfigApply(goTestBin string, preps []TreePrep, userOverlay string) (core.XgoTestConfigApply, core.PreTestHookApply, error) {
 	allBridges := collectPrepVendorBridges(preps)
 	for _, p := range preps {
 		modRoot, modPath, ok := core.FindModuleRoot(p.AbsRoot)
@@ -700,7 +706,7 @@ func workspaceProjectTestConfigApply(goTestBin string, preps []TreePrep) (core.X
 			continue
 		}
 		// Empty suite path → always request include-as (gen/hub ≠ project).
-		return applyProjectTestConfig(goTestBin, modRoot, modPath, "", allBridges)
+		return applyProjectTestConfig(goTestBin, modRoot, modPath, "", allBridges, userOverlay)
 	}
 	// No config file: still try include-as from first prep module (xgo only).
 	if strings.TrimSpace(goTestBin) == "xgo" {
@@ -735,7 +741,7 @@ func workspacePreTestHooksApply(preps []TreePrep) (core.PreTestHookApply, error)
 // prep that has one under its module root. Suite module is empty so include-as
 // always applies when a project module path is known (workspace runs from gen/hub).
 func workspaceXgoTestConfigApply(goTestBin string, preps []TreePrep) (core.XgoTestConfigApply, error) {
-	xgoApply, _, err := workspaceProjectTestConfigApply(goTestBin, preps)
+	xgoApply, _, err := workspaceProjectTestConfigApply(goTestBin, preps, "")
 	return xgoApply, err
 }
 
