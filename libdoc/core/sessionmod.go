@@ -5,11 +5,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/xhd2015/doctest/libdoc/sessionmod"
 )
 
 const SessionImportPath = "github.com/xhd2015/doctest/session"
+
+// sessionMaterializeMu serializes first-time writes so parallel nested doctest
+// leaves do not observe a half-created session-mod directory.
+var sessionMaterializeMu sync.Mutex
 
 // CasesImportSessionPackage reports whether any case imports the doctest session package.
 // Since P2, assemble always injects session.Doctest, so this is effectively always true
@@ -22,6 +27,7 @@ func CasesImportSessionPackage(cases []TreeCase, modPath string) bool {
 
 // MaterializeSessionModule writes embedded session sources to a content-addressed cache
 // directory under $CACHE/doctest/session-mod/<md5>/ and returns the cache path.
+// Safe for concurrent callers: cold path stages into a temp dir then renames into place.
 func MaterializeSessionModule() (string, error) {
 	content := sessionModuleSourceForCache()
 	md5hex := sessionmod.RawSourceCacheKeyMD5()
@@ -36,25 +42,66 @@ func MaterializeSessionModule() (string, error) {
 		return cacheRoot, nil
 	}
 
-	if err := os.MkdirAll(cacheRoot, 0755); err != nil {
+	sessionMaterializeMu.Lock()
+	defer sessionMaterializeMu.Unlock()
+
+	// Re-check under lock (another leaf may have finished).
+	if sessionCacheLayoutComplete(cacheRoot) {
+		return cacheRoot, nil
+	}
+
+	// Stage then rename so readers never see an incomplete session-mod dir.
+	parent := filepath.Dir(cacheRoot)
+	if err := os.MkdirAll(parent, 0755); err != nil {
 		return "", err
 	}
-
-	sessionGo := filepath.Join(cacheRoot, "session.go")
-	if !fileExists(sessionGo) {
-		if err := os.WriteFile(sessionGo, content, 0644); err != nil {
-			return "", err
-		}
+	tmp, err := os.MkdirTemp(parent, "session-mod-stage-*")
+	if err != nil {
+		return "", err
 	}
+	staged := true
+	defer func() {
+		if staged {
+			_ = os.RemoveAll(tmp)
+		}
+	}()
 
-	goMod := filepath.Join(cacheRoot, "go.mod")
+	sessionGo := filepath.Join(tmp, "session.go")
+	if err := os.WriteFile(sessionGo, content, 0644); err != nil {
+		return "", err
+	}
+	goMod := filepath.Join(tmp, "go.mod")
 	goModContent := fmt.Sprintf("module %s\n\ngo 1.18\n", SessionImportPath)
-	if !fileExists(goMod) {
-		if err := os.WriteFile(goMod, []byte(goModContent), 0644); err != nil {
-			return "", err
-		}
+	if err := os.WriteFile(goMod, []byte(goModContent), 0644); err != nil {
+		return "", err
+	}
+	if !sessionCacheLayoutComplete(tmp) {
+		return "", fmt.Errorf("session-mod stage incomplete: %s", tmp)
 	}
 
+	// If another process won the rename race, prefer the winner if complete.
+	if err := os.Rename(tmp, cacheRoot); err != nil {
+		if sessionCacheLayoutComplete(cacheRoot) {
+			return cacheRoot, nil
+		}
+		// Windows / busy: fall back to copy-in-place under lock.
+		if err := os.MkdirAll(cacheRoot, 0755); err != nil {
+			return "", err
+		}
+		if err := os.WriteFile(filepath.Join(cacheRoot, "session.go"), content, 0644); err != nil {
+			return "", err
+		}
+		if err := os.WriteFile(filepath.Join(cacheRoot, "go.mod"), []byte(goModContent), 0644); err != nil {
+			return "", err
+		}
+	} else {
+		// Ownership transferred to cacheRoot; do not RemoveAll(tmp).
+		staged = false
+	}
+
+	if !sessionCacheLayoutComplete(cacheRoot) {
+		return "", fmt.Errorf("session-mod materialize incomplete: %s", cacheRoot)
+	}
 	return cacheRoot, nil
 }
 
