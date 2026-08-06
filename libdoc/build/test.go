@@ -253,6 +253,10 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 			preTestApply = mat
 		}
 	}
+	// Kind B product expose packages are overlay-only; default vet chdir fails.
+	if core.NeedVetOff(ctx.genRoot) {
+		flagArgs = append(flagArgs, "-vet=off")
+	}
 	if opts.Verbose && xgoApply.ConfigPath != "" {
 		fmt.Fprintf(w, "doctest: xgo config %s\n", pathfmt.Short(xgoApply.ConfigPath))
 		if xgoApply.IncludeAsMainModule != "" {
