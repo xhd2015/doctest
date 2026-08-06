@@ -5,18 +5,20 @@ label: heavy
 ## Expected
 
 - Exit code 0.
-- stdout contains `Skill is up to date` for the global `doctest-tdd` install path.
-- stdout contains `skill not installed:` for every registry skill except `tdd`.
+- stdout contains polished `tdd  up to date` (global install under
+  `~/.agents/skills/doctest-tdd`, display name is CLI `tdd`).
+- stdout contains `<name>  not installed` for every other registry skill.
+- summary includes `1 up to date` and `14 not installed`.
 - stdout does not contain `No installed skills found`.
 
 ## Expected Output
 
 ```
 <contains>
-Skill is up to date
-doctest-tdd
-skill not installed: code-spec
-skill not installed: tdd-lite
+tdd  up to date
+code-spec  not installed
+tdd-lite  not installed
+0 updated · 1 up to date · 14 not installed
 </contains>
 ```
 
@@ -39,12 +41,7 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 	if resp.ExitCode != 0 {
 		t.Fatalf("exit code = %d, stderr:\n%s", resp.ExitCode, resp.Stderr)
 	}
-	if !strings.Contains(resp.Stdout, "Skill is up to date") {
-		t.Fatalf("expected up-to-date line:\n%s", resp.Stdout)
-	}
-	if !strings.Contains(resp.Stdout, "doctest-tdd") {
-		t.Fatalf("stdout should reference doctest-tdd:\n%s", resp.Stdout)
-	}
+	assertUpToDateLine(t, resp.Stdout, "tdd")
 	for _, name := range registryCLINames() {
 		if name == "tdd" {
 			continue
@@ -52,12 +49,16 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 		assertNotInstalledLines(t, resp.Stdout, name)
 	}
 	assertNoScopeHint(t, resp.Stdout)
-	assert.Output(t, resp.Stdout, `` +
-`<contains>
-Skill is up to date
-doctest-tdd
-skill not installed: code-spec
-skill not installed: tdd-lite
+	plain := stripANSI(resp.Stdout)
+	if !strings.Contains(plain, "0 updated · 1 up to date · 14 not installed") {
+		t.Fatalf("stdout missing batch summary:\n%s", resp.Stdout)
+	}
+	assert.Output(t, plain, ``+
+		`<contains>
+tdd  up to date
+code-spec  not installed
+tdd-lite  not installed
+0 updated · 1 up to date · 14 not installed
 </contains>`)
 }
 ```

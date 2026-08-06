@@ -4,7 +4,7 @@
 
 ```
 doctest skill tdd --install --global -> ~/.agents/skills/doctest-tdd/SKILL.md
-doctest skills update --global -> Skill is up to date for global target
+doctest skills update --global -> "tdd  up to date" for global target
 ```
 
 ## Preconditions

@@ -7,7 +7,7 @@
 doctest skill tdd --install --global -> ~/.agents/skills/doctest-tdd/SKILL.md
 
 # default-scope update sees no local installs for any registry skill
-doctest skills update -> skill not installed line per registry name
+doctest skills update -> "<name>  not installed" line per registry name
 ```
 
 ## Preconditions

@@ -5,9 +5,12 @@ label: heavy
 ## Expected
 
 - Exit code 0.
-- stdout contains `skill not installed: tdd` (global install invisible without `--global`).
-- stdout contains not-installed lines for every other registry skill.
-- stdout does not contain `Skill is up to date`, `Update skill at`, or `No installed skills found`.
+- stdout contains `<name>  not installed` for every registry skill including
+  `tdd` (global install invisible without `--global`).
+- stdout does **not** contain `tdd  up to date` or legacy `Skill is up to date` /
+  `Update skill at`.
+- summary is `0 updated · 0 up to date · 15 not installed`.
+- stdout does not contain `No installed skills found`.
 
 ## Side Effects
 
@@ -35,8 +38,14 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 	}
 	assertNotInstalledLines(t, resp.Stdout, registryCLINames()...)
 	assertNoScopeHint(t, resp.Stdout)
-	if strings.Contains(resp.Stdout, "Skill is up to date") || strings.Contains(resp.Stdout, "Update skill at") {
-		t.Fatalf("expected no per-skill update lines without --global:\n%s", resp.Stdout)
+	plain := stripANSI(resp.Stdout)
+	if strings.Contains(plain, "tdd  up to date") ||
+		strings.Contains(plain, "Skill is up to date") ||
+		strings.Contains(plain, "Update skill at") {
+		t.Fatalf("expected no up-to-date lines without --global:\n%s", resp.Stdout)
+	}
+	if !strings.Contains(plain, "0 updated · 0 up to date · 15 not installed") {
+		t.Fatalf("stdout missing batch summary:\n%s", resp.Stdout)
 	}
 	if req.Home == "" {
 		t.Fatal("req.Home unset (isolated HOME for global install)")

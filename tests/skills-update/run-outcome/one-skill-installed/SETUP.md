@@ -3,7 +3,7 @@
 **Feature**: batch update touches only installed registry skills
 
 ```
-doctest skill tdd --install -> doctest skills update -> output for doctest-tdd only
+doctest skill tdd --install -> doctest skills update -> "tdd  up to date" + not-installed for others
 ```
 
 ## Preconditions

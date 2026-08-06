@@ -5,28 +5,31 @@ label: heavy
 ## Expected
 
 - Exit code 0.
-- stdout contains `skill not installed: <name>` for every registry CLI skill.
+- stdout contains polished `<name>  not installed` for every registry CLI skill
+  (skills v0.0.26+ batch format).
+- stdout ends with a summary including `not installed`.
 - stdout does not contain `No installed skills found`.
 
 ## Expected Output
 
 ```
 <contains>
-skill not installed: analyse-perf
-skill not installed: code-spec
-skill not installed: design-principle
-skill not installed: designer
-skill not installed: doc-spec
-skill not installed: implementer
-skill not installed: lint
-skill not installed: migrate
-skill not installed: output-assert
-skill not installed: reproduce
-skill not installed: review
-skill not installed: review-perf
-skill not installed: tdd
-skill not installed: tdd-cli-agent
-skill not installed: tdd-lite
+analyse-perf  not installed
+code-spec  not installed
+design-principle  not installed
+designer  not installed
+doc-spec  not installed
+implementer  not installed
+lint  not installed
+migrate  not installed
+output-assert  not installed
+reproduce  not installed
+review  not installed
+review-perf  not installed
+tdd  not installed
+tdd-cli-agent  not installed
+tdd-lite  not installed
+0 updated · 0 up to date · 15 not installed
 </contains>
 ```
 
@@ -36,6 +39,7 @@ skill not installed: tdd-lite
 
 ```go
 import (
+	"strings"
 	"testing"
 )
 
@@ -48,5 +52,9 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 	}
 	assertNotInstalledLines(t, resp.Stdout, registryCLINames()...)
 	assertNoScopeHint(t, resp.Stdout)
+	plain := stripANSI(resp.Stdout)
+	if !strings.Contains(plain, "0 updated · 0 up to date · 15 not installed") {
+		t.Fatalf("stdout missing batch summary:\n%s", resp.Stdout)
+	}
 }
 ```

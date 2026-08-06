@@ -47,13 +47,24 @@ func registryCLINames() []string {
 	}
 }
 
+// skills v0.0.26+ polished batch lines: "<name>  <status>" (+ summary).
+// Status tokens may be gray ANSI when color is on; match name + plain status.
 func assertNotInstalledLines(t *testing.T, stdout string, names ...string) {
 	t.Helper()
+	plain := stripANSI(stdout)
 	for _, name := range names {
-		want := "skill not installed: " + name
-		if !strings.Contains(stdout, want) {
+		want := name + "  not installed"
+		if !strings.Contains(plain, want) {
 			t.Fatalf("stdout missing %q:\n%s", want, stdout)
 		}
+	}
+}
+
+func assertUpToDateLine(t *testing.T, stdout, name string) {
+	t.Helper()
+	want := name + "  up to date"
+	if !strings.Contains(stripANSI(stdout), want) {
+		t.Fatalf("stdout missing %q:\n%s", want, stdout)
 	}
 }
 
@@ -62,6 +73,26 @@ func assertNoScopeHint(t *testing.T, stdout string) {
 	if strings.Contains(stdout, "No installed skills found") {
 		t.Fatalf("aggregate scope hint must be removed:\n%s", stdout)
 	}
+}
+
+// stripANSI removes CSI color sequences so status checks work with color auto/always.
+func stripANSI(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == '[' {
+			j := i + 2
+			for j < len(s) && (s[j] < 0x40 || s[j] > 0x7e) {
+				j++
+			}
+			if j < len(s) {
+				i = j
+				continue
+			}
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
 }
 
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {

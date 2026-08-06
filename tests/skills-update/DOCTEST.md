@@ -19,8 +19,9 @@ Participants:
 Behaviors:
 
 - **`doctest skills update`** — walks every registry skill in stable CLI-name
-  order; updates installed targets via `InstallTo`; prints `skill not installed:
-  <name>` when no target has `SKILL.md` at the resolved scope.
+  order; updates installed targets via `InstallTo`; prints polished
+  `<name>  not installed` / `<name>  up to date` lines (skills v0.0.26+) when a
+  skill has no installed target or needs no content change, plus a batch summary.
 - **`doctest skill tdd --install`** — seeds one skill before batch update tests.
 - **`doctest skills --help`** — documents the `update` subcommand.
 
