@@ -269,6 +269,9 @@ var predeclaredGoIdents = map[string]bool{
 	"append": true, "cap": true, "clear": true, "close": true, "complex": true, "copy": true,
 	"delete": true, "imag": true, "len": true, "make": true, "max": true, "min": true,
 	"new": true, "panic": true, "print": true, "println": true, "real": true, "recover": true,
+	// init is not a keyword or universe predeclared type, but cannot be an import
+	// alias: Go requires "init must be a func" (leaf packages also declare func init).
+	"init": true,
 }
 
 // SanitizePackageName turns a directory basename into a valid Go package identifier.

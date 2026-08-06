@@ -347,6 +347,7 @@ func TestSanitizePackageName(t *testing.T) {
 		"type":       "pkg_type",
 		"error":      "pkg_error", // predeclared builtin — must not shadow `err error`
 		"string":     "pkg_string",
+		"init":       "pkg_init", // cannot be import alias (func init)
 		"":           "pkg",
 		"__droot":    "pkg_droot", // after sanitize of underscores + reserved check
 	}
