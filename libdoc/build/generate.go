@@ -277,6 +277,11 @@ func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) 
 			if ctx.verbose && ctx.w != nil {
 				fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(filepath.Join(ctx.genRoot, "go.mod")))
 			}
+			// Framework packages (e.g. faas handlers) init via ProjectBasePath,
+			// which requires src/ + config/ under the go test cwd (genRoot).
+			if err := core.EnsureProjectBaseSymlinks(ctx.genRoot, ctx.absModRoot); err != nil {
+				return err
+			}
 		} else if ctx.assertImport || ctx.sessionImport {
 			modfilePath, err := core.WriteInternalModfile(ctx.modRoot, ctx.assertCacheDir, ctx.sessionCacheDir)
 			if err != nil {

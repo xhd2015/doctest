@@ -536,9 +536,23 @@ func BuildXgoTestConfigApply(goTestBin, projectModRoot, projectModPath, suiteMod
 
 // ApplyLoadedXgoTestConfig builds argv/env from an already-loaded config.
 // cfgPath may be empty when no file exists (include-as-only path). cfg may be
-// nil. No-op when goTestBin is not "xgo".
+// nil.
+//
+// Env from test.config.json is applied for both `go test` and `xgo test` (e.g.
+// HOST_IP / JAEGER_AGENT_PORT required by credit_framework init). Flags,
+// mock_rules, include-as-main, and bypass-go-flags args are xgo-only.
 func ApplyLoadedXgoTestConfig(goTestBin, cfgPath string, cfg *XgoTestConfig, projectModRoot, projectModPath, suiteModPath string) (XgoTestConfigApply, error) {
 	var out XgoTestConfigApply
+	if cfgPath != "" {
+		out.ConfigPath = cfgPath
+	}
+	if cfg == nil {
+		cfg = &XgoTestConfig{}
+	}
+	// Env for plain go and xgo (framework init when tests import product handlers).
+	if len(cfg.Env) > 0 {
+		out.Env = xgoConfigEnvPairs(cfg.Env)
+	}
 	if strings.TrimSpace(goTestBin) != "xgo" {
 		return out, nil
 	}
@@ -549,10 +563,6 @@ func ApplyLoadedXgoTestConfig(goTestBin, cfgPath string, cfg *XgoTestConfig, pro
 			out.Flags = []string{"--mock-rule-include-as-main-module=" + projectModPath}
 		}
 		return out, nil
-	}
-	out.ConfigPath = cfgPath
-	if cfg == nil {
-		cfg = &XgoTestConfig{}
 	}
 
 	// Config flags first (trap-stdlib, unified, …), then mock rules (higher
@@ -568,7 +578,6 @@ func ApplyLoadedXgoTestConfig(goTestBin, cfgPath string, cfg *XgoTestConfig, pro
 		out.IncludeAsMainModule = projectModPath
 		out.Flags = append(out.Flags, "--mock-rule-include-as-main-module="+projectModPath)
 	}
-	out.Env = xgoConfigEnvPairs(cfg.Env)
 	// Mirror xgo test-explorer's bypass-go-flags behavior: the leading "--" is
 	// passed after go test -args. Legacy boot code can still inspect os.Args,
 	// while Go's test flag parser stops before treating these as test flags.
