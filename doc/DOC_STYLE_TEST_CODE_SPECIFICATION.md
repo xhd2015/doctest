@@ -361,20 +361,16 @@ in `DOCTEST.md` (Rule 9), the root `DOCTEST.md` Go block must provide one.
 
 ### 11. `func Setup` body must not be vacuous
 
-A Setup function whose body is only `return nil`, or only blank-identifier
-assignments (`_ = expr`) then `return nil`, is vacuous. Prefer removing the Go
-code block (or omitting Setup) for organization-only nodes.
+A Setup function whose body is only `return nil` is vacuous. Prefer removing the
+Go code block (or omitting Setup) for organization-only nodes.
 
-**Violation** — bare or blank-assign stub:
+**Violation**:
 ```go
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
-    _ = t
-    _ = d
-    _ = req
     return nil
 }
 ```
-**Error**: `leaf/SETUP.md: vacuous func Setup (only return nil / blank assigns) — remove the Go code block (or omit Setup); organization-only nodes need no Setup`
+**Error**: `leaf/SETUP.md: vacuous func Setup — remove the Go code block (or omit Setup); organization-only nodes need no Setup`
 
 ## Fixture Directory: `testdata/`
 
@@ -451,7 +447,6 @@ import (
 )
 
 func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
-    _ = d
     if err != nil {
         t.Fatal(err)
     }
@@ -491,7 +486,6 @@ type Response struct {
 }
 
 func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
-    _ = d
     cmd := exec.Command("doctest", "build", req.InputDir)
     out, _ := cmd.CombinedOutput()
     return &Response{
@@ -555,8 +549,9 @@ Field names match the former free-variable names (immutable inject contract).
 They are **struct fields on `d`**, not free package vars and not environment
 variables. Authors access them only as `d.DOCTEST_*`.
 
-Author signatures may omit `d`; the assembler still generates a second parameter
-(always declare `d *session.Doctest`; use `_ = d` if unused):
+Author Setup / Run / Assert must declare `d *session.Doctest` as the second
+parameter after `t` (doctest validates this). The assembler always passes `d` at
+call sites:
 
 ```go
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
@@ -626,10 +621,8 @@ func repoRootFromDoctest(t *testing.T, doctestRoot string) string {
 func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
     root := repoRootFromDoctest(t, d.DOCTEST_ROOT)
     cache := filepath.Join(os.TempDir(), "my-feature-"+d.DOCTEST_SESSION_ID)
-    // or once per leaf: req.RepoRoot = repoRootFromDoctest(t, d.DOCTEST_ROOT)
-    _ = root
-    _ = cache
-    return &Response{}, nil
+    // real harness: session.Once under cache, open files under root, etc.
+    return doWork(t, root, cache, req)
 }
 ```
 

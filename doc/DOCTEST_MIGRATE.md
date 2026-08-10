@@ -52,7 +52,7 @@ code — never bare `DOCTEST_*` identifiers and never `os.Getenv("DOCTEST_…")`
 ### Required signatures
 
 Author Setup / Run / Assert must declare **`d *session.Doctest`** as the second
-parameter after `t` (doctest validates this). Use `_ = d` if unused.
+parameter after `t` (doctest validates this).
 
 ```go
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
@@ -211,9 +211,8 @@ Unexported symbols on root/intermediate packages are **exported by gen** (rename
 ```go
 func Setup(t *testing.T, req *Request) error {
     req.WorkDir = "." // was “leaf cwd”
-    data, _ := os.ReadFile("input.txt")
-    _ = data
-    return nil
+    _, err := os.ReadFile("input.txt")
+    return err
 }
 ```
 
@@ -222,12 +221,8 @@ func Setup(t *testing.T, req *Request) error {
 ```go
 func Setup(t *testing.T, d *session.Doctest, req *Request) error {
     req.WorkDir = d.DOCTEST_CASE
-    data, err := os.ReadFile(filepath.Join(d.DOCTEST_CASE, "input.txt"))
-    if err != nil {
-        return err
-    }
-    _ = data
-    return nil
+    _, err := os.ReadFile(filepath.Join(d.DOCTEST_CASE, "input.txt"))
+    return err
 }
 ```
 
