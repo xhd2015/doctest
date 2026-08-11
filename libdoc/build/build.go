@@ -46,7 +46,7 @@ func Build(dir string, opts core.Options) error {
 		return fmt.Errorf("%s: no runnable test cases found", dir)
 	}
 
-	ctx, err := newGenerateContext(dir, opts, cases, w, true, opts.Verbose)
+	ctx, err := newGenerateContext(dir, opts, w, true, opts.Verbose)
 	if err != nil {
 		return err
 	}
@@ -71,7 +71,6 @@ func Build(dir string, opts core.Options) error {
 	}
 
 	goBuildArgs := []string{"build", "-mod=mod"}
-	goBuildArgs = append(goBuildArgs, ctx.goCommandExtraArgs()...)
 	if opts.Verbose {
 		goBuildArgs = append(goBuildArgs, "-v")
 	}
@@ -91,10 +90,6 @@ func Build(dir string, opts core.Options) error {
 			return fmt.Errorf("go build failed: %v\n%s", err, hint)
 		}
 		return fmt.Errorf("go build failed: %v", err)
-	}
-
-	if err := ctx.syncDump(); err != nil {
-		return err
 	}
 	return nil
 }

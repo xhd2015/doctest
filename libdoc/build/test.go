@@ -114,7 +114,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 
 	// --- materialize ---
 	tMat := time.Now()
-	ctx, err := newGenerateContext(dir, opts, cases, w, false, opts.Verbose)
+	ctx, err := newGenerateContext(dir, opts, w, false, opts.Verbose)
 	if err != nil {
 		stats.Phases = phases
 		return stats, err
@@ -149,13 +149,14 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	track("generate", tGen)
 
 	// Multi-root workspace prep: generate only; caller runs suite/workspace.
+	// Always unified suite gen (layout A).
 	if opts.GenerateOnly {
 		stats.Phases = phases
 		stats.GenRoot = ctx.genRoot
 		stats.TreeRel = ctx.treeRel()
 		stats.SuiteRel = ctx.suiteRel()
 		stats.PathScoped = ctx.isPathScoped()
-		stats.Unified = ctx.unifiedMode
+		stats.Unified = true
 		stats.AbsRoot = absRoot
 		stats.VendorBridges = append([]core.VendorBridgeMapping(nil), ctx.vendorBridges...)
 		return stats, nil
@@ -168,7 +169,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		stats.TreeRel = ctx.treeRel()
 		stats.SuiteRel = ctx.suiteRel()
 		stats.PathScoped = ctx.isPathScoped()
-		stats.Unified = ctx.unifiedMode
+		stats.Unified = true
 		stats.AbsRoot = absRoot
 		stats.GoTestBypassed = true
 		// Planned leaves stay in Total; do not claim pass.
@@ -176,28 +177,15 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		return stats, nil
 	}
 
-	runDir, isSingleLeaf := ctx.runDir(absRoot, opts, cases)
-
+	var runDir string
 	var packageArgs []string
-	if ctx.unifiedMode {
-		if ctx.isPathScoped() {
-			// Path scope: cd gen && go test ./tree/mid/... (multi-package under prefix).
-			// Nested go.mod under the prefix is handled by separate preps/cmds.
-			runDir = ctx.genRoot
-			packageArgs = []string{pathScopedGoTestPattern(ctx.suiteRel())}
-		} else {
-			// Full tree: one suite package under the tree.
-			runDir = ctx.scopedMultiRunDir(absRoot)
-			var pkgErr error
-			packageArgs, pkgErr = ctx.packageArgsForCases(runDir, absRoot, cases)
-			if pkgErr != nil {
-				stats.Phases = phases
-				return stats, pkgErr
-			}
-		}
-	} else if isSingleLeaf {
-		packageArgs = []string{"."}
+	if ctx.isPathScoped() {
+		// Path scope: cd gen && go test ./tree/mid/... (multi-package under prefix).
+		// Nested go.mod under the prefix is handled by separate preps/cmds.
+		runDir = ctx.genRoot
+		packageArgs = []string{pathScopedGoTestPattern(ctx.suiteRel())}
 	} else {
+		// Full tree: one suite package under the tree.
 		runDir = ctx.scopedMultiRunDir(absRoot)
 		var pkgErr error
 		packageArgs, pkgErr = ctx.packageArgsForCases(runDir, absRoot, cases)
@@ -209,7 +197,6 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 
 	// Flags only — packages are appended per go-test invocation (and per shard).
 	flagArgs := []string{"test", "-mod=mod"}
-	flagArgs = append(flagArgs, ctx.goCommandExtraArgs()...)
 	flagArgs = appendOptsGoTestFlags(flagArgs, opts)
 
 	if err := checkCoverProfilePackages(opts, packageArgs); err != nil {
@@ -328,11 +315,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	// On build failed with no leaf events: do not treat package fail as 1 Run
 	// or pre-planned leaf-cache skips as Cached.
 	applyGoTestLeafStats(&stats, &result, len(cases), skipPaths, opts)
-	if ctx.unifiedMode {
-		stats.LeafTimings = leafTimingsFromSubtests(cases, result, goTestElapsed)
-	} else {
-		stats.LeafTimings = leafTimingsFromPackages(cases, packageArgs, isSingleLeaf, result, goTestElapsed)
-	}
+	stats.LeafTimings = leafTimingsFromSubtests(cases, result, goTestElapsed)
 	recordLeafCachePasses(leafKeys, result.suiteLeafFailed, goTestErr == nil && result.failCount == 0 && !result.buildFailed)
 
 	// Quiet path: compact progress summary. Verbose already streamed Output events.
@@ -379,15 +362,6 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		return stats, fmt.Errorf("go test: %w", goTestErr)
 	}
 
-	tPost := time.Now()
-	if err := ctx.syncDump(); err != nil {
-		track("post", tPost)
-		stats.Phases = phases
-		return stats, err
-	}
-	if d := time.Since(tPost); d > time.Millisecond {
-		track("post", tPost)
-	}
 	if !opts.Verbose {
 		fmt.Fprintln(w)
 	}
@@ -551,77 +525,6 @@ func leafTimingsFromSubtests(cases []core.TreeCase, result goTestJSONResult, goT
 		out = append(out, lt)
 	}
 	return out
-}
-
-// leafTimingsFromPackages attributes go test -json package Elapsed to leaves.
-// When unmappable, multi-leaf elapsed stays 0 (do not clone tree wall onto every leaf).
-func leafTimingsFromPackages(cases []core.TreeCase, packageArgs []string, isSingleLeaf bool, result goTestJSONResult, goTestWall time.Duration) []LeafTiming {
-	out := make([]LeafTiming, 0, len(cases))
-	if isSingleLeaf && len(cases) == 1 {
-		cached := false
-		for _, c := range result.pkgCached {
-			if c {
-				cached = true
-				break
-			}
-		}
-		// Prefer package elapsed when present.
-		var ns int64
-		for _, e := range result.pkgElapsedNs {
-			if e > ns {
-				ns = e
-			}
-		}
-		if ns == 0 {
-			ns = goTestWall.Nanoseconds()
-		}
-		return []LeafTiming{{Path: cases[0].Path, ElapsedNs: ns, Cached: cached}}
-	}
-	for _, tc := range cases {
-		lt := LeafTiming{Path: tc.Path}
-		slash := filepath.ToSlash(tc.Path)
-		for pkg, ns := range result.pkgElapsedNs {
-			if packageMatchesLeaf(pkg, slash) {
-				lt.ElapsedNs = ns
-				lt.Cached = result.pkgCached[pkg]
-				break
-			}
-		}
-		// Fallback: packageArgs "./rel" vs leaf path suffix.
-		if lt.ElapsedNs == 0 {
-			for _, arg := range packageArgs {
-				rel := strings.TrimPrefix(filepath.ToSlash(arg), "./")
-				if rel == slash || strings.HasSuffix(rel, "/"+slash) || strings.HasSuffix(slash, "/"+rel) || rel == filepath.Base(slash) {
-					// try match any pkg ending with rel
-					for pkg, ns := range result.pkgElapsedNs {
-						if strings.HasSuffix(filepath.ToSlash(pkg), "/"+rel) || strings.HasSuffix(filepath.ToSlash(pkg), rel) {
-							lt.ElapsedNs = ns
-							lt.Cached = result.pkgCached[pkg]
-							break
-						}
-					}
-				}
-				if lt.ElapsedNs > 0 {
-					break
-				}
-			}
-		}
-		out = append(out, lt)
-	}
-	return out
-}
-
-func packageMatchesLeaf(pkg, leafSlash string) bool {
-	p := filepath.ToSlash(pkg)
-	if p == leafSlash {
-		return true
-	}
-	if strings.HasSuffix(p, "/"+leafSlash) {
-		return true
-	}
-	// last path segment(s)
-	base := filepath.Base(leafSlash)
-	return strings.HasSuffix(p, "/"+base) && strings.Contains(p, leafSlash)
 }
 
 type goTestJSONResult struct {

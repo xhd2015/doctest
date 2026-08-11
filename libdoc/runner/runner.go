@@ -704,7 +704,8 @@ func runSuitePlan(targets []suiteTarget, opts core.Options, rec *runRecorder, st
 		}
 	}
 
-	// Non-unified (internal-compile) trees: legacy per-root go test.
+	// Non-unified trees (should be empty now): legacy per-root go test.
+	// Retained for defensive fan-in if Prepare ever marks Unified=false.
 	for _, r := range legacy {
 		o := opts
 		o.SubDir = r.subDir

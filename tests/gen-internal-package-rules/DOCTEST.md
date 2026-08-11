@@ -7,9 +7,10 @@
 ## Layer
 
 **L3 e2e, heavy** — builds product `doctest` binary and runs it on fixture
-subject trees. Outer leaves expect **FAIL** until gen packaging is fixed
-(kind A shim) or until the subject is run under product-module internal-compile
-(kind B success path lives in `tests/build/in-module/`).
+subject trees. These leaves lock **RED** (illegal raw internal import) contracts
+for kind A/B **before** shims rewrite imports. Kind B **success** path (parent/
+product internal → Kind B `__doctest_internal_expose` + unified layout A) is
+covered by `tests/parent-internal-unified/` and core shim unit tests.
 
 ## DSN
 
@@ -22,7 +23,8 @@ Two illegal-import modes (MECE):
 
 Kind A uses **public/stdlib-only** leaf `Run` (no product internal import).
 Kind B uses a **runner** module (`example.com/runner`) + `replace` to `app`
-so `CasesImportInternalPackage` does not trigger in-module compile.
+under **external** unified gen. Production always uses layout A; there is no
+classic multi-leaf `.doctest_run_*` / internalCompile mode-selection path.
 
 ## Decision tree
 

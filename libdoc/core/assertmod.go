@@ -139,7 +139,9 @@ func assertModuleSourceForCache() []byte {
 	return []byte(strings.Join(lines[i:], ""))
 }
 
-// WriteInternalModfile copies the parent go.mod and appends assert/session replace directives.
+// WriteInternalModfile copies the parent go.mod to <modRoot>/.doctest.mod and
+// appends assert/session replace directives. L2 helper retained for assert-mod
+// tests; production gen uses mapping-gen go.mod + Kind B expose (not -modfile).
 func WriteInternalModfile(modRoot, assertCacheDir, sessionCacheDir string) (string, error) {
 	parentGoMod := filepath.Join(modRoot, "go.mod")
 	data, err := os.ReadFile(parentGoMod)

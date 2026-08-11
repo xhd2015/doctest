@@ -1,3 +1,12 @@
+// Package core internal shims: Kind A (scenario-path /internal/) and Kind B
+// (product/parent module …/internal/… → __doctest_internal_expose facade).
+//
+// Production gen is always hierarchical unified (layout A). Parent/product
+// internal imports never force classic multi-leaf .doctest_run_* compile; they
+// are rewritten to Kind B expose packages via ApplyInternalShimsAfterUnifiedGen
+// and merged into vendor-gomod-overlay.json. Overlay-only expose packages need
+// -vet=off (NeedVetOff / InternalShimVetOffMarker). Prefer -coverpkg on real
+// product packages, not the virtual expose facade path.
 package core
 
 import (
@@ -196,9 +205,12 @@ func darwinPathVariants(p string) []string {
 	return out
 }
 
-// productInternalImport reports whether imp is someModule/internal/... and not
-// under the parent module's internal (that path uses internal-compile).
+// productInternalImport reports whether imp is someModule/internal/... eligible
+// for Kind B expose facades. Parent-module internals are included (Kind B);
+// only gen-module testcase paths are excluded (Kind A).
+// parentModPath is retained for call-site compatibility but does not skip.
 func productInternalImport(imp, parentModPath string) (productMod, internalPkg string, ok bool) {
+	_ = parentModPath
 	const marker = "/internal/"
 	idx := strings.Index(imp, marker)
 	if idx < 0 {
@@ -206,10 +218,6 @@ func productInternalImport(imp, parentModPath string) (productMod, internalPkg s
 	}
 	productMod = imp[:idx]
 	if productMod == "" {
-		return "", "", false
-	}
-	// Parent-module internal → handled by internalCompile, skip expose.
-	if parentModPath != "" && productMod == parentModPath {
 		return "", "", false
 	}
 	// Gen module testcase paths are kind A (scenario-path internal), not product.
@@ -375,8 +383,9 @@ func resolveModuleDirFromGoMod(workDir, modulePath string) (string, error) {
 	return "", fmt.Errorf("no replace for %s in go.mod", modulePath)
 }
 
-// generateExposeSource builds a facade package re-exporting exported funcs/types
-// from the product internal package so external modules can import the expose path.
+// generateExposeSource builds a facade package re-exporting exported funcs,
+// types, vars, and consts from the product internal package so external modules
+// can import the expose path. Package name matches the internal package.
 func generateExposeSource(internalImp, internalDir string) (string, error) {
 	fset := token.NewFileSet()
 	pkgs, err := parser.ParseDir(fset, internalDir, func(fi os.FileInfo) bool {
@@ -401,6 +410,10 @@ func generateExposeSource(internalImp, internalDir string) (string, error) {
 
 	var types []string
 	seenTy := map[string]bool{}
+	var vars []string
+	seenVar := map[string]bool{}
+	var consts []string
+	seenConst := map[string]bool{}
 	var funcDecls []*ast.FuncDecl
 	seenFn := map[string]bool{}
 	for _, f := range pkg.Files {
@@ -416,24 +429,54 @@ func generateExposeSource(internalImp, internalDir string) (string, error) {
 				seenFn[d.Name.Name] = true
 				funcDecls = append(funcDecls, d)
 			case *ast.GenDecl:
-				if d.Tok != token.TYPE {
-					continue
-				}
-				for _, sp := range d.Specs {
-					ts, ok := sp.(*ast.TypeSpec)
-					if !ok || ts.Name == nil || !ts.Name.IsExported() {
-						continue
+				switch d.Tok {
+				case token.TYPE:
+					for _, sp := range d.Specs {
+						ts, ok := sp.(*ast.TypeSpec)
+						if !ok || ts.Name == nil || !ts.Name.IsExported() {
+							continue
+						}
+						if seenTy[ts.Name.Name] {
+							continue
+						}
+						seenTy[ts.Name.Name] = true
+						types = append(types, ts.Name.Name)
 					}
-					if seenTy[ts.Name.Name] {
-						continue
+				case token.VAR:
+					for _, sp := range d.Specs {
+						vs, ok := sp.(*ast.ValueSpec)
+						if !ok {
+							continue
+						}
+						for _, n := range vs.Names {
+							if n == nil || !n.IsExported() || seenVar[n.Name] {
+								continue
+							}
+							seenVar[n.Name] = true
+							vars = append(vars, n.Name)
+						}
 					}
-					seenTy[ts.Name.Name] = true
-					types = append(types, ts.Name.Name)
+				case token.CONST:
+					for _, sp := range d.Specs {
+						vs, ok := sp.(*ast.ValueSpec)
+						if !ok {
+							continue
+						}
+						for _, n := range vs.Names {
+							if n == nil || !n.IsExported() || seenConst[n.Name] {
+								continue
+							}
+							seenConst[n.Name] = true
+							consts = append(consts, n.Name)
+						}
+					}
 				}
 			}
 		}
 	}
 	sort.Strings(types)
+	sort.Strings(vars)
+	sort.Strings(consts)
 	sort.Slice(funcDecls, func(i, j int) bool {
 		return funcDecls[i].Name.Name < funcDecls[j].Name.Name
 	})
@@ -457,6 +500,31 @@ func generateExposeSource(internalImp, internalDir string) (string, error) {
 		b.WriteString("\n")
 	}
 	if len(types) > 0 {
+		b.WriteString("\n")
+	}
+	for _, name := range vars {
+		b.WriteString("var ")
+		b.WriteString(name)
+		b.WriteString(" = ")
+		b.WriteString(srcAlias)
+		b.WriteString(".")
+		b.WriteString(name)
+		b.WriteString("\n")
+	}
+	if len(vars) > 0 {
+		b.WriteString("\n")
+	}
+	for _, name := range consts {
+		// const X = srcpkg.X is valid when X is a constant in the source package.
+		b.WriteString("const ")
+		b.WriteString(name)
+		b.WriteString(" = ")
+		b.WriteString(srcAlias)
+		b.WriteString(".")
+		b.WriteString(name)
+		b.WriteString("\n")
+	}
+	if len(consts) > 0 {
 		b.WriteString("\n")
 	}
 	for _, fd := range funcDecls {

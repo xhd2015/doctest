@@ -122,8 +122,9 @@ genRoot/
 | One `*_test.go` per leaf, `go test ./...` over many packages | **One suite package** per tree; leaves are non-test packages |
 | Grep for `TestGeneratedCase…` | Look for **`TestDoctestSuite`** and subtests (paths may encode `/` as `__`) |
 | Probe `leaf_foo_test.go` | Probe **`leaf.go`** (+ suite / `__droot`) |
-| Flags to enable ref/unified | **Removed** — always on (except internal-compile special case) |
+| Flags to enable ref/unified | **Removed** — always hierarchical unified (layout A) |
 | Classic “everything inlined in leaf” | **Gone as production default** |
+| Parent/product `internal` → multi-leaf `.doctest_run_*` | **Gone** — always unified suite + Kind B expose |
 
 ### CLI flags removed
 
@@ -136,9 +137,30 @@ Delete from scripts, Makefiles, CI, docs:
 
 There is **no** flag to restore classic production gen.
 
-### Internal-compile exception
+### Parent / product `internal` packages (always unified)
 
-Trees that compile **inside** a module with **internal** package imports still use the classic assemble path (module-internal layout). Most product trees are **external gen (mapping-gen)** and get hierarchical unified. If you hit internal-compile, gen layout may still look classic for that tree only.
+Trees that import **parent-module or product** `…/internal/…` **no longer** switch to
+classic multi-leaf compile under `.doctest_run_*`. Gen is always **layout A**
+(hierarchical unified: `__droot`, intermediates, `leaf.go`, one `suite` package
+per tree, `__allleaves` / `__registry`).
+
+Access to product/parent `internal` is via **Kind B** export rewrite:
+
+- Gen sources import a virtual facade path:
+  `<productMod>/__doctest_internal_expose/<tail-after-internal/>`
+  (not the real `…/internal/…` import path).
+- Bodies are materialised under gen (`__doctest_shim_store`) and wired with
+  **`-overlay`** (and `-vet=off` when expose packages are active — default `go test`
+  vet would chdir into non-existent overlay-only dirs).
+- Prefer **`-coverpkg` on real product / `internal` packages** (the packages you
+  care about covering). Do **not** point `-coverpkg` at the virtual
+  `__doctest_internal_expose/…` facade path.
+- **`-coverprofile`** works against the **single suite package** (one package
+  argument), not a multi-leaf package list.
+
+Scenario-path segments named `internal` under the gen module (`testcase/…/internal/…`)
+still use **Kind A** blank-import shims under `__doctest_internal_shim` so
+`__allleaves` never blank-imports a forbidden gen-internal path.
 
 ---
 

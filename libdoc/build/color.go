@@ -143,7 +143,8 @@ type TestRunStats struct {
 	SuiteRel string
 	// PathScoped is true when the run is under a mid/leaf path, not whole tree.
 	PathScoped bool
-	// Unified is true when hierarchical suite gen was used (not internal-compile).
+	// Unified is true for hierarchical suite gen (always true; field kept for
+	// workspace/metrics consumers that branch on suite vs legacy multi-leaf).
 	Unified bool
 	AbsRoot string
 	// VendorBridges are the explicit bridge mappings created while preparing

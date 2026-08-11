@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 
@@ -23,14 +22,11 @@ type generateContext struct {
 	modPath         string
 	hasMod          bool
 	genRoot         string
-	compileRoot     string
 	dumpDir         string
-	internalCompile bool
 	assertImport    bool
 	assertCacheDir  string
 	sessionImport   bool
 	sessionCacheDir string
-	modfilePath     string
 	// vendorBridges is current-generation metadata returned while writing the
 	// generated go.mod. It is passed to pre_test overlay normalization rather
 	// than rediscovered from a retained generated root.
@@ -46,22 +42,18 @@ type generateContext struct {
 	forceA bool
 	// unlockGenRoot releases LockGenRootWrites for shared mapping-gen safety.
 	unlockGenRoot func()
-	// unifiedMode: hierarchical ref packages + one suite package per DOCTEST tree.
-	// Always true for normal generation; false only for internal-compile trees
-	// (module-internal import path layout still uses classic AssembleTestSource).
-	unifiedMode bool
 	// subDir is the path-scope filter (opts.SubDir): abs or relative source path
 	// under the DOCTEST tree (mid branch, leaf, or equal to tree root for full tree).
 	subDir    string
 	closeOnce sync.Once
 	// lifecycleMu serializes gen writes against interrupt cleanup. The SIGINT
 	// handler acquires it and holds it through os.Exit so writeCases cannot
-	// recreate .doctest_run_* / temp roots after RemoveAll.
+	// recreate temp roots after RemoveAll.
 	lifecycleMu sync.Mutex
 	closed      bool
 }
 
-func newGenerateContext(dir string, opts core.Options, cases []core.TreeCase, w io.Writer, forBuild bool, verbose bool) (*generateContext, error) {
+func newGenerateContext(dir string, opts core.Options, w io.Writer, forBuild bool, verbose bool) (*generateContext, error) {
 	absRoot, err := filepath.Abs(dir)
 	if err != nil {
 		return nil, err
@@ -74,33 +66,29 @@ func newGenerateContext(dir string, opts core.Options, cases []core.TreeCase, w 
 	// replace only — tidy then resolves assert via github.com/xhd2015/doctest@vX
 	// (parent module also has session/) and fails with ambiguous session import.
 	// Session is always required: assemble injects d *session.Doctest.
+	//
+	// Always hierarchical unified (layout A + Kind A/B shims). Parent/product
+	// internal imports use Kind B __doctest_internal_expose rewrite — never
+	// classic multi-leaf under .doctest_run_*.
 	assertImport := true
 	sessionImport := true
 
-	// Default generation is hierarchical unified (ref packages + suite).
-	// Internal-compile trees keep classic AssembleTestSource (module-internal
-	// import path layout).
-	internalCompile := hasMod && core.CasesImportInternalPackage(cases, modPath)
-	unifiedMode := !internalCompile
-
 	ctx := &generateContext{
-		w:               w,
-		verbose:         verbose,
-		absRoot:         absRoot,
-		absModRoot:      absModRoot,
-		modRoot:         modRoot,
-		modPath:         modPath,
-		hasMod:          hasMod,
-		dumpDir:         opts.GenDir,
-		internalCompile: internalCompile,
-		assertImport:    assertImport,
-		sessionImport:   sessionImport,
-		goCache:         opts.GoCache,
-		genBatch:        opts.GenBatch,
-		generateOnly:    opts.GenerateOnly,
-		forceA:          opts.ForceWithFlagA,
-		unifiedMode:     unifiedMode,
-		subDir:          opts.SubDir,
+		w:              w,
+		verbose:        verbose,
+		absRoot:        absRoot,
+		absModRoot:     absModRoot,
+		modRoot:        modRoot,
+		modPath:        modPath,
+		hasMod:         hasMod,
+		dumpDir:        opts.GenDir,
+		assertImport:   assertImport,
+		sessionImport:  sessionImport,
+		goCache:        opts.GoCache,
+		genBatch:       opts.GenBatch,
+		generateOnly:   opts.GenerateOnly,
+		forceA:         opts.ForceWithFlagA,
+		subDir:         opts.SubDir,
 	}
 
 	if assertImport {
@@ -116,16 +104,6 @@ func newGenerateContext(dir string, opts core.Options, cases []core.TreeCase, w 
 			return nil, err
 		}
 		ctx.sessionCacheDir = cacheDir
-	}
-
-	if ctx.internalCompile {
-		compileRoot, err := core.NewInternalCompileRoot(modRoot)
-		if err != nil {
-			return nil, err
-		}
-		ctx.compileRoot = compileRoot
-		ctx.genRoot = compileRoot
-		return ctx, nil
 	}
 
 	genRoot := opts.GenDir
@@ -176,30 +154,9 @@ func newGenerateContext(dir string, opts core.Options, cases []core.TreeCase, w 
 
 // removeTempsLocked deletes interrupt-scoped temps. Caller must hold lifecycleMu.
 func (ctx *generateContext) removeTempsLocked() {
-	if ctx.modfilePath != "" {
-		// Internal-compile writes <modRoot>/.doctest.mod and runs go with
-		// -modfile=…. Go's sum companion is the same path with .mod → .sum
-		// (e.g. .doctest.sum). Remove both so consumer module roots stay clean.
-		os.Remove(ctx.modfilePath)
-		if sumPath := modfileCompanionSum(ctx.modfilePath); sumPath != "" {
-			os.Remove(sumPath)
-		}
-	}
-	if ctx.compileRoot != "" {
-		os.RemoveAll(ctx.compileRoot)
-	}
 	if ctx.removeLegacyTmp && ctx.dumpDir == "" {
 		os.RemoveAll(ctx.genRoot)
 	}
-}
-
-// modfileCompanionSum returns the go.sum path that accompanies a -modfile path.
-// Go derives it by replacing a trailing ".mod" with ".sum" (see cmd/go modload).
-func modfileCompanionSum(modfilePath string) string {
-	if !strings.HasSuffix(modfilePath, ".mod") {
-		return ""
-	}
-	return strings.TrimSuffix(modfilePath, ".mod") + ".sum"
 }
 
 func (ctx *generateContext) Close() {
@@ -225,7 +182,7 @@ func (ctx *generateContext) withGenLock(fn func() error) error {
 }
 
 func (ctx *generateContext) installInterruptCleanup() {
-	if ctx.compileRoot == "" && !ctx.removeLegacyTmp {
+	if !ctx.removeLegacyTmp {
 		return
 	}
 	ch := make(chan os.Signal, 1)
@@ -233,7 +190,7 @@ func (ctx *generateContext) installInterruptCleanup() {
 	go func() {
 		<-ch
 		// Hold lifecycleMu until process exit so concurrent writeCases cannot
-		// MkdirAll/WriteFile a removed compile temp back into existence.
+		// MkdirAll/WriteFile a removed temp back into existence.
 		ctx.lifecycleMu.Lock()
 		ctx.closeOnce.Do(func() {
 			ctx.closed = true
@@ -258,8 +215,12 @@ func (ctx *generateContext) announceRoots() {
 // genModMu; tree-local package dirs may be written in parallel by multi-tree
 // ./... prepare (no global writeCases lock).
 //
-// Ephemeral compile/build temps are written under lifecycleMu so SIGINT cleanup
+// Ephemeral build temps are written under lifecycleMu so SIGINT cleanup
 // can RemoveAll without racing recreating writers.
+//
+// Always hierarchical unified (layout A): __droot, intermediates, leaf.go,
+// suite/__allleaves/__registry. Parent/product internal → Kind B
+// __doctest_internal_expose rewrite via ApplyInternalShimsAfterUnifiedGen.
 func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) error {
 	pkgName := "testcase"
 	srcDir, origPkg, hasPkgUnderTest := core.ResolvePkgUnderTest(ctx.absRoot)
@@ -268,86 +229,27 @@ func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) 
 	}
 
 	if err := ctx.withGenLock(func() error {
-		if !ctx.internalCompile {
-			bridges, err := core.WriteGoModWithVendorBridges(ctx.genRoot, ctx.absModRoot, ctx.modPath, ctx.hasMod, ctx.assertImport, ctx.assertCacheDir, ctx.sessionImport, ctx.sessionCacheDir)
-			if err != nil {
-				return err
-			}
-			ctx.vendorBridges = bridges
-			if ctx.verbose && ctx.w != nil {
-				fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(filepath.Join(ctx.genRoot, "go.mod")))
-			}
-			// Framework packages (e.g. faas handlers) init via ProjectBasePath,
-			// which requires src/ + config/ under the go test cwd (genRoot).
-			if err := core.EnsureProjectBaseSymlinks(ctx.genRoot, ctx.absModRoot); err != nil {
-				return err
-			}
-		} else if ctx.assertImport || ctx.sessionImport {
-			modfilePath, err := core.WriteInternalModfile(ctx.modRoot, ctx.assertCacheDir, ctx.sessionCacheDir)
-			if err != nil {
-				return err
-			}
-			ctx.modfilePath = modfilePath
-			if ctx.verbose && ctx.w != nil {
-				fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(modfilePath))
-			}
+		bridges, err := core.WriteGoModWithVendorBridges(ctx.genRoot, ctx.absModRoot, ctx.modPath, ctx.hasMod, ctx.assertImport, ctx.assertCacheDir, ctx.sessionImport, ctx.sessionCacheDir)
+		if err != nil {
+			return err
+		}
+		ctx.vendorBridges = bridges
+		if ctx.verbose && ctx.w != nil {
+			fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(filepath.Join(ctx.genRoot, "go.mod")))
+		}
+		// Framework packages (e.g. faas handlers) init via ProjectBasePath,
+		// which requires src/ + config/ under the go test cwd (genRoot).
+		if err := core.EnsureProjectBaseSymlinks(ctx.genRoot, ctx.absModRoot); err != nil {
+			return err
 		}
 		return nil
 	}); err != nil {
 		return err
 	}
 
-	if ctx.unifiedMode {
-		return ctx.withGenLock(func() error {
-			if err := ctx.writeUnifiedCases(cases, compileOnly, pkgName, hasPkgUnderTest, srcDir, origPkg); err != nil {
-				return err
-			}
-			if err := core.FlushGenManifest(ctx.genRoot); err != nil {
-				return err
-			}
-			return ctx.finishGenOrphans()
-		})
-	}
-
-	// Internal-compile only: classic full-inline AssembleTestSource per leaf.
-	// Per-leaf lock so SIGINT can clean up between leaves (and after a leaf finishes).
-	for _, tc := range cases {
-		tc := tc
-		if err := ctx.withGenLock(func() error {
-			absLeafDir := filepath.Join(ctx.absRoot, tc.Path)
-			leafDir, err := core.GenDirForLeaf(ctx.genRoot, ctx.absModRoot, absLeafDir)
-			if err != nil {
-				return fmt.Errorf("gen dir for leaf %s: %w", tc.Path, err)
-			}
-
-			if hasPkgUnderTest {
-				if _, err := core.CopySourceFiles(leafDir, srcDir, origPkg); err != nil {
-					return fmt.Errorf("copy source files to %s: %w", leafDir, err)
-				}
-			}
-
-			testPath, _, err := core.WriteGeneratedCase(leafDir, tc, compileOnly, pkgName, ctx.absRoot)
-			if err != nil {
-				return err
-			}
-			if ctx.verbose && ctx.w != nil {
-				if compileOnly {
-					fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(leafDir))
-				} else {
-					fmt.Fprintf(ctx.w, "→ %s\n", pathfmt.Short(testPath))
-				}
-			}
-			return nil
-		}); err != nil {
-			return err
-		}
-	}
-
 	return ctx.withGenLock(func() error {
-		if ctx.hasMod && !ctx.internalCompile {
-			if err := core.CondTidyGoMod(ctx.genRoot, ctx.goCache); err != nil {
-				return err
-			}
+		if err := ctx.writeUnifiedCases(cases, compileOnly, pkgName, hasPkgUnderTest, srcDir, origPkg); err != nil {
+			return err
 		}
 		if err := core.FlushGenManifest(ctx.genRoot); err != nil {
 			return err
@@ -365,7 +267,7 @@ func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) 
 // tree/mid) so sibling packages outside the user path are never orphan-deleted.
 func (ctx *generateContext) finishGenOrphans() error {
 	defer ctx.releaseGenWrite()
-	if ctx.internalCompile || ctx.generateOnly || ctx.genBatch == nil {
+	if ctx.generateOnly || ctx.genBatch == nil {
 		return nil
 	}
 	// Single-tree path: no sibling treeRels to exclude.
@@ -544,46 +446,12 @@ func (ctx *generateContext) writeUnifiedCases(cases []core.TreeCase, compileOnly
 		}
 	}
 
-	if ctx.hasMod && !ctx.internalCompile {
+	if ctx.hasMod {
 		if err := core.CondTidyGoMod(ctx.genRoot, ctx.goCache); err != nil {
 			return err
 		}
 	}
 	return core.FlushGenManifest(ctx.genRoot)
-}
-
-func (ctx *generateContext) syncDump() error {
-	if !ctx.internalCompile || ctx.dumpDir == "" {
-		return nil
-	}
-	if err := os.MkdirAll(ctx.dumpDir, 0755); err != nil {
-		return err
-	}
-	return core.CopyGeneratedTree(ctx.compileRoot, ctx.dumpDir)
-}
-
-func (ctx *generateContext) runDir(absRoot string, opts core.Options, cases []core.TreeCase) (string, bool) {
-	runDir := ctx.genRoot
-	isSingleLeaf := false
-	if opts.SubDir != "" {
-		subDirAbs := opts.SubDir
-		if !filepath.IsAbs(subDirAbs) {
-			subDirAbs = filepath.Join(absRoot, subDirAbs)
-		}
-		if _, err := os.Stat(filepath.Join(subDirAbs, "ASSERT.md")); err == nil {
-			isSingleLeaf = true
-		}
-		relSubDir, err := filepath.Rel(ctx.absModRoot, subDirAbs)
-		if err == nil && relSubDir != "." {
-			runDir = filepath.Join(ctx.genRoot, relSubDir)
-		}
-	}
-	if !isSingleLeaf && len(cases) == 1 && cases[0].Path != "" {
-		leafDir, _ := core.GenDirForLeaf(ctx.genRoot, ctx.absModRoot, filepath.Join(absRoot, cases[0].Path))
-		runDir = leafDir
-		isSingleLeaf = true
-	}
-	return runDir, isSingleLeaf
 }
 
 func (ctx *generateContext) scopedMultiRunDir(absRoot string) string {
@@ -606,49 +474,23 @@ func pathScopedGoTestPattern(suiteRel string) string {
 	return "./" + strings.TrimPrefix(suiteRel, "./") + "/..."
 }
 
+// packageArgsForCases returns go test package args for the unified suite layout.
+// Full tree: single suite package. Path-scoped: ./<suiteRel>/...
 func (ctx *generateContext) packageArgsForCases(runDir, absRoot string, cases []core.TreeCase) ([]string, error) {
-	if ctx.unifiedMode {
-		// Path-scoped: go test ./<suiteRel>/... (not a hard-coded */suite package).
-		if ctx.isPathScoped() {
-			return []string{pathScopedGoTestPattern(ctx.suiteRel())}, nil
-		}
-		// Full tree: single suite package under treeRel.
-		suiteDir := core.UnifiedSuiteDirForTree(ctx.genRoot, ctx.treeRel())
-		rel, err := filepath.Rel(runDir, suiteDir)
-		if err != nil {
-			return nil, fmt.Errorf("package path for suite: %w", err)
-		}
-		if rel == "." {
-			return []string{"."}, nil
-		}
-		return []string{"./" + filepath.ToSlash(rel)}, nil
+	_ = absRoot
+	_ = cases
+	// Path-scoped: go test ./<suiteRel>/... (not a hard-coded */suite package).
+	if ctx.isPathScoped() {
+		return []string{pathScopedGoTestPattern(ctx.suiteRel())}, nil
 	}
-	seen := make(map[string]bool)
-	args := make([]string, 0, len(cases))
-	for _, tc := range cases {
-		absLeaf := filepath.Join(absRoot, tc.Path)
-		leafGen, err := core.GenDirForLeaf(ctx.genRoot, ctx.absModRoot, absLeaf)
-		if err != nil {
-			return nil, err
-		}
-		rel, err := filepath.Rel(runDir, leafGen)
-		if err != nil {
-			return nil, fmt.Errorf("package path for %s: %w", tc.Path, err)
-		}
-		arg := "./" + filepath.ToSlash(rel)
-		if seen[arg] {
-			continue
-		}
-		seen[arg] = true
-		args = append(args, arg)
+	// Full tree: single suite package under treeRel.
+	suiteDir := core.UnifiedSuiteDirForTree(ctx.genRoot, ctx.treeRel())
+	rel, err := filepath.Rel(runDir, suiteDir)
+	if err != nil {
+		return nil, fmt.Errorf("package path for suite: %w", err)
 	}
-	sort.Strings(args)
-	return args, nil
-}
-
-func (ctx *generateContext) goCommandExtraArgs() []string {
-	if ctx.internalCompile && (ctx.assertImport || ctx.sessionImport) && ctx.modfilePath != "" {
-		return []string{"-modfile=" + ctx.modfilePath}
+	if rel == "." {
+		return []string{"."}, nil
 	}
-	return nil
+	return []string{"./" + filepath.ToSlash(rel)}, nil
 }
