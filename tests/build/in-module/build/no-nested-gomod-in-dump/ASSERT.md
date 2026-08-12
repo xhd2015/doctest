@@ -22,7 +22,7 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 		t.Fatalf("doctest subprocess failed: %v", err)
 	}
 	if resp.ExitCode != 0 {
-		t.Fatalf("expected build dump without nested go.mod, got exit %d\nstdout:\n%s\nstderr:\n%s", resp.ExitCode, resp.Stdout, resp.Stderr)
+		t.Fatalf("expected unified build dump (layout A + Kind B expose) to succeed, got exit %d\nstdout:\n%s\nstderr:\n%s", resp.ExitCode, resp.Stdout, resp.Stderr)
 	}
 	assertDumpHasInternalImport(t, req.GenDir)
 	assertDumpNoNestedGoMod(t, req.GenDir)

@@ -8,12 +8,13 @@ import (
 	"sync"
 
 	"github.com/xhd2015/doctest/libdoc/sessionmod"
+	"golang.org/x/sys/unix"
 )
 
 const SessionImportPath = "github.com/xhd2015/doctest/session"
 
-// sessionMaterializeMu serializes first-time writes so parallel nested doctest
-// leaves do not observe a half-created session-mod directory.
+// sessionMaterializeMu serializes first-time writes within one process.
+// Cross-process races use flock on cacheRoot+".lock" (nested doctest subprocesses).
 var sessionMaterializeMu sync.Mutex
 
 // CasesImportSessionPackage reports whether any case imports the doctest session package.
@@ -28,6 +29,7 @@ func CasesImportSessionPackage(cases []TreeCase, modPath string) bool {
 // MaterializeSessionModule writes embedded session sources to a content-addressed cache
 // directory under $CACHE/doctest/session-mod/<md5>/ and returns the cache path.
 // Safe for concurrent callers: cold path stages into a temp dir then renames into place.
+// Cross-process safety: exclusive flock on <cacheRoot>.lock before writing.
 func MaterializeSessionModule() (string, error) {
 	content := sessionModuleSourceForCache()
 	md5hex := sessionmod.RawSourceCacheKeyMD5()
@@ -45,16 +47,29 @@ func MaterializeSessionModule() (string, error) {
 	sessionMaterializeMu.Lock()
 	defer sessionMaterializeMu.Unlock()
 
-	// Re-check under lock (another leaf may have finished).
+	// Re-check under process lock (another leaf may have finished).
+	if sessionCacheLayoutComplete(cacheRoot) {
+		return cacheRoot, nil
+	}
+
+	parent := filepath.Dir(cacheRoot)
+	if err := os.MkdirAll(parent, 0755); err != nil {
+		return "", err
+	}
+
+	// Cross-process exclusive lock so parallel nested doctest binaries do not
+	// observe a half-written session-mod (in-process mu alone is not enough).
+	unlock, err := flockExclusive(cacheRoot + ".lock")
+	if err != nil {
+		return "", fmt.Errorf("session-mod flock: %w", err)
+	}
+	defer unlock()
+
 	if sessionCacheLayoutComplete(cacheRoot) {
 		return cacheRoot, nil
 	}
 
 	// Stage then rename so readers never see an incomplete session-mod dir.
-	parent := filepath.Dir(cacheRoot)
-	if err := os.MkdirAll(parent, 0755); err != nil {
-		return "", err
-	}
 	tmp, err := os.MkdirTemp(parent, "session-mod-stage-*")
 	if err != nil {
 		return "", err
@@ -103,6 +118,23 @@ func MaterializeSessionModule() (string, error) {
 		return "", fmt.Errorf("session-mod materialize incomplete: %s", cacheRoot)
 	}
 	return cacheRoot, nil
+}
+
+// flockExclusive creates path if needed and takes an exclusive flock.
+// Returns an unlock func (always safe to call).
+func flockExclusive(path string) (unlock func(), err error) {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		return nil, err
+	}
+	if err := unix.Flock(int(f.Fd()), unix.LOCK_EX); err != nil {
+		_ = f.Close()
+		return nil, err
+	}
+	return func() {
+		_ = unix.Flock(int(f.Fd()), unix.LOCK_UN)
+		_ = f.Close()
+	}, nil
 }
 
 func sessionCacheLayoutComplete(cacheRoot string) bool {
