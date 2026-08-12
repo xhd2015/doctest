@@ -12,7 +12,7 @@ for kind A/B **before** shims rewrite imports. Kind B **success** path (parent/
 product internal → Kind B `__doctest_internal_expose` + unified layout A) is
 covered by `tests/parent-internal-unified/` and core shim unit tests.
 
-## DSN
+## DSN (Domain Specific Notion)
 
 Two illegal-import modes (MECE):
 

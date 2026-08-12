@@ -28,7 +28,7 @@ This tree locks a **language-level** fix shape (not doctest gen yet):
 3. The bridge may exist **on disk** or only via **`go -overlay`** (virtual file).
 4. A bridge placed **outside** the parent of `internal` still fails.
 
-## DSN
+## DSN (Domain Specific Notion)
 
 ### Participants
 

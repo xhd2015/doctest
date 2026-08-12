@@ -22,7 +22,7 @@
 
 Sibling of `internal-shim-with-overlay` (kind A, same-module gen shim).
 
-## DSN
+## DSN (Domain Specific Notion)
 
 ### Participants
 
