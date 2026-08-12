@@ -1,17 +1,17 @@
 # Scenario
 
-**Feature**: internal-compile path resolves assert via temp -modfile instead of nested go.mod
+**Feature**: parent-internal + assert via unified layout A (Kind B expose + mapping-gen go.mod replace)
 
 ```
 # internal/ import detected
-doctest -> .doctest_run_* under moduleRoot -> -modfile with parent go.mod + assert replace
+doctest -> mapping-gen (layout A) + Kind B expose -> go test ./…/suite
 ```
 
 ## Preconditions
 
 - Fixture module imports `example.com/app/internal/greet` in harness `Run()`.
-- No nested `go.mod` is written in compile root or gen-dir dump.
-- **L3 e2e**: needs product binary so `-v` nested compile paths appear on captured stdout/stderr
+- Gen root is mapping-gen module `testcase` (not classic `.doctest_run_*`).
+- **L3 e2e**: needs product binary so `-v` nested paths appear on captured stdout/stderr
   (in-process CLI buffer does not mirror full nested go test streams the same way).
 
 ## Steps

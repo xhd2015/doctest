@@ -74,6 +74,8 @@ func Build(dir string, opts core.Options) error {
 	if opts.Verbose {
 		goBuildArgs = append(goBuildArgs, "-v")
 	}
+	// Kind B expose packages are overlay-only under the product module; same as go test.
+	goBuildArgs = append(goBuildArgs, core.VendorGomodOverlayGoFlag(ctx.genRoot)...)
 	goBuildArgs = append(goBuildArgs, "./...")
 
 	fmt.Fprintf(w, "cd %s && go %s\n\n", pathfmt.Short(ctx.genRoot), strings.Join(displayGoArgs(goBuildArgs), " "))

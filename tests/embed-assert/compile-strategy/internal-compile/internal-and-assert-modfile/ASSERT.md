@@ -4,11 +4,10 @@ label: e2e
 
 ## Expected
 
-- `doctest test` exits 0 via internal-compile temp dir.
-- Verbose output shows `-modfile=` flag (assert replace wired through temp modfile).
-- No `.doctest_run_*` dirs remain after run.
-- No leftover `.doctest.mod` / `.doctest.sum` under the consumer module root
-  (go `-modfile` companion sum must be cleaned with the temp modfile).
+- `doctest test` exits 0 via **unified layout A** (mapping-gen + Kind B expose).
+- Verbose output shows suite / mapping-gen (not classic `-modfile=` / `.doctest_run_*`).
+- No `.doctest_run_*` dirs remain under the consumer module root.
+- No leftover `.doctest.mod` / `.doctest.sum` under the consumer module root.
 
 ## Exit Code
 

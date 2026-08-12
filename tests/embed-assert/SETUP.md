@@ -249,19 +249,39 @@ func assertNoInternalModfileArtifacts(t *testing.T, moduleRoot string) {
 	assertFileNotExists(t, filepath.Join(moduleRoot, ".doctest.mod"))
 	assertFileNotExists(t, filepath.Join(moduleRoot, ".doctest.sum"))
 }
-func assertStderrUsesTempCompile(t *testing.T, resp *Response) {
+// assertStderrUsesUnifiedGen: parent-internal trees always use layout A (mapping-gen).
+func assertStderrUsesUnifiedGen(t *testing.T, resp *Response) {
 	t.Helper()
 	combined := resp.Stdout + resp.Stderr
-	if !strings.Contains(combined, ".doctest_run_") {
-		t.Fatalf("expected stderr/stdout to reference .doctest_run_ temp compile dir, got:\nstdout:\n%s\nstderr:\n%s", resp.Stdout, resp.Stderr)
+	if strings.Contains(combined, ".doctest_run_") {
+		t.Fatalf("expected no classic .doctest_run_ path (always unified), got:\nstdout:\n%s\nstderr:\n%s", resp.Stdout, resp.Stderr)
+	}
+	if !strings.Contains(combined, "mapping-gen") && !strings.Contains(combined, "suite") && !strings.Contains(combined, "__droot") {
+		t.Fatalf("expected unified gen markers (mapping-gen/suite/__droot), got:\nstdout:\n%s\nstderr:\n%s", resp.Stdout, resp.Stderr)
 	}
 }
-func assertStderrUsesModfile(t *testing.T, resp *Response) {
+
+// Historical name — now asserts unified gen (not .doctest_run_).
+func assertStderrUsesTempCompile(t *testing.T, resp *Response) {
+	assertStderrUsesUnifiedGen(t, resp)
+}
+
+// assertStderrUsesOverlayOrSuite: Kind B / assert via mapping-gen go.mod replace,
+// not classic -modfile= for internalCompile.
+func assertStderrUsesOverlayOrSuite(t *testing.T, resp *Response) {
 	t.Helper()
 	combined := resp.Stdout + resp.Stderr
-	if !strings.Contains(combined, "-modfile=") {
-		t.Fatalf("expected stderr/stdout to include -modfile= for internal-compile + assert, got:\nstdout:\n%s\nstderr:\n%s", resp.Stdout, resp.Stderr)
+	if strings.Contains(combined, "-modfile=") {
+		t.Fatalf("expected no classic -modfile= internalCompile path, got:\nstdout:\n%s\nstderr:\n%s", resp.Stdout, resp.Stderr)
 	}
+	if !strings.Contains(combined, "suite") && !strings.Contains(combined, "-overlay=") && !strings.Contains(combined, "mapping-gen") {
+		t.Fatalf("expected suite / -overlay= / mapping-gen, got:\nstdout:\n%s\nstderr:\n%s", resp.Stdout, resp.Stderr)
+	}
+}
+
+// Historical name — now asserts unified suite/overlay (not -modfile=).
+func assertStderrUsesModfile(t *testing.T, resp *Response) {
+	assertStderrUsesOverlayOrSuite(t, resp)
 }
 func assertDumpNoNestedGoMod(t *testing.T, dumpRoot string) {
 	t.Helper()

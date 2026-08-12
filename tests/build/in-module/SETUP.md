@@ -326,27 +326,67 @@ func assertNoDoctestRunDirs(t *testing.T, root string) {
 		t.Fatalf("expected no .doctest_run_* dirs under %s, found: %v", root, dirs)
 	}
 }
-func assertStderrUsesTempCompile(t *testing.T, resp *Response) {
+// assertStderrUsesUnifiedGen checks layout A (mapping-gen / suite), not classic
+// .doctest_run_* multi-leaf internalCompile.
+func assertStderrUsesUnifiedGen(t *testing.T, resp *Response) {
 	t.Helper()
 	combined := resp.Stdout + resp.Stderr
-	if !strings.Contains(combined, ".doctest_run_") {
-		t.Fatalf("expected stderr/stdout to reference .doctest_run_ temp compile dir, got:\nstdout:\n%s\nstderr:\n%s", resp.Stdout, resp.Stderr)
+	if strings.Contains(combined, ".doctest_run_") {
+		t.Fatalf("expected no classic .doctest_run_ path (always unified), got:\nstdout:\n%s\nstderr:\n%s", resp.Stdout, resp.Stderr)
+	}
+	if !strings.Contains(combined, "suite") && !strings.Contains(combined, "mapping-gen") && !strings.Contains(combined, "__droot") {
+		// Temp build dirs (doctest-build-*) and GenDir dumps still show suite packages.
+		if !strings.Contains(combined, "doctest-build-") && !strings.Contains(combined, "_gen") {
+			t.Fatalf("expected unified gen markers (suite/mapping-gen/__droot), got:\nstdout:\n%s\nstderr:\n%s", resp.Stdout, resp.Stderr)
+		}
 	}
 }
+
+// Deprecated name kept for leaves that still call it; now asserts unified gen.
+func assertStderrUsesTempCompile(t *testing.T, resp *Response) {
+	assertStderrUsesUnifiedGen(t, resp)
+}
+
+// assertDumpHasInternalExpose checks Kind B rewrite in dump sources (droot or leaf).
+func assertDumpHasInternalExpose(t *testing.T, dumpRoot string) {
+	t.Helper()
+	// Prefer droot (unified Run + imports); fall back to leaf.go.
+	candidates := []string{
+		filepath.Join(dumpRoot, "tests", "__droot", "droot.go"),
+		generatedLeafTestPath(dumpRoot),
+	}
+	expose := modPath + "/__doctest_internal_expose/greet"
+	var last string
+	for _, p := range candidates {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		last = string(data)
+		if strings.Contains(last, expose) {
+			return
+		}
+	}
+	if last == "" {
+		t.Fatalf("expected dump droot or leaf under %s", dumpRoot)
+	}
+	t.Fatalf("expected dump to import Kind B expose %s, got:\n%s", expose, last)
+}
+
+// assertDumpHasInternalImport is the historical name; now checks Kind B expose path.
 func assertDumpHasInternalImport(t *testing.T, dumpRoot string) {
-	t.Helper()
-	genTest := generatedLeafTestPath(dumpRoot)
-	assertFileExists(t, genTest)
-	testData, readErr := os.ReadFile(genTest)
-	if readErr != nil {
-		t.Fatalf("read dump test file: %v", readErr)
-	}
-	if !strings.Contains(string(testData), modPath+"/internal/greet") {
-		t.Fatalf("expected dump to import internal/greet, got:\n%s", string(testData))
-	}
+	assertDumpHasInternalExpose(t, dumpRoot)
 }
-func assertDumpNoNestedGoMod(t *testing.T, dumpRoot string) {
+
+// assertDumpHasUnifiedGoMod: layout A gen root is module testcase with replace.
+func assertDumpHasUnifiedGoMod(t *testing.T, dumpRoot string) {
 	t.Helper()
-	assertFileNotExists(t, filepath.Join(dumpRoot, "go.mod"))
+	assertNestedGoMod(t, dumpRoot)
+}
+
+// assertDumpNoNestedGoMod historically meant internal-compile dump without go.mod.
+// Always-unified dumps are module testcase — assert that shape instead.
+func assertDumpNoNestedGoMod(t *testing.T, dumpRoot string) {
+	assertDumpHasUnifiedGoMod(t, dumpRoot)
 }
 ```

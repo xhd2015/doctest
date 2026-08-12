@@ -5,9 +5,10 @@ label: e2e
 ## Expected
 
 - `doctest build` exits 0.
-- Dump at `--gen-dir` contains `tests/leaf/leaf_test.go` importing `internal/greet`.
-- Dump has no nested `go.mod`.
-- Compile used `.doctest_run_*` temp directory.
+- Dump at `--gen-dir` is unified layout A (`tests/__droot` / leaf) with Kind B
+  expose import for parent `internal/greet` (not classic multi-leaf `_test.go`).
+- Dump is module `testcase` (go.mod with replace to parent).
+- No classic `.doctest_run_*` under the product module root.
 
 ## Exit Code
 

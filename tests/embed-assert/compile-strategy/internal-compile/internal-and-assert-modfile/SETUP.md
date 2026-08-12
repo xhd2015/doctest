@@ -1,10 +1,10 @@
 # Scenario
 
-**Feature**: leaf importing both internal and assert compiles via -modfile with assert replace
+**Feature**: leaf importing both parent internal and assert compiles via unified gen + Kind B expose
 
 ```
 # internal + assert imports
-doctest test -v -> .doctest_run_* -> go test -modfile=<tmp> with assert replace
+doctest test -v -> mapping-gen suite + expose overlay + assert replace in go.mod
 ```
 
 ## Preconditions
