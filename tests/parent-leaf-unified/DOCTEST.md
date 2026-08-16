@@ -3,6 +3,19 @@
 ## Version
 0.0.1
 
+## DSN (Domain Specific Notion)
+
+### Participants
+
+- **Unified generator** — writes `setup.go` (intermediate) and `leaf.go` (parent leaf) under the same dir.
+- **Parent leaf** — `code-only/` has ASSERT and a child leaf.
+- **Child leaf** — `code-only/child/`.
+
+### Behaviors
+
+- Both generated files in `code-only/` are `package code_only`.
+- `doctest test` runs both leaves; no `found packages testcase … and code_only`.
+
 A directory that is both a leaf (ASSERT) and an intermediate (has a child
 leaf) must generate `setup.go` and `leaf.go` in the **same** Go package.
 
