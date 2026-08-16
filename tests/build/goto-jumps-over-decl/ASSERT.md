@@ -5,10 +5,7 @@
 
 ## Side Effects
 
-- Today RED: `go test` fails with
-  `goto mock jumps over declaration of cmd` (same as wrk unwind-pipeline CI).
-- Desired: generator emits compilable Go for this helper (or rewrites the
-  goto/`:=` so the suite builds).
+- Inner `doctest test` compiles and runs the testdata helper.
 
 ## Errors
 

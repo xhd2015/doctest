@@ -1,19 +1,16 @@
 # Scenario
 
-**Bug**: generated suite does not compile when a SETUP helper uses `goto` over a later `:=`
+**Feature**: generated suite compiles a SETUP helper that uses `goto mock`
 
 ```
-# wrk unwind-pipeline installFakeOpencode: goto mock jumps over cmd :=
-# doctest test testdata/goto-jumps-over-decl -> go test compile
-# today: "goto mock jumps over declaration of cmd"
-# desired: generated suite compiles; inner leaf runs (exit 0)
+# testdata helper: goto mock; build path := is in an inner block
+# doctest test testdata/goto-jumps-over-decl -> go test compile + run
 ```
 
 ## Preconditions
 
-- Testdata tree `build/testdata/goto-jumps-over-decl` has a helper with
-  `goto mock` before `cmd := exec.Command(...)`.
-- Same pattern as wrk `cmd/wrk/tests/unwind-pipeline` SETUP.
+- Testdata tree `build/testdata/goto-jumps-over-decl` has `goto mock` and
+  `cmd :=` only inside a nested block (legal Go).
 
 ## Steps
 

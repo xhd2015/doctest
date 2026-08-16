@@ -1,16 +1,16 @@
 # Scenario
 
-**Feature**: SETUP helper uses goto over a later `:=` (wrk unwind-pipeline / fake-opencode)
+**Feature**: SETUP helper uses `goto mock`; build-path `:=` is in an inner block
 
 ```
-# helper copies a binary then goto mock; else declares cmd := exec.Command
+# helper copies a binary then goto mock; else { cmd := exec.Command }
 # generated suite must compile that helper
 ```
 
 ## Setup
 
-- Mirrors `installFakeOpencode`: early `goto mock` skips `cmd := exec.Command`.
-- Go rejects `goto` over a new variable (`jumps over declaration of cmd`).
+- Copy-success path still `goto mock`.
+- Build path `:=` lives in an inner block so `goto` does not skip a declaration.
 
 ```go
 import (
@@ -27,11 +27,14 @@ func installFakeOpencode(bin string) error {
 			}
 		}
 	}
-	cmd := exec.Command("true")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return err
+	{
+		cmd := exec.Command("true")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return err
+		}
+		_ = out
 	}
-	_ = out
 mock:
 	_ = filepath.Join(".", "fake-opencode.json")
 	return nil
