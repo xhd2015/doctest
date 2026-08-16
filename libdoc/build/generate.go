@@ -166,6 +166,12 @@ func (ctx *generateContext) Close() {
 		ctx.closed = true
 		// Safety if writeCases returned early before finishGenOrphans.
 		ctx.releaseGenWrite()
+		// Kind B expose is written under the product module for go tool cover.
+		// Skip cleanup when GenerateOnly (PrepareTree): RunWorkspace still needs
+		// the files; it calls CleanupKindBMaterialized after go test.
+		if !ctx.generateOnly {
+			_ = core.CleanupKindBMaterialized(ctx.genRoot)
+		}
 		ctx.removeTempsLocked()
 	})
 }
@@ -194,9 +200,12 @@ func (ctx *generateContext) installInterruptCleanup() {
 		ctx.lifecycleMu.Lock()
 		ctx.closeOnce.Do(func() {
 			ctx.closed = true
+			// Interrupt: always strip product expose files (run will not finish).
+			_ = core.CleanupKindBMaterialized(ctx.genRoot)
 			ctx.removeTempsLocked()
 		})
 		// Re-remove even if Close already ran without this lock held for exit.
+		_ = core.CleanupKindBMaterialized(ctx.genRoot)
 		ctx.removeTempsLocked()
 		os.Exit(130)
 	}()

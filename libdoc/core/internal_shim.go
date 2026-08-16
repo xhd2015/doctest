@@ -4,9 +4,15 @@
 // Production gen is always hierarchical unified (layout A). Parent/product
 // internal imports never force classic multi-leaf .doctest_run_* compile; they
 // are rewritten to Kind B expose packages via ApplyInternalShimsAfterUnifiedGen
-// and merged into vendor-gomod-overlay.json. Overlay-only expose packages need
-// -vet=off (NeedVetOff / InternalShimVetOffMarker). Prefer -coverpkg on real
-// product packages, not the virtual expose facade path.
+// and merged into vendor-gomod-overlay.json.
+//
+// Kind B expose bodies live in __doctest_shim_store and are also materialized
+// under the product module path (__doctest_internal_expose/…/expose.go) so
+// go tool cover can open the logical path (overlay alone is not enough for
+// cover). Paths are recorded in KindBMaterializedList and removed by
+// CleanupKindBMaterialized (generateContext.Close). Overlay remains for tools
+// that prefer Replace maps. Overlay-only dirs still need -vet=off
+// (NeedVetOff / InternalShimVetOffMarker) when cleanup has not run yet.
 package core
 
 import (
@@ -32,6 +38,9 @@ const (
 	DoctestInternalExposeDir = "__doctest_internal_expose"
 	// On-disk body store under gen root (never product VCS tree).
 	InternalShimStoreDir = "__doctest_shim_store"
+	// KindBMaterializedList under gen root lists product-tree expose.go paths
+	// written for cover/compile; CleanupKindBMaterialized removes them.
+	KindBMaterializedList = "doctest-kind-b-materialized"
 )
 
 // KindAShimImport maps a real gen import that contains /internal/ to a shim
@@ -294,11 +303,85 @@ func emitKindBExpose(genRoot, absModRoot, productMod, internalImp string, replac
 		return "", err
 	}
 
-	// Virtual file under product module root.
+	// Logical path under product module root (package import path must resolve here).
 	virtRel := DoctestInternalExposeDir + "/" + tail + "/expose.go"
 	virtFile := filepath.Join(productDir, filepath.FromSlash(virtRel))
+	// Materialize on disk: go tool cover opens this path without applying -overlay.
+	// Keep shim-store + overlay as well for dual-path tooling.
+	if err := os.MkdirAll(filepath.Dir(virtFile), 0755); err != nil {
+		return "", fmt.Errorf("mkdir kind B expose %s: %w", virtFile, err)
+	}
+	if err := os.WriteFile(virtFile, []byte(body), 0644); err != nil {
+		return "", fmt.Errorf("write kind B expose %s: %w", virtFile, err)
+	}
+	if err := recordKindBMaterialized(genRoot, virtFile); err != nil {
+		return "", err
+	}
 	addOverlayKeyVariants(replace, virtFile, bodyPath)
 	return exposeImp, nil
+}
+
+// recordKindBMaterialized appends an absolute product-tree expose path so
+// CleanupKindBMaterialized can remove session-scoped files after go test/build.
+func recordKindBMaterialized(genRoot, virtFile string) error {
+	if genRoot == "" || virtFile == "" {
+		return nil
+	}
+	listPath := filepath.Join(genRoot, KindBMaterializedList)
+	f, err := os.OpenFile(listPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("record kind B materialized: %w", err)
+	}
+	defer f.Close()
+	if _, err := fmt.Fprintln(f, virtFile); err != nil {
+		return fmt.Errorf("record kind B materialized: %w", err)
+	}
+	return nil
+}
+
+// CleanupKindBMaterialized removes product-module expose.go files listed under
+// genRoot/KindBMaterializedList and prunes empty parent dirs up through
+// __doctest_internal_expose. Safe when the list is missing (no Kind B).
+func CleanupKindBMaterialized(genRoot string) error {
+	if genRoot == "" {
+		return nil
+	}
+	listPath := filepath.Join(genRoot, KindBMaterializedList)
+	data, err := os.ReadFile(listPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	var firstErr error
+	for _, line := range strings.Split(string(data), "\n") {
+		path := strings.TrimSpace(line)
+		if path == "" {
+			continue
+		}
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) && firstErr == nil {
+			firstErr = err
+		}
+		// Prune empty dirs: …/greet then …/__doctest_internal_expose.
+		dir := filepath.Dir(path)
+		for i := 0; i < 4 && dir != "" && dir != string(filepath.Separator); i++ {
+			base := filepath.Base(dir)
+			entries, rdErr := os.ReadDir(dir)
+			if rdErr != nil || len(entries) > 0 {
+				break
+			}
+			if err := os.Remove(dir); err != nil {
+				break
+			}
+			if base == DoctestInternalExposeDir {
+				break
+			}
+			dir = filepath.Dir(dir)
+		}
+	}
+	_ = os.Remove(listPath)
+	return firstErr
 }
 
 func resolveModuleDir(workDir, modulePath string) (string, error) {
@@ -383,9 +466,19 @@ func resolveModuleDirFromGoMod(workDir, modulePath string) (string, error) {
 	return "", fmt.Errorf("no replace for %s in go.mod", modulePath)
 }
 
+// exposeFunc is an exported func from one source file, with that file's import map
+// (local alias → import path) so signatures can pull external packages.
+type exposeFunc struct {
+	fd        *ast.FuncDecl
+	localPath map[string]string // import alias or default name → path
+}
+
 // generateExposeSource builds a facade package re-exporting exported funcs,
 // types, vars, and consts from the product internal package so external modules
 // can import the expose path. Package name matches the internal package.
+//
+// Func signatures that mention other product packages (e.g. model.Project) also
+// emit those imports so the facade compiles under go test / go tool cover.
 func generateExposeSource(internalImp, internalDir string) (string, error) {
 	fset := token.NewFileSet()
 	pkgs, err := parser.ParseDir(fset, internalDir, func(fi os.FileInfo) bool {
@@ -414,9 +507,14 @@ func generateExposeSource(internalImp, internalDir string) (string, error) {
 	seenVar := map[string]bool{}
 	var consts []string
 	seenConst := map[string]bool{}
-	var funcDecls []*ast.FuncDecl
+	var funcs []exposeFunc
 	seenFn := map[string]bool{}
+	// path → emit alias (stable across files; one import per path).
+	pathToEmit := map[string]string{}
+	reservedAlias := map[string]bool{srcAlias: true, pkgName: true}
+
 	for _, f := range pkg.Files {
+		localPath := fileImportAliasToPath(f)
 		for _, decl := range f.Decls {
 			switch d := decl.(type) {
 			case *ast.FuncDecl:
@@ -427,7 +525,23 @@ func generateExposeSource(internalImp, internalDir string) (string, error) {
 					continue
 				}
 				seenFn[d.Name.Name] = true
-				funcDecls = append(funcDecls, d)
+				funcs = append(funcs, exposeFunc{fd: d, localPath: localPath})
+				// Register external packages used in this signature.
+				for alias := range collectPkgSelectorsInFunc(d) {
+					path, ok := localPath[alias]
+					if !ok || path == "" || path == internalImp {
+						continue
+					}
+					if _, exists := pathToEmit[path]; exists {
+						continue
+					}
+					emit := defaultImportAlias(path)
+					if reservedAlias[emit] || emitAliasTaken(pathToEmit, emit) {
+						emit = uniqueEmitAlias(path, reservedAlias, pathToEmit)
+					}
+					pathToEmit[path] = emit
+					reservedAlias[emit] = true
+				}
 			case *ast.GenDecl:
 				switch d.Tok {
 				case token.TYPE:
@@ -477,19 +591,17 @@ func generateExposeSource(internalImp, internalDir string) (string, error) {
 	sort.Strings(types)
 	sort.Strings(vars)
 	sort.Strings(consts)
-	sort.Slice(funcDecls, func(i, j int) bool {
-		return funcDecls[i].Name.Name < funcDecls[j].Name.Name
+	sort.Slice(funcs, func(i, j int) bool {
+		return funcs[i].fd.Name.Name < funcs[j].fd.Name.Name
 	})
 
 	var b strings.Builder
 	b.WriteString("// Code generated by doctest internal expose; DO NOT EDIT.\n")
 	b.WriteString("package ")
 	b.WriteString(pkgName)
-	b.WriteString("\n\nimport ")
-	b.WriteString(srcAlias)
-	b.WriteString(" ")
-	b.WriteString(strconv.Quote(internalImp))
 	b.WriteString("\n\n")
+	writeExposeImports(&b, srcAlias, internalImp, pathToEmit)
+	b.WriteString("\n")
 	for _, ty := range types {
 		b.WriteString("type ")
 		b.WriteString(ty)
@@ -527,20 +639,28 @@ func generateExposeSource(internalImp, internalDir string) (string, error) {
 	if len(consts) > 0 {
 		b.WriteString("\n")
 	}
-	for _, fd := range funcDecls {
+	for _, ef := range funcs {
+		fd := ef.fd
 		sig := fd.Type
+		// Map this file's import aliases → emit aliases for signature printing.
+		localToEmit := map[string]string{}
+		for local, path := range ef.localPath {
+			if emit, ok := pathToEmit[path]; ok {
+				localToEmit[local] = emit
+			}
+		}
 		b.WriteString("func ")
 		b.WriteString(fd.Name.Name)
 		b.WriteString("(")
-		b.WriteString(fieldListString(sig.Params, true))
+		b.WriteString(fieldListString(sig.Params, true, localToEmit))
 		b.WriteString(")")
 		if sig.Results != nil && len(sig.Results.List) > 0 {
 			b.WriteString(" ")
 			if len(sig.Results.List) == 1 && len(sig.Results.List[0].Names) == 0 {
-				b.WriteString(exprString(sig.Results.List[0].Type))
+				b.WriteString(exprString(sig.Results.List[0].Type, localToEmit))
 			} else {
 				b.WriteString("(")
-				b.WriteString(fieldListString(sig.Results, false))
+				b.WriteString(fieldListString(sig.Results, false, localToEmit))
 				b.WriteString(")")
 			}
 		}
@@ -558,13 +678,176 @@ func generateExposeSource(internalImp, internalDir string) (string, error) {
 	return b.String(), nil
 }
 
-func fieldListString(fl *ast.FieldList, withNames bool) string {
+// fileImportAliasToPath maps import aliases (or default package names) to paths.
+// Blank and dot imports are skipped (not used as signature qualifiers).
+func fileImportAliasToPath(f *ast.File) map[string]string {
+	out := map[string]string{}
+	if f == nil {
+		return out
+	}
+	for _, imp := range f.Imports {
+		if imp.Path == nil {
+			continue
+		}
+		path, err := strconv.Unquote(imp.Path.Value)
+		if err != nil || path == "" {
+			continue
+		}
+		if imp.Name != nil {
+			name := imp.Name.Name
+			if name == "_" || name == "." {
+				continue
+			}
+			out[name] = path
+			continue
+		}
+		out[defaultImportAlias(path)] = path
+	}
+	return out
+}
+
+// defaultImportAlias is the usual Go default name for an import path (last element).
+func defaultImportAlias(path string) string {
+	path = strings.TrimSuffix(path, "/")
+	if i := strings.LastIndex(path, "/"); i >= 0 {
+		return path[i+1:]
+	}
+	return path
+}
+
+func emitAliasTaken(pathToEmit map[string]string, alias string) bool {
+	for _, a := range pathToEmit {
+		if a == alias {
+			return true
+		}
+	}
+	return false
+}
+
+func uniqueEmitAlias(path string, reserved map[string]bool, pathToEmit map[string]string) string {
+	base := defaultImportAlias(path)
+	// Prefer path-based uniqueness: replace / with _.
+	cand := strings.ReplaceAll(strings.Trim(path, "/"), "/", "_")
+	cand = strings.ReplaceAll(cand, ".", "_")
+	cand = strings.ReplaceAll(cand, "-", "_")
+	if cand == "" {
+		cand = base + "_ext"
+	}
+	if !reserved[cand] && !emitAliasTaken(pathToEmit, cand) {
+		return cand
+	}
+	for i := 2; i < 1000; i++ {
+		a := fmt.Sprintf("%s_%d", base, i)
+		if !reserved[a] && !emitAliasTaken(pathToEmit, a) {
+			return a
+		}
+	}
+	return base + "_ext"
+}
+
+// collectPkgSelectorsInFunc returns package identifiers used as X in X.Y type
+// expressions within the function signature (params + results).
+func collectPkgSelectorsInFunc(fd *ast.FuncDecl) map[string]bool {
+	out := map[string]bool{}
+	if fd == nil || fd.Type == nil {
+		return out
+	}
+	collectPkgSelectorsFieldList(fd.Type.Params, out)
+	collectPkgSelectorsFieldList(fd.Type.Results, out)
+	return out
+}
+
+func collectPkgSelectorsFieldList(fl *ast.FieldList, out map[string]bool) {
+	if fl == nil {
+		return
+	}
+	for _, f := range fl.List {
+		collectPkgSelectorsExpr(f.Type, out)
+	}
+}
+
+func collectPkgSelectorsExpr(e ast.Expr, out map[string]bool) {
+	if e == nil {
+		return
+	}
+	switch t := e.(type) {
+	case *ast.SelectorExpr:
+		if id, ok := t.X.(*ast.Ident); ok {
+			out[id.Name] = true
+		} else {
+			collectPkgSelectorsExpr(t.X, out)
+		}
+	case *ast.StarExpr:
+		collectPkgSelectorsExpr(t.X, out)
+	case *ast.ArrayType:
+		collectPkgSelectorsExpr(t.Len, out)
+		collectPkgSelectorsExpr(t.Elt, out)
+	case *ast.Ellipsis:
+		collectPkgSelectorsExpr(t.Elt, out)
+	case *ast.MapType:
+		collectPkgSelectorsExpr(t.Key, out)
+		collectPkgSelectorsExpr(t.Value, out)
+	case *ast.ChanType:
+		collectPkgSelectorsExpr(t.Value, out)
+	case *ast.FuncType:
+		collectPkgSelectorsFieldList(t.Params, out)
+		collectPkgSelectorsFieldList(t.Results, out)
+	case *ast.InterfaceType:
+		// ignore method sets for expose wrappers
+	case *ast.IndexExpr:
+		collectPkgSelectorsExpr(t.X, out)
+		collectPkgSelectorsExpr(t.Index, out)
+	case *ast.IndexListExpr:
+		collectPkgSelectorsExpr(t.X, out)
+		for _, ix := range t.Indices {
+			collectPkgSelectorsExpr(ix, out)
+		}
+	}
+}
+
+func writeExposeImports(b *strings.Builder, srcAlias, internalImp string, pathToEmit map[string]string) {
+	// Sort external paths for stable output.
+	paths := make([]string, 0, len(pathToEmit))
+	for p := range pathToEmit {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+
+	if len(paths) == 0 {
+		b.WriteString("import ")
+		b.WriteString(srcAlias)
+		b.WriteString(" ")
+		b.WriteString(strconv.Quote(internalImp))
+		b.WriteString("\n")
+		return
+	}
+	b.WriteString("import (\n\t")
+	b.WriteString(srcAlias)
+	b.WriteString(" ")
+	b.WriteString(strconv.Quote(internalImp))
+	b.WriteString("\n")
+	for _, p := range paths {
+		emit := pathToEmit[p]
+		b.WriteString("\t")
+		if emit == defaultImportAlias(p) {
+			b.WriteString(strconv.Quote(p))
+		} else {
+			b.WriteString(emit)
+			b.WriteString(" ")
+			b.WriteString(strconv.Quote(p))
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString(")\n")
+}
+
+func fieldListString(fl *ast.FieldList, withNames bool, localToEmit map[string]string) string {
 	if fl == nil {
 		return ""
 	}
 	var parts []string
 	for _, f := range fl.List {
-		ty := exprString(f.Type)
+		ty := exprString(f.Type, localToEmit)
 		if !withNames || len(f.Names) == 0 {
 			parts = append(parts, ty)
 			continue
@@ -593,7 +876,9 @@ func fieldListArgs(fl *ast.FieldList) string {
 	return strings.Join(names, ", ")
 }
 
-func exprString(e ast.Expr) string {
+// exprString prints a type expression. localToEmit rewrites package selectors
+// (file-local import aliases → facade emit aliases).
+func exprString(e ast.Expr, localToEmit map[string]string) string {
 	if e == nil {
 		return ""
 	}
@@ -601,26 +886,40 @@ func exprString(e ast.Expr) string {
 	case *ast.Ident:
 		return t.Name
 	case *ast.StarExpr:
-		return "*" + exprString(t.X)
+		return "*" + exprString(t.X, localToEmit)
 	case *ast.SelectorExpr:
-		return exprString(t.X) + "." + t.Sel.Name
+		if id, ok := t.X.(*ast.Ident); ok {
+			if emit, ok := localToEmit[id.Name]; ok {
+				return emit + "." + t.Sel.Name
+			}
+			return id.Name + "." + t.Sel.Name
+		}
+		return exprString(t.X, localToEmit) + "." + t.Sel.Name
 	case *ast.ArrayType:
 		if t.Len == nil {
-			return "[]" + exprString(t.Elt)
+			return "[]" + exprString(t.Elt, localToEmit)
 		}
-		return "[" + exprString(t.Len) + "]" + exprString(t.Elt)
+		return "[" + exprString(t.Len, localToEmit) + "]" + exprString(t.Elt, localToEmit)
 	case *ast.Ellipsis:
-		return "..." + exprString(t.Elt)
+		return "..." + exprString(t.Elt, localToEmit)
 	case *ast.InterfaceType:
 		return "interface{}"
 	case *ast.MapType:
-		return "map[" + exprString(t.Key) + "]" + exprString(t.Value)
+		return "map[" + exprString(t.Key, localToEmit) + "]" + exprString(t.Value, localToEmit)
 	case *ast.ChanType:
-		return "chan " + exprString(t.Value)
+		return "chan " + exprString(t.Value, localToEmit)
 	case *ast.FuncType:
 		return "func"
 	case *ast.BasicLit:
 		return t.Value
+	case *ast.IndexExpr:
+		return exprString(t.X, localToEmit) + "[" + exprString(t.Index, localToEmit) + "]"
+	case *ast.IndexListExpr:
+		var parts []string
+		for _, ix := range t.Indices {
+			parts = append(parts, exprString(ix, localToEmit))
+		}
+		return exprString(t.X, localToEmit) + "[" + strings.Join(parts, ", ") + "]"
 	default:
 		return "interface{}"
 	}

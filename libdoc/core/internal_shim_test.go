@@ -200,6 +200,38 @@ func hidden() {}
 	}
 }
 
+// TestGenerateExposeSource_externalSigTypes imports product packages used in
+// exported signatures (Kind B compile fix for undefined: model).
+func TestGenerateExposeSource_externalSigTypes(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	src := `package rules
+
+import "example.com/app/model"
+
+func FixIgnore(project model.Project, dryRun bool) (model.FixResult, error) {
+	_ = dryRun
+	return model.FixResult{OK: project.Root != ""}, nil
+}
+`
+	if err := os.WriteFile(filepath.Join(dir, "rules.go"), []byte(src), 0644); err != nil {
+		t.Fatal(err)
+	}
+	body, err := generateExposeSource("example.com/app/internal/rules", dir)
+	if err != nil {
+		t.Fatalf("generateExposeSource: %v", err)
+	}
+	if !strings.Contains(body, strconv.Quote("example.com/app/model")) {
+		t.Fatalf("missing import of model package; body:\n%s", body)
+	}
+	if !strings.Contains(body, "func FixIgnore(project model.Project") {
+		t.Fatalf("missing FixIgnore with model.Project; body:\n%s", body)
+	}
+	if !strings.Contains(body, "srcpkg.FixIgnore") {
+		t.Fatalf("missing forward to srcpkg; body:\n%s", body)
+	}
+}
+
 func TestDoctestInternalExposeDir(t *testing.T) {
 	t.Parallel()
 	if DoctestInternalExposeDir != "__doctest_internal_expose" {
@@ -207,6 +239,36 @@ func TestDoctestInternalExposeDir(t *testing.T) {
 	}
 	if DoctestInternalShimDir != "__doctest_internal_shim" {
 		t.Fatalf("DoctestInternalShimDir = %q", DoctestInternalShimDir)
+	}
+}
+
+// TestCleanupKindBMaterialized removes session-scoped expose.go under product
+// tree and prunes empty __doctest_internal_expose dirs.
+func TestCleanupKindBMaterialized(t *testing.T) {
+	t.Parallel()
+	genRoot := t.TempDir()
+	product := t.TempDir()
+	virt := filepath.Join(product, DoctestInternalExposeDir, "greet", "expose.go")
+	if err := os.MkdirAll(filepath.Dir(virt), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(virt, []byte("package greet\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := recordKindBMaterialized(genRoot, virt); err != nil {
+		t.Fatal(err)
+	}
+	if err := CleanupKindBMaterialized(genRoot); err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+	if _, err := os.Stat(virt); !os.IsNotExist(err) {
+		t.Fatalf("expose.go still present: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(product, DoctestInternalExposeDir)); !os.IsNotExist(err) {
+		t.Fatalf("expose dir should be pruned: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(genRoot, KindBMaterializedList)); !os.IsNotExist(err) {
+		t.Fatalf("materialized list should be removed")
 	}
 }
 

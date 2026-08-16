@@ -35,6 +35,8 @@ func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	// Defaults: no cover; multi-leaf Setup fills ModuleRoot/TestDir/GenDir.
 	req.WithCover = false
 	req.CoverPath = ""
+	req.CoverPkg = ""
+	req.CoverMode = ""
 	req.ModuleRoot = ""
 	req.TestDir = ""
 	req.GenDir = ""

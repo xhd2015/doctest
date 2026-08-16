@@ -35,12 +35,20 @@ always-unified mapping-gen (suite package + Kind B expose).
 - **Gen layout** — gen dir has `suite` + `__allleaves` (unified markers).
 - **Coverprofile** — `-cover` + `-coverprofile` exit 0; profile file non-empty
   (single package).
+- **Coverpkg + Kind B expose** — with `-coverpkg=example.com/app/...` (product
+  module wildcard; same shape as CI `github.com/<mod>/...`), cover instruments
+  product packages and the Kind B expose facade; `go tool cover` must not fail
+  with open `…/__doctest_internal_expose/…/expose.go: no such file`.
+- **External types in internal signatures** — when product `internal/…` exports
+  funcs using types from another product package (e.g. `model.Project`), Kind B
+  expose facades must compile (import or re-alias those packages). No
+  `undefined: model` (or twin) on the generated expose body.
 
 ### Pipeline sketch
 
 ```
 temp module example.com/app + internal/greet + multi-leaf tests/
-  -> runner.RunTest(tests, GenDir, optional CoverProfile)
+  -> runner.RunTest(tests, GenDir, optional CoverProfile[, CoverPkg])
   -> unified mapping-gen + Kind B expose
   -> go test ./…/suite  (one package)
   -> both leaves PASS; cover.out written when requested
@@ -50,10 +58,12 @@ temp module example.com/app + internal/greet + multi-leaf tests/
 
 ```
 parent-internal-unified/
-└── multi-leaf/                         in-module ≥2 leaves → parent internal
-    ├── subject-and-suite/              both leaves PASS + suite-only go test
-    ├── gen-layout/                     suite + __allleaves (unified shape)
-    └── coverprofile/                   -cover -coverprofile exit 0 + file
+├── multi-leaf/                         in-module ≥2 leaves → parent internal
+│   ├── subject-and-suite/              both leaves PASS + suite-only go test
+│   ├── gen-layout/                     suite + __allleaves (unified shape)
+│   ├── coverprofile/                   -cover -coverprofile exit 0 + file
+│   └── coverpkg-expose/                -coverpkg=mod/... + cover; no expose open fail
+└── external-sig-types/                 internal API uses model.T; expose must compile
 ```
 
 ## Test Index
@@ -63,6 +73,8 @@ parent-internal-unified/
 | 1 | `multi-leaf/subject-and-suite` | Subject tests PASS; go test single suite package (not multi leaf) |
 | 2 | `multi-leaf/gen-layout` | Gen has `suite` + `__allleaves`; subject run succeeds |
 | 3 | `multi-leaf/coverprofile` | Coverprofile succeeds; file exists non-empty |
+| 4 | `multi-leaf/coverpkg-expose` | Cover + coverpkg product `...` succeeds; no expose.go open error |
+| 5 | `external-sig-types` | Kind B expose compiles when internal uses external package types |
 
 ## How to Run
 
@@ -70,6 +82,8 @@ parent-internal-unified/
 doctest vet ./tests/parent-internal-unified
 doctest test ./tests/parent-internal-unified
 doctest test -v ./tests/parent-internal-unified/multi-leaf/coverprofile
+doctest test -v ./tests/parent-internal-unified/multi-leaf/coverpkg-expose
+doctest test -v ./tests/parent-internal-unified/external-sig-types
 ```
 
 ```go
@@ -95,6 +109,11 @@ type Request struct {
 	WithCover bool
 	// CoverPath is absolute path for -coverprofile (filled by Setup when WithCover).
 	CoverPath string
+	// CoverPkg is go test -coverpkg (comma-separated). Empty = omit.
+	// Use product module wildcards (e.g. example.com/app/...) to match CI.
+	CoverPkg string
+	// CoverMode is go test -covermode (set|count|atomic). Empty = omit.
+	CoverMode string
 	// ModuleRoot / TestDir / GenDir filled by multi-leaf Setup.
 	ModuleRoot string
 	TestDir    string
@@ -150,6 +169,14 @@ func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 		}
 		opts.Cover = true
 		opts.CoverProfile = req.CoverPath
+	}
+	if req.CoverPkg != "" {
+		opts.CoverPkg = req.CoverPkg
+		// coverpkg alone implies coverage analysis; keep Cover true for clarity.
+		opts.Cover = true
+	}
+	if req.CoverMode != "" {
+		opts.CoverMode = req.CoverMode
 	}
 
 	err := runner.RunTest(req.TestDir, opts)
@@ -366,6 +393,128 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 }`,
 	)
 
+	return moduleRoot, testDir
+}
+
+// createParentInternalExternalSigModule builds a parent module where
+// internal/rules exported API uses types from product package model
+// (crime scene: Kind B expose must import model or re-alias types).
+//
+//	module example.com/app
+//	model (Project, FixResult)
+//	internal/rules.FixIgnore(model.Project, bool) (model.FixResult, error)
+//	tests/leaf-a subject importing internal/rules
+func createParentInternalExternalSigModule(t *testing.T) (moduleRoot, testDir string) {
+	t.Helper()
+	moduleRoot = t.TempDir()
+	if err := os.WriteFile(
+		filepath.Join(moduleRoot, "go.mod"),
+		[]byte("module "+modPath+"\n\ngo 1.21\n"),
+		0644,
+	); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+
+	modelDir := filepath.Join(moduleRoot, "model")
+	if err := os.MkdirAll(modelDir, 0755); err != nil {
+		t.Fatalf("mkdir model: %v", err)
+	}
+	modelSrc := `package model
+
+// Project is an external product type (stand-in for scaff model.Project).
+type Project struct {
+	Root string
+}
+
+// FixResult is returned from fix helpers.
+type FixResult struct {
+	OK bool
+}
+`
+	if err := os.WriteFile(filepath.Join(modelDir, "project.go"), []byte(modelSrc), 0644); err != nil {
+		t.Fatalf("write model: %v", err)
+	}
+
+	rulesDir := filepath.Join(moduleRoot, "internal", "rules")
+	if err := os.MkdirAll(rulesDir, 0755); err != nil {
+		t.Fatalf("mkdir internal/rules: %v", err)
+	}
+	rulesSrc := `package rules
+
+import "` + modPath + `/model"
+
+// FixIgnore uses external package types in the exported signature.
+func FixIgnore(project model.Project, dryRun bool) (model.FixResult, error) {
+	_ = dryRun
+	return model.FixResult{OK: project.Root != ""}, nil
+}
+`
+	if err := os.WriteFile(filepath.Join(rulesDir, "rules.go"), []byte(rulesSrc), 0644); err != nil {
+		t.Fatalf("write rules: %v", err)
+	}
+
+	testDir = filepath.Join(moduleRoot, "tests")
+	if err := os.MkdirAll(testDir, 0755); err != nil {
+		t.Fatalf("mkdir tests: %v", err)
+	}
+
+	runGo := `import (
+	"testing"
+
+	"` + modPath + `/internal/rules"
+	"` + modPath + `/model"
+	"github.com/xhd2015/doctest/session"
+)
+
+type Request struct {
+	// Root becomes model.Project.Root.
+	Root string
+}
+
+type Response struct {
+	OK bool
+}
+
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
+	_ = d
+	res, err := rules.FixIgnore(model.Project{Root: req.Root}, false)
+	if err != nil {
+		return nil, err
+	}
+	return &Response{OK: res.OK}, nil
+}`
+	testtree.WriteFile(t, testDir, "DOCTEST.md", testtree.MinimalDOCTEST(runGo))
+
+	fence := string([]byte{'`', '`', '`'})
+	writeSubjectLeaf(t, testDir, "leaf-a", fence,
+		`import (
+	"testing"
+
+	"github.com/xhd2015/doctest/session"
+)
+
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	_ = d
+	req.Root = "/tmp/x"
+	return nil
+}`,
+		`import (
+	"testing"
+
+	"github.com/xhd2015/doctest/session"
+)
+
+func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err error) {
+	_ = d
+	_ = req
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil || !resp.OK {
+		t.Fatalf("resp=%v, want OK", resp)
+	}
+}`,
+	)
 	return moduleRoot, testDir
 }
 

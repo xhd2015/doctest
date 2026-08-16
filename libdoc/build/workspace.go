@@ -499,8 +499,20 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 		stats.GenRoot = genRootLabel
 		stats.Unified = true
 		stats.Phases = append(stats.Phases, PhaseTiming{Name: "go_test", ElapsedNs: 0})
+		// Still strip Kind B product files left by GenerateOnly prepare.
+		for _, root := range uniquePrepGenRoots(preps) {
+			_ = core.CleanupKindBMaterialized(root)
+		}
 		return stats, nil
 	}
+
+	// PrepareTree left Kind B expose on disk; strip after this function returns
+	// (success, go test fail, or early errors below).
+	defer func() {
+		for _, root := range uniquePrepGenRoots(preps) {
+			_ = core.CleanupKindBMaterialized(root)
+		}
+	}()
 
 	flagArgs := []string{"test", "-mod=mod"}
 	flagArgs = appendOptsGoTestFlags(flagArgs, opts)
