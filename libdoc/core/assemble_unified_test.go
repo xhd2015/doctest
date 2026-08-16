@@ -305,3 +305,120 @@ func TestWriteUnifiedTreeWritesIntermediatePackages(t *testing.T) {
 			err, out, interBytes, leafA)
 	}
 }
+
+func TestWriteUnifiedTreeParentLeafSharesIntermediatePackage(t *testing.T) {
+	rootBlock := &GoBlock{
+		Types: map[string]bool{"Request": true, "Response": true},
+		TypeDecls: []string{
+			"type Request struct{ Name string }",
+			"type Response struct{ Name string }",
+		},
+		Run: &FuncSnippet{
+			Name:    "Run",
+			Params:  "t *testing.T, d *session.Doctest, req *Request",
+			Results: "(*Response, error)",
+			Body:    "{ return &Response{Name: req.Name}, nil }",
+		},
+	}
+	parentSetup := &GoBlock{
+		Setup: &FuncSnippet{
+			Name:    "Setup",
+			Params:  "t *testing.T, d *session.Doctest, req *Request",
+			Results: "error",
+			Body:    `{ req.Name = "code-only"; return nil }`,
+		},
+	}
+	childSetup := &GoBlock{
+		Setup: &FuncSnippet{
+			Name:    "Setup",
+			Params:  "t *testing.T, d *session.Doctest, req *Request",
+			Results: "error",
+			Body:    `{ req.Name = "child"; return nil }`,
+		},
+	}
+	assertBlock := GoBlock{
+		Assert: &FuncSnippet{
+			Name:   "Assert",
+			Params: "t *testing.T, d *session.Doctest, req *Request, resp *Response, err error",
+			Body:   "{ _ = req; _ = resp; _ = err }",
+		},
+	}
+	cases := []TreeCase{
+		{
+			Name: "code-only",
+			Path: "code-only",
+			SetupFiles: []SetupDocument{
+				{Path: "DOCTEST.md", GoBlock: rootBlock},
+				{Path: "code-only/SETUP.md", GoBlock: parentSetup},
+			},
+			AssertFile: AssertDocument{Path: "code-only/ASSERT.md", GoBlock: assertBlock},
+		},
+		{
+			Name: "child",
+			Path: "code-only/child",
+			SetupFiles: []SetupDocument{
+				{Path: "DOCTEST.md", GoBlock: rootBlock},
+				{Path: "code-only/SETUP.md", GoBlock: parentSetup},
+				{Path: "code-only/child/SETUP.md", GoBlock: childSetup},
+			},
+			AssertFile: AssertDocument{Path: "code-only/child/ASSERT.md", GoBlock: assertBlock},
+		},
+	}
+
+	genRoot := t.TempDir()
+	if err := WriteUnifiedTree(genRoot, cases, "/doctest", false, "testcase"); err != nil {
+		t.Fatalf("WriteUnifiedTree: %v", err)
+	}
+
+	setupSrc, err := os.ReadFile(filepath.Join(genRoot, "code-only", RefIntermediateFileName))
+	if err != nil {
+		t.Fatalf("read setup.go: %v", err)
+	}
+	leafSrc, err := os.ReadFile(filepath.Join(genRoot, "code-only", UnifiedLeafFileName(cases[0])))
+	if err != nil {
+		t.Fatalf("read parent leaf.go: %v", err)
+	}
+	if !strings.HasPrefix(string(setupSrc), "package code_only\n") {
+		t.Fatalf("setup.go package:\n%s", setupSrc)
+	}
+	if !strings.HasPrefix(string(leafSrc), "package code_only\n") {
+		t.Fatalf("parent leaf.go must share intermediate package, got:\n%s", leafSrc)
+	}
+	if strings.Contains(string(leafSrc), `"testcase/code-only"`) {
+		t.Fatalf("parent leaf must not import its own intermediate package:\n%s", leafSrc)
+	}
+
+	childSrc, err := os.ReadFile(filepath.Join(genRoot, "code-only", "child", UnifiedLeafFileName(cases[1])))
+	if err != nil {
+		t.Fatalf("read child leaf.go: %v", err)
+	}
+	if !strings.HasPrefix(string(childSrc), "package testcase\n") {
+		t.Fatalf("child leaf stays package testcase:\n%s", childSrc)
+	}
+
+	modRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatalf("module root: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(modRoot, "go.mod")); err != nil {
+		t.Logf("skip go test -c: module root not found at %s", modRoot)
+		return
+	}
+	goMod := "module testcase\n\ngo 1.22\n\nrequire github.com/xhd2015/doctest v0.0.0\n\nreplace github.com/xhd2015/doctest => " + filepath.ToSlash(modRoot) + "\n"
+	if err := os.WriteFile(filepath.Join(genRoot, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	tidy := exec.Command("go", "mod", "tidy")
+	tidy.Dir = genRoot
+	tidy.Env = append(os.Environ(), "GO111MODULE=on")
+	if out, err := tidy.CombinedOutput(); err != nil {
+		t.Fatalf("go mod tidy: %v\n%s", err, out)
+	}
+	cmd := exec.Command("go", "test", "./suite/", "-count=1", "-c", "-o", os.DevNull)
+	cmd.Dir = genRoot
+	cmd.Env = append(os.Environ(), "GO111MODULE=on")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("go test -c parent-leaf suite: %v\n%s\n--- setup.go ---\n%s\n--- leaf.go ---\n%s",
+			err, out, setupSrc, leafSrc)
+	}
+}

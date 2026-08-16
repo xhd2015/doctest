@@ -1136,7 +1136,11 @@ func AssembleRefLeafTestSource(tc TreeCase, compileOnly bool, pkgName, docTestRo
 		}
 	}
 	importsMap[rootAlias+"\x00"+rootImport] = &ImportSpec{Name: rootAlias, Path: rootImport}
+	leafDir := cleanRelDir(tc.Path)
 	for _, g := range part.Intermediate {
+		if cleanRelDir(g.Dir) == leafDir {
+			continue
+		}
 		alias := RefIntermediateAlias(g.Dir)
 		imp := RefIntermediateImport(rootImport, g.Dir)
 		importsMap[alias+"\x00"+imp] = &ImportSpec{Name: alias, Path: imp}
@@ -1174,6 +1178,9 @@ func AssembleRefLeafTestSource(tc TreeCase, compileOnly bool, pkgName, docTestRo
 
 	// Intermediate setups (exported package funcs), parents first.
 	for _, g := range part.Intermediate {
+		if cleanRelDir(g.Dir) == leafDir {
+			continue
+		}
 		alias := RefIntermediateAlias(g.Dir)
 		setupTotal := 0
 		for _, doc := range g.Docs {
@@ -1385,12 +1392,14 @@ func WriteRefTree(genRoot string, cases []TreeCase, docTestRoot string, compileO
 		return err
 	}
 
+	intermediates := IntermediateDirSet(cases)
 	for _, tc := range cases {
 		leafDir := genRoot
 		if tc.Path != "" {
 			leafDir = filepath.Join(genRoot, tc.Path)
 		}
-		if _, err := WriteRefLeafCase(leafDir, tc, compileOnly, pkgName, docTestRoot, rootImport); err != nil {
+		leafPkg := UnifiedLeafPkgName(tc, intermediates, pkgName)
+		if _, err := WriteRefLeafCase(leafDir, tc, compileOnly, leafPkg, docTestRoot, rootImport); err != nil {
 			return err
 		}
 	}

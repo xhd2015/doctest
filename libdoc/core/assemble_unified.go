@@ -279,7 +279,11 @@ func AssembleUnifiedLeafSource(tc TreeCase, compileOnly bool, pkgName, docTestRo
 		}
 	}
 	importsMap[rootAlias+"\x00"+rootImport] = &ImportSpec{Name: rootAlias, Path: rootImport}
+	leafDir := cleanRelDir(tc.Path)
 	for _, g := range part.Intermediate {
+		if cleanRelDir(g.Dir) == leafDir {
+			continue // parent-leaf: setup.go is the same package, not an import
+		}
 		alias := RefIntermediateAlias(g.Dir)
 		imp := RefIntermediateImport(rootImport, g.Dir)
 		importsMap[alias+"\x00"+imp] = &ImportSpec{Name: alias, Path: imp}
@@ -331,6 +335,9 @@ func AssembleUnifiedLeafSource(tc TreeCase, compileOnly bool, pkgName, docTestRo
 
 	// Intermediate setups (exported package funcs), parents first.
 	for _, g := range part.Intermediate {
+		if cleanRelDir(g.Dir) == leafDir {
+			continue
+		}
 		alias := RefIntermediateAlias(g.Dir)
 		setupTotal := 0
 		for _, doc := range g.Docs {
@@ -432,6 +439,33 @@ func UnifiedLeafFileName(tc TreeCase) string {
 	return "leaf.go"
 }
 
+// IntermediateDirSet is the set of dirs that get a shared setup.go.
+func IntermediateDirSet(cases []TreeCase) map[string]struct{} {
+	out := make(map[string]struct{})
+	for _, g := range CollectUniqueRefIntermediates(cases) {
+		out[g.Dir] = struct{}{}
+	}
+	return out
+}
+
+// UnifiedLeafPkgName is the package clause for leaf.go.
+// A parent-leaf dir (ASSERT plus child leaves) already has setup.go named
+// RefIntermediatePkgName; leaf.go must use the same name or go test sees
+// two packages in one directory.
+func UnifiedLeafPkgName(tc TreeCase, intermediates map[string]struct{}, defaultPkg string) string {
+	if defaultPkg == "" {
+		defaultPkg = "testcase"
+	}
+	p := cleanRelDir(tc.Path)
+	if p == "" || p == "." {
+		return defaultPkg
+	}
+	if _, ok := intermediates[p]; ok {
+		return RefIntermediatePkgName(p)
+	}
+	return defaultPkg
+}
+
 // WriteUnifiedLeafCase writes a non-test leaf package under leafDir.
 // Returns the written path and the unformatted source (for suite fingerprinting).
 func WriteUnifiedLeafCase(leafDir string, tc TreeCase, compileOnly bool, pkgName, docTestRoot, rootImport, registryImport string) (path, src string, err error) {
@@ -485,13 +519,15 @@ func WriteUnifiedTree(genRoot string, cases []TreeCase, docTestRoot string, comp
 		return err
 	}
 
+	intermediates := IntermediateDirSet(cases)
 	leafImports := make([]string, 0, len(cases))
 	for _, tc := range cases {
 		leafDir := genRoot
 		if tc.Path != "" {
 			leafDir = filepath.Join(genRoot, tc.Path)
 		}
-		if _, _, err := WriteUnifiedLeafCase(leafDir, tc, compileOnly, pkgName, docTestRoot, rootImport, registryImport); err != nil {
+		leafPkg := UnifiedLeafPkgName(tc, intermediates, pkgName)
+		if _, _, err := WriteUnifiedLeafCase(leafDir, tc, compileOnly, leafPkg, docTestRoot, rootImport, registryImport); err != nil {
 			return err
 		}
 		leafRel := tc.Path

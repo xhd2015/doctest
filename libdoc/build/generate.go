@@ -430,6 +430,7 @@ func (ctx *generateContext) writeUnifiedCases(cases []core.TreeCase, compileOnly
 		}
 	}
 
+	intermediates := core.IntermediateDirSet(cases)
 	leafImports := make([]string, 0, len(cases))
 	for _, tc := range cases {
 		absLeafDir := filepath.Join(ctx.absRoot, tc.Path)
@@ -444,7 +445,8 @@ func (ctx *generateContext) writeUnifiedCases(cases []core.TreeCase, compileOnly
 			}
 		}
 
-		leafPath, _, err := core.WriteUnifiedLeafCase(leafDir, tc, compileOnly, pkgName, ctx.absRoot, rootImport, registryImport)
+		leafPkg := core.UnifiedLeafPkgName(tc, intermediates, pkgName)
+		leafPath, _, err := core.WriteUnifiedLeafCase(leafDir, tc, compileOnly, leafPkg, ctx.absRoot, rootImport, registryImport)
 		if err != nil {
 			return err
 		}
