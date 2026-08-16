@@ -232,6 +232,101 @@ func FixIgnore(project model.Project, dryRun bool) (model.FixResult, error) {
 	}
 }
 
+func TestDefaultImportAlias(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		path, want string
+	}{
+		{"example.com/app/model", "model"},
+		{"example.com/foo/bar/v2", "bar"},
+		{"gopkg.in/yaml.v3", "yaml"},
+		{"gopkg.in/check.v1", "check"},
+		{"context", "context"},
+		{"net/http", "http"},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.path, func(t *testing.T) {
+			t.Parallel()
+			if got := defaultImportAlias(tt.path); got != tt.want {
+				t.Fatalf("defaultImportAlias(%q)=%q want %q", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestGenerateExposeSource_v2PackageName uses the package clause (ext), not
+// the last path element (v2), for unaliased …/v2 imports.
+func TestGenerateExposeSource_v2PackageName(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/app\n\ngo 1.21\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	extDir := filepath.Join(root, "ext", "v2")
+	if err := os.MkdirAll(extDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(extDir, "ext.go"), []byte("package ext\n\ntype T struct{}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(root, "internal", "rules")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	src := `package rules
+
+import "example.com/app/ext/v2"
+
+func Use(t ext.T) ext.T { return t }
+`
+	if err := os.WriteFile(filepath.Join(dir, "rules.go"), []byte(src), 0644); err != nil {
+		t.Fatal(err)
+	}
+	body, err := generateExposeSource("example.com/app/internal/rules", dir)
+	if err != nil {
+		t.Fatalf("generateExposeSource: %v", err)
+	}
+	if !strings.Contains(body, strconv.Quote("example.com/app/ext/v2")) {
+		t.Fatalf("missing import of ext/v2; body:\n%s", body)
+	}
+	if !strings.Contains(body, "func Use(t ext.T)") {
+		t.Fatalf("want ext.T from package clause, not last path element; body:\n%s", body)
+	}
+	if strings.Contains(body, "v2.T") {
+		t.Fatalf("must not use path last-element v2 as selector; body:\n%s", body)
+	}
+}
+
+// TestGenerateExposeSource_gopkgInPackageName uses the yaml.v3 → yaml heuristic
+// when the imported package is not a sibling on disk.
+func TestGenerateExposeSource_gopkgInPackageName(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	src := `package rules
+
+import "gopkg.in/yaml.v3"
+
+func Dump(n yaml.Node) yaml.Node { return n }
+`
+	if err := os.WriteFile(filepath.Join(dir, "rules.go"), []byte(src), 0644); err != nil {
+		t.Fatal(err)
+	}
+	body, err := generateExposeSource("example.com/app/internal/rules", dir)
+	if err != nil {
+		t.Fatalf("generateExposeSource: %v", err)
+	}
+	if !strings.Contains(body, strconv.Quote("gopkg.in/yaml.v3")) {
+		t.Fatalf("missing yaml.v3 import; body:\n%s", body)
+	}
+	if !strings.Contains(body, "func Dump(n yaml.Node)") {
+		t.Fatalf("want yaml.Node selector; body:\n%s", body)
+	}
+	if strings.Contains(body, "yaml.v3.") {
+		t.Fatalf("must not emit invalid selector yaml.v3; body:\n%s", body)
+	}
+}
+
 func TestDoctestInternalExposeDir(t *testing.T) {
 	t.Parallel()
 	if DoctestInternalExposeDir != "__doctest_internal_expose" {
@@ -269,6 +364,97 @@ func TestCleanupKindBMaterialized(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(genRoot, KindBMaterializedList)); !os.IsNotExist(err) {
 		t.Fatalf("materialized list should be removed")
+	}
+}
+
+func TestCleanupKindBMaterialized_deepNestedPrune(t *testing.T) {
+	t.Parallel()
+	genRoot := t.TempDir()
+	product := t.TempDir()
+	virt := filepath.Join(product, DoctestInternalExposeDir, "a", "b", "c", "d", "expose.go")
+	if err := os.MkdirAll(filepath.Dir(virt), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(virt, []byte("package d\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := recordKindBMaterialized(genRoot, virt); err != nil {
+		t.Fatal(err)
+	}
+	if err := CleanupKindBMaterialized(genRoot); err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+	if _, err := os.Stat(virt); !os.IsNotExist(err) {
+		t.Fatalf("expose.go still present: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(product, DoctestInternalExposeDir)); !os.IsNotExist(err) {
+		t.Fatalf("deep expose dir should be pruned: %v", err)
+	}
+}
+
+func TestCleanupKindBMaterialized_refusesNonExposePath(t *testing.T) {
+	t.Parallel()
+	genRoot := t.TempDir()
+	secret := filepath.Join(t.TempDir(), "secret.txt")
+	if err := os.WriteFile(secret, []byte("keep\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	listPath := filepath.Join(genRoot, KindBMaterializedList)
+	if err := os.WriteFile(listPath, []byte(secret+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := CleanupKindBMaterialized(genRoot); err == nil {
+		t.Fatal("expected error refusing non-expose path")
+	}
+	if _, err := os.Stat(secret); err != nil {
+		t.Fatalf("non-expose file must not be removed: %v", err)
+	}
+	data, err := os.ReadFile(listPath)
+	if err != nil {
+		t.Fatalf("list should be kept for leftover paths: %v", err)
+	}
+	if !strings.Contains(string(data), secret) {
+		t.Fatalf("list should still name leftover path; got %q", data)
+	}
+}
+
+func TestCleanupKindBMaterialized_keepsListOnRemoveFailure(t *testing.T) {
+	t.Parallel()
+	genRoot := t.TempDir()
+	product := t.TempDir()
+	virt := filepath.Join(product, DoctestInternalExposeDir, "greet", "expose.go")
+	if err := os.MkdirAll(virt, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(virt, "keep.txt"), []byte("x\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := recordKindBMaterialized(genRoot, virt); err != nil {
+		t.Fatal(err)
+	}
+	if err := CleanupKindBMaterialized(genRoot); err == nil {
+		t.Fatal("expected error when expose.go is a non-empty dir")
+	}
+	if _, err := os.Stat(virt); err != nil {
+		t.Fatalf("non-empty expose.go dir should remain: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(genRoot, KindBMaterializedList))
+	if err != nil {
+		t.Fatalf("list should be kept after remove failure: %v", err)
+	}
+	if !strings.Contains(string(data), virt) {
+		t.Fatalf("list should still name leftover path; got %q", data)
+	}
+}
+
+func TestRecordKindBMaterialized_rejectsNonExpose(t *testing.T) {
+	t.Parallel()
+	genRoot := t.TempDir()
+	if err := recordKindBMaterialized(genRoot, filepath.Join(t.TempDir(), "other.go")); err == nil {
+		t.Fatal("expected reject of non-expose path")
+	}
+	if _, err := os.Stat(filepath.Join(genRoot, KindBMaterializedList)); !os.IsNotExist(err) {
+		t.Fatalf("must not record rejected path")
 	}
 }
 

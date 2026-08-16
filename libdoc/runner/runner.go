@@ -721,6 +721,18 @@ func runSuitePlan(targets []suiteTarget, opts core.Options, rec *runRecorder, st
 		}
 	}
 
+	// Generate-only Close leaves Kind B on disk. RunWorkspace strips roots it
+	// ran; failed/skipped trees on a different gen root still need a sweep.
+	var allPreps []runnerbuild.TreePrep
+	for _, r := range results {
+		allPreps = append(allPreps, r.prep)
+	}
+	if leftover := leftoverKindBPreps(allPreps, unified); len(leftover) > 0 {
+		if err := runnerbuild.CleanupKindBForPreps(leftover); err != nil {
+			runErrs = append(runErrs, "kind B cleanup: "+err.Error())
+		}
+	}
+
 	if err := formatClassifiedErrors(prepErrs, runErrs); err != nil {
 		return err
 	}
@@ -728,6 +740,29 @@ func runSuitePlan(targets []suiteTarget, opts core.Options, rec *runRecorder, st
 		return ErrNoTestsFound
 	}
 	return nil
+}
+
+// leftoverKindBPreps returns preps whose GenRoot was not cleaned by RunWorkspace
+// (failed or skipped trees on a distinct gen root). Shared gen roots used by
+// unified successes are omitted so cover files stay until workspace returns.
+func leftoverKindBPreps(all, unified []runnerbuild.TreePrep) []runnerbuild.TreePrep {
+	seen := make(map[string]bool)
+	for _, p := range unified {
+		g := filepath.Clean(p.GenRoot)
+		if g != "" && g != "." {
+			seen[g] = true
+		}
+	}
+	var leftover []runnerbuild.TreePrep
+	for _, p := range all {
+		g := filepath.Clean(p.GenRoot)
+		if g == "" || g == "." || seen[g] {
+			continue
+		}
+		seen[g] = true
+		leftover = append(leftover, p)
+	}
+	return leftover
 }
 
 // formatClassifiedErrors builds multi-tree failure text with honest labels:

@@ -10,9 +10,10 @@
 // under the product module path (__doctest_internal_expose/…/expose.go) so
 // go tool cover can open the logical path (overlay alone is not enough for
 // cover). Paths are recorded in KindBMaterializedList and removed by
-// CleanupKindBMaterialized (generateContext.Close). Overlay remains for tools
-// that prefer Replace maps. Overlay-only dirs still need -vet=off
-// (NeedVetOff / InternalShimVetOffMarker) when cleanup has not run yet.
+// CleanupKindBMaterialized at session end (RunWorkspace, leftover prepare
+// roots, or generateContext.Close after a non-GenerateOnly run). Overlay
+// remains for tools that prefer Replace maps. Overlay-only dirs still need
+// -vet=off (NeedVetOff / InternalShimVetOffMarker) when cleanup has not run yet.
 package core
 
 import (
@@ -327,13 +328,20 @@ func recordKindBMaterialized(genRoot, virtFile string) error {
 	if genRoot == "" || virtFile == "" {
 		return nil
 	}
+	abs, err := filepath.Abs(virtFile)
+	if err != nil {
+		abs = virtFile
+	}
+	if !isKindBMaterializedPath(abs) {
+		return fmt.Errorf("record kind B materialized: not an expose path: %s", virtFile)
+	}
 	listPath := filepath.Join(genRoot, KindBMaterializedList)
 	f, err := os.OpenFile(listPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("record kind B materialized: %w", err)
 	}
 	defer f.Close()
-	if _, err := fmt.Fprintln(f, virtFile); err != nil {
+	if _, err := fmt.Fprintln(f, abs); err != nil {
 		return fmt.Errorf("record kind B materialized: %w", err)
 	}
 	return nil
@@ -355,17 +363,29 @@ func CleanupKindBMaterialized(genRoot string) error {
 		return err
 	}
 	var firstErr error
+	var remaining []string
 	for _, line := range strings.Split(string(data), "\n") {
 		path := strings.TrimSpace(line)
 		if path == "" {
 			continue
 		}
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) && firstErr == nil {
-			firstErr = err
+		if !isKindBMaterializedPath(path) {
+			remaining = append(remaining, path)
+			if firstErr == nil {
+				firstErr = fmt.Errorf("cleanup kind B: refuse non-expose path %s", path)
+			}
+			continue
 		}
-		// Prune empty dirs: …/greet then …/__doctest_internal_expose.
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			remaining = append(remaining, path)
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		// Prune empty dirs up through __doctest_internal_expose only.
 		dir := filepath.Dir(path)
-		for i := 0; i < 4 && dir != "" && dir != string(filepath.Separator); i++ {
+		for dir != "" && dir != string(filepath.Separator) {
 			base := filepath.Base(dir)
 			entries, rdErr := os.ReadDir(dir)
 			if rdErr != nil || len(entries) > 0 {
@@ -380,8 +400,31 @@ func CleanupKindBMaterialized(genRoot string) error {
 			dir = filepath.Dir(dir)
 		}
 	}
+	if len(remaining) > 0 {
+		if err := os.WriteFile(listPath, []byte(strings.Join(remaining, "\n")+"\n"), 0644); err != nil && firstErr == nil {
+			firstErr = err
+		}
+		return firstErr
+	}
 	_ = os.Remove(listPath)
 	return firstErr
+}
+
+// isKindBMaterializedPath reports whether path is an absolute expose.go under
+// __doctest_internal_expose (the only files emitKindBExpose writes).
+func isKindBMaterializedPath(path string) bool {
+	if path == "" || !filepath.IsAbs(path) {
+		return false
+	}
+	if filepath.Base(path) != "expose.go" {
+		return false
+	}
+	for _, p := range strings.Split(filepath.Clean(path), string(filepath.Separator)) {
+		if p == DoctestInternalExposeDir {
+			return true
+		}
+	}
+	return false
 }
 
 func resolveModuleDir(workDir, modulePath string) (string, error) {
@@ -514,7 +557,7 @@ func generateExposeSource(internalImp, internalDir string) (string, error) {
 	reservedAlias := map[string]bool{srcAlias: true, pkgName: true}
 
 	for _, f := range pkg.Files {
-		localPath := fileImportAliasToPath(f)
+		localPath := fileImportAliasToPath(f, internalImp, internalDir)
 		for _, decl := range f.Decls {
 			switch d := decl.(type) {
 			case *ast.FuncDecl:
@@ -535,7 +578,7 @@ func generateExposeSource(internalImp, internalDir string) (string, error) {
 					if _, exists := pathToEmit[path]; exists {
 						continue
 					}
-					emit := defaultImportAlias(path)
+					emit := importIdent(path, internalImp, internalDir)
 					if reservedAlias[emit] || emitAliasTaken(pathToEmit, emit) {
 						emit = uniqueEmitAlias(path, reservedAlias, pathToEmit)
 					}
@@ -678,9 +721,9 @@ func generateExposeSource(internalImp, internalDir string) (string, error) {
 	return b.String(), nil
 }
 
-// fileImportAliasToPath maps import aliases (or default package names) to paths.
+// fileImportAliasToPath maps import aliases (or resolved package names) to paths.
 // Blank and dot imports are skipped (not used as signature qualifiers).
-func fileImportAliasToPath(f *ast.File) map[string]string {
+func fileImportAliasToPath(f *ast.File, internalImp, internalDir string) map[string]string {
 	out := map[string]string{}
 	if f == nil {
 		return out
@@ -701,18 +744,97 @@ func fileImportAliasToPath(f *ast.File) map[string]string {
 			out[name] = path
 			continue
 		}
-		out[defaultImportAlias(path)] = path
+		out[importIdent(path, internalImp, internalDir)] = path
 	}
 	return out
 }
 
-// defaultImportAlias is the usual Go default name for an import path (last element).
+// importIdent is the identifier an unaliased import binds as: the package
+// clause when the imported dir is resolvable next to internalDir, otherwise
+// defaultImportAlias (last element, with /vN and name.vN heuristics).
+func importIdent(importPath, internalImp, internalDir string) string {
+	if dir := resolveImportDir(importPath, internalImp, internalDir); dir != "" {
+		if name := readDirPackageName(dir); name != "" {
+			return name
+		}
+	}
+	return defaultImportAlias(importPath)
+}
+
+func resolveImportDir(importPath, internalImp, internalDir string) string {
+	if importPath == "" || internalDir == "" {
+		return ""
+	}
+	if importPath == internalImp {
+		return internalDir
+	}
+	modRoot, modPath, ok := FindModuleRoot(internalDir)
+	if !ok || modPath == "" {
+		return ""
+	}
+	if importPath == modPath {
+		return modRoot
+	}
+	if strings.HasPrefix(importPath, modPath+"/") {
+		rel := filepath.FromSlash(strings.TrimPrefix(importPath, modPath+"/"))
+		return filepath.Join(modRoot, rel)
+	}
+	return ""
+}
+
+func readDirPackageName(dir string) string {
+	fset := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fset, dir, func(fi os.FileInfo) bool {
+		name := fi.Name()
+		return strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go")
+	}, 0)
+	if err != nil || len(pkgs) == 0 {
+		return ""
+	}
+	for name := range pkgs {
+		if name != "" && name != "main" && !strings.HasSuffix(name, "_test") {
+			return name
+		}
+	}
+	return ""
+}
+
+// defaultImportAlias is the conventional unaliased name for an import path:
+// last element, except /v2 → parent element and yaml.v3 → yaml.
 func defaultImportAlias(path string) string {
 	path = strings.TrimSuffix(path, "/")
+	base := path
 	if i := strings.LastIndex(path, "/"); i >= 0 {
-		return path[i+1:]
+		base = path[i+1:]
 	}
-	return path
+	if isVersionElem(base) {
+		parent := path
+		if i := strings.LastIndex(path, "/"); i >= 0 {
+			parent = path[:i]
+			if j := strings.LastIndex(parent, "/"); j >= 0 {
+				return parent[j+1:]
+			}
+			if parent != "" {
+				return parent
+			}
+		}
+	}
+	if i := strings.LastIndex(base, "."); i > 0 && isVersionElem(base[i+1:]) {
+		return base[:i]
+	}
+	return base
+}
+
+func isVersionElem(s string) bool {
+	if len(s) < 2 || s[0] != 'v' {
+		return false
+	}
+	for _, c := range s[1:] {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func emitAliasTaken(pathToEmit map[string]string, alias string) bool {

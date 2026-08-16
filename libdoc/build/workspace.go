@@ -36,6 +36,11 @@ type TreePrep struct {
 // PrepareTree discovers, filters, and generates one tree without go test.
 // Full-tree unified trees write __wreg for later workspace fan-in.
 // Path-scoped trees emit a suite under SuiteRel only (no tree-wide __wreg).
+//
+// Kind B product expose files stay on disk until RunWorkspace or
+// CleanupKindBForPreps. Generate-only Close does not strip them — including
+// on generate error — because the materialized list is shared across trees
+// on one gen root.
 func PrepareTree(dir string, opts core.Options) (TreePrep, error) {
 	o := opts
 	// Share GenBatch across multi-tree prepare when caller provided one; else
@@ -100,11 +105,21 @@ func PrepareTree(dir string, opts core.Options) (TreePrep, error) {
 // RunWorkspace writes __workspace fan-in for the given unified preps and runs
 // a single go test. Same gen root → classic __workspace suite. Mixed gen roots
 // (multi-module ./...) → toplevel/__hub go.mod + suite calling each RunAll.
-func RunWorkspace(preps []TreePrep, opts core.Options) (TestRunStats, error) {
-	var stats TestRunStats
+func RunWorkspace(preps []TreePrep, opts core.Options) (stats TestRunStats, err error) {
 	if len(preps) == 0 {
 		return stats, fmt.Errorf("workspace: no trees to run")
 	}
+	// Session-scoped: strip Kind B product files on every return, including
+	// tidy/plan/hub errors that never reach finishWorkspaceGoTest.
+	defer func() {
+		if cErr := CleanupKindBForPreps(preps); cErr != nil {
+			if err != nil {
+				err = fmt.Errorf("%w; kind B cleanup: %v", err, cErr)
+			} else {
+				err = fmt.Errorf("kind B cleanup: %w", cErr)
+			}
+		}
+	}()
 
 	active := make([]TreePrep, 0, len(preps))
 	for _, p := range preps {
@@ -499,20 +514,8 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 		stats.GenRoot = genRootLabel
 		stats.Unified = true
 		stats.Phases = append(stats.Phases, PhaseTiming{Name: "go_test", ElapsedNs: 0})
-		// Still strip Kind B product files left by GenerateOnly prepare.
-		for _, root := range uniquePrepGenRoots(preps) {
-			_ = core.CleanupKindBMaterialized(root)
-		}
 		return stats, nil
 	}
-
-	// PrepareTree left Kind B expose on disk; strip after this function returns
-	// (success, go test fail, or early errors below).
-	defer func() {
-		for _, root := range uniquePrepGenRoots(preps) {
-			_ = core.CleanupKindBMaterialized(root)
-		}
-	}()
 
 	flagArgs := []string{"test", "-mod=mod"}
 	flagArgs = appendOptsGoTestFlags(flagArgs, opts)
@@ -672,6 +675,18 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 		return stats, fmt.Errorf("go test: %w", runErr)
 	}
 	return stats, nil
+}
+
+// CleanupKindBForPreps strips Kind B product expose files for each unique
+// GenRoot on preps. Safe when the list is missing. Returns the first error.
+func CleanupKindBForPreps(preps []TreePrep) error {
+	var first error
+	for _, root := range uniquePrepGenRoots(preps) {
+		if err := core.CleanupKindBMaterialized(root); err != nil && first == nil {
+			first = err
+		}
+	}
+	return first
 }
 
 // uniquePrepGenRoots returns cleaned unique GenRoot paths from preps (stable order).

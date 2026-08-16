@@ -144,6 +144,14 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	if err := ctx.writeCases(cases, false); err != nil {
 		track("generate", tGen)
 		stats.Phases = phases
+		// Gen root is set so GenerateOnly callers (PrepareTree) can strip Kind B
+		// after all trees finish. Close does not wipe the shared list on error.
+		stats.GenRoot = ctx.genRoot
+		stats.AbsRoot = absRoot
+		stats.TreeRel = ctx.treeRel()
+		stats.SuiteRel = ctx.suiteRel()
+		stats.PathScoped = ctx.isPathScoped()
+		stats.Unified = true
 		return stats, err
 	}
 	track("generate", tGen)

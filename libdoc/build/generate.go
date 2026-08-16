@@ -74,21 +74,21 @@ func newGenerateContext(dir string, opts core.Options, w io.Writer, forBuild boo
 	sessionImport := true
 
 	ctx := &generateContext{
-		w:              w,
-		verbose:        verbose,
-		absRoot:        absRoot,
-		absModRoot:     absModRoot,
-		modRoot:        modRoot,
-		modPath:        modPath,
-		hasMod:         hasMod,
-		dumpDir:        opts.GenDir,
-		assertImport:   assertImport,
-		sessionImport:  sessionImport,
-		goCache:        opts.GoCache,
-		genBatch:       opts.GenBatch,
-		generateOnly:   opts.GenerateOnly,
-		forceA:         opts.ForceWithFlagA,
-		subDir:         opts.SubDir,
+		w:             w,
+		verbose:       verbose,
+		absRoot:       absRoot,
+		absModRoot:    absModRoot,
+		modRoot:       modRoot,
+		modPath:       modPath,
+		hasMod:        hasMod,
+		dumpDir:       opts.GenDir,
+		assertImport:  assertImport,
+		sessionImport: sessionImport,
+		goCache:       opts.GoCache,
+		genBatch:      opts.GenBatch,
+		generateOnly:  opts.GenerateOnly,
+		forceA:        opts.ForceWithFlagA,
+		subDir:        opts.SubDir,
 	}
 
 	if assertImport {
@@ -166,11 +166,12 @@ func (ctx *generateContext) Close() {
 		ctx.closed = true
 		// Safety if writeCases returned early before finishGenOrphans.
 		ctx.releaseGenWrite()
-		// Kind B expose is written under the product module for go tool cover.
-		// Skip cleanup when GenerateOnly (PrepareTree): RunWorkspace still needs
-		// the files; it calls CleanupKindBMaterialized after go test.
+		// Kind B expose lives in the product tree for go tool cover. GenerateOnly
+		// leaves it for RunWorkspace (and leftover cleanup after all prepares).
+		// The list is per gen root and shared across parallel PrepareTree — do
+		// not strip here on generate failure or a sibling tree loses its files.
 		if !ctx.generateOnly {
-			_ = core.CleanupKindBMaterialized(ctx.genRoot)
+			ctx.reportKindBCleanup(core.CleanupKindBMaterialized(ctx.genRoot))
 		}
 		ctx.removeTempsLocked()
 	})
@@ -188,9 +189,8 @@ func (ctx *generateContext) withGenLock(fn func() error) error {
 }
 
 func (ctx *generateContext) installInterruptCleanup() {
-	if !ctx.removeLegacyTmp {
-		return
-	}
+	// Always notify: Kind B files live in the product tree, not only in an
+	// ephemeral gen root. removeTempsLocked is a no-op unless removeLegacyTmp.
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt)
 	go func() {
@@ -201,11 +201,11 @@ func (ctx *generateContext) installInterruptCleanup() {
 		ctx.closeOnce.Do(func() {
 			ctx.closed = true
 			// Interrupt: always strip product expose files (run will not finish).
-			_ = core.CleanupKindBMaterialized(ctx.genRoot)
+			ctx.reportKindBCleanup(core.CleanupKindBMaterialized(ctx.genRoot))
 			ctx.removeTempsLocked()
 		})
 		// Re-remove even if Close already ran without this lock held for exit.
-		_ = core.CleanupKindBMaterialized(ctx.genRoot)
+		ctx.reportKindBCleanup(core.CleanupKindBMaterialized(ctx.genRoot))
 		ctx.removeTempsLocked()
 		os.Exit(130)
 	}()
@@ -256,7 +256,7 @@ func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) 
 		return err
 	}
 
-	return ctx.withGenLock(func() error {
+	if err := ctx.withGenLock(func() error {
 		if err := ctx.writeUnifiedCases(cases, compileOnly, pkgName, hasPkgUnderTest, srcDir, origPkg); err != nil {
 			return err
 		}
@@ -264,7 +264,21 @@ func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) 
 			return err
 		}
 		return ctx.finishGenOrphans()
-	})
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (ctx *generateContext) reportKindBCleanup(err error) {
+	if err == nil {
+		return
+	}
+	w := ctx.w
+	if w == nil {
+		w = os.Stderr
+	}
+	fmt.Fprintf(w, "doctest: kind B cleanup: %v\n", err)
 }
 
 // finishGenOrphans reconciles throwaway gen for this tree only (treeRel scope).

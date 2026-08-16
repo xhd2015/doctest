@@ -199,6 +199,195 @@ func TestPrepareTreeParallelSharedGenRoot(t *testing.T) {
 	}
 }
 
+// TestPrepareTree_siblingKindBSurvivesFailedPrepare is the generate-only
+// contract: a failed PrepareTree must not strip Kind B files another tree
+// wrote on the shared gen root. RunWorkspace then strips them.
+func TestPrepareTree_siblingKindBSurvivesFailedPrepare(t *testing.T) {
+	mod := t.TempDir()
+	if err := os.WriteFile(filepath.Join(mod, "go.mod"), []byte("module example.com/app\n\ngo 1.22\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	greetDir := filepath.Join(mod, "internal", "greet")
+	if err := os.MkdirAll(greetDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(greetDir, "greet.go"), []byte("package greet\n\nfunc Hello(name string) string { return \"hello \" + name }\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	treeA := filepath.Join(mod, "tree-a")
+	treeB := filepath.Join(mod, "tree-b")
+	writeTreeImportingInternal(t, treeA, "example.com/app/internal/greet", "greet")
+	writeTreeImportingInternal(t, treeB, "example.com/app/internal/missing", "missing")
+
+	genDir := filepath.Join(t.TempDir(), "gen")
+	opts := core.Options{
+		GenDir:                genDir,
+		GenBatch:              core.NewGenBatch(),
+		Count:                 1,
+		SuppressResultSummary: true,
+		Stderr:                ioDiscard{},
+	}
+	prepA, err := PrepareTree(treeA, opts)
+	if err != nil {
+		t.Fatalf("PrepareTree A: %v", err)
+	}
+	virt := filepath.Join(mod, core.DoctestInternalExposeDir, "greet", "expose.go")
+	if _, err := os.Stat(virt); err != nil {
+		t.Fatalf("A should materialize Kind B expose: %v", err)
+	}
+
+	prepB, err := PrepareTree(treeB, opts)
+	if err == nil {
+		t.Fatal("PrepareTree B: expected generate error for missing internal")
+	}
+	if prepB.GenRoot == "" {
+		t.Fatal("failed PrepareTree must return GenRoot for leftover cleanup")
+	}
+	if filepath.Clean(prepB.GenRoot) != filepath.Clean(prepA.GenRoot) {
+		t.Fatalf("expected shared gen root, got A=%q B=%q", prepA.GenRoot, prepB.GenRoot)
+	}
+	if _, err := os.Stat(virt); err != nil {
+		t.Fatalf("sibling generate failure must not strip A's expose.go: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	runOpts := opts
+	runOpts.Stdout = &stdout
+	if _, err := RunWorkspace([]TreePrep{prepA}, runOpts); err != nil {
+		t.Fatalf("RunWorkspace A: %v\n%s", err, stdout.String())
+	}
+	if _, err := os.Stat(virt); !os.IsNotExist(err) {
+		t.Fatalf("expose.go should be stripped after RunWorkspace: %v", err)
+	}
+}
+
+func writeTreeImportingInternal(t *testing.T, root, internalImp, pkgIdent string) {
+	t.Helper()
+	testtree.WriteMinimalRunnableTree(t, root, []testtree.LeafSpec{{Name: "one", Steps: "s", Expected: "ok"}})
+	runGo := `import (
+	"testing"
+
+	"` + internalImp + `"
+	"github.com/xhd2015/doctest/session"
+)
+
+type Request struct{}
+type Response struct{}
+
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
+	_ = d
+	_ = ` + pkgIdent + `.Hello
+	return &Response{}, nil
+}`
+	testtree.WriteFile(t, root, "DOCTEST.md", testtree.MinimalDOCTEST(runGo))
+}
+
+// TestCleanupKindBForPreps_failedPrepareGenRoot covers the all-fail session:
+// no RunWorkspace, but the failed prep still names the shared gen root.
+func TestCleanupKindBForPreps_failedPrepareGenRoot(t *testing.T) {
+	mod := t.TempDir()
+	if err := os.WriteFile(filepath.Join(mod, "go.mod"), []byte("module example.com/app\n\ngo 1.22\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	greetDir := filepath.Join(mod, "internal", "greet")
+	if err := os.MkdirAll(greetDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(greetDir, "greet.go"), []byte("package greet\n\nfunc Hello(name string) string { return \"hi\" }\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	treeA := filepath.Join(mod, "tree-a")
+	treeB := filepath.Join(mod, "tree-b")
+	writeTreeImportingInternal(t, treeA, "example.com/app/internal/greet", "greet")
+	writeTreeImportingInternal(t, treeB, "example.com/app/internal/missing", "missing")
+	opts := core.Options{
+		GenDir:                filepath.Join(t.TempDir(), "gen"),
+		GenBatch:              core.NewGenBatch(),
+		Count:                 1,
+		SuppressResultSummary: true,
+		Stderr:                ioDiscard{},
+	}
+	if _, err := PrepareTree(treeA, opts); err != nil {
+		t.Fatalf("PrepareTree A: %v", err)
+	}
+	prepB, err := PrepareTree(treeB, opts)
+	if err == nil {
+		t.Fatal("expected B generate error")
+	}
+	virt := filepath.Join(mod, core.DoctestInternalExposeDir, "greet", "expose.go")
+	if _, err := os.Stat(virt); err != nil {
+		t.Fatalf("expose should remain after failed B: %v", err)
+	}
+	if err := CleanupKindBForPreps([]TreePrep{prepB}); err != nil {
+		t.Fatalf("leftover cleanup: %v", err)
+	}
+	if _, err := os.Stat(virt); !os.IsNotExist(err) {
+		t.Fatalf("failed prep GenRoot should be enough to strip Kind B: %v", err)
+	}
+}
+
+// TestRunWorkspace_cleansKindBOnEarlyError covers the leak window where
+// PrepareTree wrote product expose files but RunWorkspace returns before
+// finishWorkspaceGoTest (e.g. non-unified prep).
+func TestRunWorkspace_cleansKindBOnEarlyError(t *testing.T) {
+	genRoot := t.TempDir()
+	product := t.TempDir()
+	virt := filepath.Join(product, core.DoctestInternalExposeDir, "greet", "expose.go")
+	if err := os.MkdirAll(filepath.Dir(virt), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(virt, []byte("package greet\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(genRoot, core.KindBMaterializedList), []byte(virt+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := RunWorkspace([]TreePrep{{
+		AbsRoot: product,
+		Unified: false,
+		GenRoot: genRoot,
+		Stats:   TestRunStats{Total: 1},
+	}}, core.Options{SuppressResultSummary: true, Stderr: ioDiscard{}})
+	if err == nil {
+		t.Fatal("expected error for non-unified prep")
+	}
+	if _, err := os.Stat(virt); !os.IsNotExist(err) {
+		t.Fatalf("expose.go should be stripped on RunWorkspace error: %v", err)
+	}
+}
+
+func TestRunWorkspace_surfacesKindBCleanupError(t *testing.T) {
+	genRoot := t.TempDir()
+	product := t.TempDir()
+	virt := filepath.Join(product, core.DoctestInternalExposeDir, "greet", "expose.go")
+	if err := os.MkdirAll(virt, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(virt, "keep.txt"), []byte("x\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(genRoot, core.KindBMaterializedList), []byte(virt+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := RunWorkspace([]TreePrep{{
+		AbsRoot: product,
+		Unified: false,
+		GenRoot: genRoot,
+		Stats:   TestRunStats{Total: 1},
+	}}, core.Options{SuppressResultSummary: true, Stderr: ioDiscard{}})
+	if err == nil {
+		t.Fatal("expected combined workspace + cleanup error")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "not unified") {
+		t.Fatalf("want original workspace error, got %v", err)
+	}
+	if !strings.Contains(msg, "kind B cleanup") {
+		t.Fatalf("want cleanup error surfaced, got %v", err)
+	}
+}
+
 type ioDiscard struct{}
 
 func (ioDiscard) Write(p []byte) (int, error) { return len(p), nil }

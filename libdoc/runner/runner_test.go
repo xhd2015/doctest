@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	runnerbuild "github.com/xhd2015/doctest/libdoc/build"
 )
 
 func writeTreeFile(t *testing.T, root, rel, content string) {
@@ -352,6 +354,19 @@ func TestFormatClassifiedErrors(t *testing.T) {
 	}
 	if !strings.Contains(mixed.Error(), "a: prep") || !strings.Contains(mixed.Error(), "b: run") {
 		t.Fatalf("mixed body: %v", mixed)
+	}
+}
+
+func TestLeftoverKindBPreps(t *testing.T) {
+	shared := runnerbuild.TreePrep{GenRoot: "/tmp/shared"}
+	other := runnerbuild.TreePrep{GenRoot: "/tmp/other"}
+	empty := runnerbuild.TreePrep{}
+	got := leftoverKindBPreps([]runnerbuild.TreePrep{shared, other, empty}, []runnerbuild.TreePrep{shared})
+	if len(got) != 1 || filepath.Clean(got[0].GenRoot) != filepath.Clean(other.GenRoot) {
+		t.Fatalf("want only distinct leftover root, got %+v", got)
+	}
+	if leftover := leftoverKindBPreps([]runnerbuild.TreePrep{shared, empty}, []runnerbuild.TreePrep{shared}); len(leftover) != 0 {
+		t.Fatalf("shared root used by workspace must not be leftover: %+v", leftover)
 	}
 }
 
