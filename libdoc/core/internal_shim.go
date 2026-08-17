@@ -12,10 +12,11 @@
 // cover). Paths are recorded in KindBMaterializedList and removed by
 // CleanupKindBMaterialized at session end (RunWorkspace, leftover prepare
 // roots, or generateContext.Close after a non-GenerateOnly run). A process
-// SIGINT handler is armed only while those lists are outstanding and is
-// stopped after the last root is fully cleaned. Overlay remains for tools
-// that prefer Replace maps. Overlay-only dirs still need -vet=off
-// (NeedVetOff / InternalShimVetOffMarker) when cleanup has not run yet.
+// SIGINT handler is armed while lists are outstanding; it strips files and
+// os.Exit(130)s only when a CLI session holds EnableKindBInterruptExit.
+// Overlay remains for tools that prefer Replace maps. Overlay-only dirs
+// still need -vet=off (NeedVetOff / InternalShimVetOffMarker) when cleanup
+// has not run yet.
 package core
 
 import (
@@ -322,6 +323,10 @@ func emitKindBExpose(genRoot, absModRoot, productMod, internalImp string, replac
 // after mkdir/write, the file and empty Kind B parent dirs are rolled back so
 // the product tree is not left with an unlistable expose.
 func materializeKindBProductFile(genRoot, virtFile string, body []byte) error {
+	// Write+record is one critical section with cleanup so SIGINT cannot
+	// delete the list between WriteFile and Fprintln (unlistable expose).
+	kindBMu.Lock()
+	defer kindBMu.Unlock()
 	if err := os.MkdirAll(filepath.Dir(virtFile), 0755); err != nil {
 		return fmt.Errorf("mkdir kind B expose %s: %w", virtFile, err)
 	}
@@ -329,7 +334,7 @@ func materializeKindBProductFile(genRoot, virtFile string, body []byte) error {
 		pruneEmptyKindBParents(filepath.Dir(virtFile))
 		return fmt.Errorf("write kind B expose %s: %w", virtFile, err)
 	}
-	if err := recordKindBMaterialized(genRoot, virtFile); err != nil {
+	if err := recordKindBMaterializedLocked(genRoot, virtFile); err != nil {
 		_ = os.Remove(virtFile)
 		pruneEmptyKindBParents(filepath.Dir(virtFile))
 		return err
@@ -340,6 +345,12 @@ func materializeKindBProductFile(genRoot, virtFile string, body []byte) error {
 // recordKindBMaterialized appends an absolute product-tree expose path so
 // CleanupKindBMaterialized can remove session-scoped files after go test/build.
 func recordKindBMaterialized(genRoot, virtFile string) error {
+	kindBMu.Lock()
+	defer kindBMu.Unlock()
+	return recordKindBMaterializedLocked(genRoot, virtFile)
+}
+
+func recordKindBMaterializedLocked(genRoot, virtFile string) error {
 	if genRoot == "" || virtFile == "" {
 		return nil
 	}
@@ -359,7 +370,7 @@ func recordKindBMaterialized(genRoot, virtFile string) error {
 	if _, err := fmt.Fprintln(f, abs); err != nil {
 		return fmt.Errorf("record kind B materialized: %w", err)
 	}
-	registerKindBGenRoot(genRoot)
+	registerKindBGenRootLocked(genRoot)
 	return nil
 }
 
@@ -367,6 +378,12 @@ func recordKindBMaterialized(genRoot, virtFile string) error {
 // genRoot/KindBMaterializedList and prunes empty parent dirs up through
 // __doctest_internal_expose. Safe when the list is missing (no Kind B).
 func CleanupKindBMaterialized(genRoot string) error {
+	kindBMu.Lock()
+	defer kindBMu.Unlock()
+	return cleanupKindBMaterializedLocked(genRoot)
+}
+
+func cleanupKindBMaterializedLocked(genRoot string) error {
 	if genRoot == "" {
 		return nil
 	}
@@ -374,7 +391,7 @@ func CleanupKindBMaterialized(genRoot string) error {
 	data, err := os.ReadFile(listPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			unregisterKindBGenRoot(genRoot)
+			unregisterKindBGenRootLocked(genRoot)
 			return nil
 		}
 		return err
@@ -409,7 +426,7 @@ func CleanupKindBMaterialized(genRoot string) error {
 		return firstErr
 	}
 	_ = os.Remove(listPath)
-	unregisterKindBGenRoot(genRoot)
+	unregisterKindBGenRootLocked(genRoot)
 	return firstErr
 }
 
@@ -985,6 +1002,29 @@ func writeExposeImports(b *strings.Builder, srcAlias, internalImp string, pathTo
 	b.WriteString(")\n")
 }
 
+// funcTypeString prints a function type so signatures like
+// func(fn func(model.Project) error) compile and keep the model import used.
+func funcTypeString(ft *ast.FuncType, localToEmit map[string]string) string {
+	if ft == nil {
+		return "func()"
+	}
+	var b strings.Builder
+	b.WriteString("func(")
+	b.WriteString(fieldListString(ft.Params, false, localToEmit))
+	b.WriteString(")")
+	if ft.Results != nil && len(ft.Results.List) > 0 {
+		b.WriteString(" ")
+		if len(ft.Results.List) == 1 && len(ft.Results.List[0].Names) == 0 {
+			b.WriteString(exprString(ft.Results.List[0].Type, localToEmit))
+		} else {
+			b.WriteString("(")
+			b.WriteString(fieldListString(ft.Results, false, localToEmit))
+			b.WriteString(")")
+		}
+	}
+	return b.String()
+}
+
 func fieldListString(fl *ast.FieldList, withNames bool, localToEmit map[string]string) string {
 	if fl == nil {
 		return ""
@@ -992,7 +1032,17 @@ func fieldListString(fl *ast.FieldList, withNames bool, localToEmit map[string]s
 	var parts []string
 	for _, f := range fl.List {
 		ty := exprString(f.Type, localToEmit)
-		if !withNames || len(f.Names) == 0 {
+		if !withNames {
+			n := len(f.Names)
+			if n == 0 {
+				n = 1
+			}
+			for i := 0; i < n; i++ {
+				parts = append(parts, ty)
+			}
+			continue
+		}
+		if len(f.Names) == 0 {
 			parts = append(parts, ty)
 			continue
 		}
@@ -1053,7 +1103,7 @@ func exprString(e ast.Expr, localToEmit map[string]string) string {
 	case *ast.ChanType:
 		return "chan " + exprString(t.Value, localToEmit)
 	case *ast.FuncType:
-		return "func"
+		return funcTypeString(t, localToEmit)
 	case *ast.BasicLit:
 		return t.Value
 	case *ast.IndexExpr:

@@ -109,6 +109,7 @@ func TestWithWriters(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	applyWriters(&opts, stdout, stderr)
+	defer core.EnableKindBInterruptExit()()
 	return runTest(opts, remainArgs)
 }
 
@@ -423,6 +424,10 @@ func processArgsWithWriters(args []string, cmdName string, parseFn func([]string
 	if len(remainArgs) < 1 {
 		return fmt.Errorf("%s requires <dir>", cmdName)
 	}
+	// CLI build/vet: Kind B SIGINT strips product files then os.Exit(130).
+	// Nested in-process harnesses refcount so an inner pop cannot disarm
+	// an outer session.
+	defer core.EnableKindBInterruptExit()()
 	if len(remainArgs) == 1 {
 		return processSingleArg(remainArgs[0], opts, processDirFn)
 	}

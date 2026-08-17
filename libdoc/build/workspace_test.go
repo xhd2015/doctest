@@ -442,6 +442,9 @@ func TestGenerateContextClose_generateOnlyLeavesKindB(t *testing.T) {
 	if _, err := os.Stat(virt); err != nil {
 		t.Fatalf("generate-only must leave expose.go: %v", err)
 	}
+	if core.KindBInterruptExitEnabled() {
+		t.Fatal("generate-only Close must not leave CLI os.Exit armed")
+	}
 }
 
 func TestRunWorkspace_surfacesKindBCleanupError(t *testing.T) {

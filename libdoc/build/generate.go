@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -176,6 +175,12 @@ func (ctx *generateContext) Close() error {
 		}
 		ctx.removeTempsLocked()
 	})
+	if ctx.removeLegacyTmp {
+		// Drop this context's temp hook; stop the process handler when no
+		// Kind B list remains so library Build --rm does not leave os.Exit.
+		core.SetKindBInterruptHook(nil)
+		core.DisarmKindBInterruptIfIdle()
+	}
 	return closeErr
 }
 
@@ -191,28 +196,27 @@ func (ctx *generateContext) withGenLock(fn func() error) error {
 }
 
 func (ctx *generateContext) installInterruptCleanup() {
-	// Ephemeral build temps only. Kind B product files are covered by the
-	// process handler in core (armed while materialized lists exist).
+	// One process SIGINT path (core). Register temp removal so build --rm
+	// still wipes the ephemeral gen dir; do not signal.Notify here — a
+	// second os.Exit(130) raced Kind B cleanup and skipped removeTemps.
 	if !ctx.removeLegacyTmp {
 		return
 	}
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, os.Interrupt)
-	go func() {
-		<-ch
-		// Hold lifecycleMu until process exit so concurrent writeCases cannot
+	core.SetKindBInterruptHook(func() {
+		// Hold lifecycleMu until the hook returns so writeCases cannot
 		// MkdirAll/WriteFile a removed temp back into existence.
 		ctx.lifecycleMu.Lock()
+		defer ctx.lifecycleMu.Unlock()
 		ctx.closeOnce.Do(func() {
 			ctx.closed = true
+			ctx.releaseGenWrite()
 			ctx.reportKindBCleanup(core.CleanupAllKindBMaterialized())
 			ctx.removeTempsLocked()
 		})
-		// Re-remove even if Close already ran without this lock held for exit.
 		ctx.reportKindBCleanup(core.CleanupAllKindBMaterialized())
 		ctx.removeTempsLocked()
-		os.Exit(130)
-	}()
+	})
+	core.ArmKindBInterrupt()
 }
 
 func (ctx *generateContext) announceRoots() {

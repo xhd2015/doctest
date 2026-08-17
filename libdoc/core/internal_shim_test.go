@@ -1,10 +1,12 @@
 package core
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -229,6 +231,44 @@ func FixIgnore(project model.Project, dryRun bool) (model.FixResult, error) {
 	}
 	if !strings.Contains(body, "srcpkg.FixIgnore") {
 		t.Fatalf("missing forward to srcpkg; body:\n%s", body)
+	}
+}
+
+// TestGenerateExposeSource_funcTypedParam prints a full func(...) type so the
+// model import is used (bare "func" is invalid and left the import unused).
+func TestGenerateExposeSource_funcTypedParam(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	src := `package rules
+
+import "example.com/app/model"
+
+func Apply(fn func(model.Project) error) error {
+	return fn(model.Project{})
+}
+
+func ApplyMany(fn func(a, b model.Project) error) error {
+	return fn(model.Project{}, model.Project{})
+}
+`
+	if err := os.WriteFile(filepath.Join(dir, "rules.go"), []byte(src), 0644); err != nil {
+		t.Fatal(err)
+	}
+	body, err := generateExposeSource("example.com/app/internal/rules", dir)
+	if err != nil {
+		t.Fatalf("generateExposeSource: %v", err)
+	}
+	if !strings.Contains(body, strconv.Quote("example.com/app/model")) {
+		t.Fatalf("missing import of model package; body:\n%s", body)
+	}
+	if !strings.Contains(body, "func Apply(fn func(model.Project) error) error") {
+		t.Fatalf("want full func type in Apply; body:\n%s", body)
+	}
+	if !strings.Contains(body, "func ApplyMany(fn func(model.Project, model.Project) error) error") {
+		t.Fatalf("want one type per shared-field name in ApplyMany; body:\n%s", body)
+	}
+	if strings.Contains(body, "fn func)") || strings.Contains(body, "(fn func,") {
+		t.Fatalf("must not print bare func type; body:\n%s", body)
 	}
 }
 
@@ -513,6 +553,9 @@ func TestRecordKindBMaterialized_tracksUntilFullCleanup(t *testing.T) {
 	if kindBGenRootTracked(genRoot) {
 		t.Fatal("expected gen root untracked after full cleanup")
 	}
+	if KindBInterruptArmed() && KindBInterruptExitEnabled() {
+		t.Fatal("cleanup must not leave CLI os.Exit armed")
+	}
 }
 
 func TestCleanupKindBMaterialized_staysTrackedOnRemoveFailure(t *testing.T) {
@@ -535,6 +578,88 @@ func TestCleanupKindBMaterialized_staysTrackedOnRemoveFailure(t *testing.T) {
 	}
 	if !kindBGenRootTracked(genRoot) {
 		t.Fatal("outstanding leftover must stay tracked")
+	}
+}
+
+func TestMaterializeKindBProductFile_serializedWithCleanup(t *testing.T) {
+	t.Parallel()
+	genRoot := t.TempDir()
+	t.Cleanup(func() {
+		unregisterKindBGenRoot(genRoot)
+		_ = CleanupKindBMaterialized(genRoot)
+	})
+	product := t.TempDir()
+	const n = 8
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			virt := filepath.Join(product, DoctestInternalExposeDir, fmt.Sprintf("p%d", i), "expose.go")
+			_ = materializeKindBProductFile(genRoot, virt, []byte("package p\n"))
+		}(i)
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = CleanupAllKindBMaterialized()
+	}()
+	wg.Wait()
+	if err := CleanupKindBMaterialized(genRoot); err != nil {
+		t.Fatalf("final cleanup: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(product, DoctestInternalExposeDir)); !os.IsNotExist(err) {
+		t.Fatalf("expose dir should be gone after serialized materialize+cleanup: %v", err)
+	}
+}
+
+func TestKindBInterruptExit_defaultOffAndNested(t *testing.T) {
+	// Touches process-wide exit refcount; do not t.Parallel.
+	if KindBInterruptExitEnabled() {
+		t.Fatal("library/default must not os.Exit on SIGINT")
+	}
+	outer := EnableKindBInterruptExit()
+	defer outer()
+	if !KindBInterruptExitEnabled() {
+		t.Fatal("expected enabled after first hold")
+	}
+	inner := EnableKindBInterruptExit()
+	inner()
+	if !KindBInterruptExitEnabled() {
+		t.Fatal("inner pop must not disable outer CLI session")
+	}
+	outer()
+	if KindBInterruptExitEnabled() {
+		t.Fatal("expected disabled after last pop")
+	}
+}
+
+func TestKindBInterruptArmed_onlyWhileTracked(t *testing.T) {
+	t.Parallel()
+	genRoot := t.TempDir()
+	t.Cleanup(func() { unregisterKindBGenRoot(genRoot) })
+	product := t.TempDir()
+	virt := filepath.Join(product, DoctestInternalExposeDir, "greet", "expose.go")
+	if err := os.MkdirAll(filepath.Dir(virt), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(virt, []byte("package greet\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := recordKindBMaterialized(genRoot, virt); err != nil {
+		t.Fatal(err)
+	}
+	if !KindBInterruptArmed() {
+		t.Fatal("expected handler armed while list is outstanding")
+	}
+	if KindBInterruptExitEnabled() {
+		t.Fatal("record must not enable CLI os.Exit")
+	}
+	if err := CleanupKindBMaterialized(genRoot); err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+	if kindBGenRootTracked(genRoot) {
+		t.Fatal("expected this gen root untracked after cleanup")
 	}
 }
 
