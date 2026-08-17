@@ -159,7 +159,8 @@ func (ctx *generateContext) removeTempsLocked() {
 	}
 }
 
-func (ctx *generateContext) Close() {
+func (ctx *generateContext) Close() error {
+	var closeErr error
 	ctx.closeOnce.Do(func() {
 		ctx.lifecycleMu.Lock()
 		defer ctx.lifecycleMu.Unlock()
@@ -171,10 +172,11 @@ func (ctx *generateContext) Close() {
 		// The list is per gen root and shared across parallel PrepareTree — do
 		// not strip here on generate failure or a sibling tree loses its files.
 		if !ctx.generateOnly {
-			ctx.reportKindBCleanup(core.CleanupKindBMaterialized(ctx.genRoot))
+			closeErr = core.CleanupKindBMaterialized(ctx.genRoot)
 		}
 		ctx.removeTempsLocked()
 	})
+	return closeErr
 }
 
 // withGenLock runs fn while holding lifecycleMu. Returns an error if generation
@@ -189,8 +191,11 @@ func (ctx *generateContext) withGenLock(fn func() error) error {
 }
 
 func (ctx *generateContext) installInterruptCleanup() {
-	// Always notify: Kind B files live in the product tree, not only in an
-	// ephemeral gen root. removeTempsLocked is a no-op unless removeLegacyTmp.
+	// Ephemeral build temps only. Kind B product files are covered by the
+	// process handler in core (armed while materialized lists exist).
+	if !ctx.removeLegacyTmp {
+		return
+	}
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt)
 	go func() {
@@ -200,12 +205,11 @@ func (ctx *generateContext) installInterruptCleanup() {
 		ctx.lifecycleMu.Lock()
 		ctx.closeOnce.Do(func() {
 			ctx.closed = true
-			// Interrupt: always strip product expose files (run will not finish).
-			ctx.reportKindBCleanup(core.CleanupKindBMaterialized(ctx.genRoot))
+			ctx.reportKindBCleanup(core.CleanupAllKindBMaterialized())
 			ctx.removeTempsLocked()
 		})
 		// Re-remove even if Close already ran without this lock held for exit.
-		ctx.reportKindBCleanup(core.CleanupKindBMaterialized(ctx.genRoot))
+		ctx.reportKindBCleanup(core.CleanupAllKindBMaterialized())
 		ctx.removeTempsLocked()
 		os.Exit(130)
 	}()
@@ -279,6 +283,18 @@ func (ctx *generateContext) reportKindBCleanup(err error) {
 		w = os.Stderr
 	}
 	fmt.Fprintf(w, "doctest: kind B cleanup: %v\n", err)
+}
+
+// joinKindBCleanupErr appends a Kind B product-file cleanup failure to a run
+// error so a PASS cannot hide leftover __doctest_internal_expose files.
+func joinKindBCleanupErr(err, cErr error) error {
+	if cErr == nil {
+		return err
+	}
+	if err != nil {
+		return fmt.Errorf("%w; kind B cleanup: %v", err, cErr)
+	}
+	return fmt.Errorf("kind B cleanup: %w", cErr)
 }
 
 // finishGenOrphans reconciles throwaway gen for this tree only (treeRel scope).

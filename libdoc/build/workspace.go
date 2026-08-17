@@ -112,13 +112,7 @@ func RunWorkspace(preps []TreePrep, opts core.Options) (stats TestRunStats, err 
 	// Session-scoped: strip Kind B product files on every return, including
 	// tidy/plan/hub errors that never reach finishWorkspaceGoTest.
 	defer func() {
-		if cErr := CleanupKindBForPreps(preps); cErr != nil {
-			if err != nil {
-				err = fmt.Errorf("%w; kind B cleanup: %v", err, cErr)
-			} else {
-				err = fmt.Errorf("kind B cleanup: %w", cErr)
-			}
-		}
+		err = joinKindBCleanupErr(err, CleanupKindBForPreps(preps))
 	}()
 
 	active := make([]TreePrep, 0, len(preps))

@@ -10,14 +10,13 @@ import (
 	"github.com/xhd2015/dot-pkgs/go-pkgs/pathfmt"
 )
 
-func Build(dir string, opts core.Options) error {
+func Build(dir string, opts core.Options) (err error) {
 	w := opts.Stderr
 	if w == nil {
 		w = os.Stderr
 	}
 
 	var allCases, cases []core.TreeCase
-	var err error
 
 	allCases, err = core.DiscoverTreeCases(dir)
 	if err != nil {
@@ -51,7 +50,9 @@ func Build(dir string, opts core.Options) error {
 		return err
 	}
 	ctx.installInterruptCleanup()
-	defer ctx.Close()
+	defer func() {
+		err = joinKindBCleanupErr(err, ctx.Close())
+	}()
 
 	ctx.announceRoots()
 

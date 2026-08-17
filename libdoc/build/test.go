@@ -33,7 +33,7 @@ func Test(dir string, opts core.Options) error {
 	return err
 }
 
-func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
+func TestWithStats(dir string, opts core.Options) (stats TestRunStats, err error) {
 	applyForceAOpts(&opts)
 	// Ensure a GenBatch for emit-set orphan prune and -a wipe-once. Multi-tree
 	// callers should pass a shared *GenBatch on Options so prepare unions emit
@@ -110,7 +110,7 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 		return TestRunStats{Phases: phases}, fmt.Errorf("%s: no runnable test cases found", dir)
 	}
 
-	stats := TestRunStats{Total: len(cases), Skipped: skipped, Cases: cases}
+	stats = TestRunStats{Total: len(cases), Skipped: skipped, Cases: cases}
 
 	// --- materialize ---
 	tMat := time.Now()
@@ -121,7 +121,9 @@ func TestWithStats(dir string, opts core.Options) (TestRunStats, error) {
 	}
 	track("materialize", tMat)
 	ctx.installInterruptCleanup()
-	defer ctx.Close()
+	defer func() {
+		err = joinKindBCleanupErr(err, ctx.Close())
+	}()
 
 	if opts.Verbose {
 		ctx.announceRoots()

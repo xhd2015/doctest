@@ -2,6 +2,7 @@ package build
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -354,6 +355,92 @@ func TestRunWorkspace_cleansKindBOnEarlyError(t *testing.T) {
 	}
 	if _, err := os.Stat(virt); !os.IsNotExist(err) {
 		t.Fatalf("expose.go should be stripped on RunWorkspace error: %v", err)
+	}
+}
+
+func TestJoinKindBCleanupErr(t *testing.T) {
+	if err := joinKindBCleanupErr(nil, nil); err != nil {
+		t.Fatalf("nil+nil: %v", err)
+	}
+	run := fmt.Errorf("workspace: not unified")
+	if err := joinKindBCleanupErr(run, nil); err != run {
+		t.Fatalf("nil cleanup should keep run err, got %v", err)
+	}
+	clean := fmt.Errorf("remove expose.go: is a directory")
+	got := joinKindBCleanupErr(nil, clean)
+	if got == nil || !strings.Contains(got.Error(), "kind B cleanup") || !strings.Contains(got.Error(), clean.Error()) {
+		t.Fatalf("cleanup-only: %v", got)
+	}
+	mixed := joinKindBCleanupErr(run, clean)
+	if mixed == nil || !strings.Contains(mixed.Error(), "not unified") || !strings.Contains(mixed.Error(), "kind B cleanup") {
+		t.Fatalf("mixed: %v", mixed)
+	}
+}
+
+func TestGenerateContextClose_surfacesKindBCleanupError(t *testing.T) {
+	genRoot := t.TempDir()
+	product := t.TempDir()
+	virt := filepath.Join(product, core.DoctestInternalExposeDir, "greet", "expose.go")
+	if err := os.MkdirAll(virt, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(virt, "keep.txt"), []byte("x\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(genRoot, core.KindBMaterializedList), []byte(virt+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := &generateContext{genRoot: genRoot, w: ioDiscard{}}
+	err := ctx.Close()
+	if err == nil {
+		t.Fatal("expected cleanup error when expose.go is a non-empty dir")
+	}
+	if _, statErr := os.Stat(virt); statErr != nil {
+		t.Fatalf("poison dir should remain: %v", statErr)
+	}
+}
+
+func TestGenerateContextClose_cleansKindB(t *testing.T) {
+	genRoot := t.TempDir()
+	product := t.TempDir()
+	virt := filepath.Join(product, core.DoctestInternalExposeDir, "greet", "expose.go")
+	if err := os.MkdirAll(filepath.Dir(virt), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(virt, []byte("package greet\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(genRoot, core.KindBMaterializedList), []byte(virt+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := &generateContext{genRoot: genRoot, w: ioDiscard{}}
+	if err := ctx.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if _, err := os.Stat(virt); !os.IsNotExist(err) {
+		t.Fatalf("expose.go should be stripped: %v", err)
+	}
+}
+
+func TestGenerateContextClose_generateOnlyLeavesKindB(t *testing.T) {
+	genRoot := t.TempDir()
+	product := t.TempDir()
+	virt := filepath.Join(product, core.DoctestInternalExposeDir, "greet", "expose.go")
+	if err := os.MkdirAll(filepath.Dir(virt), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(virt, []byte("package greet\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(genRoot, core.KindBMaterializedList), []byte(virt+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := &generateContext{genRoot: genRoot, generateOnly: true, w: ioDiscard{}}
+	if err := ctx.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if _, err := os.Stat(virt); err != nil {
+		t.Fatalf("generate-only must leave expose.go: %v", err)
 	}
 }
 

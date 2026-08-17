@@ -11,9 +11,11 @@
 // go tool cover can open the logical path (overlay alone is not enough for
 // cover). Paths are recorded in KindBMaterializedList and removed by
 // CleanupKindBMaterialized at session end (RunWorkspace, leftover prepare
-// roots, or generateContext.Close after a non-GenerateOnly run). Overlay
-// remains for tools that prefer Replace maps. Overlay-only dirs still need
-// -vet=off (NeedVetOff / InternalShimVetOffMarker) when cleanup has not run yet.
+// roots, or generateContext.Close after a non-GenerateOnly run). A process
+// SIGINT handler is armed only while those lists are outstanding and is
+// stopped after the last root is fully cleaned. Overlay remains for tools
+// that prefer Replace maps. Overlay-only dirs still need -vet=off
+// (NeedVetOff / InternalShimVetOffMarker) when cleanup has not run yet.
 package core
 
 import (
@@ -309,17 +311,30 @@ func emitKindBExpose(genRoot, absModRoot, productMod, internalImp string, replac
 	virtFile := filepath.Join(productDir, filepath.FromSlash(virtRel))
 	// Materialize on disk: go tool cover opens this path without applying -overlay.
 	// Keep shim-store + overlay as well for dual-path tooling.
-	if err := os.MkdirAll(filepath.Dir(virtFile), 0755); err != nil {
-		return "", fmt.Errorf("mkdir kind B expose %s: %w", virtFile, err)
-	}
-	if err := os.WriteFile(virtFile, []byte(body), 0644); err != nil {
-		return "", fmt.Errorf("write kind B expose %s: %w", virtFile, err)
-	}
-	if err := recordKindBMaterialized(genRoot, virtFile); err != nil {
+	if err := materializeKindBProductFile(genRoot, virtFile, []byte(body)); err != nil {
 		return "", err
 	}
 	addOverlayKeyVariants(replace, virtFile, bodyPath)
 	return exposeImp, nil
+}
+
+// materializeKindBProductFile writes virtFile then records it. On any failure
+// after mkdir/write, the file and empty Kind B parent dirs are rolled back so
+// the product tree is not left with an unlistable expose.
+func materializeKindBProductFile(genRoot, virtFile string, body []byte) error {
+	if err := os.MkdirAll(filepath.Dir(virtFile), 0755); err != nil {
+		return fmt.Errorf("mkdir kind B expose %s: %w", virtFile, err)
+	}
+	if err := os.WriteFile(virtFile, body, 0644); err != nil {
+		pruneEmptyKindBParents(filepath.Dir(virtFile))
+		return fmt.Errorf("write kind B expose %s: %w", virtFile, err)
+	}
+	if err := recordKindBMaterialized(genRoot, virtFile); err != nil {
+		_ = os.Remove(virtFile)
+		pruneEmptyKindBParents(filepath.Dir(virtFile))
+		return err
+	}
+	return nil
 }
 
 // recordKindBMaterialized appends an absolute product-tree expose path so
@@ -344,6 +359,7 @@ func recordKindBMaterialized(genRoot, virtFile string) error {
 	if _, err := fmt.Fprintln(f, abs); err != nil {
 		return fmt.Errorf("record kind B materialized: %w", err)
 	}
+	registerKindBGenRoot(genRoot)
 	return nil
 }
 
@@ -358,6 +374,7 @@ func CleanupKindBMaterialized(genRoot string) error {
 	data, err := os.ReadFile(listPath)
 	if err != nil {
 		if os.IsNotExist(err) {
+			unregisterKindBGenRoot(genRoot)
 			return nil
 		}
 		return err
@@ -383,22 +400,7 @@ func CleanupKindBMaterialized(genRoot string) error {
 			}
 			continue
 		}
-		// Prune empty dirs up through __doctest_internal_expose only.
-		dir := filepath.Dir(path)
-		for dir != "" && dir != string(filepath.Separator) {
-			base := filepath.Base(dir)
-			entries, rdErr := os.ReadDir(dir)
-			if rdErr != nil || len(entries) > 0 {
-				break
-			}
-			if err := os.Remove(dir); err != nil {
-				break
-			}
-			if base == DoctestInternalExposeDir {
-				break
-			}
-			dir = filepath.Dir(dir)
-		}
+		pruneEmptyKindBParents(filepath.Dir(path))
 	}
 	if len(remaining) > 0 {
 		if err := os.WriteFile(listPath, []byte(strings.Join(remaining, "\n")+"\n"), 0644); err != nil && firstErr == nil {
@@ -407,7 +409,27 @@ func CleanupKindBMaterialized(genRoot string) error {
 		return firstErr
 	}
 	_ = os.Remove(listPath)
+	unregisterKindBGenRoot(genRoot)
 	return firstErr
+}
+
+// pruneEmptyKindBParents removes empty dirs from dir up through
+// __doctest_internal_expose (inclusive). Stops at the first non-empty dir.
+func pruneEmptyKindBParents(dir string) {
+	for dir != "" && dir != string(filepath.Separator) {
+		base := filepath.Base(dir)
+		entries, rdErr := os.ReadDir(dir)
+		if rdErr != nil || len(entries) > 0 {
+			return
+		}
+		if err := os.Remove(dir); err != nil {
+			return
+		}
+		if base == DoctestInternalExposeDir {
+			return
+		}
+		dir = filepath.Dir(dir)
+	}
 }
 
 // isKindBMaterializedPath reports whether path is an absolute expose.go under

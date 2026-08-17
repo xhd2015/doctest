@@ -342,6 +342,7 @@ func TestDoctestInternalExposeDir(t *testing.T) {
 func TestCleanupKindBMaterialized(t *testing.T) {
 	t.Parallel()
 	genRoot := t.TempDir()
+	t.Cleanup(func() { unregisterKindBGenRoot(genRoot) })
 	product := t.TempDir()
 	virt := filepath.Join(product, DoctestInternalExposeDir, "greet", "expose.go")
 	if err := os.MkdirAll(filepath.Dir(virt), 0755); err != nil {
@@ -370,6 +371,7 @@ func TestCleanupKindBMaterialized(t *testing.T) {
 func TestCleanupKindBMaterialized_deepNestedPrune(t *testing.T) {
 	t.Parallel()
 	genRoot := t.TempDir()
+	t.Cleanup(func() { unregisterKindBGenRoot(genRoot) })
 	product := t.TempDir()
 	virt := filepath.Join(product, DoctestInternalExposeDir, "a", "b", "c", "d", "expose.go")
 	if err := os.MkdirAll(filepath.Dir(virt), 0755); err != nil {
@@ -421,6 +423,7 @@ func TestCleanupKindBMaterialized_refusesNonExposePath(t *testing.T) {
 func TestCleanupKindBMaterialized_keepsListOnRemoveFailure(t *testing.T) {
 	t.Parallel()
 	genRoot := t.TempDir()
+	t.Cleanup(func() { unregisterKindBGenRoot(genRoot) })
 	product := t.TempDir()
 	virt := filepath.Join(product, DoctestInternalExposeDir, "greet", "expose.go")
 	if err := os.MkdirAll(virt, 0755); err != nil {
@@ -455,6 +458,83 @@ func TestRecordKindBMaterialized_rejectsNonExpose(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(genRoot, KindBMaterializedList)); !os.IsNotExist(err) {
 		t.Fatalf("must not record rejected path")
+	}
+	if kindBGenRootTracked(genRoot) {
+		t.Fatal("rejected path must not register a gen root")
+	}
+}
+
+func TestMaterializeKindBProductFile_rollsBackOnRecordFailure(t *testing.T) {
+	t.Parallel()
+	genRoot := t.TempDir()
+	t.Cleanup(func() { unregisterKindBGenRoot(genRoot) })
+	// List path as a directory so OpenFile in recordKindBMaterialized fails.
+	if err := os.Mkdir(filepath.Join(genRoot, KindBMaterializedList), 0755); err != nil {
+		t.Fatal(err)
+	}
+	product := t.TempDir()
+	virt := filepath.Join(product, DoctestInternalExposeDir, "greet", "expose.go")
+	err := materializeKindBProductFile(genRoot, virt, []byte("package greet\n"))
+	if err == nil {
+		t.Fatal("expected record failure")
+	}
+	if _, err := os.Stat(virt); !os.IsNotExist(err) {
+		t.Fatalf("expose.go should be rolled back: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(product, DoctestInternalExposeDir)); !os.IsNotExist(err) {
+		t.Fatalf("expose dir should be pruned: %v", err)
+	}
+	if kindBGenRootTracked(genRoot) {
+		t.Fatal("failed record must not register a gen root")
+	}
+}
+
+func TestRecordKindBMaterialized_tracksUntilFullCleanup(t *testing.T) {
+	t.Parallel()
+	genRoot := t.TempDir()
+	t.Cleanup(func() { unregisterKindBGenRoot(genRoot) })
+	product := t.TempDir()
+	virt := filepath.Join(product, DoctestInternalExposeDir, "greet", "expose.go")
+	if err := os.MkdirAll(filepath.Dir(virt), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(virt, []byte("package greet\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := recordKindBMaterialized(genRoot, virt); err != nil {
+		t.Fatal(err)
+	}
+	if !kindBGenRootTracked(genRoot) {
+		t.Fatal("expected gen root tracked after record")
+	}
+	if err := CleanupKindBMaterialized(genRoot); err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+	if kindBGenRootTracked(genRoot) {
+		t.Fatal("expected gen root untracked after full cleanup")
+	}
+}
+
+func TestCleanupKindBMaterialized_staysTrackedOnRemoveFailure(t *testing.T) {
+	t.Parallel()
+	genRoot := t.TempDir()
+	t.Cleanup(func() { unregisterKindBGenRoot(genRoot) })
+	product := t.TempDir()
+	virt := filepath.Join(product, DoctestInternalExposeDir, "greet", "expose.go")
+	if err := os.MkdirAll(virt, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(virt, "keep.txt"), []byte("x\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := recordKindBMaterialized(genRoot, virt); err != nil {
+		t.Fatal(err)
+	}
+	if err := CleanupKindBMaterialized(genRoot); err == nil {
+		t.Fatal("expected cleanup error")
+	}
+	if !kindBGenRootTracked(genRoot) {
+		t.Fatal("outstanding leftover must stay tracked")
 	}
 }
 
