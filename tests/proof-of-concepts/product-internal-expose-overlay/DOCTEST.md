@@ -1,4 +1,4 @@
-# Product internal expose via overlay (kind B proof of concept)
+# Product internal expose via overlay (expose proof of concept)
 
 ## Version
 
@@ -10,7 +10,7 @@
 
 ## Why this tree exists
 
-**Kind B:** a consumer module (`example.com/runner`, stand-in for mapping-gen
+**Expose:** a consumer module (`example.com/runner`, stand-in for mapping-gen
 `testcase`) must not import `example.com/app/internal/…`. Fix shape:
 
 1. Virtual package under the **product** module path, **without** the segment

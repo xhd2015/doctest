@@ -4,7 +4,7 @@ label: e2e
 
 ## Expected
 
-- `doctest test` exits 0 via **unified layout A** (mapping-gen + Kind B expose).
+- `doctest test` exits 0 via **unified layout A** (mapping-gen + expose).
 - Verbose output shows suite / mapping-gen (not classic `-modfile=` / `.doctest_run_*`).
 - No `.doctest_run_*` dirs remain under the consumer module root.
 - No leftover `.doctest.mod` / `.doctest.sum` under the consumer module root.

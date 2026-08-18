@@ -13,7 +13,7 @@ createParentInternalMultiLeafModule
 
 - Nested tree root is `tests/parent-internal-unified/` (`d.DOCTEST_ROOT`).
 - No process `Setenv`/`Chdir`; temps via `t.TempDir()` and `d.DOCTEST_*`.
-- P1 Kind B parent-internal eligibility already lands expose helpers; P2 flips
+- P1 expose parent-internal eligibility already lands expose helpers; P2 flips
   generation mode to always unified for parent-internal cases.
 
 ## Steps

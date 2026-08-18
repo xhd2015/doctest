@@ -1,4 +1,4 @@
-# Gen internal package rules — RED contracts (kind A + kind B)
+# Gen internal package rules — RED contracts (Kind A + expose)
 
 ## Version
 
@@ -8,8 +8,8 @@
 
 **L3 e2e, heavy** — builds product `doctest` binary and runs it on fixture
 subject trees. These leaves lock **RED** (illegal raw internal import) contracts
-for kind A/B **before** shims rewrite imports. Kind B **success** path (parent/
-product internal → Kind B `__doctest_internal_expose` + unified layout A) is
+for Kind A + expose **before** shims rewrite imports. The expose **success** path (parent/
+product internal → `__doctest_internal_expose` + unified layout A) is
 covered by `tests/parent-internal-unified/` and core shim unit tests.
 
 ## DSN (Domain Specific Notion)
@@ -19,10 +19,10 @@ Two illegal-import modes (MECE):
 | Kind | Illegal edge | Fixture |
 |------|--------------|---------|
 | **A** | `__allleaves` → gen path `…/http/internal/…` | `testdata/scenario-path-internal` |
-| **B** | gen package → product `example.com/app/internal/…` under external gen | `testdata/product-internal-external-gen` |
+| **expose** | gen package → product `example.com/app/internal/…` under external gen | `testdata/product-internal-external-gen` |
 
 Kind A uses **public/stdlib-only** leaf `Run` (no product internal import).
-Kind B uses a **runner** module (`example.com/runner`) + `replace` to `app`
+Expose uses a **runner** module (`example.com/runner`) + `replace` to `app`
 under **external** unified gen. Production always uses layout A; there is no
 classic multi-leaf `.doctest_run_*` / internalCompile mode-selection path.
 
@@ -31,7 +31,7 @@ classic multi-leaf `.doctest_run_*` / internalCompile mode-selection path.
 ```text
 gen-internal-package-rules/
 ├── testdata/scenario-path-internal/          # kind A subject
-├── testdata/product-internal-external-gen/   # kind B subject
+├── testdata/product-internal-external-gen/   # expose subject
 ├── kind-a-scenario-path-fails/               # expect FAIL
 └── kind-b-product-internal-external-fails/   # expect FAIL
 ```

@@ -1,6 +1,6 @@
 # Scenario
 
-Kind B leaf.
+expose leaf.
 
 ```go
 import (

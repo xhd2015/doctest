@@ -35,9 +35,9 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 	if resp.ExitCode != 0 {
 		hint := ""
 		if containsInternalDenied(resp.Combined) && strings.Contains(resp.Combined, "example.com/app/internal") {
-			hint = " (kind B: product internal via external gen)"
+			hint = " (expose: product internal via external gen)"
 		}
-		t.Fatalf("kind B RED: want subject doctest exit 0, got %d%s\n%s", resp.ExitCode, hint, resp.Combined)
+		t.Fatalf("expose RED: want subject doctest exit 0, got %d%s\n%s", resp.ExitCode, hint, resp.Combined)
 	}
 }
 ```

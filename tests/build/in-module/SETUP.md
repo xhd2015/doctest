@@ -347,7 +347,7 @@ func assertStderrUsesTempCompile(t *testing.T, resp *Response) {
 	assertStderrUsesUnifiedGen(t, resp)
 }
 
-// assertDumpHasInternalExpose checks Kind B rewrite in dump sources (droot or leaf).
+// assertDumpHasInternalExpose checks expose rewrite in dump sources (droot or leaf).
 func assertDumpHasInternalExpose(t *testing.T, dumpRoot string) {
 	t.Helper()
 	// Prefer droot (unified Run + imports); fall back to leaf.go.
@@ -370,10 +370,10 @@ func assertDumpHasInternalExpose(t *testing.T, dumpRoot string) {
 	if last == "" {
 		t.Fatalf("expected dump droot or leaf under %s", dumpRoot)
 	}
-	t.Fatalf("expected dump to import Kind B expose %s, got:\n%s", expose, last)
+	t.Fatalf("expected dump to import expose %s, got:\n%s", expose, last)
 }
 
-// assertDumpHasInternalImport is the historical name; now checks Kind B expose path.
+// assertDumpHasInternalImport is the historical name; now checks expose path.
 func assertDumpHasInternalImport(t *testing.T, dumpRoot string) {
 	assertDumpHasInternalExpose(t, dumpRoot)
 }

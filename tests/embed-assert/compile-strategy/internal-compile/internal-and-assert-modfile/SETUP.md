@@ -1,6 +1,6 @@
 # Scenario
 
-**Feature**: leaf importing both parent internal and assert compiles via unified gen + Kind B expose
+**Feature**: leaf importing both parent internal and assert compiles via unified gen + expose
 
 ```
 # internal + assert imports

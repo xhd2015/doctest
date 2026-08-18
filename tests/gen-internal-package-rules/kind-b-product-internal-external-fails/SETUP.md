@@ -1,6 +1,6 @@
 # Scenario
 
-**Feature**: Kind B — product `internal` import under external gen fails
+**Feature**: expose — product `internal` import under external gen fails
 
 ```
 module example.com/runner + replace example.com/app => ./app

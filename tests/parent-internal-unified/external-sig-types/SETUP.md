@@ -1,13 +1,13 @@
 # Scenario
 
-**Feature**: Kind B expose compiles when product internal APIs use external package types
+**Feature**: expose compiles when product internal APIs use external package types
 
 ```
 createParentInternalExternalSigModule
   model.Project + internal/rules.FixIgnore(model.Project, …)
   tests/leaf-a imports internal/rules
   -> runner.RunTest(tests, GenDir)
-  -> Kind B expose for internal/rules must compile
+  -> expose for internal/rules must compile
   -> subject leaf PASS
 ```
 

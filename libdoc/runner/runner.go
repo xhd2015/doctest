@@ -109,7 +109,7 @@ func TestWithWriters(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	applyWriters(&opts, stdout, stderr)
-	defer core.EnableKindBInterruptExit()()
+	defer core.EnableExposeInterruptExit()()
 	return runTest(opts, remainArgs)
 }
 
@@ -424,10 +424,10 @@ func processArgsWithWriters(args []string, cmdName string, parseFn func([]string
 	if len(remainArgs) < 1 {
 		return fmt.Errorf("%s requires <dir>", cmdName)
 	}
-	// CLI build/vet: Kind B SIGINT strips product files then os.Exit(130).
+	// CLI build/vet: expose SIGINT strips product files then os.Exit(130).
 	// Nested in-process harnesses refcount so an inner pop cannot disarm
 	// an outer session.
-	defer core.EnableKindBInterruptExit()()
+	defer core.EnableExposeInterruptExit()()
 	if len(remainArgs) == 1 {
 		return processSingleArg(remainArgs[0], opts, processDirFn)
 	}
@@ -726,15 +726,15 @@ func runSuitePlan(targets []suiteTarget, opts core.Options, rec *runRecorder, st
 		}
 	}
 
-	// Generate-only Close leaves Kind B on disk. RunWorkspace strips roots it
+	// Generate-only Close leaves expose on disk. RunWorkspace strips roots it
 	// ran; failed/skipped trees on a different gen root still need a sweep.
 	var allPreps []runnerbuild.TreePrep
 	for _, r := range results {
 		allPreps = append(allPreps, r.prep)
 	}
-	if leftover := leftoverKindBPreps(allPreps, unified); len(leftover) > 0 {
-		if err := runnerbuild.CleanupKindBForPreps(leftover); err != nil {
-			runErrs = append(runErrs, "kind B cleanup: "+err.Error())
+	if leftover := leftoverExposePreps(allPreps, unified); len(leftover) > 0 {
+		if err := runnerbuild.CleanupExposeForPreps(leftover); err != nil {
+			runErrs = append(runErrs, "expose cleanup: "+err.Error())
 		}
 	}
 
@@ -747,10 +747,10 @@ func runSuitePlan(targets []suiteTarget, opts core.Options, rec *runRecorder, st
 	return nil
 }
 
-// leftoverKindBPreps returns preps whose GenRoot was not cleaned by RunWorkspace
+// leftoverExposePreps returns preps whose GenRoot was not cleaned by RunWorkspace
 // (failed or skipped trees on a distinct gen root). Shared gen roots used by
 // unified successes are omitted so cover files stay until workspace returns.
-func leftoverKindBPreps(all, unified []runnerbuild.TreePrep) []runnerbuild.TreePrep {
+func leftoverExposePreps(all, unified []runnerbuild.TreePrep) []runnerbuild.TreePrep {
 	seen := make(map[string]bool)
 	for _, p := range unified {
 		g := filepath.Clean(p.GenRoot)

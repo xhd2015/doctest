@@ -51,7 +51,7 @@ func Build(dir string, opts core.Options) (err error) {
 	}
 	ctx.installInterruptCleanup()
 	defer func() {
-		err = joinKindBCleanupErr(err, ctx.Close())
+		err = joinExposeCleanupErr(err, ctx.Close())
 	}()
 
 	ctx.announceRoots()
@@ -75,7 +75,7 @@ func Build(dir string, opts core.Options) (err error) {
 	if opts.Verbose {
 		goBuildArgs = append(goBuildArgs, "-v")
 	}
-	// Kind B expose packages are overlay-only under the product module; same as go test.
+	// expose packages are overlay-only under the product module; same as go test.
 	goBuildArgs = append(goBuildArgs, core.VendorGomodOverlayGoFlag(ctx.genRoot)...)
 	goBuildArgs = append(goBuildArgs, "./...")
 

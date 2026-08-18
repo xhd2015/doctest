@@ -1,6 +1,6 @@
 # Scenario
 
-**Feature**: parent-internal Kind B expose must tolerate CI-style `-coverpkg=mod/...`
+**Feature**: parent-internal expose must tolerate CI-style `-coverpkg=mod/...`
 
 ```
 RunTest(multi-leaf parent internal,
@@ -16,7 +16,7 @@ opens the logical expose path that exists only via `-overlay` →
 
 ## Preconditions
 
-- Fixture from parent multi-leaf Setup (imports `internal/greet` → Kind B expose).
+- Fixture from parent multi-leaf Setup (imports `internal/greet` → expose).
 - Cover profile path absolute under `t.TempDir()` (parallel-safe).
 - `CoverPkg` uses product module path `example.com/app/...` (same wildcard shape
   as CI `github.com/<mod>/...`).
@@ -42,7 +42,7 @@ func Setup(t *testing.T, d *session.Doctest, req *Request) error {
 	req.WithCover = true
 	req.CoverPath = filepath.Join(t.TempDir(), "cover.out")
 	_ = os.Remove(req.CoverPath)
-	// Product module wildcard — instruments internal/greet and Kind B expose.
+	// Product module wildcard — instruments internal/greet and expose.
 	req.CoverPkg = modPath + "/..."
 	req.CoverMode = "set"
 	return nil

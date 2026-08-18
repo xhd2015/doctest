@@ -122,7 +122,7 @@ func TestWithStats(dir string, opts core.Options) (stats TestRunStats, err error
 	track("materialize", tMat)
 	ctx.installInterruptCleanup()
 	defer func() {
-		err = joinKindBCleanupErr(err, ctx.Close())
+		err = joinExposeCleanupErr(err, ctx.Close())
 	}()
 
 	if opts.Verbose {
@@ -146,7 +146,7 @@ func TestWithStats(dir string, opts core.Options) (stats TestRunStats, err error
 	if err := ctx.writeCases(cases, false); err != nil {
 		track("generate", tGen)
 		stats.Phases = phases
-		// Gen root is set so GenerateOnly callers (PrepareTree) can strip Kind B
+		// Gen root is set so GenerateOnly callers (PrepareTree) can strip expose
 		// after all trees finish. Close does not wipe the shared list on error.
 		stats.GenRoot = ctx.genRoot
 		stats.AbsRoot = absRoot
@@ -250,7 +250,7 @@ func TestWithStats(dir string, opts core.Options) (stats TestRunStats, err error
 			preTestApply = mat
 		}
 	}
-	// Kind B product expose packages are overlay-only; default vet chdir fails.
+	// product expose packages are overlay-only; default vet chdir fails.
 	if core.NeedVetOff(ctx.genRoot) {
 		flagArgs = append(flagArgs, "-vet=off")
 	}

@@ -6,7 +6,7 @@ label: e2e
 
 - `doctest test` exits 0.
 - No `.doctest_run_*` directories under `moduleRoot` after run.
-- `--gen-dir` dump at `_gen` contains unified gen (Kind B expose for parent internal).
+- `--gen-dir` dump at `_gen` contains unified gen (expose for parent internal).
 - Output uses layout A (suite / mapping-gen), not classic `.doctest_run_`.
 
 ## Exit Code

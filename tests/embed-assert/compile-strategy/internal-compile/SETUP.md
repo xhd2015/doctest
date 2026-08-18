@@ -1,10 +1,10 @@
 # Scenario
 
-**Feature**: parent-internal + assert via unified layout A (Kind B expose + mapping-gen go.mod replace)
+**Feature**: parent-internal + assert via unified layout A (expose + mapping-gen go.mod replace)
 
 ```
 # internal/ import detected
-doctest -> mapping-gen (layout A) + Kind B expose -> go test ./…/suite
+doctest -> mapping-gen (layout A) + expose -> go test ./…/suite
 ```
 
 ## Preconditions

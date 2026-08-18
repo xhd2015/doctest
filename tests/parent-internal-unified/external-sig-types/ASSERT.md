@@ -2,7 +2,7 @@
 
 **Desired product behavior** (GREEN after fix; **RED** on current code):
 
-- `RunErr` empty: Kind B expose for `internal/rules` compiles and subject suite runs.
+- `RunErr` empty: expose for `internal/rules` compiles and subject suite runs.
 - Combined stdout/stderr do **not** contain `undefined: model` (or other
   `undefined:` on external package names from expose facades).
 - Prefer single suite package args when the go test line is present.
@@ -32,13 +32,13 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 
 	combined := resp.Stdout + "\n" + resp.Stderr + "\n" + resp.RunErr
 	if strings.Contains(combined, "undefined: model") {
-		t.Fatalf("Kind B expose must import external types used in signatures; got undefined: model\nstdout:\n%s\nstderr:\n%s\nRunErr=%s",
+		t.Fatalf("expose must import external types used in signatures; got undefined: model\nstdout:\n%s\nstderr:\n%s\nRunErr=%s",
 			resp.Stdout, resp.Stderr, resp.RunErr)
 	}
 	if resp.RunErr != "" {
 		hint := ""
 		if strings.Contains(combined, "undefined:") && strings.Contains(combined, "__doctest_internal_expose") {
-			hint = " (Kind B expose missing imports for external types in signatures)"
+			hint = " (expose missing imports for external types in signatures)"
 		}
 		t.Fatalf("want subject suite success with external-type internal API, got RunErr=%s%s\nstdout:\n%s\nstderr:\n%s",
 			resp.RunErr, hint, resp.Stdout, resp.Stderr)

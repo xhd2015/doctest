@@ -92,7 +92,7 @@ func pathScopeHashTree(t *testing.T, root string) map[string]string {
 // scope is correct (manifest, tidy stamp, module file).
 func pathScopeIsBookkeeping(rel string) bool {
 	switch rel {
-	case "go.mod", "go.sum", "doctest.gen-manifest", "doctest.tidy-done", core.KindBMaterializedList:
+	case "go.mod", "go.sum", "doctest.gen-manifest", "doctest.tidy-done", core.ExposeMaterializedList:
 		return true
 	default:
 		return false

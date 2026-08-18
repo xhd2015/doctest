@@ -38,7 +38,7 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 		if containsInternalDenied(msg) {
 			hint = " (kind A packaging: gen path under …/internal/…)"
 			if strings.Contains(msg, "example.com/app/internal") {
-				hint = " (unexpected product internal — looks like kind B)"
+				hint = " (unexpected product internal — looks like expose)"
 			}
 		}
 		t.Fatalf("kind A RED: want subject doctest exit 0, got %d%s\n%s", resp.ExitCode, hint, msg)

@@ -266,7 +266,7 @@ func assertStderrUsesTempCompile(t *testing.T, resp *Response) {
 	assertStderrUsesUnifiedGen(t, resp)
 }
 
-// assertStderrUsesOverlayOrSuite: Kind B / assert via mapping-gen go.mod replace,
+// assertStderrUsesOverlayOrSuite: expose / assert via mapping-gen go.mod replace,
 // not classic -modfile= for internalCompile.
 func assertStderrUsesOverlayOrSuite(t *testing.T, resp *Response) {
 	t.Helper()

@@ -37,8 +37,8 @@ type TreePrep struct {
 // Full-tree unified trees write __wreg for later workspace fan-in.
 // Path-scoped trees emit a suite under SuiteRel only (no tree-wide __wreg).
 //
-// Kind B product expose files stay on disk until RunWorkspace or
-// CleanupKindBForPreps. Generate-only Close does not strip them — including
+// Product expose files stay on disk until RunWorkspace or
+// CleanupExposeForPreps. Generate-only Close does not strip them — including
 // on generate error — because the materialized list is shared across trees
 // on one gen root.
 func PrepareTree(dir string, opts core.Options) (TreePrep, error) {
@@ -109,10 +109,10 @@ func RunWorkspace(preps []TreePrep, opts core.Options) (stats TestRunStats, err 
 	if len(preps) == 0 {
 		return stats, fmt.Errorf("workspace: no trees to run")
 	}
-	// Session-scoped: strip Kind B product files on every return, including
+	// Session-scoped: strip expose product files on every return, including
 	// tidy/plan/hub errors that never reach finishWorkspaceGoTest.
 	defer func() {
-		err = joinKindBCleanupErr(err, CleanupKindBForPreps(preps))
+		err = joinExposeCleanupErr(err, CleanupExposeForPreps(preps))
 	}()
 
 	active := make([]TreePrep, 0, len(preps))
@@ -671,12 +671,12 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	return stats, nil
 }
 
-// CleanupKindBForPreps strips Kind B product expose files for each unique
+// CleanupExposeForPreps strips product expose files for each unique
 // GenRoot on preps. Safe when the list is missing. Returns the first error.
-func CleanupKindBForPreps(preps []TreePrep) error {
+func CleanupExposeForPreps(preps []TreePrep) error {
 	var first error
 	for _, root := range uniquePrepGenRoots(preps) {
-		if err := core.CleanupKindBMaterialized(root); err != nil && first == nil {
+		if err := core.CleanupExposeMaterialized(root); err != nil && first == nil {
 			first = err
 		}
 	}

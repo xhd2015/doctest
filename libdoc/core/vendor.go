@@ -415,7 +415,7 @@ func VendorGomodOverlayGoFlagMerged(destDir string, genRoots []string) ([]string
 // MergeReplaceIntoVendorGomodOverlay merges replace keys into
 // genDir/vendor-gomod-overlay.json (creates file if needed). Existing keys that
 // conflict with a different value return an error; same value is ignored.
-// Used for kind A/B internal shims so tidy/test keep using VendorGomodOverlayGoFlag.
+// Used for Kind A shims and product expose so tidy/test keep using VendorGomodOverlayGoFlag.
 func MergeReplaceIntoVendorGomodOverlay(genDir string, replace map[string]string) error {
 	if genDir == "" || len(replace) == 0 {
 		return nil

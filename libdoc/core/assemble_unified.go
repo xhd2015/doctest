@@ -506,7 +506,7 @@ func WriteUnifiedTree(genRoot string, cases []TreeCase, docTestRoot string, comp
 	if err := WriteUnifiedTreeExtras(genRoot, ".", docTestRoot, leafImports); err != nil {
 		return err
 	}
-	// absModRoot unknown in this helper — kind B skipped; kind A only.
+	// absModRoot unknown in this helper — expose skipped; kind A only.
 	return ApplyInternalShimsAfterUnifiedGen(genRoot, ".", realLeafImports, cases, "", "")
 }
 

@@ -1,19 +1,19 @@
-// Package core internal shims: Kind A (scenario-path /internal/) and Kind B
+// Package core internal shims: Kind A (scenario-path /internal/) and expose
 // (product/parent module …/internal/… → __doctest_internal_expose facade).
 //
 // Production gen is always hierarchical unified (layout A). Parent/product
 // internal imports never force classic multi-leaf .doctest_run_* compile; they
-// are rewritten to Kind B expose packages via ApplyInternalShimsAfterUnifiedGen
+// are rewritten to expose packages via ApplyInternalShimsAfterUnifiedGen
 // and merged into vendor-gomod-overlay.json.
 //
-// Kind B expose bodies live in __doctest_shim_store and are also materialized
+// Expose bodies live in __doctest_shim_store and are also materialized
 // under the product module path (__doctest_internal_expose/…/expose.go) so
 // go tool cover can open the logical path (overlay alone is not enough for
-// cover). Paths are recorded in KindBMaterializedList and removed by
-// CleanupKindBMaterialized at session end (RunWorkspace, leftover prepare
+// cover). Paths are recorded in ExposeMaterializedList and removed by
+// CleanupExposeMaterialized at session end (RunWorkspace, leftover prepare
 // roots, or generateContext.Close after a non-GenerateOnly run). A process
 // SIGINT handler is armed while lists are outstanding; it strips files and
-// os.Exit(130)s only when a CLI session holds EnableKindBInterruptExit.
+// os.Exit(130)s only when a CLI session holds EnableExposeInterruptExit.
 // Overlay remains for tools that prefer Replace maps. Overlay-only dirs
 // still need -vet=off (NeedVetOff / InternalShimVetOffMarker) when cleanup
 // has not run yet.
@@ -38,13 +38,13 @@ import (
 const (
 	// Kind A: bridge under parent of scenario-path "internal" inside module testcase.
 	DoctestInternalShimDir = "__doctest_internal_shim"
-	// Kind B: facade under product module path (not named "internal").
+	// expose: facade under product module path (not named "internal").
 	DoctestInternalExposeDir = "__doctest_internal_expose"
 	// On-disk body store under gen root (never product VCS tree).
 	InternalShimStoreDir = "__doctest_shim_store"
-	// KindBMaterializedList under gen root lists product-tree expose.go paths
-	// written for cover/compile; CleanupKindBMaterialized removes them.
-	KindBMaterializedList = "doctest-kind-b-materialized"
+	// ExposeMaterializedList under gen root lists product-tree expose.go paths
+	// written for cover/compile; CleanupExposeMaterialized removes them.
+	ExposeMaterializedList = "doctest-expose-materialized"
 )
 
 // KindAShimImport maps a real gen import that contains /internal/ to a shim
@@ -82,9 +82,9 @@ func RewriteKindALeafImports(leafImports []string) []string {
 	return out
 }
 
-// ApplyInternalShimsAfterUnifiedGen emits kind A blank-import shims and kind B
+// ApplyInternalShimsAfterUnifiedGen emits Kind A blank-import shims and
 // product expose facades, rewrites allleaves (already written with shim imports
-// by caller for A), rewrites gen sources for B, and merges overlay Replace into
+// by caller for A), rewrites gen sources for expose, and merges overlay Replace into
 // genDir/vendor-gomod-overlay.json so tidy/test pick it up via existing flags.
 //
 // leafImports are the *original* real leaf imports (before kind A rewrite) so we
@@ -107,8 +107,8 @@ func ApplyInternalShimsAfterUnifiedGen(genRoot, suiteRel string, realLeafImports
 		}
 	}
 
-	// --- Kind B ---
-	if err := applyKindBExposes(genRoot, suiteRel, cases, absModRoot, modPath, replace); err != nil {
+	// --- expose ---
+	if err := applyExposes(genRoot, suiteRel, cases, absModRoot, modPath, replace); err != nil {
 		return err
 	}
 
@@ -116,15 +116,15 @@ func ApplyInternalShimsAfterUnifiedGen(genRoot, suiteRel string, realLeafImports
 		_ = os.Remove(filepath.Join(genRoot, InternalShimVetOffMarker))
 		return nil
 	}
-	// Overlay-only packages (kind B under product mod root) break `go test`
+	// Overlay-only packages (expose under product mod root) break `go test`
 	// default vet (chdir into non-existent dir). Mark gen root so runners add -vet=off.
-	if err := os.WriteFile(filepath.Join(genRoot, InternalShimVetOffMarker), []byte("kind-b-overlay\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(genRoot, InternalShimVetOffMarker), []byte("expose-overlay\n"), 0644); err != nil {
 		return err
 	}
 	return MergeReplaceIntoVendorGomodOverlay(genRoot, replace)
 }
 
-// InternalShimVetOffMarker is written when kind B overlay packages are active.
+// InternalShimVetOffMarker is written when expose overlay packages are active.
 const InternalShimVetOffMarker = "doctest-internal-shim-vet-off"
 
 // NeedVetOff reports whether go/xgo test should pass -vet=off for this gen root.
@@ -219,7 +219,7 @@ func darwinPathVariants(p string) []string {
 }
 
 // productInternalImport reports whether imp is someModule/internal/... eligible
-// for Kind B expose facades. Parent-module internals are included (Kind B);
+// for expose facades. Parent-module internals are included (expose);
 // only gen-module testcase paths are excluded (Kind A).
 // parentModPath is retained for call-site compatibility but does not skip.
 func productInternalImport(imp, parentModPath string) (productMod, internalPkg string, ok bool) {
@@ -240,7 +240,7 @@ func productInternalImport(imp, parentModPath string) (productMod, internalPkg s
 	return productMod, imp, true
 }
 
-func applyKindBExposes(genRoot, suiteRel string, cases []TreeCase, absModRoot, parentModPath string, replace map[string]string) error {
+func applyExposes(genRoot, suiteRel string, cases []TreeCase, absModRoot, parentModPath string, replace map[string]string) error {
 	// Collect unique product internal imports from cases.
 	needed := map[string]bool{} // full internal import path
 	for _, tc := range cases {
@@ -265,7 +265,7 @@ func applyKindBExposes(genRoot, suiteRel string, cases []TreeCase, absModRoot, p
 	rewrites := map[string]string{}
 	for _, internalImp := range internals {
 		productMod, _, _ := productInternalImport(internalImp, parentModPath)
-		exposeImp, err := emitKindBExpose(genRoot, absModRoot, productMod, internalImp, replace)
+		exposeImp, err := emitExpose(genRoot, absModRoot, productMod, internalImp, replace)
 		if err != nil {
 			return err
 		}
@@ -280,7 +280,7 @@ func applyKindBExposes(genRoot, suiteRel string, cases []TreeCase, absModRoot, p
 	return rewriteImportsInTree(treeDir, rewrites)
 }
 
-func emitKindBExpose(genRoot, absModRoot, productMod, internalImp string, replace map[string]string) (exposeImp string, err error) {
+func emitExpose(genRoot, absModRoot, productMod, internalImp string, replace map[string]string) (exposeImp string, err error) {
 	// expose path: productMod/__doctest_internal_expose/<tail after internal/>
 	const marker = "/internal/"
 	idx := strings.Index(internalImp, marker)
@@ -312,45 +312,45 @@ func emitKindBExpose(genRoot, absModRoot, productMod, internalImp string, replac
 	virtFile := filepath.Join(productDir, filepath.FromSlash(virtRel))
 	// Materialize on disk: go tool cover opens this path without applying -overlay.
 	// Keep shim-store + overlay as well for dual-path tooling.
-	if err := materializeKindBProductFile(genRoot, virtFile, []byte(body)); err != nil {
+	if err := materializeExposeProductFile(genRoot, virtFile, []byte(body)); err != nil {
 		return "", err
 	}
 	addOverlayKeyVariants(replace, virtFile, bodyPath)
 	return exposeImp, nil
 }
 
-// materializeKindBProductFile writes virtFile then records it. On any failure
-// after mkdir/write, the file and empty Kind B parent dirs are rolled back so
+// materializeExposeProductFile writes virtFile then records it. On any failure
+// after mkdir/write, the file and empty expose parent dirs are rolled back so
 // the product tree is not left with an unlistable expose.
-func materializeKindBProductFile(genRoot, virtFile string, body []byte) error {
+func materializeExposeProductFile(genRoot, virtFile string, body []byte) error {
 	// Write+record is one critical section with cleanup so SIGINT cannot
 	// delete the list between WriteFile and Fprintln (unlistable expose).
-	kindBMu.Lock()
-	defer kindBMu.Unlock()
+	exposeMu.Lock()
+	defer exposeMu.Unlock()
 	if err := os.MkdirAll(filepath.Dir(virtFile), 0755); err != nil {
-		return fmt.Errorf("mkdir kind B expose %s: %w", virtFile, err)
+		return fmt.Errorf("mkdir expose %s: %w", virtFile, err)
 	}
 	if err := os.WriteFile(virtFile, body, 0644); err != nil {
-		pruneEmptyKindBParents(filepath.Dir(virtFile))
-		return fmt.Errorf("write kind B expose %s: %w", virtFile, err)
+		pruneEmptyExposeParents(filepath.Dir(virtFile))
+		return fmt.Errorf("write expose %s: %w", virtFile, err)
 	}
-	if err := recordKindBMaterializedLocked(genRoot, virtFile); err != nil {
+	if err := recordExposeMaterializedLocked(genRoot, virtFile); err != nil {
 		_ = os.Remove(virtFile)
-		pruneEmptyKindBParents(filepath.Dir(virtFile))
+		pruneEmptyExposeParents(filepath.Dir(virtFile))
 		return err
 	}
 	return nil
 }
 
-// recordKindBMaterialized appends an absolute product-tree expose path so
-// CleanupKindBMaterialized can remove session-scoped files after go test/build.
-func recordKindBMaterialized(genRoot, virtFile string) error {
-	kindBMu.Lock()
-	defer kindBMu.Unlock()
-	return recordKindBMaterializedLocked(genRoot, virtFile)
+// recordExposeMaterialized appends an absolute product-tree expose path so
+// CleanupExposeMaterialized can remove session-scoped files after go test/build.
+func recordExposeMaterialized(genRoot, virtFile string) error {
+	exposeMu.Lock()
+	defer exposeMu.Unlock()
+	return recordExposeMaterializedLocked(genRoot, virtFile)
 }
 
-func recordKindBMaterializedLocked(genRoot, virtFile string) error {
+func recordExposeMaterializedLocked(genRoot, virtFile string) error {
 	if genRoot == "" || virtFile == "" {
 		return nil
 	}
@@ -358,40 +358,40 @@ func recordKindBMaterializedLocked(genRoot, virtFile string) error {
 	if err != nil {
 		abs = virtFile
 	}
-	if !isKindBMaterializedPath(abs) {
-		return fmt.Errorf("record kind B materialized: not an expose path: %s", virtFile)
+	if !isExposeMaterializedPath(abs) {
+		return fmt.Errorf("record expose materialized: not an expose path: %s", virtFile)
 	}
-	listPath := filepath.Join(genRoot, KindBMaterializedList)
+	listPath := filepath.Join(genRoot, ExposeMaterializedList)
 	f, err := os.OpenFile(listPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		return fmt.Errorf("record kind B materialized: %w", err)
+		return fmt.Errorf("record expose materialized: %w", err)
 	}
 	defer f.Close()
 	if _, err := fmt.Fprintln(f, abs); err != nil {
-		return fmt.Errorf("record kind B materialized: %w", err)
+		return fmt.Errorf("record expose materialized: %w", err)
 	}
-	registerKindBGenRootLocked(genRoot)
+	registerExposeGenRootLocked(genRoot)
 	return nil
 }
 
-// CleanupKindBMaterialized removes product-module expose.go files listed under
-// genRoot/KindBMaterializedList and prunes empty parent dirs up through
-// __doctest_internal_expose. Safe when the list is missing (no Kind B).
-func CleanupKindBMaterialized(genRoot string) error {
-	kindBMu.Lock()
-	defer kindBMu.Unlock()
-	return cleanupKindBMaterializedLocked(genRoot)
+// CleanupExposeMaterialized removes product-module expose.go files listed under
+// genRoot/ExposeMaterializedList and prunes empty parent dirs up through
+// __doctest_internal_expose. Safe when the list is missing (no expose).
+func CleanupExposeMaterialized(genRoot string) error {
+	exposeMu.Lock()
+	defer exposeMu.Unlock()
+	return cleanupExposeMaterializedLocked(genRoot)
 }
 
-func cleanupKindBMaterializedLocked(genRoot string) error {
+func cleanupExposeMaterializedLocked(genRoot string) error {
 	if genRoot == "" {
 		return nil
 	}
-	listPath := filepath.Join(genRoot, KindBMaterializedList)
+	listPath := filepath.Join(genRoot, ExposeMaterializedList)
 	data, err := os.ReadFile(listPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			unregisterKindBGenRootLocked(genRoot)
+			unregisterExposeGenRootLocked(genRoot)
 			return nil
 		}
 		return err
@@ -403,10 +403,10 @@ func cleanupKindBMaterializedLocked(genRoot string) error {
 		if path == "" {
 			continue
 		}
-		if !isKindBMaterializedPath(path) {
+		if !isExposeMaterializedPath(path) {
 			remaining = append(remaining, path)
 			if firstErr == nil {
-				firstErr = fmt.Errorf("cleanup kind B: refuse non-expose path %s", path)
+				firstErr = fmt.Errorf("cleanup expose: refuse non-expose path %s", path)
 			}
 			continue
 		}
@@ -417,7 +417,7 @@ func cleanupKindBMaterializedLocked(genRoot string) error {
 			}
 			continue
 		}
-		pruneEmptyKindBParents(filepath.Dir(path))
+		pruneEmptyExposeParents(filepath.Dir(path))
 	}
 	if len(remaining) > 0 {
 		if err := os.WriteFile(listPath, []byte(strings.Join(remaining, "\n")+"\n"), 0644); err != nil && firstErr == nil {
@@ -426,13 +426,13 @@ func cleanupKindBMaterializedLocked(genRoot string) error {
 		return firstErr
 	}
 	_ = os.Remove(listPath)
-	unregisterKindBGenRootLocked(genRoot)
+	unregisterExposeGenRootLocked(genRoot)
 	return firstErr
 }
 
-// pruneEmptyKindBParents removes empty dirs from dir up through
+// pruneEmptyExposeParents removes empty dirs from dir up through
 // __doctest_internal_expose (inclusive). Stops at the first non-empty dir.
-func pruneEmptyKindBParents(dir string) {
+func pruneEmptyExposeParents(dir string) {
 	for dir != "" && dir != string(filepath.Separator) {
 		base := filepath.Base(dir)
 		entries, rdErr := os.ReadDir(dir)
@@ -449,9 +449,9 @@ func pruneEmptyKindBParents(dir string) {
 	}
 }
 
-// isKindBMaterializedPath reports whether path is an absolute expose.go under
-// __doctest_internal_expose (the only files emitKindBExpose writes).
-func isKindBMaterializedPath(path string) bool {
+// isExposeMaterializedPath reports whether path is an absolute expose.go under
+// __doctest_internal_expose (the only files emitExpose writes).
+func isExposeMaterializedPath(path string) bool {
 	if path == "" || !filepath.IsAbs(path) {
 		return false
 	}

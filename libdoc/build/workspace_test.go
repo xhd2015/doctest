@@ -200,10 +200,10 @@ func TestPrepareTreeParallelSharedGenRoot(t *testing.T) {
 	}
 }
 
-// TestPrepareTree_siblingKindBSurvivesFailedPrepare is the generate-only
-// contract: a failed PrepareTree must not strip Kind B files another tree
+// TestPrepareTree_siblingExposeSurvivesFailedPrepare is the generate-only
+// contract: a failed PrepareTree must not strip expose files another tree
 // wrote on the shared gen root. RunWorkspace then strips them.
-func TestPrepareTree_siblingKindBSurvivesFailedPrepare(t *testing.T) {
+func TestPrepareTree_siblingExposeSurvivesFailedPrepare(t *testing.T) {
 	mod := t.TempDir()
 	if err := os.WriteFile(filepath.Join(mod, "go.mod"), []byte("module example.com/app\n\ngo 1.22\n"), 0644); err != nil {
 		t.Fatal(err)
@@ -235,7 +235,7 @@ func TestPrepareTree_siblingKindBSurvivesFailedPrepare(t *testing.T) {
 	}
 	virt := filepath.Join(mod, core.DoctestInternalExposeDir, "greet", "expose.go")
 	if _, err := os.Stat(virt); err != nil {
-		t.Fatalf("A should materialize Kind B expose: %v", err)
+		t.Fatalf("A should materialize expose: %v", err)
 	}
 
 	prepB, err := PrepareTree(treeB, opts)
@@ -284,9 +284,9 @@ func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	testtree.WriteFile(t, root, "DOCTEST.md", testtree.MinimalDOCTEST(runGo))
 }
 
-// TestCleanupKindBForPreps_failedPrepareGenRoot covers the all-fail session:
+// TestCleanupExposeForPreps_failedPrepareGenRoot covers the all-fail session:
 // no RunWorkspace, but the failed prep still names the shared gen root.
-func TestCleanupKindBForPreps_failedPrepareGenRoot(t *testing.T) {
+func TestCleanupExposeForPreps_failedPrepareGenRoot(t *testing.T) {
 	mod := t.TempDir()
 	if err := os.WriteFile(filepath.Join(mod, "go.mod"), []byte("module example.com/app\n\ngo 1.22\n"), 0644); err != nil {
 		t.Fatal(err)
@@ -320,18 +320,18 @@ func TestCleanupKindBForPreps_failedPrepareGenRoot(t *testing.T) {
 	if _, err := os.Stat(virt); err != nil {
 		t.Fatalf("expose should remain after failed B: %v", err)
 	}
-	if err := CleanupKindBForPreps([]TreePrep{prepB}); err != nil {
+	if err := CleanupExposeForPreps([]TreePrep{prepB}); err != nil {
 		t.Fatalf("leftover cleanup: %v", err)
 	}
 	if _, err := os.Stat(virt); !os.IsNotExist(err) {
-		t.Fatalf("failed prep GenRoot should be enough to strip Kind B: %v", err)
+		t.Fatalf("failed prep GenRoot should be enough to strip expose: %v", err)
 	}
 }
 
-// TestRunWorkspace_cleansKindBOnEarlyError covers the leak window where
+// TestRunWorkspace_cleansExposeOnEarlyError covers the leak window where
 // PrepareTree wrote product expose files but RunWorkspace returns before
 // finishWorkspaceGoTest (e.g. non-unified prep).
-func TestRunWorkspace_cleansKindBOnEarlyError(t *testing.T) {
+func TestRunWorkspace_cleansExposeOnEarlyError(t *testing.T) {
 	genRoot := t.TempDir()
 	product := t.TempDir()
 	virt := filepath.Join(product, core.DoctestInternalExposeDir, "greet", "expose.go")
@@ -341,7 +341,7 @@ func TestRunWorkspace_cleansKindBOnEarlyError(t *testing.T) {
 	if err := os.WriteFile(virt, []byte("package greet\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(genRoot, core.KindBMaterializedList), []byte(virt+"\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(genRoot, core.ExposeMaterializedList), []byte(virt+"\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	_, err := RunWorkspace([]TreePrep{{
@@ -358,26 +358,26 @@ func TestRunWorkspace_cleansKindBOnEarlyError(t *testing.T) {
 	}
 }
 
-func TestJoinKindBCleanupErr(t *testing.T) {
-	if err := joinKindBCleanupErr(nil, nil); err != nil {
+func TestJoinExposeCleanupErr(t *testing.T) {
+	if err := joinExposeCleanupErr(nil, nil); err != nil {
 		t.Fatalf("nil+nil: %v", err)
 	}
 	run := fmt.Errorf("workspace: not unified")
-	if err := joinKindBCleanupErr(run, nil); err != run {
+	if err := joinExposeCleanupErr(run, nil); err != run {
 		t.Fatalf("nil cleanup should keep run err, got %v", err)
 	}
 	clean := fmt.Errorf("remove expose.go: is a directory")
-	got := joinKindBCleanupErr(nil, clean)
-	if got == nil || !strings.Contains(got.Error(), "kind B cleanup") || !strings.Contains(got.Error(), clean.Error()) {
+	got := joinExposeCleanupErr(nil, clean)
+	if got == nil || !strings.Contains(got.Error(), "expose cleanup") || !strings.Contains(got.Error(), clean.Error()) {
 		t.Fatalf("cleanup-only: %v", got)
 	}
-	mixed := joinKindBCleanupErr(run, clean)
-	if mixed == nil || !strings.Contains(mixed.Error(), "not unified") || !strings.Contains(mixed.Error(), "kind B cleanup") {
+	mixed := joinExposeCleanupErr(run, clean)
+	if mixed == nil || !strings.Contains(mixed.Error(), "not unified") || !strings.Contains(mixed.Error(), "expose cleanup") {
 		t.Fatalf("mixed: %v", mixed)
 	}
 }
 
-func TestGenerateContextClose_surfacesKindBCleanupError(t *testing.T) {
+func TestGenerateContextClose_surfacesExposeCleanupError(t *testing.T) {
 	genRoot := t.TempDir()
 	product := t.TempDir()
 	virt := filepath.Join(product, core.DoctestInternalExposeDir, "greet", "expose.go")
@@ -387,7 +387,7 @@ func TestGenerateContextClose_surfacesKindBCleanupError(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(virt, "keep.txt"), []byte("x\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(genRoot, core.KindBMaterializedList), []byte(virt+"\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(genRoot, core.ExposeMaterializedList), []byte(virt+"\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	ctx := &generateContext{genRoot: genRoot, w: ioDiscard{}}
@@ -400,7 +400,7 @@ func TestGenerateContextClose_surfacesKindBCleanupError(t *testing.T) {
 	}
 }
 
-func TestGenerateContextClose_cleansKindB(t *testing.T) {
+func TestGenerateContextClose_cleansExpose(t *testing.T) {
 	genRoot := t.TempDir()
 	product := t.TempDir()
 	virt := filepath.Join(product, core.DoctestInternalExposeDir, "greet", "expose.go")
@@ -410,7 +410,7 @@ func TestGenerateContextClose_cleansKindB(t *testing.T) {
 	if err := os.WriteFile(virt, []byte("package greet\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(genRoot, core.KindBMaterializedList), []byte(virt+"\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(genRoot, core.ExposeMaterializedList), []byte(virt+"\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	ctx := &generateContext{genRoot: genRoot, w: ioDiscard{}}
@@ -422,7 +422,7 @@ func TestGenerateContextClose_cleansKindB(t *testing.T) {
 	}
 }
 
-func TestGenerateContextClose_generateOnlyLeavesKindB(t *testing.T) {
+func TestGenerateContextClose_generateOnlyLeavesExpose(t *testing.T) {
 	genRoot := t.TempDir()
 	product := t.TempDir()
 	virt := filepath.Join(product, core.DoctestInternalExposeDir, "greet", "expose.go")
@@ -432,7 +432,7 @@ func TestGenerateContextClose_generateOnlyLeavesKindB(t *testing.T) {
 	if err := os.WriteFile(virt, []byte("package greet\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(genRoot, core.KindBMaterializedList), []byte(virt+"\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(genRoot, core.ExposeMaterializedList), []byte(virt+"\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	ctx := &generateContext{genRoot: genRoot, generateOnly: true, w: ioDiscard{}}
@@ -442,12 +442,12 @@ func TestGenerateContextClose_generateOnlyLeavesKindB(t *testing.T) {
 	if _, err := os.Stat(virt); err != nil {
 		t.Fatalf("generate-only must leave expose.go: %v", err)
 	}
-	if core.KindBInterruptExitEnabled() {
+	if core.ExposeInterruptExitEnabled() {
 		t.Fatal("generate-only Close must not leave CLI os.Exit armed")
 	}
 }
 
-func TestRunWorkspace_surfacesKindBCleanupError(t *testing.T) {
+func TestRunWorkspace_surfacesExposeCleanupError(t *testing.T) {
 	genRoot := t.TempDir()
 	product := t.TempDir()
 	virt := filepath.Join(product, core.DoctestInternalExposeDir, "greet", "expose.go")
@@ -457,7 +457,7 @@ func TestRunWorkspace_surfacesKindBCleanupError(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(virt, "keep.txt"), []byte("x\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(genRoot, core.KindBMaterializedList), []byte(virt+"\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(genRoot, core.ExposeMaterializedList), []byte(virt+"\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	_, err := RunWorkspace([]TreePrep{{
@@ -473,7 +473,7 @@ func TestRunWorkspace_surfacesKindBCleanupError(t *testing.T) {
 	if !strings.Contains(msg, "not unified") {
 		t.Fatalf("want original workspace error, got %v", err)
 	}
-	if !strings.Contains(msg, "kind B cleanup") {
+	if !strings.Contains(msg, "expose cleanup") {
 		t.Fatalf("want cleanup error surfaced, got %v", err)
 	}
 }

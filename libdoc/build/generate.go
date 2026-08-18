@@ -66,8 +66,8 @@ func newGenerateContext(dir string, opts core.Options, w io.Writer, forBuild boo
 	// (parent module also has session/) and fails with ambiguous session import.
 	// Session is always required: assemble injects d *session.Doctest.
 	//
-	// Always hierarchical unified (layout A + Kind A/B shims). Parent/product
-	// internal imports use Kind B __doctest_internal_expose rewrite — never
+	// Always hierarchical unified (layout A + Kind A shims + expose). Parent/product
+	// internal imports use the __doctest_internal_expose rewrite — never
 	// classic multi-leaf under .doctest_run_*.
 	assertImport := true
 	sessionImport := true
@@ -166,20 +166,20 @@ func (ctx *generateContext) Close() error {
 		ctx.closed = true
 		// Safety if writeCases returned early before finishGenOrphans.
 		ctx.releaseGenWrite()
-		// Kind B expose lives in the product tree for go tool cover. GenerateOnly
+		// expose lives in the product tree for go tool cover. GenerateOnly
 		// leaves it for RunWorkspace (and leftover cleanup after all prepares).
 		// The list is per gen root and shared across parallel PrepareTree — do
 		// not strip here on generate failure or a sibling tree loses its files.
 		if !ctx.generateOnly {
-			closeErr = core.CleanupKindBMaterialized(ctx.genRoot)
+			closeErr = core.CleanupExposeMaterialized(ctx.genRoot)
 		}
 		ctx.removeTempsLocked()
 	})
 	if ctx.removeLegacyTmp {
 		// Drop this context's temp hook; stop the process handler when no
-		// Kind B list remains so library Build --rm does not leave os.Exit.
-		core.SetKindBInterruptHook(nil)
-		core.DisarmKindBInterruptIfIdle()
+		// expose list remains so library Build --rm does not leave os.Exit.
+		core.SetExposeInterruptHook(nil)
+		core.DisarmExposeInterruptIfIdle()
 	}
 	return closeErr
 }
@@ -198,11 +198,11 @@ func (ctx *generateContext) withGenLock(fn func() error) error {
 func (ctx *generateContext) installInterruptCleanup() {
 	// One process SIGINT path (core). Register temp removal so build --rm
 	// still wipes the ephemeral gen dir; do not signal.Notify here — a
-	// second os.Exit(130) raced Kind B cleanup and skipped removeTemps.
+	// second os.Exit(130) raced expose cleanup and skipped removeTemps.
 	if !ctx.removeLegacyTmp {
 		return
 	}
-	core.SetKindBInterruptHook(func() {
+	core.SetExposeInterruptHook(func() {
 		// Hold lifecycleMu until the hook returns so writeCases cannot
 		// MkdirAll/WriteFile a removed temp back into existence.
 		ctx.lifecycleMu.Lock()
@@ -210,13 +210,13 @@ func (ctx *generateContext) installInterruptCleanup() {
 		ctx.closeOnce.Do(func() {
 			ctx.closed = true
 			ctx.releaseGenWrite()
-			ctx.reportKindBCleanup(core.CleanupAllKindBMaterialized())
+			ctx.reportExposeCleanup(core.CleanupAllExposeMaterialized())
 			ctx.removeTempsLocked()
 		})
-		ctx.reportKindBCleanup(core.CleanupAllKindBMaterialized())
+		ctx.reportExposeCleanup(core.CleanupAllExposeMaterialized())
 		ctx.removeTempsLocked()
 	})
-	core.ArmKindBInterrupt()
+	core.ArmExposeInterrupt()
 }
 
 func (ctx *generateContext) announceRoots() {
@@ -236,7 +236,7 @@ func (ctx *generateContext) announceRoots() {
 // can RemoveAll without racing recreating writers.
 //
 // Always hierarchical unified (layout A): __droot, intermediates, leaf.go,
-// suite/__allleaves/__registry. Parent/product internal → Kind B
+// suite/__allleaves/__registry. Parent/product internal → expose
 // __doctest_internal_expose rewrite via ApplyInternalShimsAfterUnifiedGen.
 func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) error {
 	pkgName := "testcase"
@@ -278,7 +278,7 @@ func (ctx *generateContext) writeCases(cases []core.TreeCase, compileOnly bool) 
 	return nil
 }
 
-func (ctx *generateContext) reportKindBCleanup(err error) {
+func (ctx *generateContext) reportExposeCleanup(err error) {
 	if err == nil {
 		return
 	}
@@ -286,19 +286,19 @@ func (ctx *generateContext) reportKindBCleanup(err error) {
 	if w == nil {
 		w = os.Stderr
 	}
-	fmt.Fprintf(w, "doctest: kind B cleanup: %v\n", err)
+	fmt.Fprintf(w, "doctest: expose cleanup: %v\n", err)
 }
 
-// joinKindBCleanupErr appends a Kind B product-file cleanup failure to a run
+// joinExposeCleanupErr appends an expose product-file cleanup failure to a run
 // error so a PASS cannot hide leftover __doctest_internal_expose files.
-func joinKindBCleanupErr(err, cErr error) error {
+func joinExposeCleanupErr(err, cErr error) error {
 	if cErr == nil {
 		return err
 	}
 	if err != nil {
-		return fmt.Errorf("%w; kind B cleanup: %v", err, cErr)
+		return fmt.Errorf("%w; expose cleanup: %v", err, cErr)
 	}
-	return fmt.Errorf("kind B cleanup: %w", cErr)
+	return fmt.Errorf("expose cleanup: %w", cErr)
 }
 
 // finishGenOrphans reconciles throwaway gen for this tree only (treeRel scope).
@@ -468,8 +468,8 @@ func (ctx *generateContext) writeUnifiedCases(cases []core.TreeCase, compileOnly
 	if err := core.WriteUnifiedTreeExtras(ctx.genRoot, suiteRel, ctx.absRoot, leafImports); err != nil {
 		return err
 	}
-	// Emit kind A/B shim bodies + merge into vendor-gomod-overlay.json; rewrite
-	// product-internal imports in gen sources to expose facades (kind B).
+	// Emit Kind A shim + expose bodies + merge into vendor-gomod-overlay.json; rewrite
+	// product-internal imports in gen sources to expose facades.
 	if err := core.ApplyInternalShimsAfterUnifiedGen(ctx.genRoot, suiteRel, realLeafImports, cases, ctx.absModRoot, ctx.modPath); err != nil {
 		return fmt.Errorf("internal shims: %w", err)
 	}

@@ -1,4 +1,4 @@
-# Kind B subject — product internal import under external gen
+# expose subject — product internal import under external gen
 
 Leaf imports `example.com/app/internal/greet`. Outer harness runs this tree
 from a **runner** module so doctest does not enter product internal-compile.

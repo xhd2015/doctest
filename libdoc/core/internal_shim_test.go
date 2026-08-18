@@ -51,7 +51,7 @@ func TestProductInternalImport(t *testing.T) {
 		wantFull      string
 	}{
 		{
-			// P1: parent-module internal is Kind B product-internal (expose), not skipped.
+			// P1: parent-module internal is expose product-internal (expose), not skipped.
 			name:          "parent_internal_kind_b",
 			imp:           "example.com/app/internal/greet",
 			parentModPath: "example.com/app",
@@ -112,7 +112,7 @@ func TestProductInternalImport(t *testing.T) {
 	}
 }
 
-// TestGenerateExposeSource_exportSurface asserts the Kind B facade re-exports
+// TestGenerateExposeSource_exportSurface asserts the expose facade re-exports
 // exported funcs, types, vars, and consts, and never re-exports unexported
 // symbols. Package name must match the internal package (call sites stay greet.X).
 //
@@ -203,7 +203,7 @@ func hidden() {}
 }
 
 // TestGenerateExposeSource_externalSigTypes imports product packages used in
-// exported signatures (Kind B compile fix for undefined: model).
+// exported signatures (expose compile fix for undefined: model).
 func TestGenerateExposeSource_externalSigTypes(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -377,12 +377,12 @@ func TestDoctestInternalExposeDir(t *testing.T) {
 	}
 }
 
-// TestCleanupKindBMaterialized removes session-scoped expose.go under product
+// TestCleanupExposeMaterialized removes session-scoped expose.go under product
 // tree and prunes empty __doctest_internal_expose dirs.
-func TestCleanupKindBMaterialized(t *testing.T) {
+func TestCleanupExposeMaterialized(t *testing.T) {
 	t.Parallel()
 	genRoot := t.TempDir()
-	t.Cleanup(func() { unregisterKindBGenRoot(genRoot) })
+	t.Cleanup(func() { unregisterExposeGenRoot(genRoot) })
 	product := t.TempDir()
 	virt := filepath.Join(product, DoctestInternalExposeDir, "greet", "expose.go")
 	if err := os.MkdirAll(filepath.Dir(virt), 0755); err != nil {
@@ -391,10 +391,10 @@ func TestCleanupKindBMaterialized(t *testing.T) {
 	if err := os.WriteFile(virt, []byte("package greet\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := recordKindBMaterialized(genRoot, virt); err != nil {
+	if err := recordExposeMaterialized(genRoot, virt); err != nil {
 		t.Fatal(err)
 	}
-	if err := CleanupKindBMaterialized(genRoot); err != nil {
+	if err := CleanupExposeMaterialized(genRoot); err != nil {
 		t.Fatalf("cleanup: %v", err)
 	}
 	if _, err := os.Stat(virt); !os.IsNotExist(err) {
@@ -403,15 +403,15 @@ func TestCleanupKindBMaterialized(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(product, DoctestInternalExposeDir)); !os.IsNotExist(err) {
 		t.Fatalf("expose dir should be pruned: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(genRoot, KindBMaterializedList)); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(genRoot, ExposeMaterializedList)); !os.IsNotExist(err) {
 		t.Fatalf("materialized list should be removed")
 	}
 }
 
-func TestCleanupKindBMaterialized_deepNestedPrune(t *testing.T) {
+func TestCleanupExposeMaterialized_deepNestedPrune(t *testing.T) {
 	t.Parallel()
 	genRoot := t.TempDir()
-	t.Cleanup(func() { unregisterKindBGenRoot(genRoot) })
+	t.Cleanup(func() { unregisterExposeGenRoot(genRoot) })
 	product := t.TempDir()
 	virt := filepath.Join(product, DoctestInternalExposeDir, "a", "b", "c", "d", "expose.go")
 	if err := os.MkdirAll(filepath.Dir(virt), 0755); err != nil {
@@ -420,10 +420,10 @@ func TestCleanupKindBMaterialized_deepNestedPrune(t *testing.T) {
 	if err := os.WriteFile(virt, []byte("package d\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := recordKindBMaterialized(genRoot, virt); err != nil {
+	if err := recordExposeMaterialized(genRoot, virt); err != nil {
 		t.Fatal(err)
 	}
-	if err := CleanupKindBMaterialized(genRoot); err != nil {
+	if err := CleanupExposeMaterialized(genRoot); err != nil {
 		t.Fatalf("cleanup: %v", err)
 	}
 	if _, err := os.Stat(virt); !os.IsNotExist(err) {
@@ -434,18 +434,18 @@ func TestCleanupKindBMaterialized_deepNestedPrune(t *testing.T) {
 	}
 }
 
-func TestCleanupKindBMaterialized_refusesNonExposePath(t *testing.T) {
+func TestCleanupExposeMaterialized_refusesNonExposePath(t *testing.T) {
 	t.Parallel()
 	genRoot := t.TempDir()
 	secret := filepath.Join(t.TempDir(), "secret.txt")
 	if err := os.WriteFile(secret, []byte("keep\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	listPath := filepath.Join(genRoot, KindBMaterializedList)
+	listPath := filepath.Join(genRoot, ExposeMaterializedList)
 	if err := os.WriteFile(listPath, []byte(secret+"\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := CleanupKindBMaterialized(genRoot); err == nil {
+	if err := CleanupExposeMaterialized(genRoot); err == nil {
 		t.Fatal("expected error refusing non-expose path")
 	}
 	if _, err := os.Stat(secret); err != nil {
@@ -460,10 +460,10 @@ func TestCleanupKindBMaterialized_refusesNonExposePath(t *testing.T) {
 	}
 }
 
-func TestCleanupKindBMaterialized_keepsListOnRemoveFailure(t *testing.T) {
+func TestCleanupExposeMaterialized_keepsListOnRemoveFailure(t *testing.T) {
 	t.Parallel()
 	genRoot := t.TempDir()
-	t.Cleanup(func() { unregisterKindBGenRoot(genRoot) })
+	t.Cleanup(func() { unregisterExposeGenRoot(genRoot) })
 	product := t.TempDir()
 	virt := filepath.Join(product, DoctestInternalExposeDir, "greet", "expose.go")
 	if err := os.MkdirAll(virt, 0755); err != nil {
@@ -472,16 +472,16 @@ func TestCleanupKindBMaterialized_keepsListOnRemoveFailure(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(virt, "keep.txt"), []byte("x\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := recordKindBMaterialized(genRoot, virt); err != nil {
+	if err := recordExposeMaterialized(genRoot, virt); err != nil {
 		t.Fatal(err)
 	}
-	if err := CleanupKindBMaterialized(genRoot); err == nil {
+	if err := CleanupExposeMaterialized(genRoot); err == nil {
 		t.Fatal("expected error when expose.go is a non-empty dir")
 	}
 	if _, err := os.Stat(virt); err != nil {
 		t.Fatalf("non-empty expose.go dir should remain: %v", err)
 	}
-	data, err := os.ReadFile(filepath.Join(genRoot, KindBMaterializedList))
+	data, err := os.ReadFile(filepath.Join(genRoot, ExposeMaterializedList))
 	if err != nil {
 		t.Fatalf("list should be kept after remove failure: %v", err)
 	}
@@ -490,31 +490,31 @@ func TestCleanupKindBMaterialized_keepsListOnRemoveFailure(t *testing.T) {
 	}
 }
 
-func TestRecordKindBMaterialized_rejectsNonExpose(t *testing.T) {
+func TestRecordExposeMaterialized_rejectsNonExpose(t *testing.T) {
 	t.Parallel()
 	genRoot := t.TempDir()
-	if err := recordKindBMaterialized(genRoot, filepath.Join(t.TempDir(), "other.go")); err == nil {
+	if err := recordExposeMaterialized(genRoot, filepath.Join(t.TempDir(), "other.go")); err == nil {
 		t.Fatal("expected reject of non-expose path")
 	}
-	if _, err := os.Stat(filepath.Join(genRoot, KindBMaterializedList)); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(genRoot, ExposeMaterializedList)); !os.IsNotExist(err) {
 		t.Fatalf("must not record rejected path")
 	}
-	if kindBGenRootTracked(genRoot) {
+	if exposeGenRootTracked(genRoot) {
 		t.Fatal("rejected path must not register a gen root")
 	}
 }
 
-func TestMaterializeKindBProductFile_rollsBackOnRecordFailure(t *testing.T) {
+func TestMaterializeExposeProductFile_rollsBackOnRecordFailure(t *testing.T) {
 	t.Parallel()
 	genRoot := t.TempDir()
-	t.Cleanup(func() { unregisterKindBGenRoot(genRoot) })
-	// List path as a directory so OpenFile in recordKindBMaterialized fails.
-	if err := os.Mkdir(filepath.Join(genRoot, KindBMaterializedList), 0755); err != nil {
+	t.Cleanup(func() { unregisterExposeGenRoot(genRoot) })
+	// List path as a directory so OpenFile in recordExposeMaterialized fails.
+	if err := os.Mkdir(filepath.Join(genRoot, ExposeMaterializedList), 0755); err != nil {
 		t.Fatal(err)
 	}
 	product := t.TempDir()
 	virt := filepath.Join(product, DoctestInternalExposeDir, "greet", "expose.go")
-	err := materializeKindBProductFile(genRoot, virt, []byte("package greet\n"))
+	err := materializeExposeProductFile(genRoot, virt, []byte("package greet\n"))
 	if err == nil {
 		t.Fatal("expected record failure")
 	}
@@ -524,15 +524,15 @@ func TestMaterializeKindBProductFile_rollsBackOnRecordFailure(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(product, DoctestInternalExposeDir)); !os.IsNotExist(err) {
 		t.Fatalf("expose dir should be pruned: %v", err)
 	}
-	if kindBGenRootTracked(genRoot) {
+	if exposeGenRootTracked(genRoot) {
 		t.Fatal("failed record must not register a gen root")
 	}
 }
 
-func TestRecordKindBMaterialized_tracksUntilFullCleanup(t *testing.T) {
+func TestRecordExposeMaterialized_tracksUntilFullCleanup(t *testing.T) {
 	t.Parallel()
 	genRoot := t.TempDir()
-	t.Cleanup(func() { unregisterKindBGenRoot(genRoot) })
+	t.Cleanup(func() { unregisterExposeGenRoot(genRoot) })
 	product := t.TempDir()
 	virt := filepath.Join(product, DoctestInternalExposeDir, "greet", "expose.go")
 	if err := os.MkdirAll(filepath.Dir(virt), 0755); err != nil {
@@ -541,27 +541,27 @@ func TestRecordKindBMaterialized_tracksUntilFullCleanup(t *testing.T) {
 	if err := os.WriteFile(virt, []byte("package greet\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := recordKindBMaterialized(genRoot, virt); err != nil {
+	if err := recordExposeMaterialized(genRoot, virt); err != nil {
 		t.Fatal(err)
 	}
-	if !kindBGenRootTracked(genRoot) {
+	if !exposeGenRootTracked(genRoot) {
 		t.Fatal("expected gen root tracked after record")
 	}
-	if err := CleanupKindBMaterialized(genRoot); err != nil {
+	if err := CleanupExposeMaterialized(genRoot); err != nil {
 		t.Fatalf("cleanup: %v", err)
 	}
-	if kindBGenRootTracked(genRoot) {
+	if exposeGenRootTracked(genRoot) {
 		t.Fatal("expected gen root untracked after full cleanup")
 	}
-	if KindBInterruptArmed() && KindBInterruptExitEnabled() {
+	if ExposeInterruptArmed() && ExposeInterruptExitEnabled() {
 		t.Fatal("cleanup must not leave CLI os.Exit armed")
 	}
 }
 
-func TestCleanupKindBMaterialized_staysTrackedOnRemoveFailure(t *testing.T) {
+func TestCleanupExposeMaterialized_staysTrackedOnRemoveFailure(t *testing.T) {
 	t.Parallel()
 	genRoot := t.TempDir()
-	t.Cleanup(func() { unregisterKindBGenRoot(genRoot) })
+	t.Cleanup(func() { unregisterExposeGenRoot(genRoot) })
 	product := t.TempDir()
 	virt := filepath.Join(product, DoctestInternalExposeDir, "greet", "expose.go")
 	if err := os.MkdirAll(virt, 0755); err != nil {
@@ -570,23 +570,23 @@ func TestCleanupKindBMaterialized_staysTrackedOnRemoveFailure(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(virt, "keep.txt"), []byte("x\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := recordKindBMaterialized(genRoot, virt); err != nil {
+	if err := recordExposeMaterialized(genRoot, virt); err != nil {
 		t.Fatal(err)
 	}
-	if err := CleanupKindBMaterialized(genRoot); err == nil {
+	if err := CleanupExposeMaterialized(genRoot); err == nil {
 		t.Fatal("expected cleanup error")
 	}
-	if !kindBGenRootTracked(genRoot) {
+	if !exposeGenRootTracked(genRoot) {
 		t.Fatal("outstanding leftover must stay tracked")
 	}
 }
 
-func TestMaterializeKindBProductFile_serializedWithCleanup(t *testing.T) {
+func TestMaterializeExposeProductFile_serializedWithCleanup(t *testing.T) {
 	t.Parallel()
 	genRoot := t.TempDir()
 	t.Cleanup(func() {
-		unregisterKindBGenRoot(genRoot)
-		_ = CleanupKindBMaterialized(genRoot)
+		unregisterExposeGenRoot(genRoot)
+		_ = CleanupExposeMaterialized(genRoot)
 	})
 	product := t.TempDir()
 	const n = 8
@@ -596,16 +596,16 @@ func TestMaterializeKindBProductFile_serializedWithCleanup(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			virt := filepath.Join(product, DoctestInternalExposeDir, fmt.Sprintf("p%d", i), "expose.go")
-			_ = materializeKindBProductFile(genRoot, virt, []byte("package p\n"))
+			_ = materializeExposeProductFile(genRoot, virt, []byte("package p\n"))
 		}(i)
 	}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		_ = CleanupAllKindBMaterialized()
+		_ = CleanupAllExposeMaterialized()
 	}()
 	wg.Wait()
-	if err := CleanupKindBMaterialized(genRoot); err != nil {
+	if err := CleanupExposeMaterialized(genRoot); err != nil {
 		t.Fatalf("final cleanup: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(product, DoctestInternalExposeDir)); !os.IsNotExist(err) {
@@ -613,38 +613,38 @@ func TestMaterializeKindBProductFile_serializedWithCleanup(t *testing.T) {
 	}
 }
 
-func TestKindBInterruptExit_defaultOffAndNested(t *testing.T) {
+func TestExposeInterruptExit_defaultOffAndNested(t *testing.T) {
 	// Touches process-wide exit refcount; do not t.Parallel.
-	if KindBInterruptExitEnabled() {
+	if ExposeInterruptExitEnabled() {
 		t.Fatal("library/default must not os.Exit on SIGINT")
 	}
-	outer := EnableKindBInterruptExit()
+	outer := EnableExposeInterruptExit()
 	defer outer()
-	if !KindBInterruptExitEnabled() {
+	if !ExposeInterruptExitEnabled() {
 		t.Fatal("expected enabled after first hold")
 	}
-	inner := EnableKindBInterruptExit()
+	inner := EnableExposeInterruptExit()
 	inner()
-	if !KindBInterruptExitEnabled() {
+	if !ExposeInterruptExitEnabled() {
 		t.Fatal("inner pop must not disable outer CLI session")
 	}
 	outer()
-	if KindBInterruptExitEnabled() {
+	if ExposeInterruptExitEnabled() {
 		t.Fatal("expected disabled after last pop")
 	}
 }
 
-func TestFinishKindBInterrupt_disarmsWhenNoExit(t *testing.T) {
+func TestFinishExposeInterrupt_disarmsWhenNoExit(t *testing.T) {
 	// Process-wide handler/exit refcount; do not t.Parallel.
-	kindBMu.Lock()
-	ensureKindBInterruptLocked()
-	if kindBExitHolders != 0 {
-		kindBMu.Unlock()
+	exposeMu.Lock()
+	ensureExposeInterruptLocked()
+	if exposeExitHolders != 0 {
+		exposeMu.Unlock()
 		t.Fatal("test requires no CLI exit holders")
 	}
-	_, exit := finishKindBInterruptLocked()
-	armed := kindBSigCh != nil
-	kindBMu.Unlock()
+	_, exit := finishExposeInterruptLocked()
+	armed := exposeSigCh != nil
+	exposeMu.Unlock()
 	if exit {
 		t.Fatal("library/go test must not request os.Exit")
 	}
@@ -653,10 +653,10 @@ func TestFinishKindBInterrupt_disarmsWhenNoExit(t *testing.T) {
 	}
 }
 
-func TestKindBInterruptArmed_onlyWhileTracked(t *testing.T) {
+func TestExposeInterruptArmed_onlyWhileTracked(t *testing.T) {
 	t.Parallel()
 	genRoot := t.TempDir()
-	t.Cleanup(func() { unregisterKindBGenRoot(genRoot) })
+	t.Cleanup(func() { unregisterExposeGenRoot(genRoot) })
 	product := t.TempDir()
 	virt := filepath.Join(product, DoctestInternalExposeDir, "greet", "expose.go")
 	if err := os.MkdirAll(filepath.Dir(virt), 0755); err != nil {
@@ -665,19 +665,19 @@ func TestKindBInterruptArmed_onlyWhileTracked(t *testing.T) {
 	if err := os.WriteFile(virt, []byte("package greet\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := recordKindBMaterialized(genRoot, virt); err != nil {
+	if err := recordExposeMaterialized(genRoot, virt); err != nil {
 		t.Fatal(err)
 	}
-	if !KindBInterruptArmed() {
+	if !ExposeInterruptArmed() {
 		t.Fatal("expected handler armed while list is outstanding")
 	}
-	if KindBInterruptExitEnabled() {
+	if ExposeInterruptExitEnabled() {
 		t.Fatal("record must not enable CLI os.Exit")
 	}
-	if err := CleanupKindBMaterialized(genRoot); err != nil {
+	if err := CleanupExposeMaterialized(genRoot); err != nil {
 		t.Fatalf("cleanup: %v", err)
 	}
-	if kindBGenRootTracked(genRoot) {
+	if exposeGenRootTracked(genRoot) {
 		t.Fatal("expected this gen root untracked after cleanup")
 	}
 }

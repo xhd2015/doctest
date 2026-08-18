@@ -124,7 +124,7 @@ genRoot/
 | Probe `leaf_foo_test.go` | Probe **`leaf.go`** (+ suite / `__droot`) |
 | Flags to enable ref/unified | **Removed** — always hierarchical unified (layout A) |
 | Classic “everything inlined in leaf” | **Gone as production default** |
-| Parent/product `internal` → multi-leaf `.doctest_run_*` | **Gone** — always unified suite + Kind B expose |
+| Parent/product `internal` → multi-leaf `.doctest_run_*` | **Gone** — always unified suite + expose |
 
 ### CLI flags removed
 
@@ -144,7 +144,7 @@ classic multi-leaf compile under `.doctest_run_*`. Gen is always **layout A**
 (hierarchical unified: `__droot`, intermediates, `leaf.go`, one `suite` package
 per tree, `__allleaves` / `__registry`).
 
-Access to product/parent `internal` is via **Kind B** export rewrite:
+Access to product/parent `internal` is via **expose** export rewrite:
 
 - Gen sources import a virtual facade path:
   `<productMod>/__doctest_internal_expose/<tail-after-internal/>`

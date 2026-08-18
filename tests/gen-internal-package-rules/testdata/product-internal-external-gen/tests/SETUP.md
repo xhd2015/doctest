@@ -1,6 +1,6 @@
 # Scenario
 
-Root setup for kind B subject.
+Root setup for expose subject.
 
 ```go
 import (

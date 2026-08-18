@@ -6,10 +6,10 @@ import (
 	"testing"
 )
 
-func TestWipeGenRoot_cleansKindBProductFiles(t *testing.T) {
+func TestWipeGenRoot_cleansExposeProductFiles(t *testing.T) {
 	t.Parallel()
 	genRoot := t.TempDir()
-	t.Cleanup(func() { unregisterKindBGenRoot(genRoot) })
+	t.Cleanup(func() { unregisterExposeGenRoot(genRoot) })
 	product := t.TempDir()
 	virt := filepath.Join(product, DoctestInternalExposeDir, "greet", "expose.go")
 	if err := os.MkdirAll(filepath.Dir(virt), 0755); err != nil {
@@ -18,7 +18,7 @@ func TestWipeGenRoot_cleansKindBProductFiles(t *testing.T) {
 	if err := os.WriteFile(virt, []byte("package greet\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := recordKindBMaterialized(genRoot, virt); err != nil {
+	if err := recordExposeMaterialized(genRoot, virt); err != nil {
 		t.Fatal(err)
 	}
 	if err := WipeGenRoot(genRoot); err != nil {
@@ -27,15 +27,15 @@ func TestWipeGenRoot_cleansKindBProductFiles(t *testing.T) {
 	if _, err := os.Stat(virt); !os.IsNotExist(err) {
 		t.Fatalf("product expose must be stripped before gen wipe: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(genRoot, KindBMaterializedList)); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(genRoot, ExposeMaterializedList)); !os.IsNotExist(err) {
 		t.Fatal("list should be gone after successful wipe")
 	}
 }
 
-func TestWipeGenRoot_failsClosedOnKindBCleanupError(t *testing.T) {
+func TestWipeGenRoot_failsClosedOnExposeCleanupError(t *testing.T) {
 	t.Parallel()
 	genRoot := t.TempDir()
-	t.Cleanup(func() { unregisterKindBGenRoot(genRoot) })
+	t.Cleanup(func() { unregisterExposeGenRoot(genRoot) })
 	product := t.TempDir()
 	virt := filepath.Join(product, DoctestInternalExposeDir, "greet", "expose.go")
 	if err := os.MkdirAll(virt, 0755); err != nil {
@@ -44,7 +44,7 @@ func TestWipeGenRoot_failsClosedOnKindBCleanupError(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(virt, "keep.txt"), []byte("x\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := recordKindBMaterialized(genRoot, virt); err != nil {
+	if err := recordExposeMaterialized(genRoot, virt); err != nil {
 		t.Fatal(err)
 	}
 	marker := filepath.Join(genRoot, "keep-me.txt")
@@ -52,12 +52,12 @@ func TestWipeGenRoot_failsClosedOnKindBCleanupError(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := WipeGenRoot(genRoot); err == nil {
-		t.Fatal("expected WipeGenRoot to fail when Kind B leftover cannot be removed")
+		t.Fatal("expected WipeGenRoot to fail when expose leftover cannot be removed")
 	}
 	if _, err := os.Stat(marker); err != nil {
 		t.Fatalf("gen root must not be wiped after cleanup failure: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(genRoot, KindBMaterializedList)); err != nil {
+	if _, err := os.Stat(filepath.Join(genRoot, ExposeMaterializedList)); err != nil {
 		t.Fatalf("list must remain after failed wipe: %v", err)
 	}
 	if _, err := os.Stat(virt); err != nil {
@@ -65,10 +65,10 @@ func TestWipeGenRoot_failsClosedOnKindBCleanupError(t *testing.T) {
 	}
 }
 
-func TestRootBookkeeping_kindBList(t *testing.T) {
+func TestRootBookkeeping_exposeList(t *testing.T) {
 	t.Parallel()
-	if !rootBookkeeping(KindBMaterializedList) {
-		t.Fatal("Kind B materialized list must be gen-root bookkeeping")
+	if !rootBookkeeping(ExposeMaterializedList) {
+		t.Fatal("expose materialized list must be gen-root bookkeeping")
 	}
 }
 

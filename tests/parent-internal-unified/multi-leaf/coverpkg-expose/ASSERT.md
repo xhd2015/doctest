@@ -4,11 +4,11 @@
 
 - `RunErr` empty: nested subject tree completes under cover + coverpkg.
 - Cover profile at `req.CoverPath` exists and is non-empty.
-- Combined stdout/stderr do **not** contain the classic Kind B cover failure:
+- Combined stdout/stderr do **not** contain the classic expose cover failure:
   `cover:` + `__doctest_internal_expose` + `no such file or directory`.
 - Prefer single suite package args when the go test line is present.
 
-Today: Kind B expose is overlay-only; `go tool cover` opens the logical
+Today: expose is overlay-only; `go tool cover` opens the logical
 `…/__doctest_internal_expose/…/expose.go` path on disk → open fails → **RED**.
 
 ```go
@@ -44,13 +44,13 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 	if resp.RunErr != "" {
 		hint := ""
 		if exposeCoverOpen {
-			hint = " (Kind B expose: go tool cover opens overlay-only expose.go)"
+			hint = " (expose: go tool cover opens overlay-only expose.go)"
 		}
-		t.Fatalf("want cover+coverpkg success for parent-internal Kind B expose, got RunErr=%s%s\nstdout:\n%s\nstderr:\n%s",
+		t.Fatalf("want cover+coverpkg success for parent-internal expose, got RunErr=%s%s\nstdout:\n%s\nstderr:\n%s",
 			resp.RunErr, hint, resp.Stdout, resp.Stderr)
 	}
 	if exposeCoverOpen {
-		t.Fatalf("cover must not open missing __doctest_internal_expose expose.go under coverpkg=%q\nstdout:\n%s\nstderr:\n%s",
+		t.Fatalf("cover must not open missing __doctest_internal_expose.go under coverpkg=%q\nstdout:\n%s\nstderr:\n%s",
 			req.CoverPkg, resp.Stdout, resp.Stderr)
 	}
 

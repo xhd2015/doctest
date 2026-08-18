@@ -349,15 +349,15 @@ func (b *GenBatch) WipeOnce(genRoot string) error {
 
 // WipeGenRoot removes all contents of genRoot (throwaway generate cache),
 // recreates the directory, and drops the in-memory gen-manifest cache.
-// Kind B product expose files are stripped first; a cleanup error aborts the
-// wipe so doctest-kind-b-materialized is not deleted out from under leftovers.
+// Product expose files are stripped first; a cleanup error aborts the
+// wipe so doctest-expose-materialized is not deleted out from under leftovers.
 func WipeGenRoot(genRoot string) error {
 	if genRoot == "" {
 		return fmt.Errorf("WipeGenRoot: empty genRoot")
 	}
 	genRoot = filepath.Clean(genRoot)
-	if err := CleanupKindBMaterialized(genRoot); err != nil {
-		return fmt.Errorf("WipeGenRoot: kind B cleanup: %w", err)
+	if err := CleanupExposeMaterialized(genRoot); err != nil {
+		return fmt.Errorf("WipeGenRoot: expose cleanup: %w", err)
 	}
 	InvalidateGenManifestCache(genRoot)
 	if err := os.RemoveAll(genRoot); err != nil {
@@ -373,7 +373,7 @@ func WipeGenRoot(genRoot string) error {
 // tree-scoped orphan prune (multi-tree / nested suite leaves share go.mod).
 func rootBookkeeping(rel string) bool {
 	switch rel {
-	case "go.mod", "go.sum", genManifestFile, "doctest.tidy-done", KindBMaterializedList:
+	case "go.mod", "go.sum", genManifestFile, "doctest.tidy-done", ExposeMaterializedList:
 		return true
 	default:
 		return strings.HasPrefix(rel, "doctest.")
@@ -428,7 +428,7 @@ func PruneTreeScopeToDesired(genRoot, treeRel string, desired map[string]struct{
 	for k := range desired {
 		keep[filepath.ToSlash(k)] = struct{}{}
 	}
-	for _, name := range []string{"go.mod", "go.sum", genManifestFile, "doctest.tidy-done", KindBMaterializedList} {
+	for _, name := range []string{"go.mod", "go.sum", genManifestFile, "doctest.tidy-done", ExposeMaterializedList} {
 		keep[name] = struct{}{}
 	}
 

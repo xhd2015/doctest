@@ -10,7 +10,7 @@
 with multi-leaf tree importing `example.com/app/internal/greet`. No product
 binary. Classic TDD for P2: leaves are **RED** while parent-internal still
 forces `internalCompile` multi-leaf under `.doctest_run_*`; **GREEN** after
-always-unified mapping-gen (suite package + Kind B expose).
+always-unified mapping-gen (suite package + expose).
 
 # DSN (Domain Specific Notion)
 
@@ -22,7 +22,7 @@ always-unified mapping-gen (suite package + Kind B expose).
 - **Subject tree** — multi-leaf doctest under `tests/` importing product internal.
 - **Unified generator** — hierarchical mapping-gen (layout A): `__droot`,
   `__registry`, leaf `RunTestLeaf`, `__allleaves`, single `suite` package.
-- **Kind B expose** — overlay facades + import rewrite so unified gen can load
+- **Expose** — overlay facades + import rewrite so unified gen can load
   product internal from module `testcase` (implementation detail).
 
 ### Behaviors
@@ -35,12 +35,12 @@ always-unified mapping-gen (suite package + Kind B expose).
 - **Gen layout** — gen dir has `suite` + `__allleaves` (unified markers).
 - **Coverprofile** — `-cover` + `-coverprofile` exit 0; profile file non-empty
   (single package).
-- **Coverpkg + Kind B expose** — with `-coverpkg=example.com/app/...` (product
+- **Coverpkg + expose** — with `-coverpkg=example.com/app/...` (product
   module wildcard; same shape as CI `github.com/<mod>/...`), cover instruments
-  product packages and the Kind B expose facade; `go tool cover` must not fail
+  product packages and the expose facade; `go tool cover` must not fail
   with open `…/__doctest_internal_expose/…/expose.go: no such file`.
 - **External types in internal signatures** — when product `internal/…` exports
-  funcs using types from another product package (e.g. `model.Project`), Kind B
+  funcs using types from another product package (e.g. `model.Project`),
   expose facades must compile (import or re-alias those packages). No
   `undefined: model` (or twin) on the generated expose body.
 
@@ -49,7 +49,7 @@ always-unified mapping-gen (suite package + Kind B expose).
 ```
 temp module example.com/app + internal/greet + multi-leaf tests/
   -> runner.RunTest(tests, GenDir, optional CoverProfile[, CoverPkg])
-  -> unified mapping-gen + Kind B expose
+  -> unified mapping-gen + expose
   -> go test ./…/suite  (one package)
   -> both leaves PASS; cover.out written when requested
 ```
@@ -74,7 +74,7 @@ parent-internal-unified/
 | 2 | `multi-leaf/gen-layout` | Gen has `suite` + `__allleaves`; subject run succeeds |
 | 3 | `multi-leaf/coverprofile` | Coverprofile succeeds; file exists non-empty |
 | 4 | `multi-leaf/coverpkg-expose` | Cover + coverpkg product `...` succeeds; no expose.go open error |
-| 5 | `external-sig-types` | Kind B expose compiles when internal uses external package types |
+| 5 | `external-sig-types` | expose compiles when internal uses external package types |
 
 ## How to Run
 
@@ -398,7 +398,7 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 
 // createParentInternalExternalSigModule builds a parent module where
 // internal/rules exported API uses types from product package model
-// (crime scene: Kind B expose must import model or re-alias types).
+// (crime scene: expose must import model or re-alias types).
 //
 //	module example.com/app
 //	model (Project, FixResult)
