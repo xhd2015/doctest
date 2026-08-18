@@ -1,18 +1,23 @@
 # Scenario
 
-**Feature**: parent-internal expose must tolerate CI-style `-coverpkg=mod/...`
+**Feature**: parent-internal expose + CI-style `-coverpkg=mod/...` leaves a
+coverprofile that downstream `go tool cover` can consume (no session-generated
+expose packages in the final profile)
 
 ```
 RunTest(multi-leaf parent internal,
   Cover + CoverProfile + CoverPkg=example.com/app/... + CoverMode=set)
   -> exit 0 (suite package)
   -> cover.out non-empty
-  -> no go tool cover open failure on __doctest_internal_expose/*/expose.go
+  -> no go tool cover open failure on __doctest_internal_expose/*/expose.go during run
+  -> cover.out has no lines for session-generated expose facades
+  -> go tool cover -func=cover.out from ModuleRoot succeeds
 ```
 
-Crime scene (scaff CI / reconstruct): with product-module coverpkg, `go tool cover`
-opens the logical expose path that exists only via `-overlay` →
-`no such file or directory` → suite build failed.
+Crime scene (scaff CI / reconstruct 2026-08-18): with product-module coverpkg,
+doctest PASS writes expose paths into `-coverprofile`, then cleans product
+expose files → `go tool cover -func` / scaff merge report fails:
+`no required module provides package …/__doctest_internal_expose/…`.
 
 ## Preconditions
 
@@ -25,7 +30,7 @@ opens the logical expose path that exists only via `-overlay` →
 
 1. Enable cover + absolute CoverPath.
 2. Set CoverPkg + CoverMode to match CI recipe.
-3. Run subject tree; Assert success and profile.
+3. Run subject tree; Assert success, clean profile, and `go tool cover -func`.
 
 ```go
 import (

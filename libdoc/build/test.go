@@ -312,6 +312,9 @@ func TestWithStats(dir string, opts core.Options) (stats TestRunStats, err error
 	}
 	goTestElapsed := time.Since(tGo)
 	track("go_test", tGo)
+	// Drop session-generated expose facades from -coverprofile before Close
+	// strips product expose files (downstream go tool cover / CI merge).
+	stripExposeFromCoverProfileSoft(opts, []string{ctx.genRoot}, w)
 	// Discovery planned count before Total is rewritten to actual_run.
 	if stats.Planned == 0 {
 		stats.Planned = stats.Total

@@ -607,6 +607,9 @@ func finishWorkspaceGoTest(preps []TreePrep, runDir, genRootLabel string, packag
 	result, runErr := runGoTestJSONOnce(goTestBin, runDir, flagArgs, packageArgs, sessionID, goCache, opts.MetricsNestSink, "", leafSkipEnv, xgoApply.Env, xgoApply.ProgArgs, leafKeys, stdout, style, opts.Verbose)
 	goTestElapsed := time.Since(tGo)
 	stats.Phases = append(stats.Phases, PhaseTiming{Name: "go_test", ElapsedNs: goTestElapsed.Nanoseconds()})
+	// Drop session-generated expose facades from -coverprofile before
+	// CleanupExposeForPreps removes the on-disk files (scaff go tool cover).
+	stripExposeFromCoverProfileSoft(opts, uniquePrepGenRoots(preps), w)
 	// Discovery planned count before Total is rewritten to actual_run.
 	if stats.Planned == 0 {
 		stats.Planned = stats.Total

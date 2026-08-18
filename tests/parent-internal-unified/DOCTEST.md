@@ -37,8 +37,11 @@ always-unified mapping-gen (suite package + expose).
   (single package).
 - **Coverpkg + expose** — with `-coverpkg=example.com/app/...` (product
   module wildcard; same shape as CI `github.com/<mod>/...`), cover instruments
-  product packages and the expose facade; `go tool cover` must not fail
-  with open `…/__doctest_internal_expose/…/expose.go: no such file`.
+  product packages; suite run must not fail opening
+  `…/__doctest_internal_expose/…/expose.go`. The **final** `-coverprofile`
+  must omit session-generated expose facade paths so
+  `go tool cover -func=<profile>` from the product module succeeds (scaff CI
+  merge/report).
 - **External types in internal signatures** — when product `internal/…` exports
   funcs using types from another product package (e.g. `model.Project`),
   expose facades must compile (import or re-alias those packages). No
@@ -62,7 +65,7 @@ parent-internal-unified/
 │   ├── subject-and-suite/              both leaves PASS + suite-only go test
 │   ├── gen-layout/                     suite + __allleaves (unified shape)
 │   ├── coverprofile/                   -cover -coverprofile exit 0 + file
-│   └── coverpkg-expose/                -coverpkg=mod/... + cover; no expose open fail
+│   └── coverpkg-expose/                -coverpkg=mod/...; clean profile + go tool cover
 └── external-sig-types/                 internal API uses model.T; expose must compile
 ```
 
@@ -73,7 +76,7 @@ parent-internal-unified/
 | 1 | `multi-leaf/subject-and-suite` | Subject tests PASS; go test single suite package (not multi leaf) |
 | 2 | `multi-leaf/gen-layout` | Gen has `suite` + `__allleaves`; subject run succeeds |
 | 3 | `multi-leaf/coverprofile` | Coverprofile succeeds; file exists non-empty |
-| 4 | `multi-leaf/coverpkg-expose` | Cover + coverpkg product `...` succeeds; no expose.go open error |
+| 4 | `multi-leaf/coverpkg-expose` | Cover + coverpkg succeeds; profile omits expose facades; `go tool cover -func` OK |
 | 5 | `external-sig-types` | expose compiles when internal uses external package types |
 
 ## How to Run
