@@ -6,6 +6,72 @@ import (
 	"testing"
 )
 
+func TestWipeGenRoot_cleansKindBProductFiles(t *testing.T) {
+	t.Parallel()
+	genRoot := t.TempDir()
+	t.Cleanup(func() { unregisterKindBGenRoot(genRoot) })
+	product := t.TempDir()
+	virt := filepath.Join(product, DoctestInternalExposeDir, "greet", "expose.go")
+	if err := os.MkdirAll(filepath.Dir(virt), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(virt, []byte("package greet\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := recordKindBMaterialized(genRoot, virt); err != nil {
+		t.Fatal(err)
+	}
+	if err := WipeGenRoot(genRoot); err != nil {
+		t.Fatalf("WipeGenRoot: %v", err)
+	}
+	if _, err := os.Stat(virt); !os.IsNotExist(err) {
+		t.Fatalf("product expose must be stripped before gen wipe: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(genRoot, KindBMaterializedList)); !os.IsNotExist(err) {
+		t.Fatal("list should be gone after successful wipe")
+	}
+}
+
+func TestWipeGenRoot_failsClosedOnKindBCleanupError(t *testing.T) {
+	t.Parallel()
+	genRoot := t.TempDir()
+	t.Cleanup(func() { unregisterKindBGenRoot(genRoot) })
+	product := t.TempDir()
+	virt := filepath.Join(product, DoctestInternalExposeDir, "greet", "expose.go")
+	if err := os.MkdirAll(virt, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(virt, "keep.txt"), []byte("x\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := recordKindBMaterialized(genRoot, virt); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(genRoot, "keep-me.txt")
+	if err := os.WriteFile(marker, []byte("stay\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := WipeGenRoot(genRoot); err == nil {
+		t.Fatal("expected WipeGenRoot to fail when Kind B leftover cannot be removed")
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("gen root must not be wiped after cleanup failure: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(genRoot, KindBMaterializedList)); err != nil {
+		t.Fatalf("list must remain after failed wipe: %v", err)
+	}
+	if _, err := os.Stat(virt); err != nil {
+		t.Fatalf("poison expose dir should remain: %v", err)
+	}
+}
+
+func TestRootBookkeeping_kindBList(t *testing.T) {
+	t.Parallel()
+	if !rootBookkeeping(KindBMaterializedList) {
+		t.Fatal("Kind B materialized list must be gen-root bookkeeping")
+	}
+}
+
 func TestGenBatchWipeOnce(t *testing.T) {
 	gen := t.TempDir()
 	orphan := filepath.Join(gen, "orphan.txt")

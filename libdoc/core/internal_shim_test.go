@@ -634,6 +634,25 @@ func TestKindBInterruptExit_defaultOffAndNested(t *testing.T) {
 	}
 }
 
+func TestFinishKindBInterrupt_disarmsWhenNoExit(t *testing.T) {
+	// Process-wide handler/exit refcount; do not t.Parallel.
+	kindBMu.Lock()
+	ensureKindBInterruptLocked()
+	if kindBExitHolders != 0 {
+		kindBMu.Unlock()
+		t.Fatal("test requires no CLI exit holders")
+	}
+	_, exit := finishKindBInterruptLocked()
+	armed := kindBSigCh != nil
+	kindBMu.Unlock()
+	if exit {
+		t.Fatal("library/go test must not request os.Exit")
+	}
+	if armed {
+		t.Fatal("non-exit SIGINT must stop the handler even if leftovers remain")
+	}
+}
+
 func TestKindBInterruptArmed_onlyWhileTracked(t *testing.T) {
 	t.Parallel()
 	genRoot := t.TempDir()

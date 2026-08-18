@@ -14,8 +14,8 @@ import (
 // mutex), strips product files, runs the optional temp-dir hook, then
 // os.Exit(130) only when a CLI session has EnableKindBInterruptExit() held.
 // Library callers and go test of this repo do not Exit — generate-only Close
-// may leave files (and the handler) for a later leftover sweep, but Ctrl+C
-// only cleans; the next SIGINT uses the default terminate.
+// may leave files for a later leftover sweep. The first SIGINT still cleans;
+// the handler then stops so a leftover cannot swallow every later Ctrl+C.
 var (
 	kindBMu            sync.Mutex
 	kindBRoots         = map[string]struct{}{}
@@ -168,7 +168,19 @@ func takeKindBInterrupt() (hook func(), exit bool) {
 	kindBMu.Lock()
 	defer kindBMu.Unlock()
 	_ = cleanupAllKindBMaterializedLocked()
-	return kindBInterruptHook, kindBExitHolders > 0
+	return finishKindBInterruptLocked()
+}
+
+// finishKindBInterruptLocked returns the temp hook and CLI-exit flag.
+// When exit is false (library / go test), the process handler is stopped even
+// if leftovers remain tracked — otherwise SIGINT stays consumed forever.
+func finishKindBInterruptLocked() (hook func(), exit bool) {
+	exit = kindBExitHolders > 0
+	hook = kindBInterruptHook
+	if !exit {
+		stopKindBInterruptLocked()
+	}
+	return hook, exit
 }
 
 func stopKindBInterruptLocked() {
