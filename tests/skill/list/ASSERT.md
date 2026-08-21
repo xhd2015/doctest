@@ -18,7 +18,7 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
     if resp.ExitCode != 0 {
         t.Fatalf("exit code = %d, stderr:\n%s", resp.ExitCode, resp.Stderr)
     }
-    for _, want := range []string{"doc-spec", "code-spec", "design-principle", "lint", "migrate", "tdd", "tdd-cli-agent", "tdd-lite", "reproduce", "review", "review-perf", "output-assert", "implementer"} {
+    for _, want := range []string{"doc-spec", "code-spec", "design-principle", "lint", "migrate", "dev-test", "tdd", "tdd-cli-agent", "tdd-lite", "reproduce", "review", "review-perf", "output-assert", "implementer"} {
         if !strings.Contains(resp.Stdout, want) {
             t.Fatalf("stdout missing %q:\n%s", want, resp.Stdout)
         }

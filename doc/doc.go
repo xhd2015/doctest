@@ -24,6 +24,9 @@ var doctestTDDCLIAgent string
 //go:embed DOCTEST_TDD_LITE.md
 var doctestTDDLITE string
 
+//go:embed DOCTEST_DEV_TEST.md
+var doctestDevTest string
+
 //go:embed DOCTEST_REPRODUCE.md
 var doctestReproduce string
 
@@ -61,6 +64,8 @@ func Content(fileName string) (string, error) {
 		content = doctestTDDCLIAgent
 	case "DOCTEST_TDD_LITE.md":
 		content = doctestTDDLITE
+	case "DOCTEST_DEV_TEST.md":
+		content = doctestDevTest
 	case "DOCTEST_REPRODUCE.md":
 		content = doctestReproduce
 	case "DOCTEST_REVIEW.md":

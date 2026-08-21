@@ -21,6 +21,7 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
     for _, want := range []string{
         "doctest-tdd-lite",
         "single-agent doctest TDD",
+        "doctest-dev-test",
         "TDD step 1 — Requirements",
         "TDD step 6 — Verify",
         "Plan phases (outer loop)",

@@ -33,6 +33,7 @@ func registryCLINames() []string {
 		"code-spec",
 		"design-principle",
 		"designer",
+		"dev-test",
 		"doc-spec",
 		"implementer",
 		"lint",

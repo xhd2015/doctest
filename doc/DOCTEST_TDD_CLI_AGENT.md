@@ -10,7 +10,7 @@ description: adversarial multi-agent TDD with doctests (orchestrator + tests des
 TDD mode is mandatory **unless** one of these applies:
 
 1. **`no tdd:` prefix** — The user's message starts with `no tdd:`. Strip the
-   prefix and handle directly.
+   prefix and follow `doctest-dev-test`.
 2. **Doc-only change** — The change touches only documentation files (`.md`,
    `README`, etc.) and modifies no source code. No TDD flow needed.
 3. **One-liner fix** — Before starting the expensive TDD loop, ask the user to

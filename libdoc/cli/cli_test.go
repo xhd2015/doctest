@@ -28,9 +28,10 @@ func TestRunHelpOutput(t *testing.T) {
 		{name: "build short help", args: []string{"build", "-h"}, wants: []string{"Usage: doctest build", "--gen-dir"}},
 		{name: "test help", args: []string{"test", "--help"}, wants: []string{"Usage: doctest test", "-v", "--verbose", "--rm", "-count", "--changed"}},
 		{name: "test short help", args: []string{"test", "-h"}, wants: []string{"Usage: doctest test", "-count"}},
-		{name: "skill no args", args: []string{"skill"}, wants: []string{"Usage: doctest skill --list", "doc-spec", "code-spec", "--show", "--install"}},
-		{name: "skill long help", args: []string{"skill", "--help"}, wants: []string{"Usage: doctest skill --list", "--install", "--show"}},
-		{name: "skill short help", args: []string{"skill", "-h"}, wants: []string{"Usage: doctest skill --list", "--show"}},
+		{name: "skill no args", args: []string{"skill"}, wants: []string{"Usage: doctest skill --list", "doc-spec", "code-spec", "--show", "--version", "--install"}},
+		{name: "skill long help", args: []string{"skill", "--help"}, wants: []string{"Usage: doctest skill --list", "--install", "--show", "--version"}},
+		{name: "skill short help", args: []string{"skill", "-h"}, wants: []string{"Usage: doctest skill --list", "--show", "--version"}},
+		{name: "skill version help", args: []string{"skill", "--version", "--help"}, wants: []string{"Usage: doctest skill --list", "--version", "--install"}},
 		{name: "skill list", args: []string{"skill", "--list"}, wants: []string{"doc-spec", "code-spec", "design-principle", "lint", "migrate"}},
 		{name: "skill list short", args: []string{"skill", "-l"}, wants: []string{"doc-spec", "tdd", "design-principle"}},
 		{name: "agent implement help", args: []string{"agent", "implement", "--help"}, wants: []string{"Usage: doctest agent implement", "--session-id", "--requirement", "--trace"}},
@@ -64,12 +65,16 @@ func TestRunErrorCases(t *testing.T) {
 		{name: "generate no idea", args: []string{"agent", "generate"}, wantErr: "agent generate requires <idea>"},
 		{name: "vet no dir", args: []string{"vet"}, wantErr: "vet requires <dir>"},
 		{name: "vet nonexistent dirs", args: []string{"vet", "a", "b"}, wantErr: "no such file or directory"},
-		{name: "skill missing action", args: []string{"skill", "doc-spec"}, wantErr: "expected one of --show, --install, or --list"},
+		{name: "skill missing action", args: []string{"skill", "doc-spec"}, wantErr: "expected one of --show, --install, --list, or --version"},
 		{name: "skill show missing name", args: []string{"skill", "--show"}, wantErr: "expected skill name for --show"},
+		{name: "skill version missing name", args: []string{"skill", "--version"}, wantErr: "expected skill name for --version"},
 		{name: "skill install missing name", args: []string{"skill", "--install"}, wantErr: "expected skill name for --install"},
 		{name: "skill unknown name flag first", args: []string{"skill", "--show", "unknown"}, wantErr: "unknown skill: unknown"},
 		{name: "skill unknown name name first", args: []string{"skill", "unknown", "--show"}, wantErr: "unknown skill: unknown"},
 		{name: "skill combine show install", args: []string{"skill", "--show", "--install", "tdd"}, wantErr: "cannot combine --show and --install"},
+		{name: "skill combine version show", args: []string{"skill", "dev-test", "--version", "--show"}, wantErr: "expected exactly one of --show, --install, --list, or --version"},
+		{name: "skill combine version header", args: []string{"skill", "dev-test", "--version", "--header"}, wantErr: "--header is only valid with --show"},
+		{name: "skill missing version", args: []string{"skill", "tdd", "--version"}, wantErr: "skill tdd has no metadata.version"},
 		{name: "implement trace without session-id", args: []string{"agent", "implement", "--trace"}, wantErr: "requires --session-id"},
 		{name: "implement session-id missing value", args: []string{"agent", "implement", "--session-id"}, wantErr: "--session-id requires a value"},
 		{name: "implement agent-runner missing value", args: []string{"agent", "implement", "--agent-runner"}, wantErr: "--agent-runner requires a value"},
@@ -90,6 +95,31 @@ func TestRunErrorCases(t *testing.T) {
 				t.Fatalf("Run(%v): expected error containing %q, got %v", tt.args, tt.wantErr, err)
 			}
 		})
+	}
+}
+
+func TestRunSkillVersionAndHeader(t *testing.T) {
+	for _, args := range [][]string{
+		{"skill", "--version", "dev-test"},
+		{"skill", "dev-test", "--version"},
+	} {
+		stdout, err := captureRun(args)
+		if err != nil {
+			t.Fatalf("Run(%v): %v", args, err)
+		}
+		if stdout != "0.1.0\n" {
+			t.Fatalf("Run(%v) stdout = %q, want %q", args, stdout, "0.1.0\\n")
+		}
+	}
+
+	stdout, err := captureRun([]string{"skill", "dev-test", "--show", "--header"})
+	if err != nil {
+		t.Fatalf("show header: %v", err)
+	}
+	for _, want := range []string{"name: doctest-dev-test", "metadata:", `version: "0.1.0"`} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("header missing %q:\n%s", want, stdout)
+		}
 	}
 }
 

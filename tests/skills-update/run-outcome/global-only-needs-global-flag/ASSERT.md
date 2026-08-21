@@ -5,7 +5,7 @@
   `tdd` (global install invisible without `--global`).
 - stdout does **not** contain `tdd  up to date` or legacy `Skill is up to date` /
   `Update skill at`.
-- summary is `0 updated · 0 up to date · 15 not installed`.
+- summary is `0 updated · 0 up to date · 16 not installed`.
 - stdout does not contain `No installed skills found`.
 
 ## Side Effects
@@ -40,7 +40,7 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 		strings.Contains(plain, "Update skill at") {
 		t.Fatalf("expected no up-to-date lines without --global:\n%s", resp.Stdout)
 	}
-	if !strings.Contains(plain, "0 updated · 0 up to date · 15 not installed") {
+	if !strings.Contains(plain, "0 updated · 0 up to date · 16 not installed") {
 		t.Fatalf("stdout missing batch summary:\n%s", resp.Stdout)
 	}
 	if req.Home == "" {

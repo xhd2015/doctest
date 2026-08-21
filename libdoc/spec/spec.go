@@ -17,21 +17,22 @@ type entry struct {
 }
 
 var entries = map[string]entry{
-	"doc-spec":          {SkillName: "doc-style-test-specification", FileName: "DOC_STYLE_TEST_SPECIFICATION.md"},
-	"code-spec":         {SkillName: "doc-style-test-code-specification", FileName: "DOC_STYLE_TEST_CODE_SPECIFICATION.md"},
-	"design-principle":  {SkillName: "doctest-design-principle", FileName: "DOCTEST_DESIGN_PRINCIPLE.md"},
-	"lint":              {SkillName: "doctest-lint", FileName: "DOCTEST_LINT.md"},
-	"migrate":           {SkillName: "doctest-migrate", FileName: "DOCTEST_MIGRATE.md"},
-	"tdd":               {SkillName: "doctest-tdd", FileName: "DOCTEST_TDD.md"},
-	"tdd-cli-agent":     {SkillName: "tdd-cli-agent", FileName: "DOCTEST_TDD_CLI_AGENT.md"},
-	"tdd-lite":          {SkillName: "doctest-tdd-lite", FileName: "DOCTEST_TDD_LITE.md"},
-	"reproduce":         {SkillName: "doctest-reproduce", FileName: "DOCTEST_REPRODUCE.md"},
-	"review":            {SkillName: "doctest-review", FileName: "DOCTEST_REVIEW.md"},
-	"review-perf":       {SkillName: "doctest-review-perf", FileName: "DOCTEST_REVIEW_PERF.md"},
-	"analyse-perf":      {SkillName: "doctest-analyse-perf", FileName: "DOCTEST_ANALYSE_PERF.md"},
-	"output-assert":     {SkillName: "doctest-output-assert", FileName: "DOCTEST_OUTPUT_ASSERT.md"},
-	"implementer":       {SkillName: "doctest-implementer", ContentFunc: func() (string, error) { return implementer.PromptContent(), nil }},
-	"designer":          {SkillName: "doctest-designer", ContentFunc: func() (string, error) { return designer.PromptContent(), nil }},
+	"doc-spec":         {SkillName: "doc-style-test-specification", FileName: "DOC_STYLE_TEST_SPECIFICATION.md"},
+	"code-spec":        {SkillName: "doc-style-test-code-specification", FileName: "DOC_STYLE_TEST_CODE_SPECIFICATION.md"},
+	"design-principle": {SkillName: "doctest-design-principle", FileName: "DOCTEST_DESIGN_PRINCIPLE.md"},
+	"lint":             {SkillName: "doctest-lint", FileName: "DOCTEST_LINT.md"},
+	"migrate":          {SkillName: "doctest-migrate", FileName: "DOCTEST_MIGRATE.md"},
+	"tdd":              {SkillName: "doctest-tdd", FileName: "DOCTEST_TDD.md"},
+	"tdd-cli-agent":    {SkillName: "tdd-cli-agent", FileName: "DOCTEST_TDD_CLI_AGENT.md"},
+	"tdd-lite":         {SkillName: "doctest-tdd-lite", FileName: "DOCTEST_TDD_LITE.md"},
+	"dev-test":         {SkillName: "doctest-dev-test", FileName: "DOCTEST_DEV_TEST.md"},
+	"reproduce":        {SkillName: "doctest-reproduce", FileName: "DOCTEST_REPRODUCE.md"},
+	"review":           {SkillName: "doctest-review", FileName: "DOCTEST_REVIEW.md"},
+	"review-perf":      {SkillName: "doctest-review-perf", FileName: "DOCTEST_REVIEW_PERF.md"},
+	"analyse-perf":     {SkillName: "doctest-analyse-perf", FileName: "DOCTEST_ANALYSE_PERF.md"},
+	"output-assert":    {SkillName: "doctest-output-assert", FileName: "DOCTEST_OUTPUT_ASSERT.md"},
+	"implementer":      {SkillName: "doctest-implementer", ContentFunc: func() (string, error) { return implementer.PromptContent(), nil }},
+	"designer":         {SkillName: "doctest-designer", ContentFunc: func() (string, error) { return designer.PromptContent(), nil }},
 }
 
 func Content(name string) (string, error) {

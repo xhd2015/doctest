@@ -7,9 +7,9 @@ description: single-agent doctest TDD (design + implement inline, no sub-agent d
 
 # Gate
 
-TDD is mandatory **unless**: (1) `no tdd:` prefix — strip and handle directly;
-(2) doc-only (`.md`, README, etc.); (3) one-liner fix — warn TDD is slow, ask
-TDD vs `no tdd:`, do not start without confirmation.
+TDD is mandatory **unless**: (1) `no tdd:` prefix — strip it and follow
+`doctest-dev-test`; (2) doc-only (`.md`, README, etc.); (3) one-liner fix — warn
+TDD is slow, ask TDD vs `no tdd:`, do not start without confirmation.
 
 # One Rule
 

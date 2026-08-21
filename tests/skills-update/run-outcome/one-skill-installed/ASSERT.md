@@ -4,7 +4,7 @@
 - stdout contains polished `tdd  up to date` (CLI registry name; install dir remains
   `doctest-tdd`).
 - stdout contains `<name>  not installed` for every other registry skill.
-- summary includes `1 up to date` and `14 not installed`.
+- summary includes `1 up to date` and `15 not installed`.
 - stdout does not contain `No installed skills found`.
 
 ## Side Effects
@@ -39,7 +39,7 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 	}
 	assertNoScopeHint(t, resp.Stdout)
 	plain := stripANSI(resp.Stdout)
-	if !strings.Contains(plain, "0 updated · 1 up to date · 14 not installed") {
+	if !strings.Contains(plain, "0 updated · 1 up to date · 15 not installed") {
 		t.Fatalf("stdout missing batch summary:\n%s", resp.Stdout)
 	}
 	skillPath := filepath.Join(req.WorkDir, ".agents", "skills", "doctest-tdd", "SKILL.md")

@@ -15,6 +15,7 @@ func TestContentKnownSkills(t *testing.T) {
 		{name: "design-principle", want: "doctest-design-principle"},
 		{name: "lint", want: "doctest-lint"},
 		{name: "migrate", want: "doctest-migrate"},
+		{name: "dev-test", want: "doctest-dev-test"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

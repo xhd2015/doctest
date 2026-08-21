@@ -14,6 +14,7 @@ analyse-perf  not installed
 code-spec  not installed
 design-principle  not installed
 designer  not installed
+dev-test  not installed
 doc-spec  not installed
 implementer  not installed
 lint  not installed
@@ -25,7 +26,7 @@ review-perf  not installed
 tdd  not installed
 tdd-cli-agent  not installed
 tdd-lite  not installed
-0 updated · 0 up to date · 15 not installed
+0 updated · 0 up to date · 16 not installed
 </contains>
 ```
 
@@ -49,7 +50,7 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 	assertNotInstalledLines(t, resp.Stdout, registryCLINames()...)
 	assertNoScopeHint(t, resp.Stdout)
 	plain := stripANSI(resp.Stdout)
-	if !strings.Contains(plain, "0 updated · 0 up to date · 15 not installed") {
+	if !strings.Contains(plain, "0 updated · 0 up to date · 16 not installed") {
 		t.Fatalf("stdout missing batch summary:\n%s", resp.Stdout)
 	}
 }

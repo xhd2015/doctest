@@ -5,11 +5,11 @@ go 1.25.10
 require (
 	github.com/google/uuid v1.6.0
 	github.com/xhd2015/agent-pro v0.0.93
-	github.com/xhd2015/dot-pkgs/go-pkgs v0.0.96
-	github.com/xhd2015/gitops v0.0.30
+	github.com/xhd2015/dot-pkgs/go-pkgs v0.0.123
+	github.com/xhd2015/gitops v0.0.31
 	github.com/xhd2015/kool v0.0.129
 	github.com/xhd2015/less-flags v1.0.2
-	github.com/xhd2015/skills v0.0.26
+	github.com/xhd2015/skills v0.0.28
 	github.com/xhd2015/xgo v1.2.7
 	golang.org/x/mod v0.36.0
 	golang.org/x/sys v0.47.0

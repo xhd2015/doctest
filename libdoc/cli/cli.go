@@ -18,7 +18,7 @@ import (
 	"github.com/xhd2015/doctest/libdoc/implementer"
 	"github.com/xhd2015/doctest/libdoc/runner"
 	"github.com/xhd2015/doctest/libdoc/spec"
-	"github.com/xhd2015/skills/skill_file"
+	"github.com/xhd2015/skills/skillcmd"
 )
 
 const usage = `Usage: doctest <command> [options]
@@ -43,6 +43,8 @@ Skills:
   skill --list
   skill --show <name>
   skill <name> --show
+  skill --version <name>
+  skill <name> --version
   skill --install <name> [OPTIONS]
   skill <name> --install [OPTIONS]
 
@@ -83,22 +85,25 @@ Run doctest skills update --help for update flags.
 const skillUsage = `Usage: doctest skill --list
        doctest skill --show <name> [--header]
        doctest skill <name> --show [--header]
+       doctest skill --version <name>
+       doctest skill <name> --version
        doctest skill --install <name> [OPTIONS] [<dir>]
        doctest skill <name> --install [OPTIONS] [<dir>]
 
-List, print, or install a registered doctest skill.
+List, print, inspect the version of, or install a registered doctest skill.
 
 Registered skills:
   doc-spec, code-spec, design-principle, lint, migrate,
-  tdd, tdd-cli-agent, tdd-lite, reproduce, review, review-perf,
+  dev-test, tdd, tdd-cli-agent, tdd-lite, reproduce, review, review-perf,
   analyse-perf, output-assert, implementer, designer
 
-Both flag orders are valid (--show/--install before or after <name>).
+Both flag orders are valid (--show/--version/--install before or after <name>).
 
 Options:
   --list, -l     List registered skill names
   --show         Print skill content to stdout
   --header       With --show: print YAML frontmatter only
+  --version      Print skill metadata.version
   --install      Install skill SKILL.md (see --install --help for targets)
   -h, --help     Show this help
 
@@ -679,108 +684,27 @@ func runSkills(io stdio, args []string) error {
 	}
 }
 
-// skill action flags (Shape 2 multi-skill host): --show / --install / --list only.
-// Both orders are valid: skill --show <name> and skill <name> --show.
-type skillAction string
-
-const (
-	skillActionShow    skillAction = "show"
-	skillActionInstall skillAction = "install"
-	skillActionList    skillAction = "list"
-	skillActionHelp    skillAction = "help"
-)
-
-type parsedSkillArgs struct {
-	Action skillAction
-	Header bool
-	Rest   []string
-}
-
-func parseSkillArgs(args []string) (parsedSkillArgs, error) {
-	var (
-		show    bool
-		install bool
-		list    bool
-		header  bool
-		help    bool
-		rest    []string
-	)
-	for _, a := range args {
-		switch a {
-		case "--show":
-			show = true
-		case "--install":
-			install = true
-		case "--list", "-l":
-			list = true
-		case "--header":
-			header = true
-		case "-h", "--help":
-			help = true
-		default:
-			rest = append(rest, a)
-		}
-	}
-
-	// Install owns its own --help (targets, --global, etc.).
-	if help && install && !show && !list {
-		rest = append(rest, "--help")
-		return parsedSkillArgs{Action: skillActionInstall, Rest: rest}, nil
-	}
-	// Skill-level help: bare --help, or --help with --show/--list.
-	if help {
-		return parsedSkillArgs{Action: skillActionHelp, Rest: rest}, nil
-	}
-
-	n := 0
-	var action skillAction
-	if show {
-		n++
-		action = skillActionShow
-	}
-	if install {
-		n++
-		action = skillActionInstall
-	}
-	if list {
-		n++
-		action = skillActionList
-	}
-	if n == 0 {
-		return parsedSkillArgs{}, fmt.Errorf("expected one of --show, --install, or --list (try --help)")
-	}
-	if n > 1 {
-		if show && install {
-			return parsedSkillArgs{}, fmt.Errorf("cannot combine --show and --install")
-		}
-		return parsedSkillArgs{}, fmt.Errorf("expected exactly one of --show, --install, or --list (try --help)")
-	}
-	if header && action != skillActionShow {
-		return parsedSkillArgs{}, fmt.Errorf("--header is only valid with --show")
-	}
-	return parsedSkillArgs{Action: action, Header: header, Rest: rest}, nil
-}
-
 func runSkill(io stdio, args []string) error {
 	if len(args) == 0 {
 		fmt.Fprint(io.Out(), skillUsage)
 		return nil
 	}
-	parsed, err := parseSkillArgs(args)
+	parsed, err := skillcmd.ParseSkillArgs(args)
 	if err != nil {
 		return err
 	}
 	switch parsed.Action {
-	case skillActionHelp:
+	case skillcmd.ActionHelp:
 		fmt.Fprint(io.Out(), skillUsage)
 		return nil
-	case skillActionList:
+	case skillcmd.ActionList:
 		for _, name := range []string{
 			"doc-spec",
 			"code-spec",
 			"design-principle",
 			"lint",
 			"migrate",
+			"dev-test",
 			"tdd",
 			"tdd-cli-agent",
 			"tdd-lite",
@@ -795,7 +719,7 @@ func runSkill(io stdio, args []string) error {
 			fmt.Fprintln(io.Out(), name)
 		}
 		return nil
-	case skillActionShow:
+	case skillcmd.ActionShow:
 		if len(parsed.Rest) == 0 {
 			return fmt.Errorf("expected skill name for --show (try --help)")
 		}
@@ -807,7 +731,7 @@ func runSkill(io stdio, args []string) error {
 			return err
 		}
 		if parsed.Header {
-			out, err := skill_file.FormatHeaderWithDelimiters(content)
+			out, err := skillcmd.FormatHeaderWithDelimiters(content)
 			if err != nil {
 				return err
 			}
@@ -816,7 +740,28 @@ func runSkill(io stdio, args []string) error {
 		}
 		fmt.Fprint(io.Out(), content)
 		return nil
-	case skillActionInstall:
+	case skillcmd.ActionVersion:
+		if len(parsed.Rest) == 0 {
+			return fmt.Errorf("expected skill name for --version (try --help)")
+		}
+		if len(parsed.Rest) > 1 {
+			return fmt.Errorf("unexpected arguments: %v", parsed.Rest[1:])
+		}
+		name := parsed.Rest[0]
+		content, err := spec.Content(name)
+		if err != nil {
+			return err
+		}
+		version, err := skillcmd.SkillVersion(content)
+		if errors.Is(err, skillcmd.ErrSkillVersionMissing) {
+			return fmt.Errorf("skill %s has no metadata.version", name)
+		}
+		if err != nil {
+			return fmt.Errorf("skill %s: %w", name, err)
+		}
+		fmt.Fprintln(io.Out(), version)
+		return nil
+	case skillcmd.ActionInstall:
 		name, installArgs, err := splitSkillName(parsed.Rest)
 		if err != nil {
 			return fmt.Errorf("expected skill name for --install (try --help)")

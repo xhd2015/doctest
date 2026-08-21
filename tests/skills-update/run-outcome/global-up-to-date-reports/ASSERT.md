@@ -4,7 +4,7 @@
 - stdout contains polished `tdd  up to date` (global install under
   `~/.agents/skills/doctest-tdd`, display name is CLI `tdd`).
 - stdout contains `<name>  not installed` for every other registry skill.
-- summary includes `1 up to date` and `14 not installed`.
+- summary includes `1 up to date` and `15 not installed`.
 - stdout does not contain `No installed skills found`.
 
 ## Expected Output
@@ -14,7 +14,7 @@
 tdd  up to date
 code-spec  not installed
 tdd-lite  not installed
-0 updated · 1 up to date · 14 not installed
+0 updated · 1 up to date · 15 not installed
 </contains>
 ```
 
@@ -46,7 +46,7 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 	}
 	assertNoScopeHint(t, resp.Stdout)
 	plain := stripANSI(resp.Stdout)
-	if !strings.Contains(plain, "0 updated · 1 up to date · 14 not installed") {
+	if !strings.Contains(plain, "0 updated · 1 up to date · 15 not installed") {
 		t.Fatalf("stdout missing batch summary:\n%s", resp.Stdout)
 	}
 	assert.Output(t, plain, ``+
@@ -54,7 +54,7 @@ func Assert(t *testing.T, d *session.Doctest, req *Request, resp *Response, err 
 tdd  up to date
 code-spec  not installed
 tdd-lite  not installed
-0 updated · 1 up to date · 14 not installed
+0 updated · 1 up to date · 15 not installed
 </contains>`)
 }
 ```
